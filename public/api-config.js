@@ -4,4 +4,4 @@
 // ou pelo workers.dev gerado no primeiro deploy.
 window.UORQUI_API_BASE = (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
   ? 'http://127.0.0.1:8787/api'
-  : 'https://uorqui-api.uorqui1.workers.dev';
+  : 'https://uorqui-api.uorqui1.workers.dev/api';
