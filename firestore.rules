@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // A v1.0.0 usa o Cloudflare Worker como única API de dados.
+    // O navegador usa Firebase somente para Authentication.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

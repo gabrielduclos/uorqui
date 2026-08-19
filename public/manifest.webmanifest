@@ -1,0 +1,9 @@
+{
+  "name": "Uorqui",
+  "short_name": "Uorqui",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
+  "description": "Conversas de trabalho que não se perdem."
+}

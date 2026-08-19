@@ -1,0 +1,5 @@
+Uorqui 1.0.0
+Frontend: Cloudflare Pages (public/)
+Backend: Cloudflare Worker API (worker/index.js)
+R2: uorqui-media
+Firebase project: uorqui-ba281
