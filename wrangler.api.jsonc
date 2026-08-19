@@ -4,17 +4,27 @@
   "main": "./worker/index.js",
   "compatibility_date": "2026-08-19",
   "placement": { "mode": "smart" },
+
+  "secrets": {
+    "required": [
+      "FIREBASE_SERVICE_ACCOUNT_EMAIL",
+      "FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY"
+    ]
+  },
+
   "r2_buckets": [
     {
       "binding": "MEDIA",
       "bucket_name": "uorqui-media"
     }
   ],
+
   "vars": {
     "FIREBASE_PROJECT_ID": "uorqui-ba281",
     "APP_ORIGIN": "https://uorqui.pages.dev",
     "ALLOWED_ORIGINS": "https://uorqui.pages.dev,http://127.0.0.1:8788,http://localhost:8788"
   },
+
   "triggers": {
     "crons": ["0 */6 * * *"]
   }
