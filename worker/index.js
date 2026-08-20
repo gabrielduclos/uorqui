@@ -6,25 +6,29 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get('Origin') || '';
+    const sameOrigin = !origin || origin === url.origin;
 
     if (request.method === 'OPTIONS') {
-      return corsPreflight(request, env);
+      return corsPreflight(request, env, url.origin);
     }
-    if (origin && !isAllowedOrigin(origin, env)) {
+    // Produção passa a usar frontend e API no mesmo Worker/origem.
+    // ALLOWED_ORIGINS continua útil apenas para previews/ambientes externos.
+    if (!sameOrigin && origin && !isAllowedOrigin(origin, env)) {
       return jsonWithCors({ error: 'Origem não autorizada.' }, 403, request, env);
     }
     if (!url.pathname.startsWith('/api/')) {
-      return jsonWithCors({ error: 'Uorqui API. Rota não encontrada.' }, 404, request, env);
+      return new Response('Not found', { status: 404 });
     }
 
     try {
       const identity = await requireAuth(request, env);
       const response = await routeApi(request, env, identity, url);
-      return withCors(response, request, env);
+      return sameOrigin ? response : withCors(response, request, env);
     } catch (error) {
       console.error(error);
       const status = error?.status || 500;
-      return jsonWithCors({ error: status === 500 ? 'Erro interno do Uorqui.' : error.message }, status, request, env);
+      const payload = { error: status === 500 ? 'Erro interno do Uorqui.' : error.message };
+      return sameOrigin ? json(payload, status) : jsonWithCors(payload, status, request, env);
     }
   },
   async scheduled(_controller, env, ctx) {
@@ -37,6 +41,7 @@ async function routeApi(request, env, identity, url) {
   const method = request.method.toUpperCase();
 
   if (method === 'GET' && path === '/bootstrap') return json(await bootstrap(env, identity, url.searchParams.get('companyId')));
+  if (method === 'PATCH' && path === '/me') return json(await updateMe(env, identity, await readJson(request)));
   if (method === 'POST' && path === '/companies') return json(await createCompany(env, identity, await readJson(request)), 201);
   if (method === 'POST' && /^\/companies\/[^/]+\/invites$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
@@ -49,6 +54,10 @@ async function routeApi(request, env, identity, url) {
   if (method === 'POST' && /^\/communities\/[^/]+\/invites$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await createCommunityInvite(env, identity, communityId, await readJson(request)), 201);
+  }
+  if (method === 'DELETE' && /^\/communities\/[^/]+$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await deleteCommunity(env, identity, communityId));
   }
   if (method === 'POST' && path === '/invites/accept') return json(await acceptInvite(env, identity, await readJson(request)));
   if (method === 'POST' && path === '/posts') return json(await createPost(env, identity, await readJson(request)), 201);
@@ -153,13 +162,43 @@ async function ensureUser(env, identity) {
       uid: identity.uid,
       email: normalizeEmail(identity.email || ''),
       displayName: identity.name || (identity.email ? identity.email.split('@')[0] : 'Usuário'),
-      username: '', bio: '', createdAt: nowIso(), updatedAt: nowIso()
+      username: '', bio: '', avatarMediaId: '', createdAt: nowIso(), updatedAt: nowIso()
     };
     await fsPut(env, 'users', identity.uid, user);
   } else if (identity.email && user.email !== normalizeEmail(identity.email)) {
     user.email = normalizeEmail(identity.email); user.updatedAt = nowIso(); await fsPut(env, 'users', identity.uid, user);
   }
   return user;
+}
+
+async function updateMe(env, identity, body) {
+  const user = await ensureUser(env, identity);
+  const avatarMediaId = body.avatarMediaId === undefined ? (user.avatarMediaId || '') : clean(body.avatarMediaId, 150);
+
+  if (avatarMediaId) {
+    const media = await fsGetRequired(env, 'media', avatarMediaId, 'Foto não encontrada.');
+    if (media.ownerUid !== identity.uid || media.scope !== 'avatar') throw httpError(403, 'Esta foto não pertence ao seu perfil.');
+  }
+
+  const previousAvatar = user.avatarMediaId || '';
+  user.avatarMediaId = avatarMediaId;
+  user.updatedAt = nowIso();
+  await fsPut(env, 'users', identity.uid, user);
+
+  const authoredPosts = await fsWhere(env, 'posts', 'authorUid', identity.uid, 120);
+  for (const post of authoredPosts) await fsPut(env, 'posts', post.id, { ...post, authorAvatarMediaId: avatarMediaId });
+  const authoredComments = await fsWhere(env, 'comments', 'authorUid', identity.uid, 120);
+  for (const comment of authoredComments) await fsPut(env, 'comments', comment.id, { ...comment, authorAvatarMediaId: avatarMediaId });
+
+  if (previousAvatar && previousAvatar !== avatarMediaId) {
+    const old = await fsGet(env, 'media', previousAvatar);
+    if (old?.ownerUid === identity.uid && old.scope === 'avatar') {
+      try { await env.MEDIA.delete(old.key); } catch {}
+      try { await fsDelete(env, 'media', previousAvatar); } catch {}
+    }
+  }
+
+  return { user };
 }
 
 async function exposePendingEmailInvites(env, identity) {
@@ -190,16 +229,18 @@ async function createCompany(env, identity, body) {
   const company = { id: companyId, name, slug: slugify(name), ownerUid: identity.uid, createdAt: nowIso(), updatedAt: nowIso() };
   await fsPut(env, 'companies', companyId, company);
   const creator = await fsGet(env,'users',identity.uid);
-  await fsPut(env, 'companyMembers', `${companyId}_${identity.uid}`, { id:`${companyId}_${identity.uid}`, companyId, uid: identity.uid, displayName:creator?.displayName||identity.name||'', email:normalizeEmail(identity.email||''), role:'owner', status:'active', joinedAt:nowIso() });
-  for (const def of [
-    { name:'Geral', description:'Conversas gerais da empresa.' },
-    { name:'Comunicados', description:'Comunicados oficiais e informações importantes.' }
-  ]) {
-    const communityId=id();
-    const community={ id:communityId, companyId, name:def.name, description:def.description, visibility:'company', isDefault:true, createdBy:identity.uid, createdAt:nowIso() };
-    await fsPut(env,'communities',communityId,community);
-    await fsPut(env,'communityMembers',`${communityId}_${identity.uid}`,{id:`${communityId}_${identity.uid}`,companyId,communityId,uid:identity.uid,role:'moderator',joinedAt:nowIso()});
-  }
+  await fsPut(env, 'companyMembers', `${companyId}_${identity.uid}`, {
+    id:`${companyId}_${identity.uid}`,
+    companyId,
+    uid: identity.uid,
+    displayName:creator?.displayName||identity.name||'',
+    email:normalizeEmail(identity.email||''),
+    role:'owner',
+    status:'active',
+    joinedAt:nowIso()
+  });
+  // Comunidades agora sao sempre criadas manualmente pelo administrador.
+  // Publicacoes para toda a empresa continuam usando scope === 'company'.
   return { company };
 }
 
@@ -235,6 +276,27 @@ async function createCommunity(env, identity, companyId, body) {
   await fsPut(env,'communities',communityId,community);
   await fsPut(env,'communityMembers',`${communityId}_${identity.uid}`,{id:`${communityId}_${identity.uid}`,companyId,communityId,uid:identity.uid,role:'moderator',joinedAt:nowIso()});
   return { community };
+}
+
+async function deleteCommunity(env, identity, communityId) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  await requireCompanyAdmin(env, identity.uid, community.companyId);
+
+  const posts = await fsWhere(env, 'posts', 'communityId', communityId, 1);
+  if (posts.length) {
+    throw httpError(409, 'Esta comunidade possui publicações. Exclua ou mova o conteúdo antes de removê-la.');
+  }
+
+  const members = await fsWhere(env, 'communityMembers', 'communityId', communityId, 250);
+  for (const member of members) await fsDelete(env, 'communityMembers', member.id);
+
+  const invites = await fsWhere(env, 'invites', 'communityId', communityId, 100);
+  for (const invite of invites) {
+    if (invite.status === 'pending') await fsDelete(env, 'invites', invite.id);
+  }
+
+  await fsDelete(env, 'communities', communityId);
+  return { ok: true };
 }
 
 async function createCommunityInvite(env, identity, communityId, body) {
@@ -276,8 +338,6 @@ async function acceptInvite(env, identity, body) {
   if(invite.type==='company'){
     const joiningUser=await fsGet(env,'users',identity.uid);
     await fsPut(env,'companyMembers',`${invite.companyId}_${identity.uid}`,{id:`${invite.companyId}_${identity.uid}`,companyId:invite.companyId,uid:identity.uid,displayName:joiningUser?.displayName||identity.name||'',email:normalizeEmail(identity.email||''),role:'member',status:'active',joinedAt:nowIso()});
-    const defaults=(await fsWhere(env,'communities','companyId',invite.companyId,100)).filter(c=>c.isDefault);
-    for(const c of defaults)await fsPut(env,'communityMembers',`${c.id}_${identity.uid}`,{id:`${c.id}_${identity.uid}`,companyId:invite.companyId,communityId:c.id,uid:identity.uid,role:'member',joinedAt:nowIso()});
   } else {
     const member=await fsGet(env,'companyMembers',`${invite.companyId}_${identity.uid}`);if(!member||member.status!=='active')throw httpError(403,'Você precisa fazer parte da empresa antes de entrar na comunidade.');
     await fsPut(env,'communityMembers',`${invite.communityId}_${identity.uid}`,{id:`${invite.communityId}_${identity.uid}`,companyId:invite.companyId,communityId:invite.communityId,uid:identity.uid,role:'member',joinedAt:nowIso()});
@@ -314,7 +374,7 @@ async function createPost(env, identity, body) {
     if(m.scope!==scope||((scope!=='world')&&m.companyId!==companyId)||(scope==='community'&&m.communityId!==communityId))throw httpError(400,'O anexo foi enviado para outra audiência.');
     attachments.push({id:m.id,name:m.name,contentType:m.contentType,size:m.size});
   }
-  const postId=id(); const post={id:postId,authorUid:identity.uid,authorName:user?.displayName||identity.name||'Usuário',scope,companyId:companyId||'',companyName:company?.name||'',communityId:communityId||'',communityName:community?.name||'',type,text,title:type==='announcement'?clean(body.title||'',180):'',requiresReadReceipt:type==='announcement'&&Boolean(body.requiresReadReceipt),attachments,reactionCount:0,commentCount:0,createdAt:nowIso(),updatedAt:nowIso()};
+  const postId=id(); const post={id:postId,authorUid:identity.uid,authorName:user?.displayName||identity.name||'Usuário',authorAvatarMediaId:user?.avatarMediaId||'',scope,companyId:companyId||'',companyName:company?.name||'',communityId:communityId||'',communityName:community?.name||'',type,text,title:type==='announcement'?clean(body.title||'',180):'',requiresReadReceipt:type==='announcement'&&Boolean(body.requiresReadReceipt),attachments,reactionCount:0,commentCount:0,createdAt:nowIso(),updatedAt:nowIso()};
   await fsPut(env,'posts',postId,post);
   if(type==='announcement'&&companyId){
     const members=(await fsWhere(env,'companyMembers','companyId',companyId,250)).filter(m=>m.status==='active'&&m.uid!==identity.uid);
@@ -331,7 +391,7 @@ async function getComments(env, identity, postId) {
 }
 async function addComment(env, identity, postId, body) {
   const post=await fsGetRequired(env,'posts',postId,'Publicação não encontrada.');await requirePostAccess(env,identity.uid,post);
-  const text=clean(body.text,3000);if(!text)throw httpError(400,'Escreva a resposta.');const user=await ensureUser(env,identity);const commentId=id();const comment={id:commentId,postId,authorUid:identity.uid,authorName:user.displayName||'Usuário',text,createdAt:nowIso()};await fsPut(env,'comments',commentId,comment);post.commentCount=Math.max(0,Number(post.commentCount||0)+1);post.updatedAt=nowIso();await fsPut(env,'posts',postId,post);
+  const text=clean(body.text,3000);if(!text)throw httpError(400,'Escreva a resposta.');const user=await ensureUser(env,identity);const commentId=id();const comment={id:commentId,postId,authorUid:identity.uid,authorName:user.displayName||'Usuário',authorAvatarMediaId:user.avatarMediaId||'',text,createdAt:nowIso()};await fsPut(env,'comments',commentId,comment);post.commentCount=Math.max(0,Number(post.commentCount||0)+1);post.updatedAt=nowIso();await fsPut(env,'posts',postId,post);
   if(post.authorUid!==identity.uid)await fsPut(env,'notifications',`comment_${commentId}_${post.authorUid}`,{recipientUid:post.authorUid,type:'comment',title:`${comment.authorName} respondeu sua publicação`,body:text.slice(0,220),data:{postId,commentId,companyId:post.companyId||''},read:false,status:'new',createdAt:comment.createdAt});
   return {comment};
 }
@@ -357,17 +417,46 @@ async function searchPosts(env, identity, params) {
 }
 
 async function uploadMedia(request, env, identity, params) {
-  const scope=params.get('scope');if(!['world','company','community'].includes(scope))throw httpError(400,'Audiência inválida.');const companyId=params.get('companyId')||'';const communityId=params.get('communityId')||'';
-  if(scope!=='world')await requireCompanyMember(env,identity.uid,companyId);if(scope==='community')await requireCommunityMember(env,identity.uid,communityId);
-  const length=Number(request.headers.get('content-length')||0);if(length>20*1024*1024)throw httpError(413,'O limite por arquivo na v1 é 20 MB.');
-  const contentType=(request.headers.get('content-type')||'application/octet-stream').slice(0,120);const name=clean(request.headers.get('x-file-name')||params.get('name')||'arquivo',180);const body=await request.arrayBuffer();if(body.byteLength>20*1024*1024)throw httpError(413,'O limite por arquivo na v1 é 20 MB.');
-  const mediaId=id();const safeName=name.replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-100)||'arquivo';const key=scope==='world'?`world/${identity.uid}/${mediaId}-${safeName}`:scope==='company'?`companies/${companyId}/general/${identity.uid}/${mediaId}-${safeName}`:`companies/${companyId}/communities/${communityId}/${identity.uid}/${mediaId}-${safeName}`;
+  const scope=params.get('scope');
+  if(!['world','company','community','avatar'].includes(scope))throw httpError(400,'Audiência inválida.');
+  const companyId=params.get('companyId')||'';const communityId=params.get('communityId')||'';
+  if(scope!=='world'&&scope!=='avatar')await requireCompanyMember(env,identity.uid,companyId);
+  if(scope==='community')await requireCommunityMember(env,identity.uid,communityId);
+
+  const limit=scope==='avatar'?5*1024*1024:20*1024*1024;
+  const length=Number(request.headers.get('content-length')||0);
+  if(length>limit)throw httpError(413,scope==='avatar'?'A foto de perfil pode ter no máximo 5 MB.':'O limite por arquivo na v1 é 20 MB.');
+
+  const contentType=(request.headers.get('content-type')||'application/octet-stream').slice(0,120);
+  if(scope==='avatar'&&!['image/jpeg','image/png','image/webp'].includes(contentType))throw httpError(415,'Use uma imagem JPG, PNG ou WebP.');
+
+  const name=clean(request.headers.get('x-file-name')||params.get('name')||'arquivo',180);
+  const body=await request.arrayBuffer();
+  if(body.byteLength>limit)throw httpError(413,scope==='avatar'?'A foto de perfil pode ter no máximo 5 MB.':'O limite por arquivo na v1 é 20 MB.');
+
+  const mediaId=id();const safeName=name.replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-100)||'arquivo';
+  const key=scope==='avatar'
+    ? `users/${identity.uid}/avatar/${mediaId}-${safeName}`
+    : scope==='world'
+      ? `world/${identity.uid}/${mediaId}-${safeName}`
+      : scope==='company'
+        ? `companies/${companyId}/general/${identity.uid}/${mediaId}-${safeName}`
+        : `companies/${companyId}/communities/${communityId}/${identity.uid}/${mediaId}-${safeName}`;
+
   await env.MEDIA.put(key,body,{httpMetadata:{contentType},customMetadata:{ownerUid:identity.uid,scope,companyId,communityId,mediaId}});
-  const media={id:mediaId,key,ownerUid:identity.uid,scope,companyId,communityId,name,contentType,size:body.byteLength,createdAt:nowIso()};await fsPut(env,'media',mediaId,media);return {media};
+  const media={id:mediaId,key,ownerUid:identity.uid,scope,companyId,communityId,name,contentType,size:body.byteLength,createdAt:nowIso()};
+  await fsPut(env,'media',mediaId,media);
+  return {media};
 }
 async function getMedia(env, identity, mediaId) {
-  const media=await fsGetRequired(env,'media',mediaId,'Arquivo não encontrado.');if(media.scope==='company')await requireCompanyMember(env,identity.uid,media.companyId);else if(media.scope==='community')await requireCommunityMember(env,identity.uid,media.communityId);
-  const object=await env.MEDIA.get(media.key);if(!object)throw httpError(404,'Arquivo não encontrado no armazenamento.');const headers=new Headers();object.writeHttpMetadata(headers);headers.set('Cache-Control',media.scope==='world'?'private, max-age=300':'private, no-store');headers.set('Content-Disposition',`inline; filename="${String(media.name||'arquivo').replace(/["\r\n]/g,'')}"`);return new Response(object.body,{headers});
+  const media=await fsGetRequired(env,'media',mediaId,'Arquivo não encontrado.');
+  if(media.scope==='company')await requireCompanyMember(env,identity.uid,media.companyId);
+  else if(media.scope==='community')await requireCommunityMember(env,identity.uid,media.communityId);
+  const object=await env.MEDIA.get(media.key);if(!object)throw httpError(404,'Arquivo não encontrado no armazenamento.');
+  const headers=new Headers();object.writeHttpMetadata(headers);
+  headers.set('Cache-Control',media.scope==='world'||media.scope==='avatar'?'private, max-age=300':'private, no-store');
+  headers.set('Content-Disposition',`inline; filename="${String(media.name||'arquivo').replace(/["\r\n]/g,'')}"`);
+  return new Response(object.body,{headers});
 }
 async function markNotificationRead(env, identity, idValue) {const n=await fsGetRequired(env,'notifications',idValue,'Notificação não encontrada.');if(n.recipientUid!==identity.uid)throw httpError(403,'Sem permissão.');await fsPut(env,'notifications',idValue,{...n,read:true,readAt:nowIso()});return {ok:true};}
 
@@ -436,9 +525,9 @@ function withCors(response, request, env){
   headers.append('Vary', 'Origin');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
-function corsPreflight(request, env){
+function corsPreflight(request, env, requestOrigin=''){
   const origin = request.headers.get('Origin') || '';
-  if(origin && !isAllowedOrigin(origin, env)) return new Response(null, { status: 403 });
+  if(origin && origin !== requestOrigin && !isAllowedOrigin(origin, env)) return new Response(null, { status: 403 });
   const headers = new Headers();
   if(origin) headers.set('Access-Control-Allow-Origin', origin);
   headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');

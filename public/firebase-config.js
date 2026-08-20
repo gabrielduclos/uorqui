@@ -1,6 +1,5 @@
 // Configuração pública do Firebase Web App.
-// Firebase Console > Configurações do projeto > Seus apps > Web.
-// Estes valores identificam o app cliente; NÃO coloque service account aqui.
+// Em seu repositório real, mantenha aqui os valores que você já configurou.
 window.UORQUI_FIREBASE_CONFIG = {
   apiKey: "AIzaSyDveHG5tmlhFymGoG04hzCX5nlKBNawzkg",
   authDomain: "uorqui-ba281.firebaseapp.com",
