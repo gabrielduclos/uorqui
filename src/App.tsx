@@ -179,7 +179,7 @@ export default function App() {
       <div className="app-shell">
         <aside className="sidebar">
           <button className="brand-button" onClick={() => navigate("home")}>
-            <img src="/assets/uorqui-logo-light.png" alt="Uorqui" />
+            <img src="/assets/uorqui-wordmark.png" alt="Uorqui" />
           </button>
 
           <label className="company-picker">
@@ -277,7 +277,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.1.5</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.1.6</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -303,11 +303,11 @@ export default function App() {
 }
 
 function Boot() {
-  return <div className="boot"><img src="/assets/uorqui-logo-light.png" alt="Uorqui" /><span>Carregando…</span></div>;
+  return <div className="boot"><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /><span>Carregando…</span></div>;
 }
 
 function ErrorScreen({ message, onRetry, onLogout }: { message: string; onRetry: () => void; onLogout: () => void }) {
-  return <div className="center-card"><img src="/assets/uorqui-logo-light.png" alt="Uorqui" /><h2>Não foi possível abrir o Uorqui.</h2><p>{message}</p><div><button className="btn" onClick={onRetry}>Tentar novamente</button><button className="btn secondary" onClick={onLogout}>Sair</button></div></div>;
+  return <div className="center-card"><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /><h2>Não foi possível abrir o Uorqui.</h2><p>{message}</p><div><button className="btn" onClick={onRetry}>Tentar novamente</button><button className="btn secondary" onClick={onLogout}>Sair</button></div></div>;
 }
 
 function AuthScreen() {
