@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
-  Bell, Building2, Camera, Check, ChevronDown, CirclePlus, FileQuestion, Globe2,
-  Home, KeyRound, LogOut, Megaphone, MessageSquareText, Plus, Search, Send,
-  Settings, UserRound, Users, X
+  ArrowLeft, Bell, Building2, Camera, Check, ChevronDown, ChevronRight, CirclePlus,
+  FileQuestion, Globe2, Home, KeyRound, LogOut, Megaphone, MessageSquareText,
+  Plus, Search, Send, Settings, UserRound, Users, X
 } from "lucide-react";
 import {
   createUserWithEmailAndPassword, EmailAuthProvider, onAuthStateChanged,
@@ -44,6 +44,8 @@ export default function App() {
   const [commentsPost, setCommentsPost] = useState<Post | null>(null);
   const [toast, setToast] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedCommunityId, setSelectedCommunityId] = useState("");
+  const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string }>({});
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
     setUser(next);
@@ -122,9 +124,27 @@ export default function App() {
     setNotificationOpen(false);
   };
 
+  const openComposer = (target: { scope?: "company" | "community" | "world"; communityId?: string } = {}) => {
+    setComposerTarget(target);
+    setComposerOpen(true);
+  };
+
+  const openCommunity = (communityId: string) => {
+    setSelectedCommunityId(communityId);
+    setView("communities");
+    setNotificationOpen(false);
+  };
+
+  const openWorld = () => {
+    setHomeTab("world");
+    setView("home");
+    setNotificationOpen(false);
+  };
+
   const changeCompany = async (id: string) => {
     localStorage.setItem("uorqui-company", id);
     setSelectedCompanyId(id);
+    setSelectedCommunityId("");
     setView("home");
     await refresh(id);
   };
@@ -136,12 +156,23 @@ export default function App() {
         tab={homeTab}
         setTab={setHomeTab}
         refresh={() => refresh()}
-        onCompose={() => setComposerOpen(true)}
+        onCompose={() => openComposer()}
         onComments={setCommentsPost}
         showToast={showToast}
       />
     );
-    if (view === "communities") return <CommunitiesPage data={data} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "communities") return (
+      <CommunitiesPage
+        data={data}
+        selectedCommunityId={selectedCommunityId}
+        onSelectCommunity={setSelectedCommunityId}
+        onBack={() => setSelectedCommunityId("")}
+        onComposeCommunity={(communityId) => openComposer({ scope: "community", communityId })}
+        onComments={setCommentsPost}
+        refresh={() => refresh()}
+        showToast={showToast}
+      />
+    );
     if (view === "search") return <SearchPage data={data} onComments={setCommentsPost} refresh={() => refresh()} showToast={showToast} />;
     if (view === "admin") return <AdminPage data={data} refresh={() => refresh()} showToast={showToast} />;
     return <ProfilePage data={data} refresh={() => refresh()} showToast={showToast} />;
@@ -167,12 +198,11 @@ export default function App() {
             <NavButton active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
             <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
             <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
-            <NavButton icon={<Bell />} label="Notificações" badge={unread} onClick={() => setNotificationOpen(true)} />
             {data.canAdmin && <NavButton active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
             <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
           </nav>
 
-          <button className="btn publish-main" onClick={() => setComposerOpen(true)}><Plus size={19} /> Publicar</button>
+          <button className="btn publish-main" onClick={() => openComposer()}><Plus size={19} /> Publicar</button>
 
           <div className="sidebar-user">
             <Avatar name={data.me.displayName || data.me.email} mediaId={data.me.avatarMediaId} />
@@ -218,26 +248,33 @@ export default function App() {
           <section className="side-card">
             <strong>Suas comunidades</strong>
             {data.communities.slice(0, 5).map((c) => (
-              <button className="mini-community" key={c.id} onClick={() => navigate("communities")}>
+              <button className="mini-community" key={c.id} onClick={() => openCommunity(c.id)}>
                 <span>{c.name.slice(0, 2).toUpperCase()}</span><div><b>{c.name}</b><small>{c.description || "Comunidade privada"}</small></div>
               </button>
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.1.0</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.1.2</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
       <nav className="mobile-nav">
-        <MobileNav active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
+        <MobileNav active={view === "home" && homeTab !== "world"} icon={<Home />} label="Início" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
         <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
         <button className="mobile-create" onClick={() => setComposerOpen(true)} aria-label="Publicar"><Plus size={26} /></button>
-        <MobileNav icon={<Bell />} label="Alertas" badge={unread} onClick={() => setNotificationOpen(true)} />
+        <MobileNav active={view === "home" && homeTab === "world"} icon={<Globe2 />} label="Mundo" onClick={openWorld} />
         <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
       </nav>
 
       {notificationOpen && <NotificationsPanel data={data} onClose={() => setNotificationOpen(false)} refresh={() => refresh()} showToast={showToast} />}
-      {composerOpen && <Composer data={data} onClose={() => setComposerOpen(false)} onDone={async () => { setComposerOpen(false); await refresh(); }} showToast={showToast} />}
+      {composerOpen && <Composer
+        data={data}
+        initialScope={composerTarget.scope}
+        initialCommunityId={composerTarget.communityId}
+        onClose={() => setComposerOpen(false)}
+        onDone={async () => { setComposerOpen(false); await refresh(); }}
+        showToast={showToast}
+      />}
       {commentsPost && <CommentsModal post={commentsPost} canAccept={commentsPost.authorUid === user.uid} onClose={() => setCommentsPost(null)} refresh={() => refresh()} showToast={showToast} />}
       {toast && <div className="toast">{toast}</div>}
     </>
@@ -369,6 +406,12 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onComments, showToast
     catch (err) { showToast(errorMessage(err)); }
   };
 
+  const remove = async (post: Post) => {
+    if (!confirm("Excluir esta publicação? Esta ação não pode ser desfeita.")) return;
+    try { await api(`/posts/${post.id}`, { method: "DELETE" }); showToast("Publicação excluída."); await refresh(); }
+    catch (err) { showToast(errorMessage(err)); }
+  };
+
   return (
     <>
       <section className="quick-compose">
@@ -376,38 +419,140 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onComments, showToast
         <button onClick={onCompose}>Compartilhe algo com sua empresa ou comunidade…</button>
       </section>
       <section className="feed">
-        {posts.map((post) => <PostCard key={post.id} post={post} companyName={data.company?.name} community={data.communityMap[post.communityId || ""]} onLike={like} onComments={onComments} onRead={read} />)}
+        {posts.map((post) => <PostCard
+          key={post.id}
+          post={post}
+          companyName={data.company?.name}
+          community={data.communityMap[post.communityId || ""]}
+          onLike={like}
+          onComments={onComments}
+          onRead={read}
+          canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
+          onDelete={remove}
+        />)}
         {!posts.length && <Empty title="Nada por aqui ainda" text={tab === "world" ? "Ainda não há publicações públicas." : "Quando sua empresa ou suas comunidades publicarem, aparecerá aqui."} />}
       </section>
     </>
   );
 }
 
-function CommunitiesPage({ data, refresh, showToast }: { data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void }) {
+function CommunitiesPage({
+  data, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, onComments, refresh, showToast
+}: {
+  data: BootstrapData;
+  selectedCommunityId: string;
+  onSelectCommunity: (id: string) => void;
+  onBack: () => void;
+  onComposeCommunity: (id: string) => void;
+  onComments: (post: Post) => void;
+  refresh: () => Promise<void>;
+  showToast: (m: string) => void;
+}) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [communityPosts, setCommunityPosts] = useState<Post[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const selectedCommunity = data.communities.find((community) => community.id === selectedCommunityId);
+
+  const loadCommunity = async (communityId: string) => {
+    setDetailLoading(true);
+    try {
+      const result = await api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts`);
+      setCommunityPosts(result.posts);
+    } catch (err) {
+      showToast(errorMessage(err));
+      onBack();
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedCommunityId) {
+      setCommunityPosts([]);
+      return;
+    }
+    loadCommunity(selectedCommunityId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCommunityId]);
+
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     try {
-      await api(`/companies/${data.selectedCompanyId}/communities`, {
+      const result = await api<{ community: Community }>(`/companies/${data.selectedCompanyId}/communities`, {
         method: "POST", body: JSON.stringify({ name: fd.get("name"), description: fd.get("description") })
       });
-      setCreateOpen(false); showToast("Comunidade criada."); await refresh();
+      setCreateOpen(false);
+      showToast("Comunidade criada.");
+      await refresh();
+      onSelectCommunity(result.community.id);
     } catch (err) { showToast(errorMessage(err)); }
   };
+
+  const like = async (post: Post) => {
+    try {
+      await api(`/posts/${post.id}/reaction`, { method: "POST" });
+      if (selectedCommunityId) await loadCommunity(selectedCommunityId);
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
+  const remove = async (post: Post) => {
+    if (!confirm("Excluir esta publicação? Respostas, reações e anexos vinculados também serão removidos.")) return;
+    try {
+      await api(`/posts/${post.id}`, { method: "DELETE" });
+      showToast("Publicação excluída.");
+      if (selectedCommunityId) await loadCommunity(selectedCommunityId);
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
+  if (selectedCommunityId && selectedCommunity) {
+    return (
+      <section className="page-section">
+        <div className="community-detail-head">
+          <button className="back-button" onClick={onBack}><ArrowLeft size={18} /> Comunidades</button>
+          <div className="community-detail-title">
+            <div className="community-avatar large">{selectedCommunity.name.slice(0, 2).toUpperCase()}</div>
+            <div><h2>{selectedCommunity.name}</h2><p>{selectedCommunity.description || "Comunidade privada da empresa."}</p></div>
+          </div>
+          <button className="btn small" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+        </div>
+
+        <div className="feed community-feed">
+          {detailLoading && <div className="loading-line">Carregando publicações…</div>}
+          {!detailLoading && communityPosts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              companyName={data.company?.name}
+              community={selectedCommunity}
+              onLike={like}
+              onComments={onComments}
+              onRead={() => {}}
+              canDelete={post.authorUid === data.me.uid || data.canAdmin}
+              onDelete={remove}
+            />
+          ))}
+          {!detailLoading && !communityPosts.length && <Empty title="Nenhuma publicação ainda" text="Comece uma conversa nesta comunidade." />}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="page-section">
       <div className="page-heading">
-        <div><h2>Suas comunidades</h2><p>Os grupos da empresa ficam organizados aqui. A entrada acontece por convite.</p></div>
+        <div><h2>Suas comunidades</h2><p>Entre em uma comunidade para acompanhar e organizar as conversas daquele grupo.</p></div>
         {data.canAdmin && <button className="btn small" onClick={() => setCreateOpen(true)}><Plus size={17} /> Criar comunidade</button>}
       </div>
       <div className="community-grid">
         {data.communities.map((community) => (
-          <article className="community-card" key={community.id}>
+          <button className="community-card community-link" key={community.id} onClick={() => onSelectCommunity(community.id)}>
             <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
             <div><strong>{community.name}</strong><p>{community.description || "Comunidade privada da empresa."}</p></div>
-          </article>
+            <ChevronRight className="community-chevron" size={18} />
+          </button>
         ))}
       </div>
       {!data.communities.length && <Empty title={data.canAdmin ? "Crie a primeira comunidade" : "Você ainda não está em comunidades"} text={data.canAdmin ? "Crie apenas os grupos que sua empresa realmente precisa." : "Quando receber um convite, ele aparecerá na Central de Notificações."} />}
@@ -444,12 +589,32 @@ function SearchPage({ data, onComments, refresh, showToast }: {
     catch (err) { showToast(errorMessage(err)); }
   };
 
+  const remove = async (post: Post) => {
+    if (!confirm("Excluir esta publicação?")) return;
+    try {
+      await api(`/posts/${post.id}`, { method: "DELETE" });
+      setPosts((current) => current.filter((item) => item.id !== post.id));
+      showToast("Publicação excluída.");
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
   return (
     <section className="page-section">
       <div className="page-heading"><div><h2>Encontre o que já foi discutido</h2><p>Procure problemas, soluções, comunicados e assuntos antigos.</p></div></div>
       <form className="large-search" onSubmit={submit}><Search size={20} /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ex.: erro E37, férias, procedimento…" /><button className="btn small">Buscar</button></form>
       <div className="feed search-results">
-        {posts.map((post) => <PostCard key={post.id} post={post} companyName={data.company?.name} community={data.communityMap[post.communityId || ""]} onLike={like} onComments={onComments} onRead={() => {}} />)}
+        {posts.map((post) => <PostCard
+          key={post.id}
+          post={post}
+          companyName={data.company?.name}
+          community={data.communityMap[post.communityId || ""]}
+          onLike={like}
+          onComments={onComments}
+          onRead={() => {}}
+          canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
+          onDelete={remove}
+        />)}
         {searched && !posts.length && <Empty title="Nenhum resultado" text="Tente outras palavras ou uma busca mais curta." />}
       </div>
     </section>
@@ -667,12 +832,17 @@ function NotificationsPanel({ data, onClose, refresh, showToast }: {
   );
 }
 
-function Composer({ data, onClose, onDone, showToast }: {
-  data: BootstrapData; onClose: () => void; onDone: () => Promise<void>; showToast: (m: string) => void;
+function Composer({ data, initialScope, initialCommunityId, onClose, onDone, showToast }: {
+  data: BootstrapData;
+  initialScope?: "company" | "community" | "world";
+  initialCommunityId?: string;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+  showToast: (m: string) => void;
 }) {
-  const [scope, setScope] = useState<"company" | "community" | "world">("company");
+  const [scope, setScope] = useState<"company" | "community" | "world">(initialScope || "company");
   const [type, setType] = useState<"post" | "question" | "announcement">("post");
-  const [communityId, setCommunityId] = useState(data.communities[0]?.id || "");
+  const [communityId, setCommunityId] = useState(initialCommunityId || data.communities[0]?.id || "");
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
 

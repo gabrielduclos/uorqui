@@ -55,12 +55,20 @@ async function routeApi(request, env, identity, url) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await createCommunityInvite(env, identity, communityId, await readJson(request)), 201);
   }
+  if (method === 'GET' && /^\/communities\/[^/]+\/posts$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await getCommunityPosts(env, identity, communityId));
+  }
   if (method === 'DELETE' && /^\/communities\/[^/]+$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await deleteCommunity(env, identity, communityId));
   }
   if (method === 'POST' && path === '/invites/accept') return json(await acceptInvite(env, identity, await readJson(request)));
   if (method === 'POST' && path === '/posts') return json(await createPost(env, identity, await readJson(request)), 201);
+  if (method === 'DELETE' && /^\/posts\/[^/]+$/.test(path)) {
+    const postId = decodeURIComponent(path.split('/')[2]);
+    return json(await deletePost(env, identity, postId));
+  }
   if (method === 'GET' && /^\/posts\/[^/]+\/comments$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
     return json(await getComments(env, identity, postId));
@@ -347,6 +355,25 @@ async function acceptInvite(env, identity, body) {
   return {ok:true,companyId:invite.companyId,communityId:invite.communityId||null};
 }
 
+async function getCommunityPosts(env, identity, communityId) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  await requireCompanyMember(env, identity.uid, community.companyId);
+  await requireCommunityMember(env, identity.uid, communityId);
+
+  let posts = await fsWhere(env, 'posts', 'communityId', communityId, 120);
+  posts = posts.filter(p => p.scope === 'community');
+
+  const reactions = await fsWhere(env, 'reactions', 'uid', identity.uid, 250);
+  const likedIds = new Set(reactions.map(r => r.postId));
+  const receipts = await fsWhere(env, 'readReceipts', 'uid', identity.uid, 250);
+  const readIds = new Set(receipts.map(r => r.postId));
+
+  return {
+    community,
+    posts: enrichPosts(posts, likedIds, readIds).slice(0, 100)
+  };
+}
+
 async function createPost(env, identity, body) {
   await ensureUser(env,identity);
   const scope=['world','company','community'].includes(body.scope)?body.scope:null;if(!scope)throw httpError(400,'Audiência inválida.');
@@ -382,6 +409,46 @@ async function createPost(env, identity, body) {
     if(docs.length) await fsBatchPut(env,docs);
   }
   return {post};
+}
+
+async function deletePost(env, identity, postId) {
+  const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
+  await requirePostAccess(env, identity.uid, post);
+
+  let allowed = post.authorUid === identity.uid;
+  if (!allowed && post.scope !== 'world' && post.companyId) {
+    const membership = await fsGet(env, 'companyMembers', `${post.companyId}_${identity.uid}`);
+    allowed = Boolean(
+      membership &&
+      membership.status === 'active' &&
+      (membership.role === 'owner' || membership.role === 'admin')
+    );
+  }
+  if (!allowed) throw httpError(403, 'Você não pode excluir esta publicação.');
+
+  const comments = await fsWhere(env, 'comments', 'postId', postId, 250);
+  for (const comment of comments) await fsDelete(env, 'comments', comment.id);
+
+  const reactions = await fsWhere(env, 'reactions', 'postId', postId, 250);
+  for (const reaction of reactions) await fsDelete(env, 'reactions', reaction.id);
+
+  const receipts = await fsWhere(env, 'readReceipts', 'postId', postId, 250);
+  for (const receipt of receipts) await fsDelete(env, 'readReceipts', receipt.id);
+
+  try {
+    const notifications = await fsWhere(env, 'notifications', 'data.postId', postId, 250);
+    for (const notification of notifications) await fsDelete(env, 'notifications', notification.id);
+  } catch {}
+
+  for (const attachment of (post.attachments || [])) {
+    const media = await fsGet(env, 'media', attachment.id);
+    if (!media) continue;
+    try { await env.MEDIA.delete(media.key); } catch {}
+    try { await fsDelete(env, 'media', media.id); } catch {}
+  }
+
+  await fsDelete(env, 'posts', postId);
+  return { ok: true };
 }
 
 async function getComments(env, identity, postId) {

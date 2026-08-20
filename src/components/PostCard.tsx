@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Share2 } from "lucide-react";
+import { Heart, MessageCircle, Share2, Trash2 } from "lucide-react";
 import { Avatar } from "./Avatar";
 import type { Community, Post } from "../types";
 
@@ -24,6 +24,8 @@ export function PostCard({
   onLike,
   onComments,
   onRead,
+  canDelete = false,
+  onDelete,
 }: {
   post: Post;
   companyName?: string;
@@ -31,6 +33,8 @@ export function PostCard({
   onLike: (post: Post) => void;
   onComments: (post: Post) => void;
   onRead: (post: Post) => void;
+  canDelete?: boolean;
+  onDelete?: (post: Post) => void;
 }) {
   const scope = post.scope === "world"
     ? "🌎 Mundo"
@@ -46,6 +50,11 @@ export function PostCard({
           <div><strong>{post.authorName || "Usuário"}</strong><span> · {relative(post.createdAt)}</span></div>
           <small className={`scope ${post.scope}`}>{scope}</small>
         </div>
+        {canDelete && onDelete && (
+          <button className="post-delete" onClick={() => onDelete(post)} aria-label="Excluir publicação" title="Excluir publicação">
+            <Trash2 size={17} />
+          </button>
+        )}
       </header>
 
       <div className="post-content">
