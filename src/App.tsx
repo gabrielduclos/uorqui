@@ -248,7 +248,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.1.3</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.1.4</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -454,6 +454,7 @@ function CommunitiesPage({
   const [communityMembers, setCommunityMembers] = useState<CommunityMember[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [addUid, setAddUid] = useState("");
+  const [membersPage, setMembersPage] = useState(false);
   const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
 
@@ -475,6 +476,7 @@ function CommunitiesPage({
   };
 
   useEffect(() => {
+    setMembersPage(false);
     if (!selectedCommunityId) {
       setCommunityPosts([]);
       setCommunityMembers([]);
@@ -548,6 +550,59 @@ function CommunitiesPage({
     const currentIds = new Set(communityMembers.map((member) => member.uid));
     const availableMembers = data.members.filter((member) => !currentIds.has(member.uid));
 
+    if (membersPage) {
+      return (
+        <section className="page-section">
+          <div className="members-page-head">
+            <button className="back-button" onClick={() => setMembersPage(false)}><ArrowLeft size={18} /> {selectedCommunity.name}</button>
+            <div>
+              <h2>Membros de {selectedCommunity.name}</h2>
+              <p>{communityMembers.length} {communityMembers.length === 1 ? "membro" : "membros"} nesta comunidade.</p>
+            </div>
+          </div>
+
+          {data.canAdmin && (
+            <section className="panel-card members-manage-card">
+              <div className="members-manage-copy">
+                <strong>Adicionar usuário</strong>
+                <small>Escolha um colaborador da empresa que ainda não participa desta comunidade.</small>
+              </div>
+              {availableMembers.length ? (
+                <div className="community-add-member">
+                  <select value={addUid} onChange={(e) => setAddUid(e.target.value)}>
+                    <option value="">Escolha um usuário…</option>
+                    {availableMembers.map((member) => (
+                      <option value={member.uid} key={member.uid}>{member.displayName || member.email}</option>
+                    ))}
+                  </select>
+                  <button className="btn small" disabled={!addUid} onClick={addMember}><Plus size={15} /> Adicionar</button>
+                </div>
+              ) : (
+                <small className="muted">Todos os colaboradores da empresa já estão nesta comunidade.</small>
+              )}
+            </section>
+          )}
+
+          <section className="panel-card members-page-list">
+            {communityMembers.map((member) => (
+              <div className="community-member-row members-page-row" key={member.uid}>
+                <Avatar name={member.displayName || member.email} mediaId={member.avatarMediaId} size={42} />
+                <div className="ellipsis">
+                  <strong>{member.displayName || member.email}</strong>
+                  <small>{member.email}</small>
+                </div>
+                <span className="private-pill">
+                  {member.companyRole === "owner" ? "Proprietário" : member.companyRole === "admin" ? "Administrador" : "Usuário"}
+                </span>
+                {data.canAdmin && <button className="btn danger small" onClick={() => removeMember(member)}>Remover</button>}
+              </div>
+            ))}
+            {!communityMembers.length && <p className="muted">Nenhum usuário nesta comunidade.</p>}
+          </section>
+        </section>
+      );
+    }
+
     return (
       <section className="page-section">
         <div className="community-detail-head">
@@ -557,41 +612,15 @@ function CommunitiesPage({
             <div>
               <h2>{selectedCommunity.name}</h2>
               <p>{selectedCommunity.description || "Comunidade privada da empresa."}</p>
-              <small>{communityMembers.length} {communityMembers.length === 1 ? "membro" : "membros"}</small>
+              <button className="community-members-link" onClick={() => setMembersPage(true)}>
+                <Users size={14} />
+                {communityMembers.length} {communityMembers.length === 1 ? "membro" : "membros"}
+                <ChevronRight size={14} />
+              </button>
             </div>
           </div>
           <button className="btn small" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
         </div>
-
-        <section className="community-members-card">
-          <div className="community-members-title">
-            <div><strong>Membros da comunidade</strong><small>{communityMembers.length} no total</small></div>
-            {data.canAdmin && !!availableMembers.length && (
-              <div className="community-add-member">
-                <select value={addUid} onChange={(e) => setAddUid(e.target.value)}>
-                  <option value="">Adicionar usuário…</option>
-                  {availableMembers.map((member) => (
-                    <option value={member.uid} key={member.uid}>{member.displayName || member.email}</option>
-                  ))}
-                </select>
-                <button className="btn small" disabled={!addUid} onClick={addMember}><Plus size={15} /> Adicionar</button>
-              </div>
-            )}
-          </div>
-          <div className="community-member-list">
-            {communityMembers.map((member) => (
-              <div className="community-member-row" key={member.uid}>
-                <Avatar name={member.displayName || member.email} mediaId={member.avatarMediaId} size={36} />
-                <div className="ellipsis">
-                  <strong>{member.displayName || member.email}</strong>
-                  <small>{member.email}{member.companyRole === "owner" ? " · Proprietário" : member.companyRole === "admin" ? " · Administrador" : ""}</small>
-                </div>
-                {data.canAdmin && <button className="btn danger small" onClick={() => removeMember(member)}>Remover</button>}
-              </div>
-            ))}
-            {!communityMembers.length && <p className="muted">Nenhum usuário nesta comunidade.</p>}
-          </div>
-        </section>
 
         <div className="feed community-feed">
           {detailLoading && <div className="loading-line">Carregando publicações…</div>}

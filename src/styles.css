@@ -212,3 +212,45 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
   .community-member-row .btn{margin-left:45px}
   .role-select,.community-add-select{max-width:150px}
 }
+
+
+/* v1.1.4 — tela de membros e visualização real de anexos */
+.community-members-link{margin-top:6px;border:0;background:transparent;padding:0;color:#555a62;font-size:10px;font-weight:750;display:inline-flex;align-items:center;gap:5px}
+.community-members-link:hover{text-decoration:underline;text-underline-offset:3px}
+.members-page-head{margin-bottom:14px}
+.members-page-head>div{margin-top:14px}
+.members-page-head h2{margin:0 0 5px;font-size:20px}
+.members-page-head p{margin:0;color:var(--muted);font-size:11px}
+.members-manage-card{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.members-manage-copy strong,.members-manage-copy small{display:block}
+.members-manage-copy strong{font-size:12px}
+.members-manage-copy small{margin-top:4px;color:var(--muted);font-size:9px;max-width:350px}
+.members-page-list{padding-top:4px;padding-bottom:4px}
+.members-page-row{min-height:58px}
+.members-page-row .private-pill{margin-left:auto}
+.post-attachments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:12px}
+.post-attachments.one{grid-template-columns:1fr}
+.post-image-wrap{overflow:hidden;border-radius:13px;background:#f0f1f2;border:1px solid var(--line)}
+.post-image{display:block;width:100%;max-height:520px;object-fit:cover;background:#f0f1f2}
+.post-attachments:not(.one) .post-image{height:240px}
+.post-image-loading{min-height:180px;display:grid;place-items:center;color:var(--muted);font-size:10px}
+.post-file{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fafafa}
+.post-file-icon{width:36px;height:36px;border-radius:10px;background:#eceef0;display:grid;place-items:center;flex:none}
+.post-file-copy{min-width:0;flex:1}
+.post-file-copy strong,.post-file-copy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-file-copy strong{font-size:10px}
+.post-file-copy small{font-size:9px;color:var(--muted);margin-top:2px}
+.post-file-download{width:34px;height:34px;border-radius:9px;color:#4f535b;display:grid;place-items:center;text-decoration:none}
+.post-file-download:hover{background:#eceef0}
+
+@media(max-width:850px){
+  .members-manage-card{align-items:flex-start;flex-direction:column}
+  .members-manage-card .community-add-member{width:100%}
+}
+@media(max-width:520px){
+  .post-attachments{grid-template-columns:1fr}
+  .post-attachments:not(.one) .post-image{height:auto;max-height:440px}
+  .members-page-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:9px}
+  .members-page-row .private-pill{grid-column:3}
+  .members-page-row .btn{grid-column:2/4;margin-left:0;justify-self:start}
+}

@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Heart, MessageCircle, Send, Share2, ShieldAlert, Trash2 } from "lucide-react";
+import { Download, FileText, Heart, MessageCircle, Send, Share2, ShieldAlert, Trash2 } from "lucide-react";
 import { Avatar } from "./Avatar";
-import { api } from "../lib/api";
-import type { Comment, Community, Post } from "../types";
+import { api, mediaBlobUrl } from "../lib/api";
+import type { Attachment, Comment, Community, Post } from "../types";
 
 function relative(value?: string) {
   if (!value) return "";
@@ -20,6 +20,65 @@ function count(value = 0) {
     notation: value > 999 ? "compact" : "standard",
     maximumFractionDigits: 1
   }).format(value);
+}
+
+function formatBytes(size = 0) {
+  if (!size) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+}
+
+function AttachmentPreview({ attachment }: { attachment: Attachment }) {
+  const [url, setUrl] = useState("");
+  const [failed, setFailed] = useState(false);
+  const isImage = String(attachment.contentType || "").startsWith("image/");
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    setUrl("");
+    setFailed(false);
+
+    mediaBlobUrl(attachment.id)
+      .then((next) => {
+        objectUrl = next;
+        if (active) setUrl(next);
+      })
+      .catch(() => active && setFailed(true));
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [attachment.id]);
+
+  if (isImage) {
+    return (
+      <div className="post-image-wrap">
+        {url ? (
+          <img className="post-image" src={url} alt={attachment.name || "Foto da publicação"} loading="lazy" />
+        ) : (
+          <div className="post-image-loading">{failed ? "Não foi possível carregar a foto." : "Carregando foto…"}</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="post-file">
+      <div className="post-file-icon"><FileText size={19} /></div>
+      <div className="post-file-copy">
+        <strong>{attachment.name || "Arquivo"}</strong>
+        <small>{formatBytes(attachment.size)}</small>
+      </div>
+      {url && (
+        <a className="post-file-download" href={url} download={attachment.name || "arquivo"} aria-label={`Baixar ${attachment.name || "arquivo"}`}>
+          <Download size={17} />
+        </a>
+      )}
+    </div>
+  );
 }
 
 export function PostCard({
@@ -163,7 +222,9 @@ export function PostCard({
               </>
             )}
             {!!post.attachments?.length && (
-              <div className="attachment-note">{post.attachments.length} anexo(s) — abra a publicação para visualizar</div>
+              <div className={`post-attachments ${post.attachments.length === 1 ? "one" : ""}`}>
+                {post.attachments.map((attachment) => <AttachmentPreview key={attachment.id} attachment={attachment} />)}
+              </div>
             )}
           </div>
 
