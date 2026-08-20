@@ -44,6 +44,8 @@ export default function App() {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedCommunityId, setSelectedCommunityId] = useState("");
   const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string }>({});
+  const [headerSearch, setHeaderSearch] = useState("");
+  const [searchSeed, setSearchSeed] = useState("");
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
     setUser(next);
@@ -166,7 +168,7 @@ export default function App() {
         showToast={showToast}
       />
     );
-    if (view === "search") return <SearchPage data={data} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} />;
     if (view === "admin") return <AdminPage data={data} refresh={() => refresh()} showToast={showToast} />;
     if (view === "notifications") return <NotificationsPage data={data} refresh={() => refresh()} showToast={showToast} />;
     return <ProfilePage data={data} refresh={() => refresh()} showToast={showToast} />;
@@ -215,10 +217,37 @@ export default function App() {
                 <button className="mobile-logo" onClick={() => navigate("home")}><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /></button>
                 <h1>{pageTitle[view]}</h1>
               </div>
-              <button className={`icon-btn top-bell ${view === "notifications" ? "active" : ""}`} onClick={() => navigate("notifications")} aria-label="Notificações">
-                <Bell size={21} />
-                {unread > 0 && <span className="count-badge">{unread > 99 ? "99+" : unread}</span>}
-              </button>
+
+              <form
+                className="mobile-header-search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const next = headerSearch.trim();
+                  if (next.length < 2) return;
+                  setSearchSeed(next);
+                  navigate("search");
+                }}
+              >
+                <Search size={17} />
+                <input
+                  value={headerSearch}
+                  onChange={(event) => setHeaderSearch(event.target.value)}
+                  placeholder="Buscar"
+                  aria-label="Buscar no Uorqui"
+                />
+              </form>
+
+              <div className="topbar-actions">
+                <button className={`icon-btn top-bell ${view === "notifications" ? "active" : ""}`} onClick={() => navigate("notifications")} aria-label="Notificações">
+                  <Bell size={21} />
+                  {unread > 0 && <span className="count-badge">{unread > 99 ? "99+" : unread}</span>}
+                </button>
+                {data.canAdmin && (
+                  <button className={`icon-btn mobile-admin-button ${view === "admin" ? "active" : ""}`} onClick={() => navigate("admin")} aria-label="Administrar empresa">
+                    <Settings size={21} />
+                  </button>
+                )}
+              </div>
             </div>
             {view === "home" && (
               <div className="tabs">
@@ -248,7 +277,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.1.4</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.1.5</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -679,21 +708,34 @@ function CommunitiesPage({
   );
 }
 
-function SearchPage({ data, refresh, showToast }: {
-  data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void;
+function SearchPage({ data, initialQuery, refresh, showToast }: {
+  data: BootstrapData; initialQuery?: string; refresh: () => Promise<void>; showToast: (m: string) => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery || "");
   const [posts, setPosts] = useState<Post[]>([]);
   const [searched, setSearched] = useState(false);
 
+  const runSearch = async (value: string) => {
+    const normalized = value.trim();
+    if (normalized.length < 2) return;
+    try {
+      const qs = new URLSearchParams({ q: normalized, companyId: data.selectedCompanyId });
+      const result = await api<{ posts: Post[] }>(`/search?${qs}`);
+      setPosts(result.posts);
+      setSearched(true);
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
+  useEffect(() => {
+    if (!initialQuery || initialQuery.trim().length < 2) return;
+    setQuery(initialQuery);
+    runSearch(initialQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, data.selectedCompanyId]);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (query.trim().length < 2) return;
-    try {
-      const qs = new URLSearchParams({ q: query.trim(), companyId: data.selectedCompanyId });
-      const result = await api<{ posts: Post[] }>(`/search?${qs}`);
-      setPosts(result.posts); setSearched(true);
-    } catch (err) { showToast(errorMessage(err)); }
+    await runSearch(query);
   };
 
   const like = async (post: Post) => {
@@ -861,6 +903,9 @@ function AdminPage({ data, refresh, showToast }: { data: BootstrapData; refresh:
 function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void }) {
   const [photoError, setPhotoError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [companyError, setCompanyError] = useState("");
+  const [createCompanyOpen, setCreateCompanyOpen] = useState(false);
+  const [deleteCompany, setDeleteCompany] = useState<{ id: string; name: string } | null>(null);
 
   const uploadPhoto = async (file?: File) => {
     if (!file) return;
@@ -900,6 +945,40 @@ function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refres
     } catch (err) { setPasswordError(errorMessage(err)); }
   };
 
+  const createCompany = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCompanyError("");
+    const form = event.currentTarget;
+    const name = String(new FormData(form).get("name") || "").trim();
+    if (!name) return;
+    try {
+      await api("/companies", { method: "POST", body: JSON.stringify({ name }) });
+      form.reset();
+      setCreateCompanyOpen(false);
+      showToast("Empresa criada.");
+      await refresh();
+    } catch (err) { setCompanyError(errorMessage(err)); }
+  };
+
+  const confirmDeleteCompany = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!deleteCompany) return;
+    setCompanyError("");
+    const confirmation = String(new FormData(event.currentTarget).get("confirmation") || "");
+    try {
+      await api(`/companies/${deleteCompany.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation })
+      });
+      if (localStorage.getItem("uorqui-company") === deleteCompany.id) {
+        localStorage.removeItem("uorqui-company");
+      }
+      setDeleteCompany(null);
+      showToast("Empresa excluída.");
+      await refresh();
+    } catch (err) { setCompanyError(errorMessage(err)); }
+  };
+
   return (
     <section className="page-section">
       <div className="profile-grid">
@@ -931,7 +1010,65 @@ function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refres
           </form>
         </section>
       </div>
+      <section className="panel-card profile-companies-card">
+        <div className="profile-companies-head">
+          <div>
+            <strong>Empresas</strong>
+            <p className="muted">Sua conta pode participar de várias empresas. Somente o proprietário pode excluir uma empresa.</p>
+          </div>
+          <button className="btn small" onClick={() => { setCompanyError(""); setCreateCompanyOpen(true); }}>
+            <Plus size={16} /> Criar empresa
+          </button>
+        </div>
+
+        <div className="profile-company-list">
+          {data.companies.map((company) => (
+            <div className="profile-company-row" key={company.id}>
+              <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
+              <div className="ellipsis">
+                <strong>{company.name}</strong>
+                <small>{company.role === "owner" ? "Proprietário" : company.role === "admin" ? "Administrador" : "Usuário"}</small>
+              </div>
+              {company.role === "owner" && (
+                <button className="btn danger small" onClick={() => { setCompanyError(""); setDeleteCompany({ id: company.id, name: company.name }); }}>
+                  Excluir
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {companyError && <div className="form-error">{companyError}</div>}
+      </section>
+
       <section className="panel-card session-card"><div><strong>Sessão</strong><p className="muted">Encerrar o acesso neste dispositivo.</p></div><button className="btn secondary" onClick={() => signOut(auth)}><LogOut size={17} /> Sair da conta</button></section>
+
+      {createCompanyOpen && (
+        <Modal title="Criar empresa" onClose={() => setCreateCompanyOpen(false)}>
+          <form className="stack-form" onSubmit={createCompany}>
+            <label><span>Nome da empresa</span><input name="name" required maxLength={120} placeholder="Ex.: Minha Empresa" /></label>
+            <p className="muted modal-help">Você será o proprietário e poderá convidar administradores e usuários depois.</p>
+            {companyError && <div className="form-error">{companyError}</div>}
+            <button className="btn">Criar empresa</button>
+          </form>
+        </Modal>
+      )}
+
+      {deleteCompany && (
+        <Modal title="Excluir empresa" onClose={() => setDeleteCompany(null)}>
+          <form className="stack-form" onSubmit={confirmDeleteCompany}>
+            <div className="danger-notice">
+              <strong>Esta ação é permanente.</strong>
+              <p>Comunidades, publicações, comentários, membros, convites e arquivos desta empresa serão removidos.</p>
+            </div>
+            <label>
+              <span>Digite <strong>{deleteCompany.name}</strong> para confirmar</span>
+              <input name="confirmation" required autoComplete="off" />
+            </label>
+            {companyError && <div className="form-error">{companyError}</div>}
+            <button className="btn danger-confirm">Excluir empresa definitivamente</button>
+          </form>
+        </Modal>
+      )}
     </section>
   );
 }

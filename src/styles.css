@@ -104,7 +104,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 }
 @media(max-width:850px){
   body{padding-bottom:70px}.app-shell{display:block;max-width:680px}.sidebar,.rightbar{display:none}.main{border:0;min-height:100dvh}
-  .topbar-line{height:64px;padding:0 13px;position:relative;justify-content:flex-end}.topbar-brand{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block}.mobile-logo{display:block;width:118px}.mobile-logo img{width:118px;height:44px;object-fit:contain;object-position:center}.topbar h1{display:none}.top-bell{display:grid;z-index:2}
+  .topbar-line{height:64px;padding:0 10px;display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:8px;align-items:center}.topbar-brand{position:static;transform:none;display:block;min-width:0}.mobile-logo{display:block;width:78px}.mobile-logo img{width:78px;height:36px;object-fit:contain;object-position:left center}.topbar h1{display:none}.mobile-header-search{display:flex;align-items:center;gap:6px;min-width:0;background:#f3f4f5;border:1px solid var(--line);border-radius:999px;padding:7px 10px}.mobile-header-search svg{flex:none;color:#7a7d85}.mobile-header-search input{min-width:0;width:100%;border:0;background:transparent;box-shadow:none;padding:0;font-size:11px}.mobile-header-search input:focus{box-shadow:none}.topbar-actions{justify-self:end}.top-bell{display:grid;z-index:2}.mobile-admin-button{display:grid;z-index:2}
   .tabs{padding:0 13px;gap:20px}.tabs button{padding-bottom:11px}
   .feed{padding:9px}.post-card{border-radius:14px;padding:14px;margin-bottom:9px}.quick-compose{padding:12px 13px}.quick-compose .avatar{width:39px!important;height:39px!important}.quick-compose>button{font-size:11px}
   .page-section{padding:14px;min-height:calc(100dvh - 57px)}
@@ -253,4 +253,36 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
   .members-page-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:9px}
   .members-page-row .private-pill{grid-column:3}
   .members-page-row .btn{grid-column:2/4;margin-left:0;justify-self:start}
+}
+
+
+/* v1.1.5 — header mobile e gestão de empresas no Perfil */
+.topbar-actions{display:flex;align-items:center;gap:3px}
+.mobile-header-search,.mobile-admin-button{display:none}
+.profile-companies-card{margin-top:12px}
+.profile-companies-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px}
+.profile-companies-head>div>strong{font-size:13px}
+.profile-companies-head p{margin:4px 0 0;font-size:10px;line-height:1.45;max-width:440px}
+.profile-company-list{display:flex;flex-direction:column}
+.profile-company-row{display:flex;align-items:center;gap:10px;border-top:1px solid #f0f0f1;padding:10px 0}
+.profile-company-row:first-child{border-top:0}
+.company-profile-mark{width:38px;height:38px;border-radius:11px;background:#151619;color:#fff;display:grid;place-items:center;font-size:9px;font-weight:800;flex:none}
+.profile-company-row>div:nth-child(2){flex:1}
+.profile-company-row strong{display:block;font-size:11px}
+.profile-company-row small{display:block;margin-top:3px;color:var(--muted);font-size:9px}
+.modal-help{font-size:10px;line-height:1.5;margin:0}
+.danger-notice{border:1px solid #ffd4cf;background:#fff5f4;border-radius:12px;padding:12px;color:#8d2520}
+.danger-notice strong{font-size:11px}
+.danger-notice p{margin:5px 0 0;font-size:10px;line-height:1.45}
+.danger-confirm{background:#b42318}
+
+@media(max-width:520px){
+  .topbar-line{grid-template-columns:70px minmax(0,1fr) auto;gap:5px;padding-left:8px;padding-right:7px}
+  .mobile-logo,.mobile-logo img{width:68px}
+  .mobile-header-search{padding:7px 8px}
+  .mobile-header-search input{font-size:10px}
+  .topbar-actions{gap:0}
+  .topbar-actions .icon-btn{width:34px;height:34px}
+  .profile-companies-head{align-items:stretch;flex-direction:column}
+  .profile-companies-head .btn{align-self:flex-start}
 }

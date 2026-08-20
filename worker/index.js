@@ -43,6 +43,10 @@ async function routeApi(request, env, identity, url) {
   if (method === 'GET' && path === '/bootstrap') return json(await bootstrap(env, identity, url.searchParams.get('companyId')));
   if (method === 'PATCH' && path === '/me') return json(await updateMe(env, identity, await readJson(request)));
   if (method === 'POST' && path === '/companies') return json(await createCompany(env, identity, await readJson(request)), 201);
+  if (method === 'DELETE' && /^\/companies\/[^/]+$/.test(path)) {
+    const companyId = decodeURIComponent(path.split('/')[2]);
+    return json(await deleteCompany(env, identity, companyId, await readJson(request)));
+  }
   if (method === 'POST' && /^\/companies\/[^/]+\/invites$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await createCompanyInvite(env, identity, companyId, await readJson(request), env.APP_ORIGIN || url.origin), 201);
@@ -281,6 +285,70 @@ async function createCompany(env, identity, body) {
   // Publicacoes para toda a empresa continuam usando scope === 'company'.
   return { company };
 }
+
+async function deleteCompany(env, identity, companyId, body) {
+  const company = await fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.');
+  const membership = await fsGet(env, 'companyMembers', `${companyId}_${identity.uid}`);
+  if (!membership || membership.status !== 'active' || membership.role !== 'owner' || company.ownerUid !== identity.uid) {
+    throw httpError(403, 'Somente o proprietário pode excluir esta empresa.');
+  }
+
+  const confirmation = clean(body.confirmation || '', 160);
+  if (confirmation !== company.name) {
+    throw httpError(400, 'Digite exatamente o nome da empresa para confirmar a exclusão.');
+  }
+
+  // Remove as publicações da empresa e seus dados vinculados.
+  const posts = await fsWhere(env, 'posts', 'companyId', companyId, 500);
+  for (const post of posts) {
+    const comments = await fsWhere(env, 'comments', 'postId', post.id, 500);
+    for (const comment of comments) await fsDelete(env, 'comments', comment.id);
+
+    const reactions = await fsWhere(env, 'reactions', 'postId', post.id, 500);
+    for (const reaction of reactions) await fsDelete(env, 'reactions', reaction.id);
+
+    const receipts = await fsWhere(env, 'readReceipts', 'postId', post.id, 500);
+    for (const receipt of receipts) await fsDelete(env, 'readReceipts', receipt.id);
+
+    for (const attachment of (post.attachments || [])) {
+      const media = await fsGet(env, 'media', attachment.id);
+      if (!media) continue;
+      try { await env.MEDIA.delete(media.key); } catch {}
+      try { await fsDelete(env, 'media', media.id); } catch {}
+    }
+
+    await fsDelete(env, 'posts', post.id);
+  }
+
+  // Limpa uploads ainda não vinculados a publicações.
+  const remainingMedia = await fsWhere(env, 'media', 'companyId', companyId, 500);
+  for (const media of remainingMedia) {
+    try { await env.MEDIA.delete(media.key); } catch {}
+    try { await fsDelete(env, 'media', media.id); } catch {}
+  }
+
+  const communityMembers = await fsWhere(env, 'communityMembers', 'companyId', companyId, 500);
+  for (const item of communityMembers) await fsDelete(env, 'communityMembers', item.id);
+
+  const communities = await fsWhere(env, 'communities', 'companyId', companyId, 250);
+  for (const community of communities) await fsDelete(env, 'communities', community.id);
+
+  const invites = await fsWhere(env, 'invites', 'companyId', companyId, 500);
+  for (const invite of invites) await fsDelete(env, 'invites', invite.id);
+
+  const companyMembers = await fsWhere(env, 'companyMembers', 'companyId', companyId, 500);
+  for (const item of companyMembers) await fsDelete(env, 'companyMembers', item.id);
+
+  // Notificações antigas não devem continuar apontando para uma empresa apagada.
+  try {
+    const notifications = await fsWhere(env, 'notifications', 'data.companyId', companyId, 500);
+    for (const notification of notifications) await fsDelete(env, 'notifications', notification.id);
+  } catch {}
+
+  await fsDelete(env, 'companies', companyId);
+  return { ok: true, deletedCompanyId: companyId };
+}
+
 
 async function updateCompanyMemberRole(env, identity, companyId, targetUid, body) {
   const actor = await requireCompanyAdmin(env, identity.uid, companyId);
