@@ -1,4 +1,4 @@
-export type View = "home" | "communities" | "search" | "admin" | "profile";
+export type View = "home" | "communities" | "search" | "admin" | "profile" | "notifications";
 export type HomeTab = "for-you" | "recent" | "announcement" | "world";
 
 export interface UserProfile {
@@ -21,6 +21,16 @@ export interface Community {
   companyId: string;
   name: string;
   description?: string;
+  memberCount?: number;
+}
+
+export interface CommunityMember {
+  uid: string;
+  displayName?: string;
+  email?: string;
+  avatarMediaId?: string;
+  companyRole?: "owner" | "admin" | "member";
+  communityRole?: "moderator" | "member";
 }
 
 export interface NotificationItem {
@@ -62,6 +72,9 @@ export interface Post {
   liked?: boolean;
   hasRead?: boolean;
   createdAt?: string;
+  deletedByAdmin?: boolean;
+  deletedAt?: string;
+  deletedByUid?: string;
 }
 
 export interface Comment {

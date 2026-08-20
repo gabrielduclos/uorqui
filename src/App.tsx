@@ -13,7 +13,7 @@ import {
 import { auth } from "./lib/firebase";
 import { api } from "./lib/api";
 import type {
-  BootstrapData, Comment, Community, HomeTab, NotificationItem, Post, View
+  BootstrapData, Community, CommunityMember, HomeTab, NotificationItem, Post, View
 } from "./types";
 import { Avatar } from "./components/Avatar";
 import { Modal } from "./components/Modal";
@@ -39,9 +39,7 @@ export default function App() {
   const [fatal, setFatal] = useState("");
   const [view, setView] = useState<View>("home");
   const [homeTab, setHomeTab] = useState<HomeTab>("for-you");
-  const [notificationOpen, setNotificationOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [commentsPost, setCommentsPost] = useState<Post | null>(null);
   const [toast, setToast] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedCommunityId, setSelectedCommunityId] = useState("");
@@ -116,12 +114,11 @@ export default function App() {
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil"
+    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações"
   };
 
   const navigate = (next: View) => {
     setView(next);
-    setNotificationOpen(false);
   };
 
   const openComposer = (target: { scope?: "company" | "community" | "world"; communityId?: string } = {}) => {
@@ -132,13 +129,11 @@ export default function App() {
   const openCommunity = (communityId: string) => {
     setSelectedCommunityId(communityId);
     setView("communities");
-    setNotificationOpen(false);
   };
 
   const openWorld = () => {
     setHomeTab("world");
     setView("home");
-    setNotificationOpen(false);
   };
 
   const changeCompany = async (id: string) => {
@@ -157,7 +152,6 @@ export default function App() {
         setTab={setHomeTab}
         refresh={() => refresh()}
         onCompose={() => openComposer()}
-        onComments={setCommentsPost}
         showToast={showToast}
       />
     );
@@ -168,13 +162,13 @@ export default function App() {
         onSelectCommunity={setSelectedCommunityId}
         onBack={() => setSelectedCommunityId("")}
         onComposeCommunity={(communityId) => openComposer({ scope: "community", communityId })}
-        onComments={setCommentsPost}
         refresh={() => refresh()}
         showToast={showToast}
       />
     );
-    if (view === "search") return <SearchPage data={data} onComments={setCommentsPost} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "search") return <SearchPage data={data} refresh={() => refresh()} showToast={showToast} />;
     if (view === "admin") return <AdminPage data={data} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "notifications") return <NotificationsPage data={data} refresh={() => refresh()} showToast={showToast} />;
     return <ProfilePage data={data} refresh={() => refresh()} showToast={showToast} />;
   };
 
@@ -221,7 +215,7 @@ export default function App() {
                 <button className="mobile-logo" onClick={() => navigate("home")}><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /></button>
                 <h1>{pageTitle[view]}</h1>
               </div>
-              <button className="icon-btn top-bell" onClick={() => setNotificationOpen(true)} aria-label="Notificações">
+              <button className={`icon-btn top-bell ${view === "notifications" ? "active" : ""}`} onClick={() => navigate("notifications")} aria-label="Notificações">
                 <Bell size={21} />
                 {unread > 0 && <span className="count-badge">{unread > 99 ? "99+" : unread}</span>}
               </button>
@@ -254,7 +248,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.1.2</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.1.3</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -266,7 +260,6 @@ export default function App() {
         <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
       </nav>
 
-      {notificationOpen && <NotificationsPanel data={data} onClose={() => setNotificationOpen(false)} refresh={() => refresh()} showToast={showToast} />}
       {composerOpen && <Composer
         data={data}
         initialScope={composerTarget.scope}
@@ -275,7 +268,6 @@ export default function App() {
         onDone={async () => { setComposerOpen(false); await refresh(); }}
         showToast={showToast}
       />}
-      {commentsPost && <CommentsModal post={commentsPost} canAccept={commentsPost.authorUid === user.uid} onClose={() => setCommentsPost(null)} refresh={() => refresh()} showToast={showToast} />}
       {toast && <div className="toast">{toast}</div>}
     </>
   );
@@ -326,7 +318,7 @@ function AuthScreen() {
   return (
     <div className="auth-layout">
       <section className="auth-brand">
-        <img src="/assets/uorqui-logo-dark.png" alt="Uorqui" />
+        <img src="/assets/uorqui-logo-login.png" alt="Uorqui" />
         <h1>Conversas de trabalho que não se perdem.</h1>
         <p>Comunidades privadas, comunicados e conhecimento organizado para sua empresa.</p>
       </section>
@@ -386,9 +378,9 @@ function MobileNav({ icon, label, active, badge, onClick }: { icon: ReactNode; l
   return <button className={active ? "active" : ""} onClick={onClick}>{icon}<small>{label}</small>{!!badge && <b className="mobile-badge">{badge}</b>}</button>;
 }
 
-function HomePage({ data, tab, setTab, refresh, onCompose, onComments, showToast }: {
+function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
   data: BootstrapData; tab: HomeTab; setTab: (tab: HomeTab) => void; refresh: () => Promise<void> | void;
-  onCompose: () => void; onComments: (post: Post) => void; showToast: (m: string) => void;
+  onCompose: () => void; showToast: (m: string) => void;
 }) {
   const posts = useMemo(() => {
     if (tab === "world") return data.worldPosts;
@@ -407,9 +399,16 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onComments, showToast
   };
 
   const remove = async (post: Post) => {
-    if (!confirm("Excluir esta publicação? Esta ação não pode ser desfeita.")) return;
-    try { await api(`/posts/${post.id}`, { method: "DELETE" }); showToast("Publicação excluída."); await refresh(); }
-    catch (err) { showToast(errorMessage(err)); }
+    const adminDeletingAnother = data.canAdmin && post.authorUid !== data.me.uid;
+    const message = adminDeletingAnother
+      ? "Apagar esta publicação como administrador? O conteúdo será removido e ficará um aviso no lugar."
+      : "Excluir sua publicação? Esta ação não pode ser desfeita.";
+    if (!confirm(message)) return;
+    try {
+      const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
+      showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
   };
 
   return (
@@ -425,10 +424,13 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onComments, showToast
           companyName={data.company?.name}
           community={data.communityMap[post.communityId || ""]}
           onLike={like}
-          onComments={onComments}
           onRead={read}
           canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
           onDelete={remove}
+          currentUid={data.me.uid}
+          canAdmin={data.canAdmin}
+          onChanged={refresh}
+          showToast={showToast}
         />)}
         {!posts.length && <Empty title="Nada por aqui ainda" text={tab === "world" ? "Ainda não há publicações públicas." : "Quando sua empresa ou suas comunidades publicarem, aparecerá aqui."} />}
       </section>
@@ -437,27 +439,33 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onComments, showToast
 }
 
 function CommunitiesPage({
-  data, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, onComments, refresh, showToast
+  data, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, refresh, showToast
 }: {
   data: BootstrapData;
   selectedCommunityId: string;
   onSelectCommunity: (id: string) => void;
   onBack: () => void;
   onComposeCommunity: (id: string) => void;
-  onComments: (post: Post) => void;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [communityPosts, setCommunityPosts] = useState<Post[]>([]);
+  const [communityMembers, setCommunityMembers] = useState<CommunityMember[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const selectedCommunity = data.communities.find((community) => community.id === selectedCommunityId);
+  const [addUid, setAddUid] = useState("");
+  const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
+    || data.communities.find((community) => community.id === selectedCommunityId);
 
   const loadCommunity = async (communityId: string) => {
     setDetailLoading(true);
     try {
-      const result = await api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts`);
-      setCommunityPosts(result.posts);
+      const [postResult, memberResult] = await Promise.all([
+        api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts`),
+        api<{ community: Community; members: CommunityMember[]; count: number }>(`/communities/${communityId}/members`)
+      ]);
+      setCommunityPosts(postResult.posts);
+      setCommunityMembers(memberResult.members);
     } catch (err) {
       showToast(errorMessage(err));
       onBack();
@@ -469,6 +477,7 @@ function CommunitiesPage({
   useEffect(() => {
     if (!selectedCommunityId) {
       setCommunityPosts([]);
+      setCommunityMembers([]);
       return;
     }
     loadCommunity(selectedCommunityId);
@@ -497,27 +506,92 @@ function CommunitiesPage({
     } catch (err) { showToast(errorMessage(err)); }
   };
 
-  const remove = async (post: Post) => {
-    if (!confirm("Excluir esta publicação? Respostas, reações e anexos vinculados também serão removidos.")) return;
+  const removePost = async (post: Post) => {
+    const adminDeletingAnother = data.canAdmin && post.authorUid !== data.me.uid;
+    const message = adminDeletingAnother
+      ? "Apagar esta publicação como administrador? O conteúdo será removido e ficará um aviso informando que foi apagado pela administração."
+      : "Excluir sua publicação? Esta ação não pode ser desfeita.";
+    if (!confirm(message)) return;
     try {
-      await api(`/posts/${post.id}`, { method: "DELETE" });
-      showToast("Publicação excluída.");
+      const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
+      showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
       if (selectedCommunityId) await loadCommunity(selectedCommunityId);
       await refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
 
+  const addMember = async () => {
+    if (!selectedCommunityId || !addUid) return;
+    try {
+      await api(`/communities/${selectedCommunityId}/members`, {
+        method: "POST", body: JSON.stringify({ uid: addUid })
+      });
+      setAddUid("");
+      showToast("Usuário adicionado à comunidade.");
+      await loadCommunity(selectedCommunityId);
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
+  const removeMember = async (member: CommunityMember) => {
+    if (!selectedCommunityId) return;
+    if (!confirm(`Remover ${member.displayName || member.email || "este usuário"} desta comunidade?`)) return;
+    try {
+      await api(`/communities/${selectedCommunityId}/members/${member.uid}`, { method: "DELETE" });
+      showToast("Usuário removido da comunidade.");
+      await loadCommunity(selectedCommunityId);
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
   if (selectedCommunityId && selectedCommunity) {
+    const currentIds = new Set(communityMembers.map((member) => member.uid));
+    const availableMembers = data.members.filter((member) => !currentIds.has(member.uid));
+
     return (
       <section className="page-section">
         <div className="community-detail-head">
           <button className="back-button" onClick={onBack}><ArrowLeft size={18} /> Comunidades</button>
           <div className="community-detail-title">
             <div className="community-avatar large">{selectedCommunity.name.slice(0, 2).toUpperCase()}</div>
-            <div><h2>{selectedCommunity.name}</h2><p>{selectedCommunity.description || "Comunidade privada da empresa."}</p></div>
+            <div>
+              <h2>{selectedCommunity.name}</h2>
+              <p>{selectedCommunity.description || "Comunidade privada da empresa."}</p>
+              <small>{communityMembers.length} {communityMembers.length === 1 ? "membro" : "membros"}</small>
+            </div>
           </div>
           <button className="btn small" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
         </div>
+
+        <section className="community-members-card">
+          <div className="community-members-title">
+            <div><strong>Membros da comunidade</strong><small>{communityMembers.length} no total</small></div>
+            {data.canAdmin && !!availableMembers.length && (
+              <div className="community-add-member">
+                <select value={addUid} onChange={(e) => setAddUid(e.target.value)}>
+                  <option value="">Adicionar usuário…</option>
+                  {availableMembers.map((member) => (
+                    <option value={member.uid} key={member.uid}>{member.displayName || member.email}</option>
+                  ))}
+                </select>
+                <button className="btn small" disabled={!addUid} onClick={addMember}><Plus size={15} /> Adicionar</button>
+              </div>
+            )}
+          </div>
+          <div className="community-member-list">
+            {communityMembers.map((member) => (
+              <div className="community-member-row" key={member.uid}>
+                <Avatar name={member.displayName || member.email} mediaId={member.avatarMediaId} size={36} />
+                <div className="ellipsis">
+                  <strong>{member.displayName || member.email}</strong>
+                  <small>{member.email}{member.companyRole === "owner" ? " · Proprietário" : member.companyRole === "admin" ? " · Administrador" : ""}</small>
+                </div>
+                {data.canAdmin && <button className="btn danger small" onClick={() => removeMember(member)}>Remover</button>}
+              </div>
+            ))}
+            {!communityMembers.length && <p className="muted">Nenhum usuário nesta comunidade.</p>}
+          </div>
+        </section>
 
         <div className="feed community-feed">
           {detailLoading && <div className="loading-line">Carregando publicações…</div>}
@@ -528,10 +602,13 @@ function CommunitiesPage({
               companyName={data.company?.name}
               community={selectedCommunity}
               onLike={like}
-              onComments={onComments}
               onRead={() => {}}
               canDelete={post.authorUid === data.me.uid || data.canAdmin}
-              onDelete={remove}
+              onDelete={removePost}
+              currentUid={data.me.uid}
+              canAdmin={data.canAdmin}
+              onChanged={async () => { await loadCommunity(selectedCommunityId); await refresh(); }}
+              showToast={showToast}
             />
           ))}
           {!detailLoading && !communityPosts.length && <Empty title="Nenhuma publicação ainda" text="Comece uma conversa nesta comunidade." />}
@@ -540,22 +617,28 @@ function CommunitiesPage({
     );
   }
 
+  const listedCommunities = data.canAdmin ? data.allCompanyCommunities : data.communities;
+
   return (
     <section className="page-section">
       <div className="page-heading">
-        <div><h2>Suas comunidades</h2><p>Entre em uma comunidade para acompanhar e organizar as conversas daquele grupo.</p></div>
+        <div><h2>{data.canAdmin ? "Comunidades da empresa" : "Suas comunidades"}</h2><p>Entre em uma comunidade para acompanhar seus membros e as conversas daquele grupo.</p></div>
         {data.canAdmin && <button className="btn small" onClick={() => setCreateOpen(true)}><Plus size={17} /> Criar comunidade</button>}
       </div>
       <div className="community-grid">
-        {data.communities.map((community) => (
+        {listedCommunities.map((community) => (
           <button className="community-card community-link" key={community.id} onClick={() => onSelectCommunity(community.id)}>
             <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
-            <div><strong>{community.name}</strong><p>{community.description || "Comunidade privada da empresa."}</p></div>
+            <div>
+              <strong>{community.name}</strong>
+              <p>{community.description || "Comunidade privada da empresa."}</p>
+              <small className="community-member-count">{community.memberCount || 0} {(community.memberCount || 0) === 1 ? "membro" : "membros"}</small>
+            </div>
             <ChevronRight className="community-chevron" size={18} />
           </button>
         ))}
       </div>
-      {!data.communities.length && <Empty title={data.canAdmin ? "Crie a primeira comunidade" : "Você ainda não está em comunidades"} text={data.canAdmin ? "Crie apenas os grupos que sua empresa realmente precisa." : "Quando receber um convite, ele aparecerá na Central de Notificações."} />}
+      {!listedCommunities.length && <Empty title={data.canAdmin ? "Crie a primeira comunidade" : "Você ainda não está em comunidades"} text={data.canAdmin ? "Crie apenas os grupos que sua empresa realmente precisa." : "Quando você for adicionado a uma comunidade, ela aparecerá aqui."} />}
       {createOpen && <Modal title="Criar comunidade" onClose={() => setCreateOpen(false)}>
         <form className="stack-form" onSubmit={create}>
           <label><span>Nome</span><input name="name" required maxLength={90} placeholder="Ex.: Assistência Técnica" /></label>
@@ -567,8 +650,8 @@ function CommunitiesPage({
   );
 }
 
-function SearchPage({ data, onComments, refresh, showToast }: {
-  data: BootstrapData; onComments: (p: Post) => void; refresh: () => Promise<void>; showToast: (m: string) => void;
+function SearchPage({ data, refresh, showToast }: {
+  data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [posts, setPosts] = useState<Post[]>([]);
@@ -590,11 +673,12 @@ function SearchPage({ data, onComments, refresh, showToast }: {
   };
 
   const remove = async (post: Post) => {
-    if (!confirm("Excluir esta publicação?")) return;
+    const adminDeletingAnother = data.canAdmin && post.authorUid !== data.me.uid;
+    if (!confirm(adminDeletingAnother ? "Apagar como administrador? Ficará um aviso no lugar da publicação." : "Excluir sua publicação?")) return;
     try {
-      await api(`/posts/${post.id}`, { method: "DELETE" });
-      setPosts((current) => current.filter((item) => item.id !== post.id));
-      showToast("Publicação excluída.");
+      const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
+      if (!result.tombstone) setPosts((current) => current.filter((item) => item.id !== post.id));
+      showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
       await refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
@@ -610,10 +694,13 @@ function SearchPage({ data, onComments, refresh, showToast }: {
           companyName={data.company?.name}
           community={data.communityMap[post.communityId || ""]}
           onLike={like}
-          onComments={onComments}
           onRead={() => {}}
           canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
           onDelete={remove}
+          currentUid={data.me.uid}
+          canAdmin={data.canAdmin}
+          onChanged={refresh}
+          showToast={showToast}
         />)}
         {searched && !posts.length && <Empty title="Nenhum resultado" text="Tente outras palavras ou uma busca mais curta." />}
       </div>
@@ -653,9 +740,22 @@ function AdminPage({ data, refresh, showToast }: { data: BootstrapData; refresh:
     } catch (err) { showToast(errorMessage(err)); }
   };
 
-  const inviteCommunity = async (uid: string, communityId: string) => {
-    try { await api(`/communities/${communityId}/invites`, { method: "POST", body: JSON.stringify({ uid }) }); showToast("Convite enviado nas notificações."); await refresh(); }
-    catch (err) { showToast(errorMessage(err)); }
+  const addToCommunity = async (uid: string, communityId: string) => {
+    try {
+      await api(`/communities/${communityId}/members`, { method: "POST", body: JSON.stringify({ uid }) });
+      showToast("Usuário adicionado à comunidade.");
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
+  const changeRole = async (uid: string, role: "admin" | "member") => {
+    try {
+      await api(`/companies/${data.selectedCompanyId}/members/${uid}`, {
+        method: "PATCH", body: JSON.stringify({ role })
+      });
+      showToast(role === "admin" ? "Usuário agora é Administrador." : "Nível alterado para Usuário.");
+      await refresh();
+    } catch (err) { showToast(errorMessage(err)); }
   };
 
   const removeCommunity = async (community: Community) => {
@@ -688,10 +788,23 @@ function AdminPage({ data, refresh, showToast }: { data: BootstrapData; refresh:
           {data.members.map((member) => (
             <div className="member-row" key={member.uid}>
               <Avatar name={member.displayName || member.email} size={38} />
-              <div className="ellipsis"><strong>{member.displayName || member.email}</strong><small>{member.email} · {member.role}</small></div>
+              <div className="ellipsis">
+                <strong>{member.displayName || member.email}</strong>
+                <small>{member.email}</small>
+              </div>
+              {member.role === "owner" ? (
+                <span className="private-pill">Proprietário</span>
+              ) : data.role === "owner" ? (
+                <select className="role-select" value={member.role === "admin" ? "admin" : "member"} onChange={(e) => changeRole(member.uid, e.target.value as "admin" | "member")}>
+                  <option value="member">Usuário</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              ) : (
+                <span className="private-pill">{member.role === "admin" ? "Administrador" : "Usuário"}</span>
+              )}
               {member.uid !== data.me.uid && !!data.allCompanyCommunities.length && (
-                <select defaultValue="" onChange={(e) => { if (e.target.value) inviteCommunity(member.uid, e.target.value); e.target.value = ""; }}>
-                  <option value="">Convidar para…</option>
+                <select className="community-add-select" defaultValue="" onChange={(e) => { if (e.target.value) addToCommunity(member.uid, e.target.value); e.target.value = ""; }}>
+                  <option value="">Adicionar à comunidade…</option>
                   {data.allCompanyCommunities.map((c) => <option value={c.id} key={c.id}>{c.name}</option>)}
                 </select>
               )}
@@ -705,7 +818,7 @@ function AdminPage({ data, refresh, showToast }: { data: BootstrapData; refresh:
         {data.allCompanyCommunities.map((community) => (
           <div className="admin-community-row" key={community.id}>
             <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
-            <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || "Comunidade privada"}</small></div>
+            <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || "Comunidade privada"} · {community.memberCount || 0} membros</small></div>
             <span className="private-pill">Privada</span>
             <button className="btn danger small" onClick={() => removeCommunity(community)}>Excluir</button>
           </div>
@@ -794,41 +907,61 @@ function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refres
   );
 }
 
-function NotificationsPanel({ data, onClose, refresh, showToast }: {
-  data: BootstrapData; onClose: () => void; refresh: () => Promise<void>; showToast: (m: string) => void;
+function NotificationsPage({ data, refresh, showToast }: {
+  data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void;
 }) {
   const accept = async (notification: NotificationItem) => {
     const inviteId = notification.data?.inviteId;
     if (!inviteId) return;
     try {
-      const result = await api<{ companyId?: string }>("/invites/accept", { method: "POST", body: JSON.stringify({ inviteId }) });
+      const result = await api<{ companyId?: string }>("/invites/accept", {
+        method: "POST", body: JSON.stringify({ inviteId })
+      });
       if (result.companyId) localStorage.setItem("uorqui-company", result.companyId);
-      showToast("Convite aceito."); await refresh();
+      showToast("Convite aceito.");
+      await refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
+
   const read = async (notification: NotificationItem) => {
     if (!notification.id || notification.read) return;
-    try { await api(`/notifications/${notification.id}/read`, { method: "POST" }); await refresh(); } catch {}
+    try {
+      await api(`/notifications/${notification.id}/read`, { method: "POST" });
+      await refresh();
+    } catch {}
   };
 
+  const unread = data.notifications.filter((item) => !item.read).length;
+
   return (
-    <>
-      <div className="drawer-scrim" onClick={onClose} />
-      <aside className="notification-drawer">
-        <header><h2>Notificações</h2><button className="icon-btn" onClick={onClose}><X size={20} /></button></header>
-        <div className="notification-list">
-          {data.notifications.map((item, index) => (
-            <article className={`notification-item ${item.read ? "" : "unread"}`} key={item.id || index} onClick={() => read(item)}>
-              <div className="notification-icon">{item.type.includes("invite") ? <Users size={18} /> : item.type === "announcement" ? <Megaphone size={18} /> : <Bell size={18} />}</div>
-              <div><strong>{item.title}</strong><p>{item.body}</p>
-                {item.status === "pending" && item.type.includes("invite") && <button className="btn small" onClick={(e) => { e.stopPropagation(); accept(item); }}><Check size={16} /> Aceitar</button>}
-              </div>
-            </article>
-          ))}
-          {!data.notifications.length && <Empty title="Tudo em dia" text="Seus convites, menções e comunicados aparecerão aqui." />}
+    <section className="page-section notifications-page">
+      <div className="page-heading">
+        <div>
+          <h2>Notificações</h2>
+          <p>{unread ? `${unread} ${unread === 1 ? "notificação não lida" : "notificações não lidas"}.` : "Você está em dia."}</p>
         </div>
-      </aside>
-    </>
+      </div>
+      <div className="notifications-page-list">
+        {data.notifications.map((item, index) => (
+          <article className={`notification-page-item ${item.read ? "" : "unread"}`} key={item.id || index} onClick={() => read(item)}>
+            <div className="notification-icon">
+              {item.type.includes("community") || item.type.includes("invite")
+                ? <Users size={19} />
+                : item.type === "announcement" ? <Megaphone size={19} /> : <Bell size={19} />}
+            </div>
+            <div className="notification-page-copy">
+              <strong>{item.title}</strong>
+              <p>{item.body}</p>
+              {item.status === "pending" && item.type.includes("invite") && (
+                <button className="btn small" onClick={(event) => { event.stopPropagation(); accept(item); }}><Check size={16} /> Aceitar</button>
+              )}
+            </div>
+            {!item.read && <span className="unread-dot" aria-label="Não lida" />}
+          </article>
+        ))}
+        {!data.notifications.length && <Empty title="Tudo em dia" text="Convites, menções e comunicados aparecerão nesta página." />}
+      </div>
+    </section>
   );
 }
 
@@ -906,48 +1039,6 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
   );
 }
 
-function CommentsModal({ post, canAccept, onClose, refresh, showToast }: {
-  post: Post; canAccept: boolean; onClose: () => void; refresh: () => Promise<void>; showToast: (m: string) => void;
-}) {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const load = async () => {
-    try { const result = await api<{ comments: Comment[] }>(`/posts/${post.id}/comments`); setComments(result.comments); setLoaded(true); }
-    catch (err) { showToast(errorMessage(err)); }
-  };
-  useEffect(() => { load(); }, [post.id]);
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const text = String(new FormData(form).get("text") || "").trim();
-    try { await api(`/posts/${post.id}/comments`, { method: "POST", body: JSON.stringify({ text }) }); form.reset(); await load(); await refresh(); }
-    catch (err) { showToast(errorMessage(err)); }
-  };
-  const accept = async (commentId: string) => {
-    try { await api(`/posts/${post.id}/solution`, { method: "POST", body: JSON.stringify({ commentId }) }); showToast("Solução marcada."); await refresh(); await load(); }
-    catch (err) { showToast(errorMessage(err)); }
-  };
-
-  return (
-    <Modal title="Respostas" onClose={onClose} wide>
-      <div className="comments-post"><strong>{post.authorName}</strong><p>{post.text}</p></div>
-      <div className="comments-list">
-        {comments.map((comment) => (
-          <article className="comment" key={comment.id}>
-            <Avatar name={comment.authorName} mediaId={comment.authorAvatarMediaId} size={36} />
-            <div><strong>{comment.authorName}</strong><p>{comment.text}</p>
-              {canAccept && post.type === "question" && post.authorUid !== comment.authorUid && !post.acceptedCommentId && <button className="text-button solution-button" onClick={() => accept(comment.id)}>✓ Marcar como solução</button>}
-              {post.acceptedCommentId === comment.id && <span className="solution">✓ Solução aceita</span>}
-            </div>
-          </article>
-        ))}
-        {loaded && !comments.length && <p className="muted">Nenhuma resposta ainda.</p>}
-      </div>
-      <form className="comment-form" onSubmit={submit}><textarea name="text" rows={3} required placeholder="Escreva uma resposta…" /><button className="btn"><Send size={17} /> Responder</button></form>
-    </Modal>
-  );
-}
 
 function Empty({ title, text }: { title: string; text: string }) {
   return <div className="empty-state"><MessageSquareText size={30} /><h3>{title}</h3><p>{text}</p></div>;
