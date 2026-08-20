@@ -339,3 +339,44 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
     height:15px;
   }
 }
+
+
+/* v1.1.7 — administração multiempresa, empresas e busca ao digitar */
+button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
+.live-search-status{padding:8px 2px 0;color:var(--muted);font-size:10px}
+
+.admin-page-heading{align-items:flex-end}
+.admin-company-picker{display:flex;flex-direction:column;gap:5px;min-width:220px}
+.admin-company-picker>span{font-size:9px;color:var(--muted);font-weight:750}
+.admin-company-picker select{font-size:11px;font-weight:700}
+.admin-company-context{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+.admin-company-context strong,.admin-company-context small{display:block}
+.admin-company-context strong{font-size:12px}
+.admin-company-context small{margin-top:2px;color:var(--muted);font-size:9px}
+
+.companies-summary-list{display:flex;flex-direction:column;gap:12px}
+.company-summary-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
+.company-summary-card.current{border-color:#cfd1d5}
+.company-summary-head{display:flex;align-items:center;gap:10px}
+.company-summary-head>div:nth-child(2){flex:1}
+.company-summary-head strong,.company-summary-head small{display:block}
+.company-summary-head strong{font-size:12px}
+.company-summary-head small{margin-top:3px;color:var(--muted);font-size:9px}
+.company-summary-communities{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f1}
+.company-summary-community{display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid #f0f0f1;border-radius:12px;padding:9px}
+.company-summary-community .community-avatar{width:34px;height:34px;border-radius:9px}
+.company-summary-community>div:nth-child(2){flex:1}
+.company-summary-community strong,.company-summary-community small{display:block}
+.company-summary-community strong{font-size:10px}
+.company-summary-community small{margin-top:2px;color:var(--muted);font-size:8.5px}
+.company-no-communities{grid-column:1/-1;font-size:10px}
+
+@media(max-width:850px){
+  .admin-page-heading{align-items:stretch}
+  .admin-company-picker{width:100%;min-width:0}
+  .company-summary-communities{grid-template-columns:1fr}
+}
+@media(max-width:520px){
+  .company-summary-head{align-items:flex-start;flex-wrap:wrap}
+  .company-summary-head .btn,.company-summary-head .private-pill{margin-left:48px}
+}

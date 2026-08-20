@@ -36,20 +36,19 @@ function AttachmentPreview({ attachment }: { attachment: Attachment }) {
 
   useEffect(() => {
     let active = true;
-    let objectUrl = "";
     setUrl("");
     setFailed(false);
 
+    // mediaBlobUrl is session-cached. App/page loaders prefetch image media
+    // before rendering the feed, so this normally resolves immediately.
     mediaBlobUrl(attachment.id)
       .then((next) => {
-        objectUrl = next;
         if (active) setUrl(next);
       })
       .catch(() => active && setFailed(true));
 
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [attachment.id]);
 

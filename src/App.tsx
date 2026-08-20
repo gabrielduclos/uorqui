@@ -11,7 +11,7 @@ import {
   signInWithEmailAndPassword, signOut, updatePassword, updateProfile, type User
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
-import { api } from "./lib/api";
+import { api, prefetchPostMedia } from "./lib/api";
 import type {
   BootstrapData, Community, CommunityMember, HomeTab, NotificationItem, Post, View
 } from "./types";
@@ -63,6 +63,7 @@ export default function App() {
     try {
       const suffix = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
       const next = await api<BootstrapData>(`/bootstrap${suffix}`);
+      await prefetchPostMedia([...next.posts, ...next.worldPosts]);
       setData(next);
       setSelectedCompanyId(next.selectedCompanyId || "");
       if (next.selectedCompanyId && next.selectedCompanyId !== companyId) {
@@ -116,7 +117,7 @@ export default function App() {
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações"
+    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações", companies: "Empresas"
   };
 
   const navigate = (next: View) => {
@@ -138,11 +139,11 @@ export default function App() {
     setView("home");
   };
 
-  const changeCompany = async (id: string) => {
+  const changeCompany = async (id: string, nextView: View = "home") => {
     localStorage.setItem("uorqui-company", id);
     setSelectedCompanyId(id);
     setSelectedCommunityId("");
-    setView("home");
+    setView(nextView);
     await refresh(id);
   };
 
@@ -169,8 +170,9 @@ export default function App() {
       />
     );
     if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} />;
-    if (view === "admin") return <AdminPage data={data} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "admin") return <AdminPage data={data} onCompanyChange={(id) => changeCompany(id, "admin")} refresh={() => refresh()} showToast={showToast} />;
     if (view === "notifications") return <NotificationsPage data={data} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "companies") return <CompaniesPage data={data} onSelectCompany={(id) => changeCompany(id, "home")} showToast={showToast} />;
     return <ProfilePage data={data} refresh={() => refresh()} showToast={showToast} />;
   };
 
@@ -231,7 +233,17 @@ export default function App() {
                 <Search size={17} />
                 <input
                   value={headerSearch}
-                  onChange={(event) => setHeaderSearch(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setHeaderSearch(value);
+                    if (value.trim().length >= 2) {
+                      setSearchSeed(value);
+                      navigate("search");
+                    } else if (view === "search") {
+                      setSearchSeed("");
+                    }
+                  }}
+                  onBlur={() => setHeaderSearch("")}
                   placeholder="Buscar"
                   aria-label="Buscar no Uorqui"
                 />
@@ -277,7 +289,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.1.6</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.1.7</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -285,7 +297,7 @@ export default function App() {
         <MobileNav active={view === "home" && homeTab !== "world"} icon={<Home />} label="Início" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
         <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
         <button className="mobile-create" onClick={() => setComposerOpen(true)} aria-label="Publicar"><Plus size={26} /></button>
-        <MobileNav active={view === "home" && homeTab === "world"} icon={<Globe2 />} label="Mundo" onClick={openWorld} />
+        <MobileNav active={view === "companies"} icon={<Building2 />} label="Empresas" onClick={() => navigate("companies")} />
         <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
       </nav>
 
@@ -494,6 +506,7 @@ function CommunitiesPage({
         api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts`),
         api<{ community: Community; members: CommunityMember[]; count: number }>(`/communities/${communityId}/members`)
       ]);
+      await prefetchPostMedia(postResult.posts);
       setCommunityPosts(postResult.posts);
       setCommunityMembers(memberResult.members);
     } catch (err) {
@@ -714,24 +727,42 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   const [query, setQuery] = useState(initialQuery || "");
   const [posts, setPosts] = useState<Post[]>([]);
   const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   const runSearch = async (value: string) => {
     const normalized = value.trim();
-    if (normalized.length < 2) return;
+    if (normalized.length < 2) {
+      setPosts([]);
+      setSearched(false);
+      return;
+    }
+
+    setSearching(true);
     try {
       const qs = new URLSearchParams({ q: normalized, companyId: data.selectedCompanyId });
       const result = await api<{ posts: Post[] }>(`/search?${qs}`);
+      await prefetchPostMedia(result.posts);
       setPosts(result.posts);
       setSearched(true);
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      showToast(errorMessage(err));
+    } finally {
+      setSearching(false);
+    }
   };
 
   useEffect(() => {
-    if (!initialQuery || initialQuery.trim().length < 2) return;
-    setQuery(initialQuery);
-    runSearch(initialQuery);
+    if (initialQuery !== undefined && initialQuery !== query) setQuery(initialQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuery, data.selectedCompanyId]);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      runSearch(query);
+    }, 220);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, data.selectedCompanyId]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -757,7 +788,12 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   return (
     <section className="page-section">
       <div className="page-heading"><div><h2>Encontre o que já foi discutido</h2><p>Procure problemas, soluções, comunicados e assuntos antigos.</p></div></div>
-      <form className="large-search" onSubmit={submit}><Search size={20} /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ex.: erro E37, férias, procedimento…" /><button className="btn small">Buscar</button></form>
+      <form className="large-search" onSubmit={submit}>
+        <Search size={20} />
+        <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ex.: erro E37, férias, procedimento…" />
+        <button className="btn small">Buscar</button>
+      </form>
+      {searching && <div className="live-search-status">Buscando…</div>}
       <div className="feed search-results">
         {posts.map((post) => <PostCard
           key={post.id}
@@ -779,8 +815,14 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   );
 }
 
-function AdminPage({ data, refresh, showToast }: { data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void }) {
+function AdminPage({ data, onCompanyChange, refresh, showToast }: {
+  data: BootstrapData;
+  onCompanyChange: (companyId: string) => Promise<void>;
+  refresh: () => Promise<void>;
+  showToast: (m: string) => void;
+}) {
   const [inviteLink, setInviteLink] = useState("");
+  const manageableCompanies = data.companies.filter((company) => company.role === "owner" || company.role === "admin");
   if (!data.canAdmin) return <Empty title="Acesso restrito" text="Somente administradores podem acessar esta área." />;
 
   const inviteCompany = async (event: FormEvent<HTMLFormElement>) => {
@@ -837,7 +879,21 @@ function AdminPage({ data, refresh, showToast }: { data: BootstrapData; refresh:
 
   return (
     <section className="page-section">
-      <div className="page-heading"><div><h2>Administrar {data.company?.name}</h2><p>Controle colaboradores e comunidades privadas.</p></div></div>
+      <div className="page-heading admin-page-heading">
+        <div><h2>Administrar</h2><p>Escolha a empresa e gerencie colaboradores e comunidades privadas.</p></div>
+        <label className="admin-company-picker">
+          <span>Empresa</span>
+          <select value={data.selectedCompanyId} onChange={(event) => onCompanyChange(event.target.value)}>
+            {manageableCompanies.map((company) => (
+              <option value={company.id} key={company.id}>{company.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="admin-company-context">
+        <div className="company-profile-mark">{data.company?.name?.slice(0, 2).toUpperCase()}</div>
+        <div><strong>{data.company?.name}</strong><small>{data.role === "owner" ? "Proprietário" : "Administrador"}</small></div>
+      </div>
       <div className="admin-grid">
         <form className="panel-card stack-form" onSubmit={inviteCompany}>
           <h3>Convidar colaborador</h3>
@@ -896,6 +952,109 @@ function AdminPage({ data, refresh, showToast }: { data: BootstrapData; refresh:
         ))}
         {!data.allCompanyCommunities.length && <p className="muted">Nenhuma comunidade criada.</p>}
       </section>
+    </section>
+  );
+}
+
+type CompanySummary = {
+  id: string;
+  name: string;
+  role: "owner" | "admin" | "member";
+  communities: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    memberCount?: number;
+  }>;
+};
+
+function CompaniesPage({
+  data,
+  onSelectCompany,
+  showToast
+}: {
+  data: BootstrapData;
+  onSelectCompany: (companyId: string) => Promise<void>;
+  showToast: (message: string) => void;
+}) {
+  const [companies, setCompanies] = useState<CompanySummary[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingCompanies(true);
+
+    api<{ companies: CompanySummary[] }>("/companies/summary")
+      .then((result) => {
+        if (active) setCompanies(result.companies);
+      })
+      .catch((error) => {
+        if (active) showToast(errorMessage(error));
+      })
+      .finally(() => {
+        if (active) setLoadingCompanies(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [data.companies.length]);
+
+  return (
+    <section className="page-section companies-page">
+      <div className="page-heading">
+        <div>
+          <h2>Empresas</h2>
+          <p>Um resumo das empresas e comunidades às quais sua conta tem acesso.</p>
+        </div>
+      </div>
+
+      {loadingCompanies && <div className="loading-line">Carregando empresas…</div>}
+
+      {!loadingCompanies && (
+        <div className="companies-summary-list">
+          {companies.map((company) => (
+            <section className={`company-summary-card ${company.id === data.selectedCompanyId ? "current" : ""}`} key={company.id}>
+              <div className="company-summary-head">
+                <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
+                <div className="ellipsis">
+                  <strong>{company.name}</strong>
+                  <small>
+                    {company.role === "owner" ? "Proprietário" : company.role === "admin" ? "Administrador" : "Usuário"}
+                    {" · "}
+                    {company.communities.length} {company.communities.length === 1 ? "comunidade" : "comunidades"}
+                  </small>
+                </div>
+                {company.id === data.selectedCompanyId ? (
+                  <span className="private-pill">Atual</span>
+                ) : (
+                  <button className="btn secondary small" onClick={() => onSelectCompany(company.id)}>Abrir empresa</button>
+                )}
+              </div>
+
+              <div className="company-summary-communities">
+                {company.communities.map((community) => (
+                  <div className="company-summary-community" key={community.id}>
+                    <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
+                    <div className="ellipsis">
+                      <strong>{community.name}</strong>
+                      <small>
+                        {community.description || "Comunidade privada"}
+                        {typeof community.memberCount === "number" ? ` · ${community.memberCount} membros` : ""}
+                      </small>
+                    </div>
+                  </div>
+                ))}
+                {!company.communities.length && (
+                  <p className="muted company-no-communities">Nenhuma comunidade disponível para sua conta nesta empresa.</p>
+                )}
+              </div>
+            </section>
+          ))}
+
+          {!companies.length && <Empty title="Nenhuma empresa" text="As empresas das quais você participa aparecerão aqui." />}
+        </div>
+      )}
     </section>
   );
 }

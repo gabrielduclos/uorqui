@@ -41,6 +41,7 @@ async function routeApi(request, env, identity, url) {
   const method = request.method.toUpperCase();
 
   if (method === 'GET' && path === '/bootstrap') return json(await bootstrap(env, identity, url.searchParams.get('companyId')));
+  if (method === 'GET' && path === '/companies/summary') return json(await getCompaniesSummary(env, identity));
   if (method === 'PATCH' && path === '/me') return json(await updateMe(env, identity, await readJson(request)));
   if (method === 'POST' && path === '/companies') return json(await createCompany(env, identity, await readJson(request)), 201);
   if (method === 'DELETE' && /^\/companies\/[^/]+$/.test(path)) {
@@ -124,6 +125,48 @@ async function routeApi(request, env, identity, url) {
     return json(await markNotificationRead(env, identity, notificationId));
   }
   throw httpError(404, 'Rota não encontrada.');
+}
+
+async function getCompaniesSummary(env, identity) {
+  const memberships = (await fsWhere(env, 'companyMembers', 'uid', identity.uid, 120))
+    .filter(m => m.status === 'active');
+
+  const ownCommunityMemberships = await fsWhere(env, 'communityMembers', 'uid', identity.uid, 400);
+  const ownCommunityIds = new Set(ownCommunityMemberships.map(m => m.communityId));
+
+  const companies = [];
+  for (const membership of memberships) {
+    const company = await fsGet(env, 'companies', membership.companyId);
+    if (!company) continue;
+
+    const rawCommunities = await fsWhere(env, 'communities', 'companyId', company.id, 160);
+    const visibleCommunities = (membership.role === 'owner' || membership.role === 'admin')
+      ? rawCommunities
+      : rawCommunities.filter(c => ownCommunityIds.has(c.id));
+
+    const companyCommunityMemberships = await fsWhere(env, 'communityMembers', 'companyId', company.id, 500);
+    const counts = {};
+    for (const item of companyCommunityMemberships) {
+      counts[item.communityId] = Number(counts[item.communityId] || 0) + 1;
+    }
+
+    companies.push({
+      id: company.id,
+      name: company.name,
+      role: membership.role || 'member',
+      communities: visibleCommunities
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          description: c.description || '',
+          memberCount: Number(counts[c.id] || 0)
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+    });
+  }
+
+  companies.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  return { companies };
 }
 
 async function bootstrap(env, identity, requestedCompanyId) {
