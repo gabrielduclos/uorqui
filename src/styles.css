@@ -391,7 +391,7 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .resolve-button:hover{text-decoration:underline;text-underline-offset:3px}
 .solution{align-items:center;gap:5px}
 
-.poll-block{display:flex;flex-direction:column;gap:10px}
+.poll-block{display:flex;flex-direction:column;gap:10px;margin-top:13px}
 .poll-question{font-weight:700!important;font-size:13px!important;margin:0!important}
 .poll-options{display:flex;flex-direction:column;gap:7px}
 .poll-option{position:relative;overflow:hidden;width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:11px;background:#fff;padding:9px 11px;display:flex;align-items:center;gap:8px;text-align:left}
@@ -664,3 +664,27 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
     justify-self:start;
   }
 }
+
+
+/* v1.2.7 — autorização automática de push e ações do post */
+.push-permission-prompt{text-align:center}
+.push-permission-prompt-icon{
+  width:58px;
+  height:58px;
+  margin:2px auto 12px;
+  border-radius:17px;
+  background:#f2f3f4;
+  display:grid;
+  place-items:center;
+}
+.push-permission-prompt h3{margin:0 0 7px;font-size:16px}
+.push-permission-prompt p{
+  max-width:420px;
+  margin:0 auto 16px;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.55;
+}
+.push-permission-prompt .modal-actions{justify-content:center}
+.post-actions .resolve-action.resolved{color:#2f6e39}
+.post-actions .resolve-action:disabled{opacity:.55;cursor:not-allowed}

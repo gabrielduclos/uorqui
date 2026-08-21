@@ -425,15 +425,7 @@ export function PostCard({
             )}
 
             {(resolved || post.acceptedCommentId) && (post.type === "post" || post.type === "question") && (
-              <span className="solution"><CheckCircle2 size={14} /> Resolvido</span>
-            )}
-
-            {canResolve && (
-              <div className="post-status-actions">
-                <button className="text-button resolve-button" disabled={resolveBusy} onClick={toggleResolved}>
-                  {resolved ? <><RotateCcw size={14} /> Reabrir</> : <><CheckCircle2 size={14} /> Marcar como resolvido</>}
-                </button>
-              </div>
+              <span className="solution"><CheckCircle2 size={14} /> Concluído</span>
             )}
 
             {!!post.attachments?.length && (
@@ -449,6 +441,17 @@ export function PostCard({
               <span className="action-count">{count(post.reactionCount)}</span>
               <span className="action-label">curtidas</span>
             </button>
+            {canResolve && (
+              <button
+                className={`resolve-action ${resolved ? "resolved" : ""}`}
+                disabled={resolveBusy}
+                onClick={toggleResolved}
+                aria-label={resolved ? "Reabrir publicação" : "Marcar publicação como concluída"}
+              >
+                {resolved ? <RotateCcw size={18} /> : <CheckCircle2 size={18} />}
+                <span className="action-label">{resolved ? "reabrir" : "concluir"}</span>
+              </button>
+            )}
             <button className={commentsOpen ? "active" : ""} onClick={toggleComments} aria-label="Abrir comentários">
               <MessageCircle size={18} />
               <span className="action-count">{count(localCommentCount)}</span>

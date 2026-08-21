@@ -51,6 +51,8 @@ export default function App() {
   const [searchSeed, setSearchSeed] = useState("");
   const [sharedPost, setSharedPost] = useState<Post | null>(null);
   const [sharedPostLoading, setSharedPostLoading] = useState(false);
+  const [pushPermissionPromptOpen, setPushPermissionPromptOpen] = useState(false);
+  const [pushPermissionBusy, setPushPermissionBusy] = useState(false);
   const pwaInstall = usePwaInstall();
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
@@ -174,6 +176,69 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, data.me.uid, selectedCompanyId, loading]);
+
+
+  useEffect(() => {
+    if (!user || !data.me.uid || loading) return;
+    if (currentPushState() !== "default") return;
+
+    const key = `uorqui-push-permission-prompt:${data.me.uid}`;
+    const lastPrompt = Number(localStorage.getItem(key) || "0");
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+    if (lastPrompt && Date.now() - lastPrompt < sevenDays) return;
+
+    const timer = window.setTimeout(() => {
+      setPushPermissionPromptOpen(true);
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [user?.uid, data.me.uid, loading]);
+
+  const postponePushPermission = () => {
+    if (data.me.uid) {
+      localStorage.setItem(
+        `uorqui-push-permission-prompt:${data.me.uid}`,
+        String(Date.now())
+      );
+    }
+    setPushPermissionPromptOpen(false);
+  };
+
+  const activatePushFromAutomaticPrompt = async () => {
+    if (pushPermissionBusy) return;
+    setPushPermissionBusy(true);
+
+    try {
+      const next = await enablePushNotifications();
+
+      if (next === "granted") {
+        setPushPermissionPromptOpen(false);
+        localStorage.removeItem(`uorqui-push-permission-prompt:${data.me.uid}`);
+        showToast("Notificações push ativadas.");
+        return;
+      }
+
+      if (data.me.uid) {
+        localStorage.setItem(
+          `uorqui-push-permission-prompt:${data.me.uid}`,
+          String(Date.now())
+        );
+      }
+
+      if (next === "denied") {
+        showToast("As notificações foram bloqueadas pelo navegador.");
+      } else if (next === "not_configured") {
+        showToast("Falta configurar a chave pública VAPID do Firebase.");
+      } else if (next === "unsupported") {
+        showToast("Este navegador não oferece suporte a notificações push.");
+      }
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setPushPermissionBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!user || !data.me.uid || loading) return;
@@ -463,7 +528,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.6</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.7</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -475,6 +540,30 @@ export default function App() {
           <MobileNav active={view === "companies"} icon={<Building2 />} label="Empresas" onClick={() => navigate("companies")} />
           <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
         </nav>
+      )}
+
+      {user && data.me.uid && pushPermissionPromptOpen && currentPushState() === "default" && (
+        <Modal title="Ativar notificações" onClose={postponePushPermission}>
+          <div className="push-permission-prompt">
+            <div className="push-permission-prompt-icon"><Bell size={28} /></div>
+            <h3>Não perca o que importa</h3>
+            <p>
+              Autorize o Uorqui a enviar notificações de novas publicações relevantes,
+              comunicados, respostas, curtidas e confirmações de leitura.
+            </p>
+            <div className="modal-actions">
+              <button className="btn secondary" onClick={postponePushPermission}>Agora não</button>
+              <button
+                className="btn"
+                disabled={pushPermissionBusy}
+                onClick={activatePushFromAutomaticPrompt}
+              >
+                <Bell size={16} />
+                {pushPermissionBusy ? "Ativando…" : "Ativar notificações"}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
