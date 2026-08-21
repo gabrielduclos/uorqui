@@ -861,3 +861,54 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   .post-actions .resolve-action{min-width:0;justify-content:flex-end;white-space:nowrap}
   .post-actions .resolve-action .action-label{display:inline!important;font-size:8.5px}
 }
+
+/* v1.2.12 — entrega de convites, confirmação de e-mail e exclusão da conta */
+.onboarding-invites>h2,.onboarding-company-form>h2{margin:10px 0 6px}
+.onboarding-invites>p,.onboarding-company-form>p{margin:0}
+.onboarding-verification{
+  margin-top:14px;
+  padding:12px;
+  border:1px solid #eadfb8;
+  border-radius:13px;
+  background:#fffaf0;
+  text-align:left;
+}
+.onboarding-verification strong,.onboarding-verification span{display:block}
+.onboarding-verification strong{font-size:11px;color:#5f4b14}
+.onboarding-verification span{margin-top:4px;color:#756632;font-size:9px;line-height:1.45}
+.onboarding-verification>div{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.onboarding-invite-list{display:flex;flex-direction:column;gap:8px;margin-top:12px;text-align:left}
+.onboarding-invite{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:#fafafa;
+}
+.onboarding-invite>div{min-width:0}
+.onboarding-invite strong,.onboarding-invite span{display:block}
+.onboarding-invite strong{font-size:11px}
+.onboarding-invite span{margin-top:4px;color:var(--muted);font-size:9px;line-height:1.4}
+.onboarding-invite .btn{flex:none}
+.onboarding-company-form{padding-top:4px}
+.onboarding-invites+.onboarding-company-form{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+.onboarding-create-instead{display:block;margin:12px auto 0!important}
+.onboarding-error{margin-top:12px;text-align:left}
+.profile-verification-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.delete-account-card{display:flex;align-items:center;justify-content:space-between;gap:16px;border-color:#f1d3d0}
+.delete-account-copy{display:flex;align-items:flex-start;gap:10px;min-width:0;color:#8d2520}
+.delete-account-copy svg{flex:none;margin-top:1px}
+.delete-account-copy strong{display:block;font-size:12px}
+.delete-account-copy p{margin:4px 0 0;max-width:470px;color:#7a5b58;font-size:9px;line-height:1.5}
+.invite-delivery.failed{color:#a33a31}
+.invite-delivery.not_configured{color:#84691f}
+.invite-delivery.sent{color:#2f6e39}
+
+@media(max-width:620px){
+  .onboarding-invite{align-items:flex-start;flex-direction:column}
+  .onboarding-invite .btn{width:100%}
+  .delete-account-card{align-items:flex-start;flex-direction:column}
+}

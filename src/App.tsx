@@ -4,10 +4,10 @@ import {
   ArrowLeft, BarChart3, Bell, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
   KeyRound, LogOut, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
-  ShieldCheck, Smartphone, UserRound, Users, X
+  ShieldCheck, Smartphone, Trash2, UserRound, Users, X
 } from "lucide-react";
 import {
-  createUserWithEmailAndPassword, EmailAuthProvider, onAuthStateChanged,
+  createUserWithEmailAndPassword, deleteUser as deleteFirebaseUser, EmailAuthProvider, onAuthStateChanged,
   reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail,
   signInWithEmailAndPassword, updatePassword, updateProfile, type User
 } from "firebase/auth";
@@ -32,6 +32,14 @@ const emptyData: BootstrapData = {
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Não foi possível concluir esta ação.";
+}
+
+async function refreshFirebaseSession() {
+  const current = auth.currentUser;
+  if (!current) throw new Error("Faça login novamente para continuar.");
+  await current.reload();
+  await current.getIdToken(true);
+  return current.emailVerified;
 }
 
 function optimisticTombstone(post: Post): Post {
@@ -79,6 +87,7 @@ export default function App() {
   const [pushPermissionBusy, setPushPermissionBusy] = useState(false);
   const [planOfferReason, setPlanOfferReason] = useState<PlanOfferReason>(null);
   const [lastCreatedPost, setLastCreatedPost] = useState<Post | null>(null);
+  const [, setAuthRevision] = useState(0);
   const pwaInstall = usePwaInstall();
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
@@ -123,6 +132,40 @@ export default function App() {
     refresh(sharedCompany || stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (!user || user.emailVerified) return;
+    let active = true;
+    let checking = false;
+
+    const checkVerification = async () => {
+      if (checking || !auth.currentUser) return;
+      checking = true;
+      try {
+        const verified = await refreshFirebaseSession();
+        if (active && verified) {
+          setAuthRevision((current) => current + 1);
+          await refresh();
+        }
+      } catch {
+        // A tela também oferece uma verificação manual com retorno visível.
+      } finally {
+        checking = false;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void checkVerification();
+    };
+    window.addEventListener("focus", checkVerification);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", checkVerification);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, user?.emailVerified]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -286,19 +329,41 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, data.me.uid, loading]);
 
+  useEffect(() => {
+    if (!user || !data.me.uid || loading) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("notifications") !== "1") return;
+    if (data.companies.length || data.isSuperadmin) setView("notifications");
+    params.delete("notifications");
+    const query = params.toString();
+    history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+  }, [user, data.me.uid, data.companies.length, data.isSuperadmin, loading]);
+
   if (!authReady) return <Boot />;
   if (!user) return <AuthScreen />;
   if (loading && !data.me.uid) return <Boot />;
   if (fatal) return <ErrorScreen message={fatal} onRetry={() => refresh()} onLogout={() => unregisterPushBeforeLogout()} />;
-  if (!data.companies.length && !data.isSuperadmin) return <Onboarding onCreated={async (companyId) => {
-    localStorage.setItem("uorqui-company", companyId);
-    await refresh(companyId);
-    setPlanOfferReason({
-      kind: "company_created",
-      message: "Sua empresa foi criada no plano Free. Você pode continuar grátis ou ativar o Premium agora."
-    });
-    setView("plans");
-  }} />;
+  if (!data.companies.length && !data.isSuperadmin) return (
+    <Onboarding
+      data={data}
+      refresh={() => refresh()}
+      showToast={showToast}
+      onAccepted={async (companyId) => {
+        if (companyId) localStorage.setItem("uorqui-company", companyId);
+        await refresh(companyId || "");
+        setView("home");
+      }}
+      onCreated={async (companyId) => {
+        localStorage.setItem("uorqui-company", companyId);
+        await refresh(companyId);
+        setPlanOfferReason({
+          kind: "company_created",
+          message: "Sua empresa foi criada no plano Free. Você pode continuar grátis ou ativar o Premium agora."
+        });
+        setView("plans");
+      }}
+    />
+  );
 
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
@@ -623,7 +688,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.11</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.12</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -665,7 +730,7 @@ export default function App() {
 
       {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
         <aside className="pwa-install-banner" role="status">
-          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.11" alt="" /></div>
+          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.12" alt="" /></div>
           <div className="pwa-install-copy">
             <strong>Instale o Uorqui</strong>
             <span>Abra mais rápido e use como um app no celular.</span>
@@ -835,28 +900,152 @@ function CompanyRegistrationFields() {
   );
 }
 
-function Onboarding({ onCreated }: { onCreated: (id: string) => void }) {
+function Onboarding({ data, refresh, showToast, onAccepted, onCreated }: {
+  data: BootstrapData;
+  refresh: () => Promise<void>;
+  showToast: (message: string) => void;
+  onAccepted: (companyId?: string) => Promise<void>;
+  onCreated: (id: string) => Promise<void>;
+}) {
   const [error, setError] = useState("");
+  const [busyInviteId, setBusyInviteId] = useState("");
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [createInstead, setCreateInstead] = useState(false);
+  const pendingInvites = data.notifications.filter((item) =>
+    item.status === "pending" &&
+    (item.type === "company_invite" || item.type === "community_invite") &&
+    item.data?.inviteId
+  );
+
+  const resendVerification = async () => {
+    if (!auth.currentUser || verificationBusy) return;
+    setVerificationBusy(true);
+    setError("");
+    try {
+      await sendEmailVerification(auth.currentUser);
+      showToast("E-mail de verificação enviado.");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const checkVerification = async () => {
+    if (verificationBusy) return;
+    setVerificationBusy(true);
+    setError("");
+    try {
+      const verified = await refreshFirebaseSession();
+      if (!verified) {
+        setError("A confirmação ainda não apareceu no Firebase. Abra o link recebido por e-mail e tente novamente.");
+        return;
+      }
+      showToast("E-mail confirmado. Agora você pode aceitar o convite.");
+      await refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const acceptInvite = async (notification: NotificationItem) => {
+    const inviteId = notification.data?.inviteId || "";
+    if (!inviteId || busyInviteId) return;
+    setBusyInviteId(inviteId);
+    setError("");
+    try {
+      const verified = await refreshFirebaseSession();
+      if (!verified) throw new Error("Confirme seu e-mail e toque em “Já confirmei” antes de aceitar.");
+      const result = await api<{ companyId?: string }>("/invites/accept", {
+        method: "POST",
+        body: JSON.stringify({ inviteId })
+      });
+      showToast("Convite aceito.");
+      await onAccepted(result.companyId);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusyInviteId("");
+    }
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError("");
     const payload = companyRegistrationPayload(event.currentTarget);
     try {
       const result = await api<{ company: { id: string } }>("/companies", { method: "POST", body: JSON.stringify(payload) });
-      onCreated(result.company.id);
+      await onCreated(result.company.id);
     } catch (err) { setError(errorMessage(err)); }
   };
+
+  const showCompanyForm = !pendingInvites.length || createInstead;
+
   return (
     <div className="onboarding">
       <img src="/assets/uorqui-logo-light.png" alt="Uorqui" />
       <div className="onboarding-card">
-        <Building2 size={30} />
-        <h2>Comece sua empresa no Uorqui</h2>
-        <p>Você também pode aguardar um convite. Para criar sua empresa agora, informe os dados fiscais usados na nota.</p>
-        <form onSubmit={submit}>
-          <CompanyRegistrationFields />
-          {error && <div className="form-error">{error}</div>}
-          <button className="btn">Criar empresa</button>
-        </form>
+        {pendingInvites.length > 0 && (
+          <section className="onboarding-invites">
+            <Users size={30} />
+            <h2>{pendingInvites.length === 1 ? "Você recebeu um convite" : "Você recebeu convites"}</h2>
+            <p>Aceite o convite para entrar no Uorqui sem precisar criar outra empresa.</p>
+
+            {!auth.currentUser?.emailVerified && (
+              <div className="onboarding-verification">
+                <strong>Confirme seu e-mail primeiro</strong>
+                <span>Depois de abrir o link do Firebase, volte aqui e toque em “Já confirmei”.</span>
+                <div>
+                  <button className="btn secondary small" disabled={verificationBusy} onClick={resendVerification}>
+                    {verificationBusy ? "Enviando…" : "Enviar verificação"}
+                  </button>
+                  <button className="btn small" disabled={verificationBusy} onClick={checkVerification}>
+                    {verificationBusy ? "Verificando…" : "Já confirmei"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="onboarding-invite-list">
+              {pendingInvites.map((notification) => {
+                const inviteId = notification.data?.inviteId || "";
+                return (
+                  <article className="onboarding-invite" key={notification.id || inviteId}>
+                    <div>
+                      <strong>{notification.title}</strong>
+                      <span>{notification.body}</span>
+                    </div>
+                    <button className="btn small" disabled={!!busyInviteId} onClick={() => acceptInvite(notification)}>
+                      <Check size={16} />
+                      {busyInviteId === inviteId ? "Aceitando…" : "Aceitar convite"}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {showCompanyForm && (
+          <section className="onboarding-company-form">
+            <Building2 size={30} />
+            <h2>Comece sua empresa no Uorqui</h2>
+            <p>Para criar sua empresa agora, informe os dados fiscais usados na nota.</p>
+            <form onSubmit={submit}>
+              <CompanyRegistrationFields />
+              <button className="btn">Criar empresa</button>
+            </form>
+          </section>
+        )}
+
+        {pendingInvites.length > 0 && !createInstead && (
+          <button className="text-button onboarding-create-instead" onClick={() => { setError(""); setCreateInstead(true); }}>
+            Criar uma empresa em vez disso
+          </button>
+        )}
+        {error && <div className="form-error onboarding-error">{error}</div>}
         <button className="text-button" onClick={() => unregisterPushBeforeLogout()}>Sair desta conta</button>
       </div>
     </div>
@@ -1409,6 +1598,8 @@ type SentInvite = {
   communityName?: string;
   status: "pending" | "accepted" | "expired" | string;
   emailSent?: boolean;
+  emailStatus?: "sent" | "failed" | "not_configured" | "unknown" | string;
+  emailError?: string;
   createdAt?: string;
   expiresAt?: string;
   acceptedAt?: string;
@@ -1455,14 +1646,18 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
     const form = event.currentTarget;
     const email = String(new FormData(form).get("email") || "");
     try {
-      const result = await api<{ inviteUrl?: string; emailSent?: boolean }>(`/companies/${data.selectedCompanyId}/invites`, {
+      const result = await api<{ inviteUrl?: string; emailSent?: boolean; emailStatus?: string; emailError?: string }>(`/companies/${data.selectedCompanyId}/invites`, {
         method: "POST", body: JSON.stringify({ email })
       });
       form.reset();
       if (result.emailSent) showToast("Convite enviado por e-mail.");
       else {
         setInviteLink(result.inviteUrl || "");
-        showToast("Convite criado.");
+        showToast(result.emailStatus === "not_configured"
+          ? "Convite criado. O e-mail não está configurado; use o link."
+          : result.emailStatus === "failed"
+            ? "Convite criado, mas o e-mail falhou. Use o link."
+            : "Convite criado. Use o link para compartilhar.");
       }
       await Promise.all([refresh(), loadSentInvites()]);
     } catch (err) {
@@ -1495,7 +1690,7 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
     const actionKey = `resend:${invite.id}`;
     setInviteActionBusy(actionKey);
     try {
-      const result = await api<{ inviteUrl?: string; emailSent?: boolean }>(
+      const result = await api<{ inviteUrl?: string; emailSent?: boolean; emailStatus?: string; emailError?: string }>(
         `/companies/${data.selectedCompanyId}/invites/${encodeURIComponent(invite.id)}/resend`,
         { method: "POST" }
       );
@@ -1505,7 +1700,11 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
         showToast("Convite reenviado por e-mail.");
       } else {
         setInviteLink(result.inviteUrl || "");
-        showToast("Convite renovado. Use o novo link.");
+        showToast(result.emailStatus === "not_configured"
+          ? "Convite renovado. O e-mail não está configurado; use o link."
+          : result.emailStatus === "failed"
+            ? "Convite renovado, mas o e-mail falhou. Use o link."
+            : "Convite renovado. Use o novo link.");
       }
       await loadSentInvites();
     } catch (err) {
@@ -1614,6 +1813,15 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
             const dateLabel = invite.createdAt ? new Date(invite.createdAt).toLocaleDateString("pt-BR") : "";
             const canCancel = invite.status === "pending";
             const canResend = invite.status !== "accepted";
+            const deliveryLabel = invite.type === "community"
+              ? "Convite interno"
+              : invite.emailStatus === "sent" || invite.emailSent
+                ? "E-mail enviado"
+                : invite.emailStatus === "not_configured"
+                  ? "E-mail não configurado"
+                  : invite.emailStatus === "failed"
+                    ? "Falha no e-mail"
+                    : "Link gerado";
             return (
               <div className="sent-invite-row" key={invite.id}>
                 <div className="ellipsis">
@@ -1621,7 +1829,12 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
                   <small>{invite.type === "community" ? invite.communityName || "Comunidade" : "Empresa"} · enviado em {dateLabel}</small>
                 </div>
                 <span className={`invite-status ${invite.status}`}>{statusLabel}</span>
-                <small className="invite-delivery">{invite.type === "community" ? "Convite interno" : invite.emailSent ? "E-mail enviado" : "Link gerado"}</small>
+                <small
+                  className={`invite-delivery ${invite.emailStatus || "unknown"}`}
+                  title={invite.emailError || undefined}
+                >
+                  {deliveryLabel}
+                </small>
                 <div className="sent-invite-actions">
                   {canResend && (
                     <button
@@ -2507,6 +2720,10 @@ function ProfilePage({
   const [companyError, setCompanyError] = useState("");
   const [createCompanyOpen, setCreateCompanyOpen] = useState(false);
   const [deleteCompany, setDeleteCompany] = useState<{ id: string; name: string } | null>(null);
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
 
   const uploadPhoto = async (file?: File) => {
     if (!file) return;
@@ -2544,6 +2761,73 @@ function ProfilePage({
       await updatePassword(auth.currentUser, next);
       form.reset(); showToast("Senha atualizada.");
     } catch (err) { setPasswordError(errorMessage(err)); }
+  };
+
+  const resendVerification = async () => {
+    if (!auth.currentUser || verificationBusy) return;
+    setVerificationBusy(true);
+    try {
+      await sendEmailVerification(auth.currentUser);
+      showToast("E-mail de verificação enviado.");
+    } catch (err) {
+      showToast(errorMessage(err));
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const confirmVerification = async () => {
+    if (verificationBusy) return;
+    setVerificationBusy(true);
+    try {
+      const verified = await refreshFirebaseSession();
+      if (!verified) throw new Error("A confirmação ainda não apareceu no Firebase. Tente novamente após abrir o link do e-mail.");
+      showToast("E-mail confirmado.");
+      await refresh();
+    } catch (err) {
+      showToast(errorMessage(err));
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const deleteAccount = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (deleteAccountBusy) return;
+    setDeleteAccountError("");
+    const fd = new FormData(event.currentTarget);
+    const password = String(fd.get("password") || "");
+    const confirmation = String(fd.get("confirmation") || "").trim().toUpperCase();
+    if (confirmation !== "EXCLUIR") {
+      setDeleteAccountError("Digite EXCLUIR para confirmar.");
+      return;
+    }
+
+    setDeleteAccountBusy(true);
+    try {
+      const current = auth.currentUser;
+      if (!current?.email) throw new Error("Faça login novamente para apagar sua conta.");
+      await reauthenticateWithCredential(current, EmailAuthProvider.credential(current.email, password));
+      await current.getIdToken(true);
+      await api("/me", {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation })
+      });
+      await deleteFirebaseUser(current);
+
+      for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+        const key = localStorage.key(index);
+        if (key?.startsWith("uorqui-")) localStorage.removeItem(key);
+      }
+      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = sessionStorage.key(index);
+        if (key?.startsWith("uorqui-")) sessionStorage.removeItem(key);
+      }
+      location.replace("/");
+    } catch (err) {
+      setDeleteAccountError(errorMessage(err));
+      setDeleteAccountBusy(false);
+    }
   };
 
   const createCompany = async (event: FormEvent<HTMLFormElement>) => {
@@ -2600,7 +2884,16 @@ function ProfilePage({
             {data.me.avatarMediaId && <button className="btn ghost" onClick={removePhoto}>Remover foto</button>}
           </div>
           {photoError && <div className="form-error">{photoError}</div>}
-          {!auth.currentUser?.emailVerified && <button className="btn secondary small" onClick={() => sendEmailVerification(auth.currentUser!).then(() => showToast("E-mail de verificação enviado.")).catch((e) => showToast(errorMessage(e)))}>Enviar verificação</button>}
+          {!auth.currentUser?.emailVerified && (
+            <div className="profile-verification-actions">
+              <button className="btn secondary small" disabled={verificationBusy} onClick={resendVerification}>
+                {verificationBusy ? "Aguarde…" : "Enviar verificação"}
+              </button>
+              <button className="btn small" disabled={verificationBusy} onClick={confirmVerification}>
+                {verificationBusy ? "Verificando…" : "Já confirmei"}
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="panel-card">
@@ -2678,6 +2971,19 @@ function ProfilePage({
 
       <section className="panel-card session-card"><div><strong>Sessão</strong><p className="muted">Encerrar o acesso neste dispositivo.</p></div><button className="btn secondary" onClick={() => unregisterPushBeforeLogout()}><LogOut size={17} /> Sair da conta</button></section>
 
+      <section className="panel-card delete-account-card">
+        <div className="delete-account-copy">
+          <Trash2 size={20} />
+          <div>
+            <strong>Apagar minha conta</strong>
+            <p>Remove seus acessos e dados pessoais. Publicações e respostas permanecem identificadas apenas como “Conta removida”.</p>
+          </div>
+        </div>
+        <button className="btn danger" onClick={() => { setDeleteAccountError(""); setDeleteAccountOpen(true); }}>
+          Apagar conta
+        </button>
+      </section>
+
       {createCompanyOpen && (
         <Modal title="Criar empresa" onClose={() => setCreateCompanyOpen(false)}>
           <form className="stack-form" onSubmit={createCompany}>
@@ -2705,6 +3011,32 @@ function ProfilePage({
           </form>
         </Modal>
       )}
+
+      {deleteAccountOpen && (
+        <Modal title="Apagar minha conta" onClose={() => !deleteAccountBusy && setDeleteAccountOpen(false)}>
+          <form className="stack-form" onSubmit={deleteAccount}>
+            <div className="danger-notice">
+              <strong>Esta ação é permanente.</strong>
+              <p>Se você ainda for proprietário de uma empresa, transfira a propriedade ou exclua a empresa antes. Seus textos permanecerão anonimizados para não quebrar as conversas.</p>
+            </div>
+            <label>
+              <span>Senha atual</span>
+              <input name="password" type="password" required autoComplete="current-password" />
+            </label>
+            <label>
+              <span>Digite <strong>EXCLUIR</strong> para confirmar</span>
+              <input name="confirmation" required autoComplete="off" />
+            </label>
+            {deleteAccountError && <div className="form-error">{deleteAccountError}</div>}
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" disabled={deleteAccountBusy} onClick={() => setDeleteAccountOpen(false)}>Cancelar</button>
+              <button className="btn danger-confirm" disabled={deleteAccountBusy}>
+                {deleteAccountBusy ? "Apagando…" : "Apagar conta definitivamente"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </section>
   );
 }
@@ -2717,18 +3049,28 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
 }) {
   const [pushState, setPushState] = useState<PushState>(() => currentPushState());
   const [pushBusy, setPushBusy] = useState(false);
+  const [acceptingInviteId, setAcceptingInviteId] = useState("");
 
   const accept = async (notification: NotificationItem) => {
     const inviteId = notification.data?.inviteId;
-    if (!inviteId) return;
+    if (!inviteId || acceptingInviteId) return;
+    setAcceptingInviteId(inviteId);
     try {
+      const verified = await refreshFirebaseSession();
+      if (!verified) {
+        throw new Error("Confirme seu e-mail e toque em aceitar novamente.");
+      }
       const result = await api<{ companyId?: string }>("/invites/accept", {
         method: "POST", body: JSON.stringify({ inviteId })
       });
       if (result.companyId) localStorage.setItem("uorqui-company", result.companyId);
       showToast("Convite aceito.");
       await refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      showToast(errorMessage(err));
+    } finally {
+      setAcceptingInviteId("");
+    }
   };
 
   const activatePush = async () => {
@@ -2832,8 +3174,13 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
               )}
 
               {item.status === "pending" && item.type.includes("invite") && (
-                <button className="btn small" onClick={(event) => { event.stopPropagation(); accept(item); }}>
-                  <Check size={16} /> Aceitar
+                <button
+                  className="btn small"
+                  disabled={!!acceptingInviteId}
+                  onClick={(event) => { event.stopPropagation(); accept(item); }}
+                >
+                  <Check size={16} />
+                  {acceptingInviteId === item.data?.inviteId ? "Aceitando…" : "Aceitar"}
                 </button>
               )}
 

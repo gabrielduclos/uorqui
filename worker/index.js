@@ -50,7 +50,7 @@ async function routeApi(request, env, identity, url, ctx) {
   const path = url.pathname.slice(4); // remove /api
   const method = request.method.toUpperCase();
 
-  if (method === 'GET' && path === '/bootstrap') return json(await bootstrap(env, identity, url.searchParams.get('companyId')));
+  if (method === 'GET' && path === '/bootstrap') return json(await bootstrap(env, identity, url.searchParams.get('companyId'), ctx));
   if (method === 'GET' && path === '/superadmin/overview') {
     return json(await getSuperadminOverview(env, identity));
   }
@@ -60,8 +60,9 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'GET' && path === '/companies/summary') return json(await getCompaniesSummary(env, identity));
   if (method === 'PATCH' && path === '/me') return json(await updateMe(env, identity, await readJson(request)));
+  if (method === 'DELETE' && path === '/me') return json(await deleteUserAccount(env, identity, await readJson(request)));
   if (method === 'POST' && path === '/push/register') {
-    return json(await registerPushToken(env, identity, await readJson(request)), 201);
+    return json(await registerPushToken(env, identity, await readJson(request), ctx), 201);
   }
   if (method === 'DELETE' && path === '/push/register') {
     return json(await unregisterPushToken(env, identity, await readJson(request)));
@@ -89,7 +90,7 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'POST' && /^\/companies\/[^/]+\/invites$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
-    return json(await createCompanyInvite(env, identity, companyId, await readJson(request), env.APP_ORIGIN || url.origin), 201);
+    return json(await createCompanyInvite(env, identity, companyId, await readJson(request), env.APP_ORIGIN || url.origin, ctx), 201);
   }
   if (method === 'DELETE' && /^\/companies\/[^/]+\/invites\/[^/]+$/.test(path)) {
     const parts = path.split('/');
@@ -101,7 +102,7 @@ async function routeApi(request, env, identity, url, ctx) {
     const parts = path.split('/');
     const companyId = decodeURIComponent(parts[2]);
     const inviteId = decodeURIComponent(parts[4]);
-    return json(await resendCompanyInvite(env, identity, companyId, inviteId, env.APP_ORIGIN || url.origin));
+    return json(await resendCompanyInvite(env, identity, companyId, inviteId, env.APP_ORIGIN || url.origin, ctx));
   }
   if (method === 'POST' && /^\/companies\/[^/]+\/leave$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
@@ -119,7 +120,7 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'POST' && /^\/communities\/[^/]+\/invites$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
-    return json(await createCommunityInvite(env, identity, communityId, await readJson(request)), 201);
+    return json(await createCommunityInvite(env, identity, communityId, await readJson(request), ctx), 201);
   }
   if (method === 'GET' && /^\/communities\/[^/]+\/members$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
@@ -537,9 +538,9 @@ async function updateSuperadminPremium(env, identity, companyId, body) {
   };
 }
 
-async function bootstrap(env, identity, requestedCompanyId) {
+async function bootstrap(env, identity, requestedCompanyId, ctx) {
   const me = await ensureUser(env, identity);
-  await exposePendingEmailInvites(env, identity);
+  await exposePendingEmailInvites(env, identity, ctx);
 
   const memberships = (await fsWhere(env, 'companyMembers', 'uid', identity.uid, 10)).filter(m => m.status === 'active');
   const companies = [];
@@ -693,23 +694,157 @@ async function updateMe(env, identity, body) {
   return { user };
 }
 
-async function exposePendingEmailInvites(env, identity) {
-  if (!identity.email || !identity.email_verified) return;
+async function deleteUserAccount(env, identity, body) {
+  if (clean(body.confirmation || '', 20).toUpperCase() !== 'EXCLUIR') {
+    throw httpError(400, 'Digite EXCLUIR para confirmar a exclusão da conta.');
+  }
+
+  const [
+    user,
+    memberships,
+    ownedCompanies,
+    communityMemberships,
+    notifications,
+    pushSubscriptions,
+    reactions,
+    readReceipts,
+    pollVotes,
+    authoredPosts,
+    authoredComments,
+    ownedMedia,
+    targetInvites,
+    sentInvites
+  ] = await Promise.all([
+    fsGet(env, 'users', identity.uid),
+    fsWhere(env, 'companyMembers', 'uid', identity.uid, 500),
+    fsWhere(env, 'companies', 'ownerUid', identity.uid, 100),
+    fsWhere(env, 'communityMembers', 'uid', identity.uid, 500),
+    fsWhere(env, 'notifications', 'recipientUid', identity.uid, 500),
+    fsWhere(env, 'pushSubscriptions', 'uid', identity.uid, 100),
+    fsWhere(env, 'reactions', 'uid', identity.uid, 500),
+    fsWhere(env, 'readReceipts', 'uid', identity.uid, 500),
+    fsWhere(env, 'pollVotes', 'uid', identity.uid, 500),
+    fsWhere(env, 'posts', 'authorUid', identity.uid, 500),
+    fsWhere(env, 'comments', 'authorUid', identity.uid, 500),
+    fsWhere(env, 'media', 'ownerUid', identity.uid, 500),
+    fsWhere(env, 'invites', 'targetUid', identity.uid, 250),
+    fsWhere(env, 'invites', 'invitedBy', identity.uid, 250)
+  ]);
+
+  const ownerMemberships = memberships.filter(item => item.status === 'active' && item.role === 'owner');
+  const ownedCompanyIds = new Set([
+    ...ownedCompanies.map(company => company.id),
+    ...ownerMemberships.map(membership => membership.companyId)
+  ]);
+  if (ownedCompanyIds.size) {
+    const names = [];
+    for (const companyId of ownedCompanyIds) {
+      const company = ownedCompanies.find(item => item.id === companyId) || await fsGet(env, 'companies', companyId);
+      if (company?.name) names.push(company.name);
+    }
+    throw httpError(
+      409,
+      `Antes de apagar sua conta, transfira a propriedade ou exclua ${names.length === 1 ? 'a empresa' : 'as empresas'}: ${names.join(', ') || 'empresa vinculada'}.`
+    );
+  }
+
+  const deletedAt = nowIso();
+  await fsBatchPut(env, authoredPosts.map(post => ({
+    collection: 'posts',
+    id: post.id,
+    data: {
+      ...post,
+      authorUid: '',
+      authorName: 'Conta removida',
+      authorAvatarMediaId: '',
+      resolvedByUid: post.resolvedByUid === identity.uid ? '' : post.resolvedByUid || '',
+      authorAccountDeletedAt: deletedAt,
+      updatedAt: deletedAt
+    }
+  })));
+  await fsBatchPut(env, authoredComments.map(comment => ({
+    collection: 'comments',
+    id: comment.id,
+    data: {
+      ...comment,
+      authorUid: '',
+      authorName: 'Conta removida',
+      authorAvatarMediaId: '',
+      authorAccountDeletedAt: deletedAt,
+      updatedAt: deletedAt
+    }
+  })));
+
+  for (const media of ownedMedia) {
+    if (media.scope === 'avatar' || media.id === user?.avatarMediaId) {
+      try { await env.MEDIA.delete(media.key); } catch {}
+      try { await fsDelete(env, 'media', media.id); } catch {}
+    } else {
+      await fsPut(env, 'media', media.id, {
+        ...media,
+        ownerUid: '',
+        ownerAccountDeletedAt: deletedAt,
+        updatedAt: deletedAt
+      });
+    }
+  }
+
+  const invitationUpdates = new Map();
+  for (const invite of targetInvites) {
+    invitationUpdates.set(invite.id, {
+      ...invite,
+      targetUid: '',
+      acceptedBy: invite.acceptedBy === identity.uid ? '' : invite.acceptedBy || '',
+      targetAccountDeletedAt: deletedAt,
+      updatedAt: deletedAt
+    });
+  }
+  for (const invite of sentInvites) {
+    const current = invitationUpdates.get(invite.id) || invite;
+    invitationUpdates.set(invite.id, {
+      ...current,
+      invitedBy: '',
+      inviterAccountDeletedAt: deletedAt,
+      updatedAt: deletedAt
+    });
+  }
+  await fsBatchPut(env, Array.from(invitationUpdates.values()).map(invite => ({
+    collection: 'invites',
+    id: invite.id,
+    data: invite
+  })));
+
+  await fsBatchDelete(env, [
+    ...memberships.map(item => ({ collection: 'companyMembers', id: item.id })),
+    ...communityMemberships.map(item => ({ collection: 'communityMembers', id: item.id })),
+    ...notifications.map(item => ({ collection: 'notifications', id: item.id })),
+    ...pushSubscriptions.map(item => ({ collection: 'pushSubscriptions', id: item.id })),
+    ...reactions.map(item => ({ collection: 'reactions', id: item.id })),
+    ...readReceipts.map(item => ({ collection: 'readReceipts', id: item.id })),
+    ...pollVotes.map(item => ({ collection: 'pollVotes', id: item.id })),
+    { collection: 'users', id: identity.uid }
+  ]);
+
+  return {
+    ok: true,
+    deletedAt,
+    anonymizedPosts: authoredPosts.length,
+    anonymizedComments: authoredComments.length
+  };
+}
+
+async function exposePendingEmailInvites(env, identity, ctx) {
+  if (!identity.email) return;
   const email = normalizeEmail(identity.email);
   const invites = await fsWhere(env, 'invites', 'email', email, 10);
   for (const invite of invites) {
     if (invite.status !== 'pending' || isExpired(invite.expiresAt)) continue;
     const nid = `invite_${invite.id}_${identity.uid}`;
     const existingNotification = await fsGet(env, 'notifications', nid);
-    if (!existingNotification) await fsPut(env, 'notifications', nid, {
-      recipientUid: identity.uid,
-      type: invite.type === 'company' ? 'company_invite' : 'community_invite',
-      title: invite.type === 'company' ? `${invite.companyName} convidou você` : `Convite para ${invite.communityName}`,
-      body: invite.type === 'company' ? 'Aceite para entrar no ambiente privado da empresa.' : `Entre na comunidade ${invite.communityName}.`,
-      data: { inviteId: invite.id, companyId: invite.companyId, communityId: invite.communityId || '' },
-      read: false, status: 'pending', createdAt: invite.createdAt
-    });
-    if (!invite.targetUid) await fsPut(env, 'invites', invite.id, { ...invite, targetUid: identity.uid, updatedAt: nowIso() });
+    if (!existingNotification) await createInviteNotification(env, invite, identity.uid, ctx);
+    if (identity.email_verified && invite.targetUid !== identity.uid) {
+      await fsPut(env, 'invites', invite.id, { ...invite, targetUid: identity.uid, updatedAt: nowIso() });
+    }
   }
 }
 
@@ -982,7 +1117,7 @@ async function updateCompanyMemberRole(env, identity, companyId, targetUid, body
   return { member: updated };
 }
 
-async function createCompanyInvite(env, identity, companyId, body, origin) {
+async function createCompanyInvite(env, identity, companyId, body, origin, ctx) {
   const admin = await requireCompanyAdmin(env, identity.uid, companyId);
   const company = await fsGet(env, 'companies', companyId);
   const email = normalizeEmail(body.email || '');
@@ -1005,16 +1140,25 @@ async function createCompanyInvite(env, identity, companyId, body, origin) {
   };
   if (users[0]) invite.targetUid = users[0].uid;
   await fsPut(env, 'invites', inviteId, invite);
-  if (invite.targetUid) await createInviteNotification(env, invite, invite.targetUid);
+  if (invite.targetUid) await createInviteNotification(env, invite, invite.targetUid, ctx);
   const inviteUrl = `${origin.replace(/\/$/,'')}/?invite=${encodeURIComponent(token)}`;
-  const emailSent = await maybeSendInviteEmail(env, email, company.name, inviteUrl);
+  const emailResult = await maybeSendInviteEmail(env, email, company.name, inviteUrl);
   await fsPut(env, 'invites', inviteId, {
     ...invite,
-    emailSent,
-    emailSentAt: emailSent ? nowIso() : '',
+    emailSent: emailResult.sent,
+    emailStatus: emailResult.status,
+    emailError: emailResult.error || '',
+    emailProviderId: emailResult.providerId || '',
+    emailSentAt: emailResult.sent ? nowIso() : '',
     updatedAt: nowIso()
   });
-  return { inviteId, inviteUrl, emailSent };
+  return {
+    inviteId,
+    inviteUrl,
+    emailSent: emailResult.sent,
+    emailStatus: emailResult.status,
+    emailError: emailResult.error || ''
+  };
 }
 
 async function getCompanyInvites(env, identity, companyId) {
@@ -1031,6 +1175,8 @@ async function getCompanyInvites(env, identity, companyId) {
         communityName: invite.communityName || '',
         status: invite.status === 'pending' && isExpired(invite.expiresAt) ? 'expired' : invite.status || 'pending',
         emailSent: Boolean(invite.emailSent),
+        emailStatus: invite.emailStatus || (invite.emailSent ? 'sent' : 'unknown'),
+        emailError: invite.emailError || '',
         createdAt: invite.createdAt || '',
         expiresAt: invite.expiresAt || '',
         acceptedAt: invite.acceptedAt || '',
@@ -1085,7 +1231,7 @@ async function cancelCompanyInvite(env, identity, companyId, inviteId) {
   return { ok: true, inviteId: invite.id, status: 'canceled' };
 }
 
-async function resendCompanyInvite(env, identity, companyId, inviteId, origin) {
+async function resendCompanyInvite(env, identity, companyId, inviteId, origin, ctx) {
   const invite = await requireManagedInvite(env, identity, companyId, inviteId);
   if (invite.status === 'accepted') throw httpError(409, 'Este convite já foi aceito.');
 
@@ -1132,19 +1278,22 @@ async function resendCompanyInvite(env, identity, companyId, inviteId, origin) {
   };
   await fsPut(env, 'invites', invite.id, updated);
 
-  if (targetUid) await createInviteNotification(env, updated, targetUid);
+  if (targetUid) await createInviteNotification(env, updated, targetUid, ctx);
 
   let inviteUrl = '';
-  let emailSent = false;
+  let emailResult = { sent: false, status: 'not_applicable', error: '', providerId: '' };
   if (invite.type === 'company') {
     inviteUrl = `${origin.replace(/\/$/,'')}/?invite=${encodeURIComponent(token)}`;
-    emailSent = await maybeSendInviteEmail(env, invite.email, invite.companyName, inviteUrl);
+    emailResult = await maybeSendInviteEmail(env, invite.email, invite.companyName, inviteUrl);
   }
 
   const finalInvite = {
     ...updated,
-    emailSent,
-    emailSentAt: emailSent ? lastResentAt : '',
+    emailSent: emailResult.sent,
+    emailStatus: emailResult.status,
+    emailError: emailResult.error || '',
+    emailProviderId: emailResult.providerId || '',
+    emailSentAt: emailResult.sent ? lastResentAt : '',
     updatedAt: nowIso()
   };
   await fsPut(env, 'invites', invite.id, finalInvite);
@@ -1153,7 +1302,9 @@ async function resendCompanyInvite(env, identity, companyId, inviteId, origin) {
     ok: true,
     inviteId: invite.id,
     inviteUrl,
-    emailSent,
+    emailSent: emailResult.sent,
+    emailStatus: emailResult.status,
+    emailError: emailResult.error || '',
     status: 'pending',
     expiresAt: finalInvite.expiresAt
   };
@@ -1282,7 +1433,7 @@ async function removeCommunityMember(env, identity, communityId, targetUid) {
   return { ok: true };
 }
 
-async function createCommunityInvite(env, identity, communityId, body) {
+async function createCommunityInvite(env, identity, communityId, body, ctx) {
   const community=await fsGetRequired(env,'communities',communityId,'Comunidade não encontrada.');
   await requireCompanyAdmin(env,identity.uid,community.companyId);
   let target=null;
@@ -1294,12 +1445,42 @@ async function createCommunityInvite(env, identity, communityId, body) {
   const existing=await fsGet(env,'communityMembers',`${communityId}_${target.uid}`); if(existing)throw httpError(409,'O usuário já participa desta comunidade.');
   const company=await fsGet(env,'companies',community.companyId); const token=randomToken(); const inviteId=id();
   const invite={id:inviteId,type:'community',companyId:community.companyId,companyName:company?.name||'',communityId,communityName:community.name,email:target.email,targetUid:target.uid,invitedBy:identity.uid,status:'pending',tokenHash:await sha256(token),createdAt:nowIso(),expiresAt:new Date(Date.now()+7*86400000).toISOString()};
-  await fsPut(env,'invites',inviteId,invite); await createInviteNotification(env,invite,target.uid);
+  await fsPut(env,'invites',inviteId,invite); await createInviteNotification(env,invite,target.uid,ctx);
   return { inviteId };
 }
 
-async function createInviteNotification(env, invite, uid) {
-  await fsPut(env,'notifications',`invite_${invite.id}_${uid}`,{recipientUid:uid,type:invite.type==='company'?'company_invite':'community_invite',title:invite.type==='company'?`${invite.companyName} convidou você`:`Convite para ${invite.communityName}`,body:invite.type==='company'?'Aceite para entrar no ambiente privado da empresa.':`A empresa convidou você para ${invite.communityName}.`,data:{inviteId:invite.id,companyId:invite.companyId,communityId:invite.communityId||''},read:false,status:'pending',createdAt:invite.lastResentAt||invite.createdAt,updatedAt:nowIso()});
+async function createInviteNotification(env, invite, uid, ctx) {
+  const notificationId = `invite_${invite.id}_${uid}`;
+  const notification = {
+    recipientUid: uid,
+    type: invite.type === 'company' ? 'company_invite' : 'community_invite',
+    title: invite.type === 'company' ? `${invite.companyName} convidou você` : `Convite para ${invite.communityName}`,
+    body: invite.type === 'company'
+      ? 'Aceite para entrar no ambiente privado da empresa.'
+      : `A empresa convidou você para ${invite.communityName}.`,
+    data: {
+      inviteId: invite.id,
+      companyId: invite.companyId,
+      communityId: invite.communityId || ''
+    },
+    read: false,
+    status: 'pending',
+    createdAt: invite.lastResentAt || invite.createdAt,
+    updatedAt: nowIso()
+  };
+  await fsPut(env, 'notifications', notificationId, notification);
+
+  const pushTask = sendPushToUser(env, uid, {
+    title: notification.title,
+    body: notification.body,
+    notificationId,
+    type: notification.type,
+    inviteId: invite.id,
+    companyId: invite.companyId || '',
+    communityId: invite.communityId || ''
+  });
+  if (ctx?.waitUntil) ctx.waitUntil(pushTask);
+  else await pushTask;
 }
 
 async function acceptInvite(env, identity, body) {
@@ -1313,7 +1494,9 @@ async function acceptInvite(env, identity, body) {
   if(!acceptedByToken){
     if(!identity.email_verified)throw httpError(403,'Verifique seu e-mail antes de aceitar este convite pela Central de Notificações.');
     if(invite.email&&invite.email!==email)throw httpError(403,'Este convite pertence a outro e-mail.');
-    if(invite.targetUid&&invite.targetUid!==identity.uid)throw httpError(403,'Este convite pertence a outro usuário.');
+    // O e-mail verificado é a autoridade do convite. Isso também recupera convites
+    // que ficaram ligados a uma conta antiga criada com o mesmo endereço.
+    if(invite.targetUid!==identity.uid)invite.targetUid=identity.uid;
   } else if (invite.email && email && invite.email !== email) {
     throw httpError(403,'Crie ou entre com a conta do e-mail que recebeu o convite.');
   }
@@ -1428,7 +1611,7 @@ function deferPushes(ctx, promises) {
   if (ctx?.waitUntil) ctx.waitUntil(task);
 }
 
-async function registerPushToken(env, identity, body) {
+async function registerPushToken(env, identity, body, ctx) {
   await ensureUser(env, identity);
 
   const token = clean(body.token || '', 4096);
@@ -1453,6 +1636,23 @@ async function registerPushToken(env, identity, body) {
   if (existing?.createdAt) subscription.createdAt = existing.createdAt;
 
   await fsPut(env, 'pushSubscriptions', subscriptionId, subscription);
+
+  if (!existing) {
+    const notifications = await fsWhere(env, 'notifications', 'recipientUid', identity.uid, 100);
+    const pendingInvites = notifications.filter(item =>
+      item.status === 'pending' &&
+      (item.type === 'company_invite' || item.type === 'community_invite')
+    );
+    deferPushes(ctx, pendingInvites.map(item => sendPushToUser(env, identity.uid, {
+      title: item.title,
+      body: item.body,
+      notificationId: item.id,
+      type: item.type,
+      inviteId: item.data?.inviteId || '',
+      companyId: item.data?.companyId || '',
+      communityId: item.data?.communityId || ''
+    })));
+  }
   return { ok: true };
 }
 
@@ -1496,13 +1696,16 @@ async function sendPushToUser(env, uid, payload) {
   for (const [key, value] of Object.entries({
     notificationId: payload.notificationId || '',
     type: payload.type || '',
+    inviteId: payload.inviteId || '',
     postId: payload.postId || '',
     companyId: payload.companyId || '',
     communityId: payload.communityId || '',
     openComments: payload.openComments || '',
     url: payload.postId
       ? `/?post=${encodeURIComponent(payload.postId)}${payload.companyId ? `&company=${encodeURIComponent(payload.companyId)}` : ''}${payload.openComments ? '&comments=1' : ''}`
-      : '/'
+      : payload.inviteId
+        ? '/?notifications=1'
+        : '/'
   })) {
     data[key] = String(value || '');
   }
@@ -2190,9 +2393,74 @@ async function requireCompanyMember(env, uid, companyId) {if(!companyId)throw ht
 async function requireCompanyAdmin(env, uid, companyId) {const m=await requireCompanyMember(env,uid,companyId);if(!['owner','admin'].includes(m.role))throw httpError(403,'Somente administradores podem fazer isso.');return m;}
 async function requireCommunityMember(env, uid, communityId) {const m=await fsGet(env,'communityMembers',`${communityId}_${uid}`);if(!m)throw httpError(403,'Você não participa desta comunidade.');return m;}
 
-async function maybeSendInviteEmail(env,email,companyName,inviteUrl){
-  if(!env.RESEND_API_KEY||!env.INVITE_FROM_EMAIL)return false;
-  try{const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:env.INVITE_FROM_EMAIL,to:[email],subject:`${companyName} convidou você para o Uorqui`,html:`<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h2>Você foi convidado para ${htmlEscape(companyName)}</h2><p>Crie ou entre na sua conta Uorqui para acessar o ambiente privado da empresa.</p><p><a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px">Aceitar convite</a></p><p style="color:#777;font-size:12px">Este convite expira em 7 dias.</p></div>`})});return r.ok;}catch{return false;}
+async function maybeSendInviteEmail(env, email, companyName, inviteUrl) {
+  if (!env.RESEND_API_KEY || !env.INVITE_FROM_EMAIL) {
+    return {
+      sent: false,
+      status: 'not_configured',
+      error: 'O envio de e-mail ainda não está configurado no Worker.',
+      providerId: ''
+    };
+  }
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: env.INVITE_FROM_EMAIL,
+        to: [email],
+        subject: `${companyName} convidou você para o Uorqui`,
+        text: `${companyName} convidou você para o Uorqui. Aceite o convite em ${inviteUrl}. Este convite expira em 7 dias.`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h2>Você foi convidado para ${htmlEscape(companyName)}</h2><p>Crie ou entre na sua conta Uorqui para acessar o ambiente privado da empresa.</p><p><a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px">Aceitar convite</a></p><p style="color:#777;font-size:12px">Este convite expira em 7 dias.</p></div>`
+      })
+    });
+    const responseText = await response.text();
+    let responseBody = {};
+    try { responseBody = responseText ? JSON.parse(responseText) : {}; } catch {}
+
+    if (response.ok) {
+      return {
+        sent: true,
+        status: 'sent',
+        error: '',
+        providerId: clean(responseBody.id || '', 200)
+      };
+    }
+
+    const providerError = clean(
+      responseBody.message || responseBody.error || responseText || `Erro ${response.status}`,
+      300
+    );
+    console.error(JSON.stringify({
+      message: 'Falha ao enviar convite por e-mail',
+      provider: 'resend',
+      status: response.status,
+      error: providerError
+    }));
+    return {
+      sent: false,
+      status: 'failed',
+      error: providerError || 'O provedor recusou o envio do convite.',
+      providerId: ''
+    };
+  } catch (error) {
+    const message = clean(error instanceof Error ? error.message : String(error), 300);
+    console.error(JSON.stringify({
+      message: 'Erro de conexão ao enviar convite por e-mail',
+      provider: 'resend',
+      error: message
+    }));
+    return {
+      sent: false,
+      status: 'failed',
+      error: message || 'Não foi possível acessar o provedor de e-mail.',
+      providerId: ''
+    };
+  }
 }
 
 function asaasApiBase(env) {
@@ -2600,8 +2868,10 @@ async function fsBatchPut(env,docs){
   if(!docs.length)return;
   const project=encodeURIComponent(env.FIREBASE_PROJECT_ID);
   const prefix=`projects/${project}/databases/(default)/documents/`;
-  const writes=docs.slice(0,450).map(d=>({update:{name:`${prefix}${encPath(d.collection)}/${encodeURIComponent(d.id)}`,fields:toFields({...d.data,id:d.data.id||d.id})}}));
-  await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
+  for(let index=0;index<docs.length;index+=450){
+    const writes=docs.slice(index,index+450).map(d=>({update:{name:`${prefix}${encPath(d.collection)}/${encodeURIComponent(d.id)}`,fields:toFields({...d.data,id:d.data.id||d.id})}}));
+    await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
+  }
 }
 async function fsBatchDelete(env,docs){
   if(!docs.length)return;
