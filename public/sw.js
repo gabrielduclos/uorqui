@@ -1,4 +1,4 @@
-const CACHE = "uorqui-react-v1.2.13";
+const CACHE = "uorqui-react-v1.2.14";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(
   caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())
@@ -39,7 +39,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: "/assets/uorqui-icon-192.png?v=1.2.13",
+      icon: "/assets/uorqui-icon-192.png?v=1.2.14",
       badge: "/assets/uorqui-favicon.png",
       tag: `uorqui-${notificationId}`,
       renotify: type === "read_required",

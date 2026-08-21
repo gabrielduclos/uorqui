@@ -80,6 +80,8 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 .form-error{color:#b42318;background:#fff3f1;border-radius:9px;padding:8px 10px;font-size:10px}
 .member-list{display:flex;flex-direction:column}.member-row{display:flex;align-items:center;gap:9px;border-top:1px solid #f0f0f1;padding:10px 0}.member-row:first-child{border-top:0}.member-row>div:nth-child(2){flex:1}.member-row strong{font-size:11px}.member-row small{font-size:9px;color:var(--muted);margin-top:3px}.member-row select{width:auto;max-width:175px;font-size:10px;padding:7px}
 .admin-community-row{display:grid;grid-template-columns:40px 1fr auto auto;gap:9px;align-items:center;border-top:1px solid #f0f0f1;padding:10px 0}.admin-community-row:first-of-type{border-top:0}.admin-community-row strong{font-size:11px}.admin-community-row small{font-size:9px;color:var(--muted);display:block;margin-top:3px}
+.admin-community-help{margin:-6px 0 10px;color:var(--muted);font-size:9px;line-height:1.45}
+.admin-community-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
 .private-pill{display:inline-block;border-radius:999px;background:#f0f1f2;padding:5px 8px;font-size:9px;color:#61646b;font-weight:750}
 .invite-link{display:flex;flex-direction:column;gap:5px}.invite-link small{color:var(--muted);font-size:9px}.invite-link input{font-size:9px}
 .large-search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);padding:8px;border-radius:14px}.large-search input{border:0;box-shadow:none;padding:7px}.search-results{padding-left:0;padding-right:0}
@@ -119,6 +121,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
   .post-actions{gap:12px}.post-actions .action-label{display:none}.post-actions .action-count{display:inline;font-size:10px;font-weight:750}
   .large-search{flex-wrap:wrap}.large-search input{flex:1;min-width:180px}.large-search .btn{width:100%}
   .member-row{align-items:flex-start;flex-wrap:wrap}.member-row select{width:100%;max-width:none;margin-left:47px}
+  .admin-community-actions{grid-column:2/4;justify-content:flex-start;flex-wrap:wrap}
   .session-card{align-items:flex-start;flex-direction:column}
 }
 
@@ -162,7 +165,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 .community-member-row>div:nth-child(2){flex:1}
 .community-member-row strong{display:block;font-size:11px}
 .community-member-row small{display:block;margin-top:2px;color:var(--muted);font-size:9px}
-.role-select,.community-add-select{width:auto;max-width:190px;font-size:10px;padding:7px 9px}
+.role-select{width:auto;max-width:190px;font-size:10px;padding:7px 9px}
 .post-tombstone{background:#fafafa}
 .admin-deleted-message{display:flex;align-items:flex-start;gap:10px;margin-top:13px;padding:13px;border:1px dashed #d8dade;background:#f4f4f5;border-radius:12px;color:#60646b}
 .admin-deleted-message strong{display:block;color:#34373d;font-size:11px}
@@ -210,7 +213,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
   .inline-comment-form .btn{align-self:flex-end}
   .community-member-row{flex-wrap:wrap}
   .community-member-row .btn{margin-left:45px}
-  .role-select,.community-add-select{max-width:150px}
+  .role-select{max-width:150px}
 }
 
 
@@ -224,10 +227,23 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 .members-manage-card{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .members-manage-copy strong,.members-manage-copy small{display:block}
 .members-manage-copy strong{font-size:12px}
-.members-manage-copy small{margin-top:4px;color:var(--muted);font-size:9px;max-width:350px}
-.members-page-list{padding-top:4px;padding-bottom:4px}
-.members-page-row{min-height:58px}
-.members-page-row .private-pill{margin-left:auto}
+.members-manage-copy small{margin-top:4px;color:var(--muted);font-size:9px;line-height:1.45;max-width:540px}
+.community-member-search{width:min(310px,100%);border:1px solid var(--line-strong);border-radius:11px;background:#fff;padding:8px 10px;display:flex;align-items:center;gap:7px;color:#777b83}
+.community-member-search input{min-width:0;flex:1;border:0;outline:0;padding:0;background:transparent;font-size:10px}
+.community-member-search button{width:24px;height:24px;border:0;border-radius:7px;background:transparent;color:#777b83;display:grid;place-items:center}
+.community-member-search button:hover{background:#f0f1f2}
+.members-page-list{padding-top:5px;padding-bottom:5px}
+.members-page-row{min-height:58px;display:grid;grid-template-columns:42px minmax(0,1fr) auto minmax(250px,auto);gap:9px}
+.members-page-row.not-member{background:#fafafa;color:#656870}
+.members-page-row .private-pill{margin-left:0}
+.member-community-controls{display:flex;align-items:center;justify-content:flex-end;gap:9px}
+.community-membership-status{min-width:108px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:750}
+.community-membership-status.active{background:#edf8ef;color:#26733a}
+.community-membership-status.inactive{background:#f0f1f2;color:#777b83}
+.member-community-action{min-width:104px;border:1px solid transparent;border-radius:10px;padding:7px 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:10px;font-weight:750}
+.member-community-action.add{background:#17181b;color:#fff}
+.member-community-action.remove{background:#fff5f4;border-color:#ffd8d4;color:#a33027}
+.member-community-action:disabled{opacity:.55;cursor:not-allowed}
 .post-attachments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:12px}
 .post-attachments.one{grid-template-columns:1fr}
 .post-image-wrap{overflow:hidden;border-radius:13px;background:#f0f1f2;border:1px solid var(--line)}
@@ -246,13 +262,16 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 @media(max-width:850px){
   .members-manage-card{align-items:flex-start;flex-direction:column}
   .members-manage-card .community-add-member{width:100%}
+  .community-member-search{width:100%}
+  .members-page-row{grid-template-columns:42px minmax(0,1fr) auto}
+  .member-community-controls{grid-column:2/4;justify-content:space-between;width:100%}
 }
 @media(max-width:520px){
   .post-attachments{grid-template-columns:1fr}
   .post-attachments:not(.one) .post-image{height:auto;max-height:440px}
-  .members-page-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:9px}
   .members-page-row .private-pill{grid-column:3}
-  .members-page-row .btn{grid-column:2/4;margin-left:0;justify-self:start}
+  .community-membership-status{min-width:0}
+  .member-community-action{min-width:106px}
 }
 
 

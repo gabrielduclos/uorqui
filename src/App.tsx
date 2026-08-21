@@ -4,7 +4,7 @@ import {
   ArrowLeft, BarChart3, Bell, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
   KeyRound, LogOut, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
-  ShieldCheck, Smartphone, Trash2, UserRound, Users, X
+  ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, X
 } from "lucide-react";
 import {
   createUserWithEmailAndPassword, deleteUser as deleteFirebaseUser, EmailAuthProvider, onAuthStateChanged,
@@ -78,6 +78,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedCommunityId, setSelectedCommunityId] = useState("");
+  const [manageCommunityMembersId, setManageCommunityMembersId] = useState("");
   const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string }>({});
   const [headerSearch, setHeaderSearch] = useState("");
   const [searchSeed, setSearchSeed] = useState("");
@@ -501,6 +502,8 @@ export default function App() {
         selectedCommunityId={selectedCommunityId}
         onSelectCommunity={setSelectedCommunityId}
         onBack={() => setSelectedCommunityId("")}
+        openMembersRequested={manageCommunityMembersId === selectedCommunityId}
+        onMembersOpened={() => setManageCommunityMembersId("")}
         onComposeCommunity={(communityId) => openComposer({ scope: "community", communityId })}
         refresh={() => refresh()}
         showToast={showToast}
@@ -511,6 +514,10 @@ export default function App() {
     if (view === "admin") return <AdminPage
       data={data}
       onCompanyChange={(id) => changeCompany(id, "admin")}
+      onManageCommunity={(communityId) => {
+        setManageCommunityMembersId(communityId);
+        openCommunity(communityId);
+      }}
       refresh={() => refresh()}
       showToast={showToast}
       onUpgradeRequired={(message) => openPlans("limit", message)}
@@ -688,7 +695,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.13</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.14</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -730,7 +737,7 @@ export default function App() {
 
       {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
         <aside className="pwa-install-banner" role="status">
-          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.13" alt="" /></div>
+          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.14" alt="" /></div>
           <div className="pwa-install-copy">
             <strong>Instale o Uorqui</strong>
             <span>Abra mais rápido e use como um app no celular.</span>
@@ -1203,13 +1210,16 @@ function SharedPostPage({
 }
 
 function CommunitiesPage({
-  data, lastCreatedPost, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, refresh, showToast, onUpgradeRequired
+  data, lastCreatedPost, selectedCommunityId, onSelectCommunity, onBack, openMembersRequested, onMembersOpened,
+  onComposeCommunity, refresh, showToast, onUpgradeRequired
 }: {
   data: BootstrapData;
   lastCreatedPost: Post | null;
   selectedCommunityId: string;
   onSelectCommunity: (id: string) => void;
   onBack: () => void;
+  openMembersRequested: boolean;
+  onMembersOpened: () => void;
   onComposeCommunity: (id: string) => void;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
@@ -1221,7 +1231,8 @@ function CommunitiesPage({
   const [detailLoading, setDetailLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersLoaded, setMembersLoaded] = useState(false);
-  const [addUid, setAddUid] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberAction, setMemberAction] = useState<{ uid: string; kind: "add" | "remove" } | null>(null);
   const [membersPage, setMembersPage] = useState(false);
   const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
@@ -1255,7 +1266,8 @@ function CommunitiesPage({
     setMembersPage(false);
     setCommunityMembers([]);
     setMembersLoaded(false);
-    setAddUid("");
+    setMemberSearch("");
+    setMemberAction(null);
 
     if (!selectedCommunityId) {
       setCommunityPosts([]);
@@ -1272,6 +1284,15 @@ function CommunitiesPage({
     void loadCommunityPosts(selectedCommunityId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunityId, data.selectedCompanyId]);
+
+  useEffect(() => {
+    if (!openMembersRequested || !selectedCommunityId) return;
+    setMembersPage(true);
+    if (!membersLoaded) void loadCommunityMembers(selectedCommunityId);
+    onMembersOpened();
+    // Deve executar somente quando a tela Administrar solicitar a gestão dos membros.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openMembersRequested, selectedCommunityId]);
 
   useEffect(() => {
     if (
@@ -1356,32 +1377,65 @@ function CommunitiesPage({
     }
   };
 
-  const addMember = async () => {
-    if (!selectedCommunityId || !addUid) return;
+  const addMember = async (uid: string) => {
+    if (!selectedCommunityId || !uid || memberAction) return;
+    const companyMember = data.members.find((member) => member.uid === uid);
+    if (!companyMember) return;
+
+    const previousMembers = communityMembers;
+    const optimisticMember: CommunityMember = {
+      uid,
+      displayName: companyMember.displayName,
+      email: companyMember.email,
+      companyRole: companyMember.role === "owner" || companyMember.role === "admin" ? companyMember.role : "member",
+      communityRole: "member"
+    };
+
+    setMemberAction({ uid, kind: "add" });
+    setCommunityMembers((current) => [...current.filter((member) => member.uid !== uid), optimisticMember]
+      .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || "", "pt-BR")));
+    setMembersLoaded(true);
+
     try {
-      await api(`/communities/${selectedCommunityId}/members`, { method: "POST", body: JSON.stringify({ uid: addUid }) });
-      setAddUid("");
+      await api(`/communities/${selectedCommunityId}/members`, { method: "POST", body: JSON.stringify({ uid }) });
       showToast("Usuário adicionado à comunidade.");
-      await loadCommunityMembers(selectedCommunityId);
       void refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      setCommunityMembers(previousMembers);
+      showToast(errorMessage(err));
+    } finally {
+      setMemberAction(null);
+    }
   };
 
   const removeMember = async (member: CommunityMember) => {
-    if (!selectedCommunityId) return;
+    if (!selectedCommunityId || memberAction) return;
     if (!confirm(`Remover ${member.displayName || member.email || "este usuário"} desta comunidade?`)) return;
+
+    const previousMembers = communityMembers;
+    setMemberAction({ uid: member.uid, kind: "remove" });
+    setCommunityMembers((current) => current.filter((item) => item.uid !== member.uid));
+
     try {
       await api(`/communities/${selectedCommunityId}/members/${member.uid}`, { method: "DELETE" });
       showToast("Usuário removido da comunidade.");
-      await loadCommunityMembers(selectedCommunityId);
       void refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      setCommunityMembers(previousMembers);
+      showToast(errorMessage(err));
+    } finally {
+      setMemberAction(null);
+    }
   };
 
   if (selectedCommunityId && selectedCommunity) {
-    const currentIds = new Set(communityMembers.map((member) => member.uid));
-    const availableMembers = data.members.filter((member) => !currentIds.has(member.uid));
+    const communityMemberMap = new Map(communityMembers.map((member) => [member.uid, member]));
     const memberCount = membersLoaded ? communityMembers.length : Number(selectedCommunity.memberCount || 0);
+    const memberSearchValue = memberSearch.trim().toLocaleLowerCase("pt-BR");
+    const listedMembers = (data.canAdmin ? data.members : communityMembers).filter((member) => {
+      if (!memberSearchValue) return true;
+      return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
+    });
 
     if (membersPage) {
       return (
@@ -1393,30 +1447,56 @@ function CommunitiesPage({
 
           {data.canAdmin && (
             <section className="panel-card members-manage-card">
-              <div className="members-manage-copy"><strong>Adicionar usuário</strong><small>Escolha um colaborador da empresa que ainda não participa desta comunidade.</small></div>
-              {!membersLoading && availableMembers.length ? (
-                <div className="community-add-member">
-                  <select value={addUid} onChange={(e) => setAddUid(e.target.value)}>
-                    <option value="">Escolha um usuário…</option>
-                    {availableMembers.map((member) => <option value={member.uid} key={member.uid}>{member.displayName || member.email}</option>)}
-                  </select>
-                  <button className="btn small" disabled={!addUid} onClick={addMember}><Plus size={15} /> Adicionar</button>
-                </div>
-              ) : !membersLoading ? <small className="muted">Todos os colaboradores da empresa já estão nesta comunidade.</small> : null}
+              <div className="members-manage-copy">
+                <strong>Gerenciar participantes</strong>
+                <small>{memberCount} de {data.members.length} colaboradores participam. Adicione ou remova cada pessoa diretamente na lista.</small>
+              </div>
+              <label className="community-member-search">
+                <Search size={16} />
+                <input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Buscar por nome ou e-mail" />
+                {memberSearch && <button type="button" onClick={() => setMemberSearch("")} aria-label="Limpar busca"><X size={14} /></button>}
+              </label>
             </section>
           )}
 
           <section className="panel-card members-page-list">
             {membersLoading && <div className="loading-line">Carregando membros…</div>}
-            {!membersLoading && communityMembers.map((member) => (
-              <div className="community-member-row members-page-row" key={member.uid}>
-                <Avatar name={member.displayName || member.email} mediaId={member.avatarMediaId} size={42} />
-                <div className="ellipsis"><strong>{member.displayName || member.email}</strong><small>{member.email}</small></div>
-                <span className="private-pill">{member.companyRole === "owner" ? "Proprietário" : member.companyRole === "admin" ? "Administrador" : "Usuário"}</span>
-                {data.canAdmin && <button className="btn danger small" onClick={() => removeMember(member)}>Remover</button>}
-              </div>
-            ))}
-            {!membersLoading && membersLoaded && !communityMembers.length && <p className="muted">Nenhum usuário nesta comunidade.</p>}
+            {!membersLoading && listedMembers.map((companyMember) => {
+              const membership = communityMemberMap.get(companyMember.uid);
+              const isMember = Boolean(membership);
+              const displayName = membership?.displayName || companyMember.displayName || companyMember.email || "Usuário";
+              const email = membership?.email || companyMember.email;
+              const role = membership?.companyRole || ("role" in companyMember ? companyMember.role : undefined);
+              const busy = memberAction?.uid === companyMember.uid;
+              const actionKind = busy ? memberAction!.kind : (isMember ? "remove" : "add");
+
+              return (
+                <div className={`community-member-row members-page-row ${isMember ? "is-member" : "not-member"}`} key={companyMember.uid}>
+                  <Avatar name={displayName} mediaId={membership?.avatarMediaId} size={42} />
+                  <div className="ellipsis"><strong>{displayName}</strong><small>{email}</small></div>
+                  <span className="private-pill">{role === "owner" ? "Proprietário" : role === "admin" ? "Administrador" : "Usuário"}</span>
+                  {data.canAdmin && (
+                    <div className="member-community-controls">
+                      <span className={`community-membership-status ${isMember ? "active" : "inactive"}`}>
+                        {isMember ? <Check size={13} /> : <X size={13} />}
+                        {isMember ? "Na comunidade" : "Não participa"}
+                      </span>
+                      <button
+                        className={`member-community-action ${actionKind}`}
+                        disabled={Boolean(memberAction)}
+                        onClick={() => isMember ? removeMember(membership!) : addMember(companyMember.uid)}
+                      >
+                        {actionKind === "remove" ? <UserMinus size={15} /> : <UserPlus size={15} />}
+                        {busy ? (actionKind === "remove" ? "Removendo…" : "Adicionando…") : (isMember ? "Remover" : "Adicionar")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {!membersLoading && membersLoaded && !listedMembers.length && (
+              <p className="muted">{memberSearch ? "Nenhum colaborador encontrado para esta busca." : "Nenhum usuário nesta comunidade."}</p>
+            )}
           </section>
         </section>
       );
@@ -1630,9 +1710,10 @@ type SentInvite = {
   resendCount?: number;
 };
 
-function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequired }: {
+function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToast, onUpgradeRequired }: {
   data: BootstrapData;
   onCompanyChange: (companyId: string) => Promise<void>;
+  onManageCommunity: (communityId: string) => void;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onUpgradeRequired: (message: string) => void;
@@ -1754,14 +1835,6 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
       }
       showToast(errorMessage(err));
     }
-  };
-
-  const addToCommunity = async (uid: string, communityId: string) => {
-    try {
-      await api(`/communities/${communityId}/members`, { method: "POST", body: JSON.stringify({ uid }) });
-      showToast("Usuário adicionado à comunidade.");
-      await refresh();
-    } catch (err) { showToast(errorMessage(err)); }
   };
 
   const changeRole = async (uid: string, role: "admin" | "member") => {
@@ -1908,12 +1981,6 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
               ) : (
                 <span className="private-pill">{member.role === "admin" ? "Administrador" : "Usuário"}</span>
               )}
-              {member.uid !== data.me.uid && !!data.allCompanyCommunities.length && (
-                <select className="community-add-select" defaultValue="" onChange={(e) => { if (e.target.value) addToCommunity(member.uid, e.target.value); e.target.value = ""; }}>
-                  <option value="">Adicionar à comunidade…</option>
-                  {data.allCompanyCommunities.map((c) => <option value={c.id} key={c.id}>{c.name}</option>)}
-                </select>
-              )}
             </div>
           ))}
         </div>
@@ -1921,12 +1988,16 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
 
       <section className="panel-card">
         <h3>Comunidades da empresa</h3>
+        <p className="admin-community-help">Abra uma comunidade para visualizar todos os colaboradores e adicionar ou remover participantes.</p>
         {data.allCompanyCommunities.map((community) => (
           <div className="admin-community-row" key={community.id}>
             <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
             <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || "Comunidade privada"} · {community.memberCount || 0} membros</small></div>
             <span className="private-pill">Privada</span>
-            <button className="btn danger small" onClick={() => removeCommunity(community)}>Excluir</button>
+            <div className="admin-community-actions">
+              <button className="btn secondary small" onClick={() => onManageCommunity(community.id)}><Users size={14} /> Gerenciar membros</button>
+              <button className="btn danger small" onClick={() => removeCommunity(community)}>Excluir</button>
+            </div>
           </div>
         ))}
         {!data.allCompanyCommunities.length && <p className="muted">Nenhuma comunidade criada.</p>}
