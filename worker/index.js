@@ -131,7 +131,7 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'DELETE' && /^\/posts\/[^/]+$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
-    return json(await deletePost(env, identity, postId));
+    return json(await deletePost(env, identity, postId, ctx));
   }
   if (method === 'GET' && /^\/posts\/[^/]+\/comments$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
@@ -1145,8 +1145,9 @@ async function sendPushToUser(env, uid, payload) {
     postId: payload.postId || '',
     companyId: payload.companyId || '',
     communityId: payload.communityId || '',
+    openComments: payload.openComments || '',
     url: payload.postId
-      ? `/?post=${encodeURIComponent(payload.postId)}${payload.companyId ? `&company=${encodeURIComponent(payload.companyId)}` : ''}`
+      ? `/?post=${encodeURIComponent(payload.postId)}${payload.companyId ? `&company=${encodeURIComponent(payload.companyId)}` : ''}${payload.openComments ? '&comments=1' : ''}`
       : '/'
   })) {
     data[key] = String(value || '');
@@ -1305,6 +1306,9 @@ async function createPost(env, identity, body, ctx) {
     attachments,
     reactionCount: 0,
     commentCount: 0,
+    lastCommentAt: '',
+    followUpReminderFor: '',
+    followUpReminderAt: '',
     isResolved: false,
     resolvedAt: '',
     resolvedByUid: '',
@@ -1373,40 +1377,61 @@ async function createPost(env, identity, body, ctx) {
   return { post };
 }
 
-async function deletePost(env, identity, postId) {
+async function cleanupDeletedPost(env, post, keepNotifications) {
+  const postId = post.id;
+  try {
+    const [comments, reactions, pollVotes, receipts, notifications] = await Promise.all([
+      fsWhere(env, 'comments', 'postId', postId, 250),
+      fsWhere(env, 'reactions', 'postId', postId, 250),
+      fsWhere(env, 'pollVotes', 'postId', postId, 250),
+      fsWhere(env, 'readReceipts', 'postId', postId, 250),
+      fsWhere(env, 'notifications', 'data.postId', postId, 250).catch(() => [])
+    ]);
+
+    await fsBatchDelete(env, [
+      ...comments.map(item => ({ collection: 'comments', id: item.id })),
+      ...reactions.map(item => ({ collection: 'reactions', id: item.id })),
+      ...pollVotes.map(item => ({ collection: 'pollVotes', id: item.id })),
+      ...receipts.map(item => ({ collection: 'readReceipts', id: item.id })),
+      ...(keepNotifications ? [] : notifications.map(item => ({ collection: 'notifications', id: item.id })))
+    ]);
+
+    if (keepNotifications && notifications.length) {
+      const readAt = nowIso();
+      await fsBatchPut(env, notifications.map(notification => ({
+        collection: 'notifications',
+        id: notification.id,
+        data: {
+          ...notification,
+          read: true,
+          persistent: false,
+          status: 'post_removed',
+          readAt
+        }
+      })));
+    }
+
+    await Promise.allSettled((post.attachments || []).map(async attachment => {
+      const media = await fsGet(env, 'media', attachment.id);
+      if (!media) return;
+      if (env.MEDIA && media.key) await env.MEDIA.delete(media.key);
+      await fsDelete(env, 'media', media.id);
+    }));
+  } catch (error) {
+    console.warn('Post cleanup:', postId, error);
+  }
+}
+
+async function deletePost(env, identity, postId, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
-  await requirePostAccess(env, identity.uid, post);
+  const access = await requirePostAccess(env, identity.uid, post);
 
   const isAuthor = post.authorUid === identity.uid;
-  let adminMembership = null;
-  if (!isAuthor && post.scope !== 'world' && post.companyId) {
-    const membership = await fsGet(env, 'companyMembers', `${post.companyId}_${identity.uid}`);
-    if (membership && membership.status === 'active' && (membership.role === 'owner' || membership.role === 'admin')) {
-      adminMembership = membership;
-    }
-  }
+  const adminMembership = !isAuthor && access && ['owner', 'admin'].includes(access.role) ? access : null;
   if (!isAuthor && !adminMembership) throw httpError(403, 'Você não pode excluir esta publicação.');
 
-  const comments = await fsWhere(env, 'comments', 'postId', postId, 250);
-  for (const comment of comments) await fsDelete(env, 'comments', comment.id);
-
-  const reactions = await fsWhere(env, 'reactions', 'postId', postId, 250);
-  for (const reaction of reactions) await fsDelete(env, 'reactions', reaction.id);
-
-  const pollVotes = await fsWhere(env, 'pollVotes', 'postId', postId, 250);
-  for (const vote of pollVotes) await fsDelete(env, 'pollVotes', vote.id);
-
-  const receipts = await fsWhere(env, 'readReceipts', 'postId', postId, 250);
-  for (const receipt of receipts) await fsDelete(env, 'readReceipts', receipt.id);
-
-  for (const attachment of (post.attachments || [])) {
-    const media = await fsGet(env, 'media', attachment.id);
-    if (!media) continue;
-    try { await env.MEDIA.delete(media.key); } catch {}
-    try { await fsDelete(env, 'media', media.id); } catch {}
-  }
-
   if (!isAuthor && adminMembership) {
+    const deletedAt = nowIso();
     const tombstone = {
       ...post,
       type: 'post',
@@ -1424,35 +1449,25 @@ async function deletePost(env, identity, postId) {
       eventTimeZone: '',
       reactionCount: 0,
       commentCount: 0,
+      lastCommentAt: '',
+      followUpReminderFor: '',
+      followUpReminderAt: '',
       deletedByAdmin: true,
-      deletedAt: nowIso(),
+      deletedAt,
       deletedByUid: identity.uid,
-      updatedAt: nowIso()
+      updatedAt: deletedAt
     };
     await fsPut(env, 'posts', postId, tombstone);
-
-    try {
-      const notifications = await fsWhere(env, 'notifications', 'data.postId', postId, 250);
-      for (const notification of notifications) {
-        await fsPut(env, 'notifications', notification.id, {
-          ...notification,
-          read: true,
-          persistent: false,
-          status: 'post_removed',
-          readAt: nowIso()
-        });
-      }
-    } catch {}
-
-    return { ok: true, tombstone: true };
+    const cleanup = cleanupDeletedPost(env, post, true);
+    if (ctx?.waitUntil) ctx.waitUntil(cleanup);
+    else await cleanup;
+    return { ok: true, tombstone: true, post: tombstone };
   }
 
-  try {
-    const notifications = await fsWhere(env, 'notifications', 'data.postId', postId, 250);
-    for (const notification of notifications) await fsDelete(env, 'notifications', notification.id);
-  } catch {}
-
   await fsDelete(env, 'posts', postId);
+  const cleanup = cleanupDeletedPost(env, post, false);
+  if (ctx?.waitUntil) ctx.waitUntil(cleanup);
+  else await cleanup;
   return { ok: true, tombstone: false };
 }
 
@@ -1475,9 +1490,13 @@ async function getPostDetail(env, identity, postId) {
 }
 
 async function getComments(env, identity, postId) {
-  const post=await fsGetRequired(env,'posts',postId,'Publicação não encontrada.');await requirePostAccess(env,identity.uid,post);
-  let comments=await fsWhere(env,'comments','postId',postId,100);comments=comments.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
-  return {post,comments};
+  const [post, commentsResult] = await Promise.all([
+    fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.'),
+    fsWhere(env, 'comments', 'postId', postId, 100)
+  ]);
+  await requirePostAccess(env, identity.uid, post);
+  const comments = commentsResult.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  return { post, comments };
 }
 async function addComment(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
@@ -1501,7 +1520,10 @@ async function addComment(env, identity, postId, body, ctx) {
 
   await fsPut(env, 'comments', commentId, comment);
   post.commentCount = Math.max(0, Number(post.commentCount || 0) + 1);
-  post.updatedAt = nowIso();
+  post.lastCommentAt = comment.createdAt;
+  post.followUpReminderFor = '';
+  post.followUpReminderAt = '';
+  post.updatedAt = comment.createdAt;
   await fsPut(env, 'posts', postId, post);
 
   if (post.authorUid !== identity.uid) {
@@ -1654,6 +1676,7 @@ async function acceptSolution(env, identity, postId, body) {
   post.isResolved = true;
   post.resolvedAt = nowIso();
   post.resolvedByUid = identity.uid;
+  post.followUpReminderFor = post.lastCommentAt || '';
   post.updatedAt = nowIso();
   await fsPut(env, 'posts', postId, post);
   return { ok: true, isResolved: true };
@@ -1676,6 +1699,7 @@ async function setPostResolved(env, identity, postId, body) {
   post.resolvedAt = resolved ? nowIso() : '';
   post.resolvedByUid = resolved ? identity.uid : '';
   if (!resolved && post.type === 'question') post.acceptedCommentId = '';
+  post.followUpReminderFor = post.lastCommentAt || post.followUpReminderFor || '';
   post.updatedAt = nowIso();
 
   await fsPut(env, 'posts', postId, post);
@@ -2149,12 +2173,100 @@ async function handleAsaasWebhook(request, env) {
   return json({ ok: true });
 }
 
-async function runScheduled(env){
-  const pending=await fsWhere(env,'invites','status','pending',20);const now=Date.now();
-  for(const invite of pending){
-    if(isExpired(invite.expiresAt)){invite.status='expired';invite.updatedAt=nowIso();await fsPut(env,'invites',invite.id,invite);continue;}
-    const age=now-new Date(invite.createdAt).getTime();if(invite.targetUid&&age>3*86400000){const nid=`invite_reminder_${invite.id}_${invite.targetUid}`;const existing=await fsGet(env,'notifications',nid);if(!existing)await fsPut(env,'notifications',nid,{recipientUid:invite.targetUid,type:'invite_reminder',title:'Você tem um convite pendente',body:invite.type==='company'?`${invite.companyName} ainda aguarda sua resposta.`:`Convite pendente para ${invite.communityName}.`,data:{inviteId:invite.id},read:false,status:'new',createdAt:nowIso()});}
+const DAY_MS = 86400000;
+const POST_FOLLOW_UP_MS = 5 * DAY_MS;
+
+async function sendPostFollowUpReminders(env, now) {
+  const unresolvedPosts = await fsWhere(env, 'posts', 'isResolved', false, 250);
+
+  for (const post of unresolvedPosts) {
+    if (
+      post.deletedByAdmin ||
+      !post.authorUid ||
+      Number(post.commentCount || 0) < 1 ||
+      !['post', 'question'].includes(post.type)
+    ) continue;
+
+    // Posts anteriores não tinham lastCommentAt. updatedAt é um fallback
+    // conservador: pode adiar o lembrete, mas não o dispara cedo.
+    const lastCommentAt = post.lastCommentAt || post.updatedAt || post.createdAt || '';
+    const lastCommentMs = new Date(lastCommentAt).getTime();
+    if (!Number.isFinite(lastCommentMs) || now - lastCommentMs < POST_FOLLOW_UP_MS) continue;
+    if (post.followUpReminderFor === lastCommentAt) continue;
+
+    const notificationId = `post_follow_up_${post.id}_${lastCommentMs}`;
+    const createdAt = nowIso();
+    const notification = {
+      recipientUid: post.authorUid,
+      type: 'post_follow_up',
+      title: 'Sua publicação está sem novas respostas',
+      body: 'Já se passaram 5 dias desde a última resposta. Marque como concluída ou continue o assunto.',
+      data: {
+        postId: post.id,
+        companyId: post.companyId || '',
+        communityId: post.communityId || '',
+        openComments: 'true'
+      },
+      read: false,
+      persistent: false,
+      status: 'new',
+      createdAt
+    };
+
+    await fsPut(env, 'notifications', notificationId, notification);
+    await fsPut(env, 'posts', post.id, {
+      ...post,
+      lastCommentAt,
+      followUpReminderFor: lastCommentAt,
+      followUpReminderAt: createdAt
+    });
+    await sendPushToUser(env, post.authorUid, {
+      title: notification.title,
+      body: notification.body,
+      notificationId,
+      type: notification.type,
+      postId: post.id,
+      companyId: post.companyId || '',
+      communityId: post.communityId || '',
+      openComments: 'true'
+    });
   }
+}
+
+async function runScheduled(env) {
+  const now = Date.now();
+  const pending = await fsWhere(env, 'invites', 'status', 'pending', 20);
+
+  for (const invite of pending) {
+    if (isExpired(invite.expiresAt)) {
+      invite.status = 'expired';
+      invite.updatedAt = nowIso();
+      await fsPut(env, 'invites', invite.id, invite);
+      continue;
+    }
+
+    const age = now - new Date(invite.createdAt).getTime();
+    if (invite.targetUid && age > 3 * DAY_MS) {
+      const notificationId = `invite_reminder_${invite.id}_${invite.targetUid}`;
+      const existing = await fsGet(env, 'notifications', notificationId);
+      if (!existing) {
+        await fsPut(env, 'notifications', notificationId, {
+          recipientUid: invite.targetUid,
+          type: 'invite_reminder',
+          title: 'Você tem um convite pendente',
+          body: invite.type === 'company'
+            ? `${invite.companyName} ainda aguarda sua resposta.`
+            : `Convite pendente para ${invite.communityName}.`,
+          data: { inviteId: invite.id },
+          read: false,
+          status: 'new',
+          createdAt: nowIso()
+        });
+      }
+    }
+  }
+
+  await sendPostFollowUpReminders(env, now);
 }
 
 async function requireAuth(request, env) {
@@ -2180,6 +2292,15 @@ async function fsBatchPut(env,docs){
   const prefix=`projects/${project}/databases/(default)/documents/`;
   const writes=docs.slice(0,450).map(d=>({update:{name:`${prefix}${encPath(d.collection)}/${encodeURIComponent(d.id)}`,fields:toFields({...d.data,id:d.data.id||d.id})}}));
   await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
+}
+async function fsBatchDelete(env,docs){
+  if(!docs.length)return;
+  const project=encodeURIComponent(env.FIREBASE_PROJECT_ID);
+  const prefix=`projects/${project}/databases/(default)/documents/`;
+  for(let index=0;index<docs.length;index+=450){
+    const writes=docs.slice(index,index+450).map(d=>({delete:`${prefix}${encPath(d.collection)}/${encodeURIComponent(d.id)}`}));
+    await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
+  }
 }
 async function fsWhere(env,collection,field,value,limit=100){const body={structuredQuery:{from:[{collectionId:collection}],where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:toValue(value)}},limit}};const rows=await fsRequest(env,'/documents:runQuery',{method:'POST',body:JSON.stringify(body)});return (Array.isArray(rows)?rows:[]).filter(x=>x.document).map(x=>fromDoc(x.document));}
 

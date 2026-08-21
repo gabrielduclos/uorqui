@@ -34,6 +34,20 @@ function errorMessage(error: unknown) {
   return "Não foi possível concluir esta ação.";
 }
 
+function optimisticTombstone(post: Post): Post {
+  const deletedAt = new Date().toISOString();
+  return {
+    ...post,
+    deletedByAdmin: true,
+    deletedAt,
+    text: "",
+    title: "",
+    attachments: [],
+    reactionCount: 0,
+    commentCount: 0
+  };
+}
+
 function isPlanLimitError(error: unknown) {
   return error instanceof ApiError && error.status === 402;
 }
@@ -350,6 +364,8 @@ export default function App() {
       const params = new URLSearchParams(location.search);
       params.set("post", postId);
       if (companyId) params.set("company", companyId);
+      if (notification.data?.openComments === "true") params.set("comments", "1");
+      else params.delete("comments");
       history.replaceState({}, "", `${location.pathname}?${params.toString()}`);
 
       setSharedPostLoading(true);
@@ -371,6 +387,7 @@ export default function App() {
     const params = new URLSearchParams(location.search);
     params.delete("post");
     params.delete("company");
+    params.delete("comments");
     const query = params.toString();
     history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
   };
@@ -591,7 +608,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.8</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.9</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -792,12 +809,16 @@ function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
   data: BootstrapData; tab: HomeTab; setTab: (tab: HomeTab) => void; refresh: () => Promise<void> | void;
   onCompose: () => void; showToast: (m: string) => void;
 }) {
+  const [hiddenPostIds, setHiddenPostIds] = useState<Set<string>>(() => new Set());
+  const [postOverrides, setPostOverrides] = useState<Record<string, Post>>({});
   const posts = useMemo(() => {
-    if (tab === "world") return data.worldPosts;
-    if (tab === "announcement") return data.posts.filter((p) => p.type === "announcement");
-    if (tab === "recent") return [...data.posts].sort((a, b) => +new Date(b.createdAt || 0) - +new Date(a.createdAt || 0));
-    return data.posts;
-  }, [data, tab]);
+    let source: Post[];
+    if (tab === "world") source = data.worldPosts;
+    else if (tab === "announcement") source = data.posts.filter((p) => p.type === "announcement");
+    else if (tab === "recent") source = [...data.posts].sort((a, b) => +new Date(b.createdAt || 0) - +new Date(a.createdAt || 0));
+    else source = data.posts;
+    return source.filter((post) => !hiddenPostIds.has(post.id)).map((post) => postOverrides[post.id] || post);
+  }, [data, tab, hiddenPostIds, postOverrides]);
 
   const like = async (post: Post) => {
     try { await api(`/posts/${post.id}/reaction`, { method: "POST" }); await refresh(); }
@@ -814,11 +835,23 @@ function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
       ? "Apagar esta publicação como administrador? O conteúdo será removido e ficará um aviso no lugar."
       : "Excluir sua publicação? Esta ação não pode ser desfeita.";
     if (!confirm(message)) return;
+
+    if (adminDeletingAnother) {
+      setPostOverrides((current) => ({ ...current, [post.id]: optimisticTombstone(post) }));
+    } else {
+      setHiddenPostIds((current) => new Set(current).add(post.id));
+    }
+
     try {
-      const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
+      const result = await api<{ tombstone?: boolean; post?: Post }>(`/posts/${post.id}`, { method: "DELETE" });
+      if (result.post) setPostOverrides((current) => ({ ...current, [post.id]: result.post! }));
       showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
-      await refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+      void refresh();
+    } catch (err) {
+      setHiddenPostIds((current) => { const next = new Set(current); next.delete(post.id); return next; });
+      setPostOverrides((current) => { const next = { ...current }; delete next[post.id]; return next; });
+      showToast(errorMessage(err));
+    }
   };
 
   return (
@@ -875,9 +908,9 @@ function SharedPostPage({
     if (!confirm(adminDeletingAnother ? "Apagar esta publicação como administrador?" : "Excluir sua publicação?")) return;
     try {
       const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
-      if (result.tombstone) await reload();
-      else onBack();
       showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
+      if (result.tombstone) void reload();
+      else onBack();
     } catch (error) { showToast(errorMessage(error)); }
   };
 
@@ -894,6 +927,7 @@ function SharedPostPage({
         onDelete={remove}
         currentUid={data.me.uid}
         canAdmin={data.canAdmin}
+        initialCommentsOpen={new URLSearchParams(location.search).get("comments") === "1"}
         onChanged={reload}
         showToast={showToast}
       />
@@ -1019,12 +1053,23 @@ function CommunitiesPage({
       ? "Apagar esta publicação como administrador? O conteúdo será removido e ficará um aviso informando que foi apagado pela administração."
       : "Excluir sua publicação? Esta ação não pode ser desfeita.";
     if (!confirm(message)) return;
+
+    const previousPosts = communityPosts;
+    setCommunityPosts((current) => adminDeletingAnother
+      ? current.map((item) => item.id === post.id ? optimisticTombstone(item) : item)
+      : current.filter((item) => item.id !== post.id));
+
     try {
-      const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
+      const result = await api<{ tombstone?: boolean; post?: Post }>(`/posts/${post.id}`, { method: "DELETE" });
+      if (result.post) {
+        setCommunityPosts((current) => current.map((item) => item.id === post.id ? result.post! : item));
+      }
       showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
-      if (selectedCommunityId) await loadCommunityPosts(selectedCommunityId);
       void refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      setCommunityPosts(previousPosts);
+      showToast(errorMessage(err));
+    }
   };
 
   const addMember = async () => {
@@ -1231,12 +1276,21 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   const remove = async (post: Post) => {
     const adminDeletingAnother = data.canAdmin && post.authorUid !== data.me.uid;
     if (!confirm(adminDeletingAnother ? "Apagar como administrador? Ficará um aviso no lugar da publicação." : "Excluir sua publicação?")) return;
+
+    const previousPosts = posts;
+    setPosts((current) => adminDeletingAnother
+      ? current.map((item) => item.id === post.id ? optimisticTombstone(item) : item)
+      : current.filter((item) => item.id !== post.id));
+
     try {
-      const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
-      if (!result.tombstone) setPosts((current) => current.filter((item) => item.id !== post.id));
+      const result = await api<{ tombstone?: boolean; post?: Post }>(`/posts/${post.id}`, { method: "DELETE" });
+      if (result.post) setPosts((current) => current.map((item) => item.id === post.id ? result.post! : item));
       showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
-      await refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+      void refresh();
+    } catch (err) {
+      setPosts(previousPosts);
+      showToast(errorMessage(err));
+    }
   };
 
   return (
@@ -2447,7 +2501,9 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
                 ? <Users size={19} />
                 : item.type === "announcement" || item.type === "read_required"
                   ? <Megaphone size={19} />
-                  : <Bell size={19} />}
+                  : item.type === "post_follow_up"
+                    ? <MessageSquareText size={19} />
+                    : <Bell size={19} />}
             </div>
 
             <div className="notification-page-copy">

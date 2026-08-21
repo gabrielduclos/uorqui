@@ -99,6 +99,9 @@ export interface Post {
   attachments?: Attachment[];
   reactionCount?: number;
   commentCount?: number;
+  lastCommentAt?: string;
+  followUpReminderFor?: string;
+  followUpReminderAt?: string;
   liked?: boolean;
   hasRead?: boolean;
   createdAt?: string;

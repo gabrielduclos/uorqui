@@ -688,6 +688,13 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .push-permission-prompt .modal-actions{justify-content:center}
 .post-actions .resolve-action.resolved{color:#2f6e39}
 .post-actions .resolve-action:disabled{opacity:.55;cursor:not-allowed}
+.post-actions .resolve-action{
+  order:-1;
+  flex:none;
+  color:#3f5f47;
+  font-weight:750;
+}
+.post-actions .resolve-action:hover{color:#244b2d}
 
 
 /* v1.2.8 — página de planos e upgrade contextual */

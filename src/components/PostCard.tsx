@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   CalendarDays, CalendarPlus, CheckCircle2, Download, FileText, Heart, MapPin,
   MessageCircle, RotateCcw, Send, Share2, ShieldAlert, Trash2, Vote
@@ -129,6 +129,7 @@ export function PostCard({
   onDelete,
   currentUid,
   canAdmin = false,
+  initialCommentsOpen = false,
   onChanged,
   showToast,
 }: {
@@ -141,13 +142,15 @@ export function PostCard({
   onDelete?: (post: Post) => Promise<void> | void;
   currentUid?: string;
   canAdmin?: boolean;
+  initialCommentsOpen?: boolean;
   onChanged?: () => Promise<void> | void;
   showToast?: (message: string) => void;
 }) {
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(initialCommentsOpen);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [commentsBusy, setCommentsBusy] = useState(false);
+  const commentsRequestRef = useRef<Promise<void> | null>(null);
   const [localCommentCount, setLocalCommentCount] = useState(Number(post.commentCount || 0));
   const [resolved, setResolved] = useState(Boolean(post.isResolved));
   const [resolveBusy, setResolveBusy] = useState(false);
@@ -174,25 +177,45 @@ export function PostCard({
     post.authorUid === currentUid || (canAdmin && post.scope !== "world")
   );
 
-  const loadComments = async () => {
+  const loadComments = () => {
+    if (commentsLoaded) return Promise.resolve();
+    if (commentsRequestRef.current) return commentsRequestRef.current;
+
     setCommentsBusy(true);
-    try {
-      const result = await api<{ comments: Comment[] }>(`/posts/${post.id}/comments`);
-      setComments(result.comments);
-      setLocalCommentCount(result.comments.length);
-      setCommentsLoaded(true);
-    } catch (error) {
-      showToast?.(error instanceof Error ? error.message : "Não foi possível carregar os comentários.");
-    } finally {
-      setCommentsBusy(false);
-    }
+    const request = api<{ comments: Comment[] }>(`/posts/${post.id}/comments`)
+      .then((result) => {
+        setComments(result.comments);
+        setLocalCommentCount(result.comments.length);
+        setCommentsLoaded(true);
+      })
+      .catch((error) => {
+        commentsRequestRef.current = null;
+        showToast?.(error instanceof Error ? error.message : "Não foi possível carregar as respostas.");
+      })
+      .finally(() => setCommentsBusy(false));
+
+    commentsRequestRef.current = request;
+    return request;
   };
 
-  const toggleComments = async () => {
+  const warmComments = () => {
+    if (!commentsLoaded && !post.deletedByAdmin) void loadComments();
+  };
+
+  const toggleComments = () => {
     const next = !commentsOpen;
     setCommentsOpen(next);
-    if (next && !commentsLoaded && !post.deletedByAdmin) await loadComments();
+    if (next) warmComments();
   };
+
+  useEffect(() => {
+    if (initialCommentsOpen) {
+      setCommentsOpen(true);
+      warmComments();
+    }
+    // Deve executar somente quando a navegação pedir a abertura das respostas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCommentsOpen]);
 
   const addComment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -436,33 +459,41 @@ export function PostCard({
           </div>
 
           <footer className="post-actions">
-            <button className={post.liked ? "liked" : ""} onClick={() => onLike(post)} aria-label="Curtir">
-              <Heart size={18} fill={post.liked ? "currentColor" : "none"} />
-              <span className="action-count">{count(post.reactionCount)}</span>
-              <span className="action-label">curtidas</span>
-            </button>
             {canResolve && (
               <button
                 className={`resolve-action ${resolved ? "resolved" : ""}`}
                 disabled={resolveBusy}
                 onClick={toggleResolved}
-                aria-label={resolved ? "Reabrir publicação" : "Marcar publicação como concluída"}
+                aria-label={resolved ? "Reabrir assunto" : "Marcar como concluído"}
+                title={resolved ? "Reabrir assunto" : "Marcar como concluído"}
               >
                 {resolved ? <RotateCcw size={18} /> : <CheckCircle2 size={18} />}
-                <span className="action-label">{resolved ? "reabrir" : "concluir"}</span>
+                <span className="action-label">{resolved ? "Reabrir assunto" : "Marcar como concluído"}</span>
               </button>
             )}
-            <button className={commentsOpen ? "active" : ""} onClick={toggleComments} aria-label="Abrir comentários">
+            <button className={post.liked ? "liked" : ""} onClick={() => onLike(post)} aria-label="Curtir">
+              <Heart size={18} fill={post.liked ? "currentColor" : "none"} />
+              <span className="action-count">{count(post.reactionCount)}</span>
+              <span className="action-label">curtidas</span>
+            </button>
+            <button
+              className={commentsOpen ? "active" : ""}
+              onPointerEnter={warmComments}
+              onPointerDown={warmComments}
+              onFocus={warmComments}
+              onClick={toggleComments}
+              aria-label="Abrir respostas"
+            >
               <MessageCircle size={18} />
               <span className="action-count">{count(localCommentCount)}</span>
-              <span className="action-label">comentários</span>
+              <span className="action-label">respostas</span>
             </button>
             <button onClick={share} aria-label="Compartilhar publicação"><Share2 size={18} /><span className="action-label">compartilhar</span></button>
           </footer>
 
           {commentsOpen && (
             <section className="inline-comments">
-              {commentsBusy && !commentsLoaded && <div className="inline-comments-loading">Carregando comentários…</div>}
+              {commentsBusy && !commentsLoaded && <div className="inline-comments-loading">Carregando respostas…</div>}
               <div className="inline-comment-list">
                 {comments.map((comment) => (
                   <article className="inline-comment" key={comment.id}>
