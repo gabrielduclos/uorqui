@@ -898,11 +898,13 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .onboarding-create-instead{display:block;margin:12px auto 0!important}
 .onboarding-error{margin-top:12px;text-align:left}
 .profile-verification-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.delete-account-card{display:flex;align-items:center;justify-content:space-between;gap:16px;border-color:#f1d3d0}
-.delete-account-copy{display:flex;align-items:flex-start;gap:10px;min-width:0;color:#8d2520}
+.delete-account-card{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.delete-account-copy{display:flex;align-items:flex-start;gap:8px;min-width:0;color:#6f7178}
 .delete-account-copy svg{flex:none;margin-top:1px}
-.delete-account-copy strong{display:block;font-size:12px}
-.delete-account-copy p{margin:4px 0 0;max-width:470px;color:#7a5b58;font-size:9px;line-height:1.5}
+.delete-account-copy strong{display:block;font-size:10px;font-weight:650}
+.delete-account-copy p{margin:3px 0 0;max-width:470px;color:#8a8c92;font-size:8.5px;line-height:1.5}
+.delete-account-trigger{flex:none;border:0;background:transparent;color:#777980;padding:4px 0;font-size:9px;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.delete-account-trigger:hover,.delete-account-trigger:focus-visible{color:#8d2520}
 .invite-delivery.failed{color:#a33a31}
 .invite-delivery.not_configured{color:#84691f}
 .invite-delivery.sent{color:#2f6e39}

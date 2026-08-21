@@ -25,6 +25,11 @@ function count(value = 0) {
   }).format(value);
 }
 
+type LikeResult = {
+  liked: boolean;
+  reactionCount: number;
+};
+
 function formatBytes(size = 0) {
   if (!size) return "";
   if (size < 1024) return `${size} B`;
@@ -136,7 +141,7 @@ export function PostCard({
   post: Post;
   companyName?: string;
   community?: Community;
-  onLike: (post: Post) => Promise<void> | void;
+  onLike: (post: Post) => Promise<LikeResult> | LikeResult;
   onRead: (post: Post) => Promise<void> | void;
   canDelete?: boolean;
   onDelete?: (post: Post) => Promise<void> | void;
@@ -151,7 +156,10 @@ export function PostCard({
   const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [commentsBusy, setCommentsBusy] = useState(false);
   const commentsRequestRef = useRef<Promise<void> | null>(null);
+  const likeBusyRef = useRef(false);
   const [localCommentCount, setLocalCommentCount] = useState(Number(post.commentCount || 0));
+  const [localLiked, setLocalLiked] = useState(Boolean(post.liked));
+  const [localReactionCount, setLocalReactionCount] = useState(Number(post.reactionCount || 0));
   const [resolved, setResolved] = useState(Boolean(post.isResolved));
   const [resolveBusy, setResolveBusy] = useState(false);
   const [pollOptions, setPollOptions] = useState<PollOption[]>(post.pollOptions || []);
@@ -160,6 +168,10 @@ export function PostCard({
   const [pollBusy, setPollBusy] = useState(false);
 
   useEffect(() => setLocalCommentCount(Number(post.commentCount || 0)), [post.commentCount]);
+  useEffect(() => {
+    setLocalLiked(Boolean(post.liked));
+    setLocalReactionCount(Number(post.reactionCount || 0));
+  }, [post.liked, post.reactionCount]);
   useEffect(() => setResolved(Boolean(post.isResolved)), [post.isResolved]);
   useEffect(() => {
     setPollOptions(post.pollOptions || []);
@@ -206,6 +218,29 @@ export function PostCard({
     const next = !commentsOpen;
     setCommentsOpen(next);
     if (next) warmComments();
+  };
+
+  const toggleLike = async () => {
+    if (likeBusyRef.current) return;
+    likeBusyRef.current = true;
+
+    const previousLiked = localLiked;
+    const previousCount = localReactionCount;
+    const nextLiked = !previousLiked;
+
+    setLocalLiked(nextLiked);
+    setLocalReactionCount(Math.max(0, previousCount + (nextLiked ? 1 : -1)));
+
+    try {
+      const result = await onLike(post);
+      setLocalLiked(Boolean(result.liked));
+      setLocalReactionCount(Math.max(0, Number(result.reactionCount || 0)));
+    } catch {
+      setLocalLiked(previousLiked);
+      setLocalReactionCount(previousCount);
+    } finally {
+      likeBusyRef.current = false;
+    }
   };
 
   useEffect(() => {
@@ -459,9 +494,9 @@ export function PostCard({
           </div>
 
           <footer className="post-actions">
-            <button className={post.liked ? "liked" : ""} onClick={() => onLike(post)} aria-label="Curtir">
-              <Heart size={18} fill={post.liked ? "currentColor" : "none"} />
-              <span className="action-count">{count(post.reactionCount)}</span>
+            <button className={localLiked ? "liked" : ""} onClick={toggleLike} aria-label="Curtir" aria-pressed={localLiked}>
+              <Heart size={18} fill={localLiked ? "currentColor" : "none"} />
+              <span className="action-count">{count(localReactionCount)}</span>
               <span className="action-label">curtidas</span>
             </button>
             <button

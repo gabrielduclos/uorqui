@@ -688,7 +688,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.12</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.13</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -730,7 +730,7 @@ export default function App() {
 
       {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
         <aside className="pwa-install-banner" role="status">
-          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.12" alt="" /></div>
+          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.13" alt="" /></div>
           <div className="pwa-install-copy">
             <strong>Instale o Uorqui</strong>
             <span>Abra mais rápido e use como um app no celular.</span>
@@ -1076,8 +1076,14 @@ function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
   }, [data, tab, hiddenPostIds, postOverrides]);
 
   const like = async (post: Post) => {
-    try { await api(`/posts/${post.id}/reaction`, { method: "POST" }); await refresh(); }
-    catch (err) { showToast(errorMessage(err)); }
+    try {
+      const result = await api<{ liked: boolean; reactionCount: number }>(`/posts/${post.id}/reaction`, { method: "POST" });
+      void refresh();
+      return result;
+    } catch (err) {
+      showToast(errorMessage(err));
+      throw err;
+    }
   };
   const read = async (post: Post) => {
     try { await api(`/posts/${post.id}/read`, { method: "POST" }); showToast("Leitura confirmada."); await refresh(); }
@@ -1147,8 +1153,14 @@ function SharedPostPage({
   showToast: (message: string) => void;
 }) {
   const like = async () => {
-    try { await api(`/posts/${post.id}/reaction`, { method: "POST" }); await reload(); }
-    catch (error) { showToast(errorMessage(error)); }
+    try {
+      const result = await api<{ liked: boolean; reactionCount: number }>(`/posts/${post.id}/reaction`, { method: "POST" });
+      void reload();
+      return result;
+    } catch (error) {
+      showToast(errorMessage(error));
+      throw error;
+    }
   };
   const read = async () => {
     try {
@@ -1301,9 +1313,13 @@ function CommunitiesPage({
 
   const like = async (post: Post) => {
     try {
-      await api(`/posts/${post.id}/reaction`, { method: "POST" });
-      if (selectedCommunityId) await loadCommunityPosts(selectedCommunityId);
-    } catch (err) { showToast(errorMessage(err)); }
+      const result = await api<{ liked: boolean; reactionCount: number }>(`/posts/${post.id}/reaction`, { method: "POST" });
+      if (selectedCommunityId) void loadCommunityPosts(selectedCommunityId);
+      return result;
+    } catch (err) {
+      showToast(errorMessage(err));
+      throw err;
+    }
   };
 
   const read = async (post: Post) => {
@@ -1528,8 +1544,14 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   };
 
   const like = async (post: Post) => {
-    try { await api(`/posts/${post.id}/reaction`, { method: "POST" }); await refresh(); }
-    catch (err) { showToast(errorMessage(err)); }
+    try {
+      const result = await api<{ liked: boolean; reactionCount: number }>(`/posts/${post.id}/reaction`, { method: "POST" });
+      void refresh();
+      return result;
+    } catch (err) {
+      showToast(errorMessage(err));
+      throw err;
+    }
   };
 
   const read = async (post: Post) => {
@@ -2973,13 +2995,13 @@ function ProfilePage({
 
       <section className="panel-card delete-account-card">
         <div className="delete-account-copy">
-          <Trash2 size={20} />
+          <Trash2 size={16} />
           <div>
             <strong>Apagar minha conta</strong>
             <p>Remove seus acessos e dados pessoais. Publicações e respostas permanecem identificadas apenas como “Conta removida”.</p>
           </div>
         </div>
-        <button className="btn danger" onClick={() => { setDeleteAccountError(""); setDeleteAccountOpen(true); }}>
+        <button className="delete-account-trigger" onClick={() => { setDeleteAccountError(""); setDeleteAccountOpen(true); }}>
           Apagar conta
         </button>
       </section>
