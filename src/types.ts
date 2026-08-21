@@ -1,4 +1,4 @@
-export type View = "home" | "communities" | "search" | "admin" | "profile" | "notifications" | "companies";
+export type View = "home" | "communities" | "search" | "admin" | "profile" | "notifications" | "companies" | "superadmin";
 export type HomeTab = "for-you" | "recent" | "announcement" | "world";
 
 export interface UserProfile {
@@ -10,10 +10,30 @@ export interface UserProfile {
   avatarMediaId?: string;
 }
 
+export type CompanyPlan = "free" | "premium";
+export type BillingStatus = "inactive" | "pending" | "active" | "past_due" | "canceled";
+
+export interface PlanLimits {
+  members: number | null;
+  communities: number | null;
+}
+
 export interface Company {
   id: string;
   name: string;
   role?: string;
+  plan?: CompanyPlan;
+  effectivePlan?: CompanyPlan;
+  billingStatus?: BillingStatus;
+  premiumUntil?: string;
+  manualPremiumUntil?: string;
+  premiumSource?: "asaas" | "manual" | "";
+  memberCount?: number;
+  communityCount?: number;
+  limits?: PlanLimits;
+  billingReady?: boolean;
+  premiumMonthlyPrice?: number;
+  billingSubscriptionId?: string;
 }
 
 export interface Community {
@@ -39,6 +59,7 @@ export interface NotificationItem {
   title: string;
   body?: string;
   read?: boolean;
+  persistent?: boolean;
   status?: string;
   createdAt?: string;
   data?: Record<string, string>;
@@ -51,6 +72,12 @@ export interface Attachment {
   size?: number;
 }
 
+export interface PollOption {
+  id: string;
+  text: string;
+  voteCount: number;
+}
+
 export interface Post {
   id: string;
   authorUid: string;
@@ -61,11 +88,14 @@ export interface Post {
   companyName?: string;
   communityId?: string;
   communityName?: string;
-  type: "post" | "question" | "announcement";
+  type: "post" | "question" | "announcement" | "poll" | "event";
   text: string;
   title?: string;
   requiresReadReceipt?: boolean;
   acceptedCommentId?: string;
+  isResolved?: boolean;
+  resolvedAt?: string;
+  resolvedByUid?: string;
   attachments?: Attachment[];
   reactionCount?: number;
   commentCount?: number;
@@ -75,6 +105,13 @@ export interface Post {
   deletedByAdmin?: boolean;
   deletedAt?: string;
   deletedByUid?: string;
+  pollOptions?: PollOption[];
+  pollTotalVotes?: number;
+  myPollOptionId?: string;
+  eventStart?: string;
+  eventEnd?: string;
+  eventLocation?: string;
+  eventTimeZone?: string;
 }
 
 export interface Comment {
@@ -101,6 +138,7 @@ export interface BootstrapData {
   company: Company | null;
   role: string | null;
   canAdmin: boolean;
+  isSuperadmin: boolean;
   communities: Community[];
   communityMap: Record<string, Community>;
   posts: Post[];

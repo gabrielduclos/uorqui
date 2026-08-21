@@ -463,7 +463,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.4</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.5</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
