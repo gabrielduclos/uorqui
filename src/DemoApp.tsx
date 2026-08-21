@@ -11,7 +11,7 @@ import type { Community, HomeTab, Post, View } from "./types";
 import "./styles.css";
 
 const company = { id: "demo-company", name: "Lumina Tecnologia" };
-const me = { uid: "demo-me", name: "Gabriel Duclos", email: "gabriel@lumina.demo" };
+const me = { uid: "demo-me", name: "Daniel Carvalho", email: "daniel.carvalho@lumina.demo" };
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
 const communities: Community[] = [
@@ -239,7 +239,7 @@ export default function DemoApp() {
       <div className="page-heading admin-page-heading"><div><h2>Administrar</h2><p>Gerencie empresa, pessoas e comunidades.</p></div><button className="btn secondary" onClick={() => showToast("Dados fiscais disponíveis para edição.")}>Editar dados da empresa</button></div>
       <div className="admin-company-context"><div className="company-profile-mark">LT</div><div><strong>{company.name}</strong><small>Plano Premium · 248 colaboradores</small></div><span className="plan-pill premium"><Crown size={12} /> Premium</span></div>
       <div className="admin-grid">
-        <section className="panel-card"><h3>Membros da empresa</h3><div className="member-list">{["Gabriel Duclos", "Mariana Costa", "Lucas Martins", "Camila Souza"].map((name, index) => <div className="member-row" key={name}><Avatar name={name} size={38} /><div><strong>{name}</strong><small>{index === 0 ? "Proprietário" : index === 1 ? "Administrador" : "Colaborador"}</small></div><select defaultValue={index < 2 ? "admin" : "member"}><option value="admin">Administrador</option><option value="member">Colaborador</option></select></div>)}</div></section>
+        <section className="panel-card"><h3>Membros da empresa</h3><div className="member-list">{["Daniel Carvalho", "Mariana Costa", "Lucas Martins", "Camila Souza"].map((name, index) => <div className="member-row" key={name}><Avatar name={name} size={38} /><div><strong>{name}</strong><small>{index === 0 ? "Proprietário" : index === 1 ? "Administrador" : "Colaborador"}</small></div><select defaultValue={index < 2 ? "admin" : "member"}><option value="admin">Administrador</option><option value="member">Colaborador</option></select></div>)}</div></section>
         <section className="panel-card"><h3>Convidar colaborador</h3><form className="stack-form" onSubmit={(event) => { event.preventDefault(); showToast("Convite fictício enviado."); }}><label><span>E-mail</span><input type="email" defaultValue="novo.colaborador@lumina.demo" /></label><button className="btn"><Mail size={16} /> Enviar convite</button></form></section>
       </div>
       <section className="panel-card"><h3>Comunidades</h3><p className="admin-community-help">Defina a visibilidade e abra a gerência de membros.</p>{communities.map((community) => <div className="admin-community-row" key={community.id}><div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div><div><strong>{community.name}</strong><small>{community.memberCount} membros</small></div><span className="private-pill">{community.visibility === "public" ? "Pública" : "Privada"}</span><div className="admin-community-actions"><button className="btn secondary small" onClick={() => { setSelectedCommunityId(community.id); setView("communities"); }}><Users size={14} /> Gerenciar membros</button></div></div>)}</section>
