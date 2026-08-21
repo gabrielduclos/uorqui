@@ -21,7 +21,8 @@ document.addEventListener("click", (event) => {
   const shouldLock =
     button.classList.contains("btn") ||
     button.classList.contains("post-delete") ||
-    Boolean(button.closest(".post-actions"));
+    Boolean(button.closest(".post-actions")) ||
+    button.dataset.lockAction === "true";
 
   if (!shouldLock || button.disabled) return;
 
@@ -32,15 +33,10 @@ document.addEventListener("click", (event) => {
   }
 
   button.dataset.uorquiLocked = "1";
-  window.setTimeout(() => {
-    if (!button.isConnected) return;
-    button.disabled = true;
-    button.setAttribute("aria-busy", "true");
-  }, 0);
+  button.setAttribute("aria-busy", "true");
 
   window.setTimeout(() => {
     if (!button.isConnected) return;
-    button.disabled = false;
     button.removeAttribute("aria-busy");
     delete button.dataset.uorquiLocked;
   }, 900);

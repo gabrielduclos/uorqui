@@ -10,6 +10,7 @@ export class ApiError extends Error {
 
 const inFlightMutations = new Map<string, Promise<any>>();
 const mediaUrlCache = new Map<string, Promise<string>>();
+const resolvedMediaUrls = new Map<string, string>();
 
 function mutationKey(path: string, init: RequestInit) {
   const method = String(init.method || "GET").toUpperCase();
@@ -54,8 +55,6 @@ async function executeApi<T>(path: string, init: RequestInit = {}): Promise<T> {
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const method = String(init.method || "GET").toUpperCase();
 
-  // GETs may run in parallel. Write actions are deduplicated while the same
-  // request is in flight, preventing accidental double submits/double clicks.
   if (method === "GET" || method === "HEAD") {
     return executeApi<T>(path, init);
   }
@@ -72,7 +71,14 @@ export async function api<T = any>(path: string, init: RequestInit = {}): Promis
   return request;
 }
 
+export function cachedMediaBlobUrl(mediaId: string): string {
+  return resolvedMediaUrls.get(mediaId) || "";
+}
+
 export async function mediaBlobUrl(mediaId: string): Promise<string> {
+  const resolved = resolvedMediaUrls.get(mediaId);
+  if (resolved) return resolved;
+
   const cached = mediaUrlCache.get(mediaId);
   if (cached) return cached;
 
@@ -90,7 +96,9 @@ export async function mediaBlobUrl(mediaId: string): Promise<string> {
       throw new ApiError("Não foi possível carregar a mídia.", response.status);
     }
 
-    return URL.createObjectURL(await response.blob());
+    const url = URL.createObjectURL(await response.blob());
+    resolvedMediaUrls.set(mediaId, url);
+    return url;
   })();
 
   mediaUrlCache.set(mediaId, request);
@@ -98,7 +106,8 @@ export async function mediaBlobUrl(mediaId: string): Promise<string> {
 }
 
 export async function prefetchPostMedia(
-  posts: Array<{ attachments?: Array<{ id: string; contentType?: string }> }>
+  posts: Array<{ attachments?: Array<{ id: string; contentType?: string }> }>,
+  maxImages = 16
 ): Promise<void> {
   const imageIds = Array.from(new Set(
     posts
@@ -106,12 +115,10 @@ export async function prefetchPostMedia(
       .filter((attachment) => String(attachment.contentType || "").startsWith("image/"))
       .map((attachment) => attachment.id)
       .filter(Boolean)
-  ));
+  )).slice(0, maxImages);
 
   if (!imageIds.length) return;
 
-  // Load images before the new feed is swapped into view, so text and photos
-  // appear together instead of each image popping in afterward.
   const concurrency = 6;
   let cursor = 0;
 

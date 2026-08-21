@@ -12,5 +12,11 @@ if (!config?.apiKey || String(config.apiKey).includes("COLE_AQUI") || !config?.a
   throw new Error("Firebase Web App ainda não foi configurado em public/firebase-config.js.");
 }
 
-export const firebaseApp = initializeApp(config);
+const normalizedConfig: FirebaseOptions = { ...config };
+if (!normalizedConfig.messagingSenderId && normalizedConfig.appId) {
+  const parts = String(normalizedConfig.appId).split(":");
+  if (parts.length > 1 && /^\d+$/.test(parts[1])) normalizedConfig.messagingSenderId = parts[1];
+}
+
+export const firebaseApp = initializeApp(normalizedConfig);
 export const auth = getAuth(firebaseApp);
