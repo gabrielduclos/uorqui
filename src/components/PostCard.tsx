@@ -459,18 +459,6 @@ export function PostCard({
           </div>
 
           <footer className="post-actions">
-            {canResolve && (
-              <button
-                className={`resolve-action ${resolved ? "resolved" : ""}`}
-                disabled={resolveBusy}
-                onClick={toggleResolved}
-                aria-label={resolved ? "Reabrir assunto" : "Marcar como concluído"}
-                title={resolved ? "Reabrir assunto" : "Marcar como concluído"}
-              >
-                {resolved ? <RotateCcw size={18} /> : <CheckCircle2 size={18} />}
-                <span className="action-label">{resolved ? "Reabrir assunto" : "Marcar como concluído"}</span>
-              </button>
-            )}
             <button className={post.liked ? "liked" : ""} onClick={() => onLike(post)} aria-label="Curtir">
               <Heart size={18} fill={post.liked ? "currentColor" : "none"} />
               <span className="action-count">{count(post.reactionCount)}</span>
@@ -489,6 +477,18 @@ export function PostCard({
               <span className="action-label">respostas</span>
             </button>
             <button onClick={share} aria-label="Compartilhar publicação"><Share2 size={18} /><span className="action-label">compartilhar</span></button>
+            {canResolve && (
+              <button
+                className={`resolve-action ${resolved ? "resolved" : ""}`}
+                disabled={resolveBusy}
+                onClick={toggleResolved}
+                aria-label={resolved ? "Reabrir assunto" : "Marcar como concluído"}
+                title={resolved ? "Reabrir assunto" : "Marcar como concluído"}
+              >
+                {resolved ? <RotateCcw size={18} /> : <CheckCircle2 size={18} />}
+                <span className="action-label">{resolved ? "Reabrir assunto" : "Marcar como concluído"}</span>
+              </button>
+            )}
           </footer>
 
           {commentsOpen && (

@@ -78,6 +78,7 @@ export default function App() {
   const [pushPermissionPromptOpen, setPushPermissionPromptOpen] = useState(false);
   const [pushPermissionBusy, setPushPermissionBusy] = useState(false);
   const [planOfferReason, setPlanOfferReason] = useState<PlanOfferReason>(null);
+  const [lastCreatedPost, setLastCreatedPost] = useState<Post | null>(null);
   const pwaInstall = usePwaInstall();
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
@@ -345,6 +346,7 @@ export default function App() {
     localStorage.setItem("uorqui-company", id);
     setSelectedCompanyId(id);
     setSelectedCommunityId("");
+    setLastCreatedPost(null);
     setView(nextView);
     await refresh(id);
   };
@@ -430,6 +432,7 @@ export default function App() {
     if (view === "communities") return (
       <CommunitiesPage
         data={data}
+        lastCreatedPost={lastCreatedPost}
         selectedCommunityId={selectedCommunityId}
         onSelectCommunity={setSelectedCommunityId}
         onBack={() => setSelectedCommunityId("")}
@@ -451,6 +454,18 @@ export default function App() {
     if (view === "companies") return <CompaniesPage
       data={data}
       onSelectCompany={(id) => changeCompany(id, "home")}
+      onCompanyLeft={async (leftCompanyId, nextCompanyId) => {
+        if (leftCompanyId === selectedCompanyId) {
+          if (nextCompanyId) localStorage.setItem("uorqui-company", nextCompanyId);
+          else localStorage.removeItem("uorqui-company");
+          setSelectedCompanyId(nextCompanyId);
+          setSelectedCommunityId("");
+          setLastCreatedPost(null);
+          await refresh(nextCompanyId);
+          return;
+        }
+        await refresh(selectedCompanyId);
+      }}
       onOpenPlans={() => openPlans("manual")}
       showToast={showToast}
     />;
@@ -608,7 +623,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.9</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.10</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -692,7 +707,20 @@ export default function App() {
         initialScope={composerTarget.scope}
         initialCommunityId={composerTarget.communityId}
         onClose={() => setComposerOpen(false)}
-        onDone={async () => { setComposerOpen(false); await refresh(); }}
+        onDone={(post) => {
+          setComposerOpen(false);
+          setLastCreatedPost(post);
+          setData((current) => {
+            if (post.scope === "world") {
+              return { ...current, worldPosts: [post, ...current.worldPosts.filter(item => item.id !== post.id)] };
+            }
+            if (post.companyId === current.selectedCompanyId) {
+              return { ...current, posts: [post, ...current.posts.filter(item => item.id !== post.id)] };
+            }
+            return current;
+          });
+          void refresh(post.companyId || selectedCompanyId);
+        }}
         showToast={showToast}
       />}
       {toast && <div className="toast">{toast}</div>}
@@ -769,13 +797,49 @@ function AuthScreen() {
   );
 }
 
+function companyRegistrationPayload(form: HTMLFormElement) {
+  const fd = new FormData(form);
+  return {
+    name: String(fd.get("name") || "").trim(),
+    cnpj: String(fd.get("cnpj") || "").trim(),
+    address: {
+      postalCode: String(fd.get("postalCode") || "").trim(),
+      street: String(fd.get("street") || "").trim(),
+      number: String(fd.get("number") || "").trim(),
+      complement: String(fd.get("complement") || "").trim(),
+      district: String(fd.get("district") || "").trim(),
+      city: String(fd.get("city") || "").trim(),
+      state: String(fd.get("state") || "").trim().toUpperCase()
+    }
+  };
+}
+
+function CompanyRegistrationFields() {
+  return (
+    <>
+      <label><span>Nome da empresa</span><input name="name" required maxLength={120} placeholder="Ex.: Minha Empresa" /></label>
+      <label><span>CNPJ</span><input name="cnpj" required inputMode="numeric" maxLength={18} placeholder="00.000.000/0000-00" /></label>
+      <div className="company-address-heading"><strong>Endereço para nota fiscal</strong><small>Todos os campos abaixo, exceto complemento, são obrigatórios.</small></div>
+      <div className="company-address-grid">
+        <label className="postal-code"><span>CEP</span><input name="postalCode" required inputMode="numeric" maxLength={9} placeholder="00000-000" /></label>
+        <label className="street"><span>Logradouro</span><input name="street" required maxLength={160} placeholder="Rua, avenida…" /></label>
+        <label><span>Número</span><input name="number" required maxLength={30} /></label>
+        <label><span>Complemento</span><input name="complement" maxLength={100} placeholder="Sala, bloco…" /></label>
+        <label><span>Bairro</span><input name="district" required maxLength={100} /></label>
+        <label><span>Cidade</span><input name="city" required maxLength={100} /></label>
+        <label><span>UF</span><input name="state" required minLength={2} maxLength={2} autoCapitalize="characters" placeholder="SP" /></label>
+      </div>
+    </>
+  );
+}
+
 function Onboarding({ onCreated }: { onCreated: (id: string) => void }) {
   const [error, setError] = useState("");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const name = String(new FormData(event.currentTarget).get("name") || "").trim();
+    const payload = companyRegistrationPayload(event.currentTarget);
     try {
-      const result = await api<{ company: { id: string } }>("/companies", { method: "POST", body: JSON.stringify({ name }) });
+      const result = await api<{ company: { id: string } }>("/companies", { method: "POST", body: JSON.stringify(payload) });
       onCreated(result.company.id);
     } catch (err) { setError(errorMessage(err)); }
   };
@@ -785,9 +849,9 @@ function Onboarding({ onCreated }: { onCreated: (id: string) => void }) {
       <div className="onboarding-card">
         <Building2 size={30} />
         <h2>Comece sua empresa no Uorqui</h2>
-        <p>Você também pode aguardar um convite de uma empresa. Se quiser criar a sua agora, informe o nome abaixo.</p>
+        <p>Você também pode aguardar um convite. Para criar sua empresa agora, informe os dados fiscais usados na nota.</p>
         <form onSubmit={submit}>
-          <label><span>Nome da empresa</span><input name="name" required placeholder="Ex.: Minha Empresa" /></label>
+          <CompanyRegistrationFields />
           {error && <div className="form-error">{error}</div>}
           <button className="btn">Criar empresa</button>
         </form>
@@ -936,9 +1000,10 @@ function SharedPostPage({
 }
 
 function CommunitiesPage({
-  data, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, refresh, showToast, onUpgradeRequired
+  data, lastCreatedPost, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, refresh, showToast, onUpgradeRequired
 }: {
   data: BootstrapData;
+  lastCreatedPost: Post | null;
   selectedCommunityId: string;
   onSelectCommunity: (id: string) => void;
   onBack: () => void;
@@ -1004,6 +1069,18 @@ function CommunitiesPage({
     void loadCommunityPosts(selectedCommunityId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunityId, data.selectedCompanyId]);
+
+  useEffect(() => {
+    if (
+      !lastCreatedPost ||
+      lastCreatedPost.scope !== "community" ||
+      lastCreatedPost.communityId !== selectedCommunityId
+    ) return;
+    setCommunityPosts((current) => [
+      lastCreatedPost,
+      ...current.filter(post => post.id !== lastCreatedPost.id)
+    ]);
+  }, [lastCreatedPost, selectedCommunityId]);
 
   const openMembers = () => {
     setMembersPage(true);
@@ -1323,6 +1400,18 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   );
 }
 
+type SentInvite = {
+  id: string;
+  type: "company" | "community";
+  email: string;
+  communityName?: string;
+  status: "pending" | "accepted" | "expired" | string;
+  emailSent?: boolean;
+  createdAt?: string;
+  expiresAt?: string;
+  acceptedAt?: string;
+};
+
 function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequired }: {
   data: BootstrapData;
   onCompanyChange: (companyId: string) => Promise<void>;
@@ -1331,7 +1420,28 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
   onUpgradeRequired: (message: string) => void;
 }) {
   const [inviteLink, setInviteLink] = useState("");
+  const [sentInvites, setSentInvites] = useState<SentInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
   const manageableCompanies = data.companies.filter((company) => company.role === "owner" || company.role === "admin");
+
+  const loadSentInvites = async () => {
+    if (!data.canAdmin || !data.selectedCompanyId) return;
+    setInvitesLoading(true);
+    try {
+      const result = await api<{ invites: SentInvite[] }>(`/companies/${data.selectedCompanyId}/invites`);
+      setSentInvites(result.invites);
+    } catch (err) {
+      showToast(errorMessage(err));
+    } finally {
+      setInvitesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadSentInvites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.selectedCompanyId, data.canAdmin]);
+
   if (!data.canAdmin) return <Empty title="Acesso restrito" text="Somente administradores podem acessar esta área." />;
 
   const inviteCompany = async (event: FormEvent<HTMLFormElement>) => {
@@ -1348,7 +1458,7 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
         setInviteLink(result.inviteUrl || "");
         showToast("Convite criado.");
       }
-      await refresh();
+      await Promise.all([refresh(), loadSentInvites()]);
     } catch (err) {
       if (isPlanLimitError(err)) {
         onUpgradeRequired(errorMessage(err));
@@ -1432,6 +1542,33 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
           <button className="btn small"><CirclePlus size={16} /> Criar</button>
         </form>
       </div>
+
+      <section className="panel-card sent-invites-card">
+        <div className="sent-invites-head">
+          <div><h3>Convites enviados</h3><small>Acompanhe os convites da empresa e das comunidades.</small></div>
+          <button className="btn secondary small" disabled={invitesLoading} onClick={() => loadSentInvites()}>
+            {invitesLoading ? "Atualizando…" : "Atualizar"}
+          </button>
+        </div>
+        {invitesLoading && !sentInvites.length && <div className="loading-line">Carregando convites…</div>}
+        <div className="sent-invite-list">
+          {sentInvites.map((invite) => {
+            const statusLabel = invite.status === "accepted" ? "Aceito" : invite.status === "expired" ? "Expirado" : "Pendente";
+            const dateLabel = invite.createdAt ? new Date(invite.createdAt).toLocaleDateString("pt-BR") : "";
+            return (
+              <div className="sent-invite-row" key={invite.id}>
+                <div className="ellipsis">
+                  <strong>{invite.email || "Usuário convidado"}</strong>
+                  <small>{invite.type === "community" ? invite.communityName || "Comunidade" : "Empresa"} · enviado em {dateLabel}</small>
+                </div>
+                <span className={`invite-status ${invite.status}`}>{statusLabel}</span>
+                <small className="invite-delivery">{invite.type === "community" ? "Convite interno" : invite.emailSent ? "E-mail enviado" : "Link gerado"}</small>
+              </div>
+            );
+          })}
+          {!invitesLoading && !sentInvites.length && <p className="muted">Nenhum convite enviado ainda.</p>}
+        </div>
+      </section>
 
       <section className="panel-card">
         <h3>Colaboradores</h3>
@@ -1773,6 +1910,17 @@ function SuperadminPage({
 type CompanySummary = {
   id: string;
   name: string;
+  cnpj?: string;
+  address?: {
+    postalCode: string;
+    street: string;
+    number: string;
+    complement?: string;
+    district: string;
+    city: string;
+    state: string;
+  };
+  administrators?: Array<{ uid: string; displayName?: string; email?: string }>;
   role: "owner" | "admin" | "member";
   plan?: "free" | "premium";
   effectivePlan?: "free" | "premium";
@@ -2023,17 +2171,23 @@ function PlansPage({
 function CompaniesPage({
   data,
   onSelectCompany,
+  onCompanyLeft,
   onOpenPlans,
   showToast
 }: {
   data: BootstrapData;
   onSelectCompany: (companyId: string) => Promise<void>;
+  onCompanyLeft: (leftCompanyId: string, nextCompanyId: string) => Promise<void>;
   onOpenPlans: () => void;
   showToast: (message: string) => void;
 }) {
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [billingBusy, setBillingBusy] = useState("");
+  const [leaveTarget, setLeaveTarget] = useState<CompanySummary | null>(null);
+  const [newOwnerUid, setNewOwnerUid] = useState("");
+  const [leaveError, setLeaveError] = useState("");
+  const [leaveBusy, setLeaveBusy] = useState(false);
 
   const loadCompanies = async () => {
     setLoadingCompanies(true);
@@ -2080,6 +2234,33 @@ function CompaniesPage({
     }
   };
 
+  const leaveCompany = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!leaveTarget || leaveBusy) return;
+    if (leaveTarget.role === "owner" && !newOwnerUid) {
+      setLeaveError("Escolha o administrador que receberá a propriedade.");
+      return;
+    }
+
+    setLeaveBusy(true);
+    setLeaveError("");
+    try {
+      const result = await api<{ nextCompanyId?: string }>(`/companies/${leaveTarget.id}/leave`, {
+        method: "POST",
+        body: JSON.stringify({ newOwnerUid: leaveTarget.role === "owner" ? newOwnerUid : "" })
+      });
+      const leftCompanyId = leaveTarget.id;
+      setLeaveTarget(null);
+      setNewOwnerUid("");
+      showToast(leaveTarget.role === "owner" ? "Propriedade transferida e saída concluída." : "Você saiu da empresa.");
+      await onCompanyLeft(leftCompanyId, result.nextCompanyId || "");
+    } catch (error) {
+      setLeaveError(errorMessage(error));
+    } finally {
+      setLeaveBusy(false);
+    }
+  };
+
   return (
     <section className="page-section companies-page">
       <div className="page-heading">
@@ -2102,7 +2283,7 @@ function CompaniesPage({
                   <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
                   <div className="ellipsis">
                     <strong>{company.name}</strong>
-                    <small>{company.role === "owner" ? "Proprietário" : company.role === "admin" ? "Administrador" : "Usuário"}</small>
+                    <small>{company.role === "owner" ? "Proprietário" : company.role === "admin" ? "Administrador" : "Usuário"}{company.cnpj ? ` · CNPJ ${company.cnpj}` : ""}</small>
                   </div>
                   <span className={`plan-pill ${premium ? "premium" : "free"}`}>{premium ? <><Crown size={13} /> Premium</> : "Free"}</span>
                   {company.id === data.selectedCompanyId ? <span className="private-pill">Atual</span> : <button className="btn secondary small" onClick={() => onSelectCompany(company.id)}>Abrir</button>}
@@ -2163,11 +2344,62 @@ function CompaniesPage({
                   ))}
                   {!company.communities.length && <p className="muted company-no-communities">Nenhuma comunidade disponível para sua conta nesta empresa.</p>}
                 </div>
+                <div className="company-membership-actions">
+                  <button className="btn danger small" onClick={() => {
+                    setLeaveError("");
+                    setNewOwnerUid("");
+                    setLeaveTarget(company);
+                  }}>
+                    <LogOut size={15} /> Sair da empresa
+                  </button>
+                </div>
               </section>
             );
           })}
           {!companies.length && <Empty title="Nenhuma empresa" text="As empresas das quais você participa aparecerão aqui." />}
         </div>
+      )}
+
+      {leaveTarget && (
+        <Modal title={`Sair de ${leaveTarget.name}`} onClose={() => !leaveBusy && setLeaveTarget(null)}>
+          <form className="stack-form" onSubmit={leaveCompany}>
+            {leaveTarget.role === "owner" ? (
+              <>
+                <div className="danger-notice">
+                  <strong>Transfira a propriedade antes de sair.</strong>
+                  <p>Você perderá o acesso à empresa e o administrador escolhido passará a ser o proprietário.</p>
+                </div>
+                {!!leaveTarget.administrators?.length ? (
+                  <label>
+                    <span>Novo proprietário</span>
+                    <select required value={newOwnerUid} onChange={(event) => setNewOwnerUid(event.target.value)}>
+                      <option value="">Escolha um administrador…</option>
+                      {leaveTarget.administrators.map((administrator) => (
+                        <option value={administrator.uid} key={administrator.uid}>
+                          {administrator.displayName || administrator.email}{administrator.displayName && administrator.email ? ` · ${administrator.email}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <div className="form-error">Promova outro colaborador a Administrador na tela Administrar antes de sair.</div>
+                )}
+              </>
+            ) : (
+              <div className="danger-notice">
+                <strong>Confirmar saída da empresa?</strong>
+                <p>Você perderá o acesso às publicações e comunidades de {leaveTarget.name}.</p>
+              </div>
+            )}
+            {leaveError && <div className="form-error">{leaveError}</div>}
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" disabled={leaveBusy} onClick={() => setLeaveTarget(null)}>Cancelar</button>
+              <button className="btn danger-confirm" disabled={leaveBusy || (leaveTarget.role === "owner" && (!leaveTarget.administrators?.length || !newOwnerUid))}>
+                {leaveBusy ? "Saindo…" : leaveTarget.role === "owner" ? "Transferir e sair" : "Sair da empresa"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </section>
   );
@@ -2235,12 +2467,12 @@ function ProfilePage({
     event.preventDefault();
     setCompanyError("");
     const form = event.currentTarget;
-    const name = String(new FormData(form).get("name") || "").trim();
-    if (!name) return;
+    const payload = companyRegistrationPayload(form);
+    if (!payload.name) return;
     try {
       const result = await api<{ company: { id: string } }>("/companies", {
         method: "POST",
-        body: JSON.stringify({ name })
+        body: JSON.stringify(payload)
       });
       form.reset();
       setCreateCompanyOpen(false);
@@ -2366,7 +2598,7 @@ function ProfilePage({
       {createCompanyOpen && (
         <Modal title="Criar empresa" onClose={() => setCreateCompanyOpen(false)}>
           <form className="stack-form" onSubmit={createCompany}>
-            <label><span>Nome da empresa</span><input name="name" required maxLength={120} placeholder="Ex.: Minha Empresa" /></label>
+            <CompanyRegistrationFields />
             <p className="muted modal-help">Você será o proprietário e poderá convidar administradores e usuários depois.</p>
             {companyError && <div className="form-error">{companyError}</div>}
             <button className="btn">Criar empresa</button>
@@ -2552,7 +2784,7 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
   initialScope?: "company" | "community" | "world";
   initialCommunityId?: string;
   onClose: () => void;
-  onDone: () => Promise<void>;
+  onDone: (post: Post) => Promise<void> | void;
   showToast: (m: string) => void;
 }) {
   const [scope, setScope] = useState<"company" | "community" | "world">(initialScope || "company");
@@ -2597,7 +2829,7 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
         attachmentIds.push(uploaded.media.id);
       }
 
-      await api("/posts", {
+      const result = await api<{ post: Post }>("/posts", {
         method: "POST",
         body: JSON.stringify({
           scope, type, text, title,
@@ -2614,7 +2846,7 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
       });
 
       showToast(type === "event" ? "Evento publicado." : type === "poll" ? "Enquete publicada." : "Publicado.");
-      await onDone();
+      await onDone(result.post);
     } catch (err) {
       showToast(errorMessage(err));
       setBusy(false);

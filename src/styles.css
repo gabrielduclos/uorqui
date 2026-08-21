@@ -689,12 +689,43 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .post-actions .resolve-action.resolved{color:#2f6e39}
 .post-actions .resolve-action:disabled{opacity:.55;cursor:not-allowed}
 .post-actions .resolve-action{
-  order:-1;
+  margin-left:auto;
   flex:none;
   color:#3f5f47;
   font-weight:750;
 }
 .post-actions .resolve-action:hover{color:#244b2d}
+
+/* v1.2.10 — cadastro fiscal, saída da empresa e convites enviados */
+.company-address-heading{margin-top:3px;padding-top:10px;border-top:1px solid var(--line)}
+.company-address-heading strong,.company-address-heading small{display:block}
+.company-address-heading strong{font-size:11px}
+.company-address-heading small{margin-top:3px;color:var(--muted);font-size:9px;line-height:1.4}
+.company-address-grid{display:grid;grid-template-columns:120px 1fr 100px;gap:10px}
+.company-address-grid .street{grid-column:2/4}
+.company-address-grid label{min-width:0}
+.onboarding-card{width:min(620px,100%)}
+.sent-invites-card{padding-bottom:8px}
+.sent-invites-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.sent-invites-head h3{margin-bottom:3px}
+.sent-invites-head small{display:block;color:var(--muted);font-size:9px}
+.sent-invite-list{display:flex;flex-direction:column}
+.sent-invite-row{display:grid;grid-template-columns:minmax(0,1fr) auto 82px;align-items:center;gap:10px;border-top:1px solid #f0f0f1;padding:10px 0}
+.sent-invite-row strong{font-size:11px}
+.sent-invite-row small{display:block;margin-top:3px;color:var(--muted);font-size:9px}
+.invite-status{border-radius:999px;padding:5px 8px;background:#fff7df;color:#755a16;font-size:9px;font-weight:750}
+.invite-status.accepted{background:#edf8ef;color:#2f6e39}
+.invite-status.expired{background:#f2f2f3;color:#6c7077}
+.sent-invite-row .invite-delivery{text-align:right;margin:0}
+.company-membership-actions{display:flex;justify-content:flex-end;border-top:1px solid #f0f0f1;margin-top:12px;padding-top:12px}
+
+@media(max-width:620px){
+  .company-address-grid{grid-template-columns:1fr 90px}
+  .company-address-grid .postal-code{grid-column:1/-1}
+  .company-address-grid .street{grid-column:1/-1}
+  .sent-invite-row{grid-template-columns:minmax(0,1fr) auto}
+  .sent-invite-row .invite-delivery{grid-column:1/-1;text-align:left;margin-top:-6px}
+}
 
 
 /* v1.2.8 — página de planos e upgrade contextual */

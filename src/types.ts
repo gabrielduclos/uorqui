@@ -18,9 +18,28 @@ export interface PlanLimits {
   communities: number | null;
 }
 
+export interface CompanyAddress {
+  postalCode: string;
+  street: string;
+  number: string;
+  complement?: string;
+  district: string;
+  city: string;
+  state: string;
+}
+
+export interface CompanyAdministrator {
+  uid: string;
+  displayName?: string;
+  email?: string;
+}
+
 export interface Company {
   id: string;
   name: string;
+  cnpj?: string;
+  address?: CompanyAddress;
+  administrators?: CompanyAdministrator[];
   role?: string;
   plan?: CompanyPlan;
   effectivePlan?: CompanyPlan;

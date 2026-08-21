@@ -83,9 +83,17 @@ async function routeApi(request, env, identity, url, ctx) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await cancelPremiumSubscription(env, identity, companyId));
   }
+  if (method === 'GET' && /^\/companies\/[^/]+\/invites$/.test(path)) {
+    const companyId = decodeURIComponent(path.split('/')[2]);
+    return json(await getCompanyInvites(env, identity, companyId));
+  }
   if (method === 'POST' && /^\/companies\/[^/]+\/invites$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await createCompanyInvite(env, identity, companyId, await readJson(request), env.APP_ORIGIN || url.origin), 201);
+  }
+  if (method === 'POST' && /^\/companies\/[^/]+\/leave$/.test(path)) {
+    const companyId = decodeURIComponent(path.split('/')[2]);
+    return json(await leaveCompany(env, identity, companyId, await readJson(request), ctx));
   }
   if (method === 'PATCH' && /^\/companies\/[^/]+\/members\/[^/]+$/.test(path)) {
     const parts = path.split('/');
@@ -257,7 +265,8 @@ async function companyUsage(env, companyId) {
   return {
     memberCount: memberDocs.length,
     communityCount: communities.length,
-    communities
+    communities,
+    members: memberDocs
   };
 }
 
@@ -319,6 +328,16 @@ async function getCompaniesSummary(env, identity) {
       role: membership.role || 'member',
       memberCount: usage.memberCount,
       communityCount: usage.communityCount,
+      administrators: membership.role === 'owner'
+        ? usage.members
+          .filter(member => member.role === 'admin')
+          .map(member => ({
+            uid: member.uid,
+            displayName: member.displayName || '',
+            email: member.email || ''
+          }))
+          .sort((a, b) => (a.displayName || a.email).localeCompare(b.displayName || b.email, 'pt-BR'))
+        : [],
       communities: visibleCommunities
         .map(c => ({
           id: c.id,
@@ -685,12 +704,39 @@ async function exposePendingEmailInvites(env, identity) {
 async function createCompany(env, identity, body) {
   const name = clean(body.name, 120);
   if (!name) throw httpError(400, 'Informe o nome da empresa.');
+
+  const cnpjDigits = onlyDigits(body.cnpj).slice(0, 14);
+  if (!isValidCnpj(cnpjDigits)) throw httpError(400, 'Informe um CNPJ válido.');
+
+  const addressInput = body.address && typeof body.address === 'object' ? body.address : {};
+  const address = {
+    postalCode: onlyDigits(addressInput.postalCode).slice(0, 8),
+    street: clean(addressInput.street, 160),
+    number: clean(addressInput.number, 30),
+    complement: clean(addressInput.complement || '', 100),
+    district: clean(addressInput.district, 100),
+    city: clean(addressInput.city, 100),
+    state: clean(addressInput.state, 2).toUpperCase()
+  };
+  if (
+    address.postalCode.length !== 8 || !address.street || !address.number ||
+    !address.district || !address.city || !/^[A-Z]{2}$/.test(address.state)
+  ) {
+    throw httpError(400, 'Preencha o endereço completo da empresa para emissão de nota fiscal.');
+  }
+
+  const duplicates = await fsWhere(env, 'companies', 'cnpjDigits', cnpjDigits, 2);
+  if (duplicates.length) throw httpError(409, 'Já existe uma empresa cadastrada com este CNPJ.');
+
   await ensureUser(env, identity);
   const companyId = id();
   const company = {
     id: companyId,
     name,
     slug: slugify(name),
+    cnpj: formatCnpj(cnpjDigits),
+    cnpjDigits,
+    address,
     ownerUid: identity.uid,
     plan: 'free',
     billingStatus: 'inactive',
@@ -703,9 +749,8 @@ async function createCompany(env, identity, body) {
     createdAt: nowIso(),
     updatedAt: nowIso()
   };
-  await fsPut(env, 'companies', companyId, company);
   const creator = await fsGet(env,'users',identity.uid);
-  await fsPut(env, 'companyMembers', `${companyId}_${identity.uid}`, {
+  const ownerMembership = {
     id:`${companyId}_${identity.uid}`,
     companyId,
     uid: identity.uid,
@@ -714,10 +759,106 @@ async function createCompany(env, identity, body) {
     role:'owner',
     status:'active',
     joinedAt:nowIso()
-  });
+  };
+  try {
+    await fsCommit(env, [
+      { update: { collection: 'companies', id: companyId, data: company } },
+      { update: { collection: 'companyMembers', id: ownerMembership.id, data: ownerMembership } },
+      {
+        update: {
+          collection: 'companyCnpjRegistry',
+          id: cnpjDigits,
+          data: { cnpjDigits, companyId, companyName: name, createdAt: company.createdAt },
+          createOnly: true
+        }
+      }
+    ]);
+  } catch (error) {
+    if (error?.status === 409) throw httpError(409, 'Já existe uma empresa cadastrada com este CNPJ.');
+    throw error;
+  }
   // Comunidades agora sao sempre criadas manualmente pelo administrador.
   // Publicacoes para toda a empresa continuam usando scope === 'company'.
   return { company };
+}
+
+async function cleanupCompanyAccessForUser(env, companyId, uid) {
+  const memberships = await fsWhere(env, 'communityMembers', 'uid', uid, 500);
+  const companyMemberships = memberships
+    .filter(item => item.companyId === companyId)
+    .map(item => ({ collection: 'communityMembers', id: item.id }));
+  await fsBatchDelete(env, companyMemberships);
+}
+
+async function leaveCompany(env, identity, companyId, body, ctx) {
+  const company = await fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.');
+  const membershipId = `${companyId}_${identity.uid}`;
+  const membership = await requireCompanyMember(env, identity.uid, companyId);
+  let newOwner = null;
+
+  if (membership.role === 'owner' || company.ownerUid === identity.uid) {
+    const newOwnerUid = clean(body.newOwnerUid, 150);
+    if (!newOwnerUid || newOwnerUid === identity.uid) {
+      throw httpError(400, 'Escolha outro administrador para receber a propriedade.');
+    }
+
+    newOwner = await fsGet(env, 'companyMembers', `${companyId}_${newOwnerUid}`);
+    if (!newOwner || newOwner.status !== 'active' || newOwner.role !== 'admin') {
+      throw httpError(400, 'Escolha um administrador ativo desta empresa.');
+    }
+
+    const transferredAt = nowIso();
+    await fsCommit(env, [
+      {
+        update: {
+          collection: 'companies',
+          id: companyId,
+          data: { ...company, ownerUid: newOwnerUid, ownershipTransferredAt: transferredAt, updatedAt: transferredAt }
+        }
+      },
+      {
+        update: {
+          collection: 'companyMembers',
+          id: `${companyId}_${newOwnerUid}`,
+          data: { ...newOwner, role: 'owner', ownershipReceivedAt: transferredAt, updatedAt: transferredAt }
+        }
+      },
+      {
+        update: {
+          collection: 'notifications',
+          id: `ownership_${companyId}_${newOwnerUid}_${Date.now()}`,
+          data: {
+            recipientUid: newOwnerUid,
+            type: 'company_ownership_received',
+            title: `Você agora é proprietário de ${company.name}`,
+            body: 'A propriedade da empresa foi transferida para sua conta.',
+            data: { companyId },
+            read: false,
+            status: 'new',
+            createdAt: transferredAt
+          }
+        }
+      },
+      { delete: { collection: 'companyMembers', id: membershipId } }
+    ]);
+  } else {
+    await fsDelete(env, 'companyMembers', membershipId);
+  }
+
+  const cleanupTask = cleanupCompanyAccessForUser(env, companyId, identity.uid)
+    .catch(error => console.error('Falha ao limpar acesso às comunidades após saída da empresa:', error));
+  if (ctx?.waitUntil) ctx.waitUntil(cleanupTask);
+  else await cleanupTask;
+
+  const remainingMemberships = (await fsWhere(env, 'companyMembers', 'uid', identity.uid, 20))
+    .filter(item => item.status === 'active');
+
+  return {
+    ok: true,
+    leftCompanyId: companyId,
+    newOwnerUid: newOwner?.uid || '',
+    nextCompanyId: remainingMemberships[0]?.companyId || ''
+  };
 }
 
 async function deleteCompany(env, identity, companyId, body) {
@@ -793,7 +934,10 @@ async function deleteCompany(env, identity, companyId, body) {
     for (const notification of notifications) await fsDelete(env, 'notifications', notification.id);
   } catch {}
 
-  await fsDelete(env, 'companies', companyId);
+  await fsCommit(env, [
+    { delete: { collection: 'companies', id: companyId } },
+    ...(company.cnpjDigits ? [{ delete: { collection: 'companyCnpjRegistry', id: company.cnpjDigits } }] : [])
+  ]);
   return { ok: true, deletedCompanyId: companyId };
 }
 
@@ -852,7 +996,35 @@ async function createCompanyInvite(env, identity, companyId, body, origin) {
   if (invite.targetUid) await createInviteNotification(env, invite, invite.targetUid);
   const inviteUrl = `${origin.replace(/\/$/,'')}/?invite=${encodeURIComponent(token)}`;
   const emailSent = await maybeSendInviteEmail(env, email, company.name, inviteUrl);
+  await fsPut(env, 'invites', inviteId, {
+    ...invite,
+    emailSent,
+    emailSentAt: emailSent ? nowIso() : '',
+    updatedAt: nowIso()
+  });
   return { inviteId, inviteUrl, emailSent };
+}
+
+async function getCompanyInvites(env, identity, companyId) {
+  await requireCompanyAdmin(env, identity.uid, companyId);
+  const invites = await fsWhere(env, 'invites', 'companyId', companyId, 250);
+
+  return {
+    invites: invites
+      .map(invite => ({
+        id: invite.id,
+        type: invite.type === 'community' ? 'community' : 'company',
+        email: invite.email || '',
+        communityId: invite.communityId || '',
+        communityName: invite.communityName || '',
+        status: invite.status === 'pending' && isExpired(invite.expiresAt) ? 'expired' : invite.status || 'pending',
+        emailSent: Boolean(invite.emailSent),
+        createdAt: invite.createdAt || '',
+        expiresAt: invite.expiresAt || '',
+        acceptedAt: invite.acceptedAt || ''
+      }))
+      .sort(byCreatedDesc)
+  };
 }
 
 async function createCommunity(env, identity, companyId, body) {
@@ -1066,6 +1238,56 @@ async function interestedPostRecipients(env, post, authorUid) {
       .map(item => item.uid)
       .filter(uid => uid && uid !== authorUid)
   ));
+}
+
+async function notifyInterestedPostRecipients(env, post, authorUid) {
+  const interestedRecipients = await interestedPostRecipients(env, post, authorUid);
+  if (!interestedRecipients.length) return;
+
+  const persistent = post.type === 'announcement' && Boolean(post.requiresReadReceipt);
+  const notificationType = persistent ? 'read_required' : post.type === 'announcement' ? 'announcement' : 'new_post';
+  const notificationTitle = persistent
+    ? 'Confirmação de leitura pendente'
+    : post.type === 'announcement'
+      ? post.title || 'Novo comunicado'
+      : post.scope === 'community'
+        ? `Nova publicação em ${post.communityName || 'uma comunidade'}`
+        : `Nova publicação em ${post.companyName || 'sua empresa'}`;
+
+  const notificationBody = persistent
+    ? `${post.authorName} publicou um comunicado que precisa da sua confirmação de leitura.`
+    : `${post.authorName} publicou ${post.type === 'poll' ? 'uma enquete' : post.type === 'event' ? 'um evento' : post.type === 'question' ? 'uma pergunta' : 'uma nova mensagem'}.`;
+
+  const docs = interestedRecipients.map(uid => ({
+    collection: 'notifications',
+    id: persistent ? `read_${post.id}_${uid}` : `post_${post.id}_${uid}`,
+    data: {
+      recipientUid: uid,
+      type: notificationType,
+      title: notificationTitle,
+      body: notificationBody,
+      data: {
+        postId: post.id,
+        companyId: post.companyId || '',
+        communityId: post.communityId || ''
+      },
+      read: false,
+      persistent,
+      status: persistent ? 'pending_confirmation' : 'new',
+      createdAt: post.createdAt
+    }
+  }));
+
+  await fsBatchPut(env, docs);
+  await Promise.allSettled(docs.map(doc => sendPushToUser(env, doc.data.recipientUid, {
+    title: doc.data.title,
+    body: doc.data.body,
+    notificationId: doc.id,
+    type: doc.data.type,
+    postId: post.id,
+    companyId: post.companyId || '',
+    communityId: post.communityId || ''
+  })));
 }
 
 function deferPushes(ctx, promises) {
@@ -1325,54 +1547,10 @@ async function createPost(env, identity, body, ctx) {
 
   await fsPut(env, 'posts', postId, post);
 
-  const interestedRecipients = await interestedPostRecipients(env, post, identity.uid);
-
-  if (interestedRecipients.length) {
-    const persistent = post.type === 'announcement' && Boolean(post.requiresReadReceipt);
-    const notificationType = persistent ? 'read_required' : type === 'announcement' ? 'announcement' : 'new_post';
-    const notificationTitle = persistent
-      ? 'Confirmação de leitura pendente'
-      : type === 'announcement'
-        ? post.title || 'Novo comunicado'
-        : post.scope === 'community'
-          ? `Nova publicação em ${post.communityName || 'uma comunidade'}`
-          : `Nova publicação em ${post.companyName || 'sua empresa'}`;
-
-    const notificationBody = persistent
-      ? `${post.authorName} publicou um comunicado que precisa da sua confirmação de leitura.`
-      : `${post.authorName} publicou ${type === 'poll' ? 'uma enquete' : type === 'event' ? 'um evento' : type === 'question' ? 'uma pergunta' : 'uma nova mensagem'}.`;
-
-    const docs = interestedRecipients.map(uid => ({
-      collection: 'notifications',
-      id: persistent ? `read_${postId}_${uid}` : `post_${postId}_${uid}`,
-      data: {
-        recipientUid: uid,
-        type: notificationType,
-        title: notificationTitle,
-        body: notificationBody,
-        data: {
-          postId,
-          companyId: post.companyId || '',
-          communityId: post.communityId || ''
-        },
-        read: false,
-        persistent,
-        status: persistent ? 'pending_confirmation' : 'new',
-        createdAt: post.createdAt
-      }
-    }));
-
-    await fsBatchPut(env, docs);
-    deferPushes(ctx, docs.map(doc => sendPushToUser(env, doc.data.recipientUid, {
-      title: doc.data.title,
-      body: doc.data.body,
-      notificationId: doc.id,
-      type: doc.data.type,
-      postId,
-      companyId: post.companyId || '',
-      communityId: post.communityId || ''
-    })));
-  }
+  const notificationTask = notifyInterestedPostRecipients(env, post, identity.uid)
+    .catch(error => console.error('Falha ao notificar nova publicação:', error));
+  if (ctx?.waitUntil) ctx.waitUntil(notificationTask);
+  else await notificationTask;
 
   return { post };
 }
@@ -2281,7 +2459,7 @@ async function getGoogleAccessToken(env){if(googleTokenCache.token&&googleTokenC
 async function importPrivateKey(pem){const clean=String(pem).replace(/\\n/g,'\n').replace(/-----BEGIN PRIVATE KEY-----/,'').replace(/-----END PRIVATE KEY-----/,'').replace(/\s/g,'');const bytes=Uint8Array.from(atob(clean),c=>c.charCodeAt(0));return crypto.subtle.importKey('pkcs8',bytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);}
 
 function fsBase(env){return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)`;}
-async function fsRequest(env,path,options={}){const token=await getGoogleAccessToken(env);const headers=new Headers(options.headers||{});headers.set('Authorization',`Bearer ${token}`);if(options.body&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');const r=await fetch(`${fsBase(env)}${path}`,{...options,headers});if(r.status===404)return null;const text=await r.text();let data=null;try{data=text?JSON.parse(text):null}catch{data=text}if(!r.ok)throw httpError(500,`Firestore: ${data?.error?.message||r.statusText}`);return data;}
+async function fsRequest(env,path,options={}){const token=await getGoogleAccessToken(env);const headers=new Headers(options.headers||{});headers.set('Authorization',`Bearer ${token}`);if(options.body&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');const r=await fetch(`${fsBase(env)}${path}`,{...options,headers});if(r.status===404)return null;const text=await r.text();let data=null;try{data=text?JSON.parse(text):null}catch{data=text}if(!r.ok){const conflict=r.status===409||data?.error?.status==='ALREADY_EXISTS';throw httpError(conflict?409:500,`Firestore: ${data?.error?.message||r.statusText}`);}return data;}
 async function fsGet(env,collection,docId){const d=await fsRequest(env,`/documents/${encPath(collection)}/${encodeURIComponent(docId)}`);return d?fromDoc(d):null;}
 async function fsGetRequired(env,c,idValue,message){const d=await fsGet(env,c,idValue);if(!d)throw httpError(404,message);return d;}
 async function fsPut(env,collection,docId,obj){const d=await fsRequest(env,`/documents/${encPath(collection)}/${encodeURIComponent(docId)}`,{method:'PATCH',body:JSON.stringify({fields:toFields({...obj,id:obj.id||docId})})});return fromDoc(d);}
@@ -2301,6 +2479,25 @@ async function fsBatchDelete(env,docs){
     const writes=docs.slice(index,index+450).map(d=>({delete:`${prefix}${encPath(d.collection)}/${encodeURIComponent(d.id)}`}));
     await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
   }
+}
+async function fsCommit(env,operations){
+  if(!operations.length)return;
+  const project=encodeURIComponent(env.FIREBASE_PROJECT_ID);
+  const prefix=`projects/${project}/databases/(default)/documents/`;
+  const writes=operations.map(operation=>{
+    if(operation.update){
+      const item=operation.update;
+      const write={update:{name:`${prefix}${encPath(item.collection)}/${encodeURIComponent(item.id)}`,fields:toFields({...item.data,id:item.data.id||item.id})}};
+      if(item.createOnly)write.currentDocument={exists:false};
+      return write;
+    }
+    if(operation.delete){
+      const item=operation.delete;
+      return {delete:`${prefix}${encPath(item.collection)}/${encodeURIComponent(item.id)}`};
+    }
+    throw httpError(500,'Operação Firestore inválida.');
+  });
+  await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
 }
 async function fsWhere(env,collection,field,value,limit=100){const body={structuredQuery:{from:[{collectionId:collection}],where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:toValue(value)}},limit}};const rows=await fsRequest(env,'/documents:runQuery',{method:'POST',body:JSON.stringify(body)});return (Array.isArray(rows)?rows:[]).filter(x=>x.document).map(x=>fromDoc(x.document));}
 
@@ -2372,6 +2569,20 @@ function nowIso(){return new Date().toISOString();}
 function normalizeEmail(v){return String(v).trim().toLowerCase();}
 function isEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);}
 function clean(v,max=5000){return String(v??'').trim().slice(0,max);}
+function onlyDigits(v){return String(v??'').replace(/\D/g,'');}
+function formatCnpj(v){const d=onlyDigits(v).slice(0,14);return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');}
+function isValidCnpj(v){
+  const digits=onlyDigits(v);
+  if(digits.length!==14||/^(\d)\1{13}$/.test(digits))return false;
+  const check=(base,weights)=>{
+    const sum=base.split('').reduce((total,digit,index)=>total+Number(digit)*weights[index],0);
+    const remainder=sum%11;
+    return remainder<2?0:11-remainder;
+  };
+  const first=check(digits.slice(0,12),[5,4,3,2,9,8,7,6,5,4,3,2]);
+  const second=check(digits.slice(0,12)+first,[6,5,4,3,2,9,8,7,6,5,4,3,2]);
+  return digits.endsWith(`${first}${second}`);
+}
 function slugify(v){return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,70);}
 function isExpired(iso){return !iso||new Date(iso).getTime()<Date.now();}
 function byCreatedDesc(a,b){return new Date(b.createdAt||0)-new Date(a.createdAt||0);}
