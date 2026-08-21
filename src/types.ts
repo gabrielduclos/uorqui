@@ -60,6 +60,7 @@ export interface Community {
   companyId: string;
   name: string;
   description?: string;
+  visibility?: "public" | "private";
   memberCount?: number;
 }
 
@@ -107,6 +108,7 @@ export interface Post {
   companyName?: string;
   communityId?: string;
   communityName?: string;
+  communityVisibility?: "public" | "private";
   type: "post" | "question" | "announcement" | "poll" | "event";
   text: string;
   title?: string;

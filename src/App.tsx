@@ -34,6 +34,10 @@ function errorMessage(error: unknown) {
   return "Não foi possível concluir esta ação.";
 }
 
+function communityVisibility(community?: Pick<Community, "visibility"> | null): "public" | "private" {
+  return community?.visibility === "public" ? "public" : "private";
+}
+
 async function refreshFirebaseSession() {
   const current = auth.currentUser;
   if (!current) throw new Error("Faça login novamente para continuar.");
@@ -232,6 +236,17 @@ export default function App() {
       void setupForegroundPush((payload) => {
         if (!active) return;
         const title = payload.notification?.title || payload.data?.title || "Nova notificação no Uorqui";
+        const body = payload.notification?.body || payload.data?.body || "Você tem uma nova atualização.";
+        const type = payload.data?.type || "";
+        if (["company_member_joined", "community_added", "community_removed"].includes(type)) {
+          void navigator.serviceWorker.ready.then((registration) => registration.showNotification(title, {
+            body,
+            icon: "/assets/uorqui-icon-192-v1215.png",
+            badge: "/assets/uorqui-favicon.png",
+            tag: `uorqui-${payload.data?.notificationId || Date.now()}`,
+            data: { url: payload.data?.url || "/", notificationId: payload.data?.notificationId || "", type }
+          })).catch(() => {});
+        }
         showToast(title);
         void refresh();
       }).then((cleanup) => {
@@ -246,6 +261,45 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, data.me.uid, selectedCompanyId, loading]);
+
+  useEffect(() => {
+    if (!user || !data.me.uid || loading) return;
+    const params = new URLSearchParams(location.search);
+    const adminRequested = params.get("admin") === "1";
+    const notificationsRequested = params.get("notifications") === "1";
+    const communityId = params.get("community") || "";
+    if (!adminRequested && !notificationsRequested && !communityId) return;
+
+    const companyId = params.get("company") || "";
+    params.delete("admin");
+    params.delete("notifications");
+    params.delete("community");
+    params.delete("company");
+    const query = params.toString();
+    history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+
+    const openRequestedView = async () => {
+      if (companyId && companyId !== data.selectedCompanyId) {
+        localStorage.setItem("uorqui-company", companyId);
+        setSelectedCompanyId(companyId);
+        await refresh(companyId);
+      }
+
+      if (adminRequested) {
+        setView("admin");
+        return;
+      }
+      if (communityId) {
+        setSelectedCommunityId(communityId);
+        setView("communities");
+        return;
+      }
+      setView("notifications");
+    };
+
+    void openRequestedView().catch((error) => showToast(errorMessage(error)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, data.me.uid, loading]);
 
 
   useEffect(() => {
@@ -522,7 +576,18 @@ export default function App() {
       showToast={showToast}
       onUpgradeRequired={(message) => openPlans("limit", message)}
     />;
-    if (view === "notifications") return <NotificationsPage data={data} refresh={() => refresh()} showToast={showToast} onOpenPost={openPostFromNotification} />;
+    if (view === "notifications") return <NotificationsPage
+      data={data}
+      refresh={() => refresh()}
+      showToast={showToast}
+      onOpenPost={openPostFromNotification}
+      onOpenAdmin={(companyId) => changeCompany(companyId, "admin")}
+      onOpenCommunity={async (companyId, communityId) => {
+        if (companyId && companyId !== selectedCompanyId) await changeCompany(companyId, "communities");
+        setSelectedCommunityId(communityId);
+        setView("communities");
+      }}
+    />;
     if (view === "companies") return <CompaniesPage
       data={data}
       onSelectCompany={(id) => changeCompany(id, "home")}
@@ -695,7 +760,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.14</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.15</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -737,7 +802,7 @@ export default function App() {
 
       {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
         <aside className="pwa-install-banner" role="status">
-          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.14" alt="" /></div>
+          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192-v1215.png" alt="" /></div>
           <div className="pwa-install-copy">
             <strong>Instale o Uorqui</strong>
             <span>Abra mais rápido e use como um app no celular.</span>
@@ -1316,7 +1381,11 @@ function CommunitiesPage({
     const fd = new FormData(event.currentTarget);
     try {
       const result = await api<{ community: Community }>(`/companies/${data.selectedCompanyId}/communities`, {
-        method: "POST", body: JSON.stringify({ name: fd.get("name"), description: fd.get("description") })
+        method: "POST", body: JSON.stringify({
+          name: fd.get("name"),
+          description: fd.get("description"),
+          visibility: fd.get("visibility")
+        })
       });
       setCreateOpen(false);
       showToast("Comunidade criada.");
@@ -1442,7 +1511,7 @@ function CommunitiesPage({
         <section className="page-section">
           <div className="members-page-head">
             <button className="back-button" onClick={() => setMembersPage(false)}><ArrowLeft size={18} /> {selectedCommunity.name}</button>
-            <div><h2>Membros de {selectedCommunity.name}</h2><p>{memberCount} {memberCount === 1 ? "membro" : "membros"} nesta comunidade.</p></div>
+            <div><h2>{data.canAdmin ? "Gerenciar membros" : "Membros"} de {selectedCommunity.name}</h2><p>{memberCount} {memberCount === 1 ? "membro" : "membros"} nesta comunidade.</p></div>
           </div>
 
           {data.canAdmin && (
@@ -1510,11 +1579,21 @@ function CommunitiesPage({
             <div className="community-avatar large">{selectedCommunity.name.slice(0, 2).toUpperCase()}</div>
             <div>
               <h2>{selectedCommunity.name}</h2>
-              <p>{selectedCommunity.description || "Comunidade privada da empresa."}</p>
-              <button className="community-members-link" onClick={openMembers}><Users size={14} />{memberCount} {memberCount === 1 ? "membro" : "membros"}<ChevronRight size={14} /></button>
+              <p>{selectedCommunity.description || (communityVisibility(selectedCommunity) === "public" ? "Comunidade pública da empresa." : "Comunidade privada da empresa.")}</p>
+              <span className={`community-visibility-badge ${communityVisibility(selectedCommunity)}`}>
+                {communityVisibility(selectedCommunity) === "public" ? <Globe2 size={13} /> : <ShieldCheck size={13} />}
+                {communityVisibility(selectedCommunity) === "public" ? "Pública na empresa" : "Privada"}
+              </span>
             </div>
           </div>
-          <button className="btn small" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+          <div className="community-detail-actions">
+            <button className="btn secondary community-manage-members" onClick={openMembers}>
+              <Users size={17} />
+              {data.canAdmin ? "Gerenciar membros" : "Ver membros"}
+              <span>{memberCount}</span>
+            </button>
+            <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+          </div>
         </div>
 
         <div className="feed community-feed">
@@ -1553,7 +1632,17 @@ function CommunitiesPage({
         {listedCommunities.map((community) => (
           <button className="community-card community-link" key={community.id} onClick={() => onSelectCommunity(community.id)}>
             <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
-            <div><strong>{community.name}</strong><p>{community.description || "Comunidade privada da empresa."}</p><small className="community-member-count">{community.memberCount || 0} {(community.memberCount || 0) === 1 ? "membro" : "membros"}</small></div>
+            <div>
+              <strong>{community.name}</strong>
+              <p>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública da empresa." : "Comunidade privada da empresa.")}</p>
+              <div className="community-card-meta">
+                <small className={`community-visibility-badge ${communityVisibility(community)}`}>
+                  {communityVisibility(community) === "public" ? <Globe2 size={12} /> : <ShieldCheck size={12} />}
+                  {communityVisibility(community) === "public" ? "Pública" : "Privada"}
+                </small>
+                <small className="community-member-count">{community.memberCount || 0} {(community.memberCount || 0) === 1 ? "membro" : "membros"}</small>
+              </div>
+            </div>
             <ChevronRight className="community-chevron" size={18} />
           </button>
         ))}
@@ -1563,6 +1652,13 @@ function CommunitiesPage({
         <form className="stack-form" onSubmit={create}>
           <label><span>Nome</span><input name="name" required maxLength={90} placeholder="Ex.: Assistência Técnica" /></label>
           <label><span>Descrição</span><textarea name="description" maxLength={280} rows={3} placeholder="Que assuntos ficam aqui?" /></label>
+          <label>
+            <span>Visibilidade</span>
+            <select name="visibility" defaultValue="private">
+              <option value="private">Privada — somente participantes e administradores</option>
+              <option value="public">Pública — pesquisável por toda a empresa</option>
+            </select>
+          </label>
           <button className="btn">Criar comunidade</button>
         </form>
       </Modal>}
@@ -1722,7 +1818,14 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
   const [sentInvites, setSentInvites] = useState<SentInvite[]>([]);
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [inviteActionBusy, setInviteActionBusy] = useState("");
+  const [communityVisibilityBusy, setCommunityVisibilityBusy] = useState("");
+  const [communityVisibilityOverrides, setCommunityVisibilityOverrides] = useState<Record<string, "public" | "private">>({});
   const manageableCompanies = data.companies.filter((company) => company.role === "owner" || company.role === "admin");
+
+  useEffect(() => {
+    setCommunityVisibilityOverrides({});
+    setCommunityVisibilityBusy("");
+  }, [data.selectedCompanyId]);
 
   const loadSentInvites = async () => {
     if (!data.canAdmin || !data.selectedCompanyId) return;
@@ -1826,7 +1929,14 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
     const form = event.currentTarget;
     const fd = new FormData(form);
     try {
-      await api(`/companies/${data.selectedCompanyId}/communities`, { method: "POST", body: JSON.stringify({ name: fd.get("name"), description: fd.get("description") }) });
+      await api(`/companies/${data.selectedCompanyId}/communities`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: fd.get("name"),
+          description: fd.get("description"),
+          visibility: fd.get("visibility")
+        })
+      });
       form.reset(); showToast("Comunidade criada."); await refresh();
     } catch (err) {
       if (isPlanLimitError(err)) {
@@ -1847,6 +1957,33 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
     } catch (err) { showToast(errorMessage(err)); }
   };
 
+  const changeCommunityVisibility = async (community: Community, visibility: "public" | "private") => {
+    if (communityVisibilityBusy) return;
+    const previous = communityVisibilityOverrides[community.id];
+    setCommunityVisibilityOverrides((current) => ({ ...current, [community.id]: visibility }));
+    setCommunityVisibilityBusy(community.id);
+    try {
+      await api(`/communities/${community.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ visibility })
+      });
+      showToast(visibility === "public"
+        ? "Comunidade pública para os colaboradores desta empresa."
+        : "Comunidade privada para participantes e administradores.");
+      await refresh();
+    } catch (err) {
+      setCommunityVisibilityOverrides((current) => {
+        const next = { ...current };
+        if (previous) next[community.id] = previous;
+        else delete next[community.id];
+        return next;
+      });
+      showToast(errorMessage(err));
+    } finally {
+      setCommunityVisibilityBusy("");
+    }
+  };
+
   const removeCommunity = async (community: Community) => {
     if (!confirm(`Excluir a comunidade "${community.name}"?`)) return;
     try { await api(`/communities/${community.id}`, { method: "DELETE" }); showToast("Comunidade excluída."); await refresh(); }
@@ -1856,7 +1993,7 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
   return (
     <section className="page-section">
       <div className="page-heading admin-page-heading">
-        <div><h2>Administrar</h2><p>Escolha a empresa e gerencie colaboradores e comunidades privadas.</p></div>
+        <div><h2>Administrar</h2><p>Escolha a empresa e gerencie colaboradores e comunidades públicas ou privadas.</p></div>
         <label className="admin-company-picker">
           <span>Empresa</span>
           <select value={data.selectedCompanyId} onChange={(event) => onCompanyChange(event.target.value)}>
@@ -1884,6 +2021,13 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
           <h3>Criar comunidade</h3>
           <label><span>Nome</span><input name="name" required placeholder="Ex.: Comercial" /></label>
           <label><span>Descrição</span><input name="description" placeholder="Assuntos deste grupo" /></label>
+          <label>
+            <span>Visibilidade</span>
+            <select name="visibility" defaultValue="private">
+              <option value="private">Privada — somente participantes e administradores</option>
+              <option value="public">Pública — pesquisável por toda a empresa</option>
+            </select>
+          </label>
           <button className="btn small"><CirclePlus size={16} /> Criar</button>
         </form>
       </div>
@@ -1992,8 +2136,17 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
         {data.allCompanyCommunities.map((community) => (
           <div className="admin-community-row" key={community.id}>
             <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
-            <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || "Comunidade privada"} · {community.memberCount || 0} membros</small></div>
-            <span className="private-pill">Privada</span>
+            <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública" : "Comunidade privada")} · {community.memberCount || 0} membros</small></div>
+            <select
+              className={`community-visibility-select ${communityVisibilityOverrides[community.id] || communityVisibility(community)}`}
+              value={communityVisibilityOverrides[community.id] || communityVisibility(community)}
+              disabled={Boolean(communityVisibilityBusy)}
+              onChange={(event) => changeCommunityVisibility(community, event.target.value as "public" | "private")}
+              aria-label={`Visibilidade de ${community.name}`}
+            >
+              <option value="private">Privada</option>
+              <option value="public">Pública</option>
+            </select>
             <div className="admin-community-actions">
               <button className="btn secondary small" onClick={() => onManageCommunity(community.id)}><Users size={14} /> Gerenciar membros</button>
               <button className="btn danger small" onClick={() => removeCommunity(community)}>Excluir</button>
@@ -3134,11 +3287,13 @@ function ProfilePage({
   );
 }
 
-function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
+function NotificationsPage({ data, refresh, showToast, onOpenPost, onOpenAdmin, onOpenCommunity }: {
   data: BootstrapData;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onOpenPost: (notification: NotificationItem) => Promise<void>;
+  onOpenAdmin: (companyId: string) => Promise<void>;
+  onOpenCommunity: (companyId: string, communityId: string) => Promise<void>;
 }) {
   const [pushState, setPushState] = useState<PushState>(() => currentPushState());
   const [pushBusy, setPushBusy] = useState(false);
@@ -3200,6 +3355,16 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
       return;
     }
 
+    if (notification.data?.targetView === "admin" && notification.data.companyId) {
+      await onOpenAdmin(notification.data.companyId);
+      return;
+    }
+
+    if (notification.data?.targetView === "community" && notification.data.companyId && notification.data.communityId) {
+      await onOpenCommunity(notification.data.companyId, notification.data.communityId);
+      return;
+    }
+
     if (!notification.read && !notification.persistent) {
       await refresh();
     }
@@ -3247,7 +3412,7 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
             onClick={() => openNotification(item)}
           >
             <div className="notification-icon">
-              {item.type.includes("community") || item.type.includes("invite")
+              {item.type.includes("community") || item.type.includes("invite") || item.type === "company_member_joined"
                 ? <Users size={19} />
                 : item.type === "announcement" || item.type === "read_required"
                   ? <Megaphone size={19} />
@@ -3286,6 +3451,30 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
                   }}
                 >
                   Abrir publicação
+                </button>
+              )}
+
+              {item.data?.targetView === "admin" && item.data.companyId && (
+                <button
+                  className="text-button notification-open-post"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void openNotification(item);
+                  }}
+                >
+                  Gerenciar comunidades
+                </button>
+              )}
+
+              {item.data?.targetView === "community" && item.data.communityId && (
+                <button
+                  className="text-button notification-open-post"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void openNotification(item);
+                  }}
+                >
+                  Abrir comunidade
                 </button>
               )}
             </div>

@@ -182,7 +182,7 @@ export function PostCard({
   const scope = post.scope === "world"
     ? "🌎 Mundo"
     : post.scope === "community"
-      ? `Comunidade · ${community?.name || post.communityName || "Comunidade"}`
+      ? `${community?.visibility === "public" || post.communityVisibility === "public" ? "Comunidade pública" : "Comunidade"} · ${community?.name || post.communityName || "Comunidade"}`
       : `🏢 ${companyName || post.companyName || "Empresa"}`;
 
   const canResolve = (post.type === "post" || post.type === "question") && (

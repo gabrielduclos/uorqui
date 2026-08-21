@@ -82,6 +82,9 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 .admin-community-row{display:grid;grid-template-columns:40px 1fr auto auto;gap:9px;align-items:center;border-top:1px solid #f0f0f1;padding:10px 0}.admin-community-row:first-of-type{border-top:0}.admin-community-row strong{font-size:11px}.admin-community-row small{font-size:9px;color:var(--muted);display:block;margin-top:3px}
 .admin-community-help{margin:-6px 0 10px;color:var(--muted);font-size:9px;line-height:1.45}
 .admin-community-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.community-visibility-select{width:auto;min-width:92px;border-radius:999px;padding:7px 28px 7px 10px;font-size:9px;font-weight:750}
+.community-visibility-select.public{background:#edf6ff;color:#28669a;border-color:#cfe3f5}
+.community-visibility-select.private{background:#f4f4f5;color:#62656c}
 .private-pill{display:inline-block;border-radius:999px;background:#f0f1f2;padding:5px 8px;font-size:9px;color:#61646b;font-weight:750}
 .invite-link{display:flex;flex-direction:column;gap:5px}.invite-link small{color:var(--muted);font-size:9px}.invite-link input{font-size:9px}
 .large-search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);padding:8px;border-radius:14px}.large-search input{border:0;box-shadow:none;padding:7px}.search-results{padding-left:0;padding-right:0}
@@ -114,6 +117,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
   .mobile-nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#7b7e86;position:relative}.mobile-nav button.active{color:#111}.mobile-nav small{font-size:8px}.mobile-create{width:48px!important;height:48px!important;border-radius:15px!important;background:#111!important;color:#fff!important;align-self:center;justify-self:center}.mobile-badge{position:absolute;top:10px;right:calc(50% - 22px);background:#111;color:#fff;border-radius:999px;font-size:8px;padding:2px 5px}
   .community-grid,.admin-grid,.profile-grid{grid-template-columns:1fr}
   .admin-community-row{grid-template-columns:40px 1fr auto}.admin-community-row .private-pill{display:none}
+  .admin-community-actions{grid-column:2/4;justify-content:flex-start;flex-wrap:wrap}
   .auth-layout{display:block;background:#f6f7f8;padding:20px}.auth-brand{display:none}.auth-card{margin:8vh auto}.auth-mobile-logo{display:block;width:190px;max-width:72%;margin:0 auto 22px}
 }
 @media(max-width:520px){
@@ -138,6 +142,16 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 .community-detail-title{display:flex;align-items:center;gap:12px;min-width:0}
 .community-detail-title h2{margin:0;font-size:19px}
 .community-detail-title p{margin:4px 0 0;color:var(--muted);font-size:11px}
+.community-detail-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.community-detail-actions .btn{white-space:nowrap}
+.community-manage-members{border-color:#cbd7e5;background:#f3f7fb;color:#243b53}
+.community-manage-members span{min-width:21px;height:21px;border-radius:999px;background:#fff;border:1px solid #d9e2ec;display:grid;place-items:center;font-size:9px}
+.community-visibility-badge{width:max-content;display:inline-flex!important;align-items:center;gap:4px;border-radius:999px;padding:5px 8px;font-size:8px!important;font-weight:750}
+.community-visibility-badge.public{background:#edf6ff;color:#28669a}
+.community-visibility-badge.private{background:#f0f1f2;color:#676a72}
+.community-detail-title .community-visibility-badge{margin-top:7px}
+.community-card-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px}
+.community-card-meta .community-member-count{margin-top:0}
 .community-avatar.large{width:48px;height:48px;border-radius:13px}
 .community-feed{padding:0;margin-top:0}
 .loading-line{text-align:center;color:var(--muted);font-size:11px;padding:28px}
@@ -145,6 +159,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 @media(max-width:850px){
   .community-detail-head{grid-template-columns:1fr;padding:14px}
   .community-detail-head>.btn{justify-self:start}
+  .community-detail-actions{justify-content:flex-start}
   .community-detail-title h2{font-size:18px}
 }
 

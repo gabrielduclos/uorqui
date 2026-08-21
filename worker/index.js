@@ -128,23 +128,27 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'POST' && /^\/communities\/[^/]+\/members$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
-    return json(await addCommunityMember(env, identity, communityId, await readJson(request)), 201);
+    return json(await addCommunityMember(env, identity, communityId, await readJson(request), ctx), 201);
   }
   if (method === 'DELETE' && /^\/communities\/[^/]+\/members\/[^/]+$/.test(path)) {
     const parts = path.split('/');
     const communityId = decodeURIComponent(parts[2]);
     const targetUid = decodeURIComponent(parts[4]);
-    return json(await removeCommunityMember(env, identity, communityId, targetUid));
+    return json(await removeCommunityMember(env, identity, communityId, targetUid, ctx));
   }
   if (method === 'GET' && /^\/communities\/[^/]+\/posts$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await getCommunityPosts(env, identity, communityId));
   }
+  if (method === 'PATCH' && /^\/communities\/[^/]+$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await updateCommunityVisibility(env, identity, communityId, await readJson(request)));
+  }
   if (method === 'DELETE' && /^\/communities\/[^/]+$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await deleteCommunity(env, identity, communityId));
   }
-  if (method === 'POST' && path === '/invites/accept') return json(await acceptInvite(env, identity, await readJson(request)));
+  if (method === 'POST' && path === '/invites/accept') return json(await acceptInvite(env, identity, await readJson(request), ctx));
   if (method === 'POST' && path === '/posts') return json(await createPost(env, identity, await readJson(request), ctx), 201);
   if (method === 'GET' && /^\/posts\/[^/]+$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
@@ -356,6 +360,7 @@ async function getCompaniesSummary(env, identity) {
           id: c.id,
           name: c.name,
           description: c.description || '',
+          visibility: normalizedCommunityVisibility(c.visibility),
           memberCount: Number(counts[c.id] || 0)
         }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
@@ -568,7 +573,10 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
   }
 
   const rawCompanyCommunities = selectedCompanyId ? await fsWhere(env, 'communities', 'companyId', selectedCompanyId, 120) : [];
-  const companyCommunities = rawCompanyCommunities.map(c => ({ ...c, memberCount: Number(memberCountByCommunity[c.id] || 0) }));
+  const companyCommunities = rawCompanyCommunities.map(c => ({
+    ...communityView(c),
+    memberCount: Number(memberCountByCommunity[c.id] || 0)
+  }));
   const communities = companyCommunities.filter(c => memberCommunityIds.has(c.id)).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
   const communityIds = new Set(communities.map(c => c.id));
   const communityMap = Object.fromEntries(communities.map(c => [c.id, c]));
@@ -1310,15 +1318,46 @@ async function resendCompanyInvite(env, identity, companyId, inviteId, origin, c
   };
 }
 
+function normalizedCommunityVisibility(value) {
+  return value === 'public' ? 'public' : 'private';
+}
+
+function publicCommunity(community) {
+  return normalizedCommunityVisibility(community?.visibility) === 'public';
+}
+
+function communityView(community) {
+  return { ...community, visibility: normalizedCommunityVisibility(community?.visibility) };
+}
+
 async function createCommunity(env, identity, companyId, body) {
   await requireCompanyAdmin(env, identity.uid, companyId);
   await assertCommunityCapacity(env, companyId);
   const name=clean(body.name,90), description=clean(body.description||'',280);
+  const visibility=normalizedCommunityVisibility(body.visibility);
   if(!name)throw httpError(400,'Informe o nome da comunidade.');
-  const communityId=id(); const community={id:communityId,companyId,name,description,visibility:'invite',isDefault:false,createdBy:identity.uid,createdAt:nowIso()};
+  const communityId=id(); const community={id:communityId,companyId,name,description,visibility,isDefault:false,createdBy:identity.uid,createdAt:nowIso()};
   await fsPut(env,'communities',communityId,community);
   await fsPut(env,'communityMembers',`${communityId}_${identity.uid}`,{id:`${communityId}_${identity.uid}`,companyId,communityId,uid:identity.uid,role:'moderator',joinedAt:nowIso()});
   return { community };
+}
+
+async function updateCommunityVisibility(env, identity, communityId, body) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  await requireCompanyAdmin(env, identity.uid, community.companyId);
+
+  if (body.visibility !== 'public' && body.visibility !== 'private') {
+    throw httpError(400, 'Escolha se a comunidade é pública ou privada.');
+  }
+
+  const updated = {
+    ...community,
+    visibility: normalizedCommunityVisibility(body.visibility),
+    updatedAt: nowIso(),
+    updatedBy: identity.uid
+  };
+  await fsPut(env, 'communities', communityId, updated);
+  return { community: communityView(updated) };
 }
 
 async function deleteCommunity(env, identity, communityId) {
@@ -1345,13 +1384,17 @@ async function deleteCommunity(env, identity, communityId) {
 async function requireCommunityAccess(env, uid, community) {
   const companyMember = await requireCompanyMember(env, uid, community.companyId);
   if (companyMember.role === 'owner' || companyMember.role === 'admin') return companyMember;
+  if (publicCommunity(community)) return companyMember;
   await requireCommunityMember(env, uid, community.id);
   return companyMember;
 }
 
 async function getCommunityMembers(env, identity, communityId) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-  await requireCommunityAccess(env, identity.uid, community);
+  const companyMember = await requireCompanyMember(env, identity.uid, community.companyId);
+  if (companyMember.role !== 'owner' && companyMember.role !== 'admin') {
+    await requireCommunityMember(env, identity.uid, community.id);
+  }
 
   const docs = await fsWhere(env, 'communityMembers', 'communityId', communityId, 250);
   const members = [];
@@ -1369,10 +1412,10 @@ async function getCommunityMembers(env, identity, communityId) {
     });
   }
   members.sort((a,b) => (a.displayName || a.email).localeCompare(b.displayName || b.email, 'pt-BR'));
-  return { community: { ...community, memberCount: members.length }, members, count: members.length };
+  return { community: { ...communityView(community), memberCount: members.length }, members, count: members.length };
 }
 
-async function addCommunityMember(env, identity, communityId, body) {
+async function addCommunityMember(env, identity, communityId, body, ctx) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
   await requireCompanyAdmin(env, identity.uid, community.companyId);
 
@@ -1396,21 +1439,33 @@ async function addCommunityMember(env, identity, communityId, body) {
   };
   await fsPut(env, 'communityMembers', memberId, membership);
 
-  await fsPut(env, 'notifications', `community_added_${communityId}_${targetUid}_${Date.now()}`, {
+  const notificationId = `community_added_${communityId}_${targetUid}_${Date.now()}`;
+  const notification = {
     recipientUid: targetUid,
     type: 'community_added',
     title: `Você foi adicionado a ${community.name}`,
     body: 'Um administrador adicionou você a esta comunidade.',
-    data: { companyId: community.companyId, communityId },
+    data: { companyId: community.companyId, communityId, targetView: 'community' },
     read: false,
     status: 'new',
     createdAt: nowIso()
-  });
+  };
+  await fsPut(env, 'notifications', notificationId, notification);
+  deferPushes(ctx, [sendPushToUser(env, targetUid, {
+    title: notification.title,
+    body: notification.body,
+    notificationId,
+    type: notification.type,
+    companyId: community.companyId,
+    communityId,
+    targetView: 'community',
+    url: `/?community=${encodeURIComponent(communityId)}&company=${encodeURIComponent(community.companyId)}`
+  })]);
 
   return { member: membership };
 }
 
-async function removeCommunityMember(env, identity, communityId, targetUid) {
+async function removeCommunityMember(env, identity, communityId, targetUid, ctx) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
   await requireCompanyAdmin(env, identity.uid, community.companyId);
 
@@ -1419,16 +1474,30 @@ async function removeCommunityMember(env, identity, communityId, targetUid) {
   if (!existing) return { ok: true, alreadyRemoved: true };
 
   await fsDelete(env, 'communityMembers', memberId);
-  await fsPut(env, 'notifications', `community_removed_${communityId}_${targetUid}_${Date.now()}`, {
+  const notificationId = `community_removed_${communityId}_${targetUid}_${Date.now()}`;
+  const notification = {
     recipientUid: targetUid,
     type: 'community_removed',
     title: `Você foi removido de ${community.name}`,
-    body: 'Seu acesso a esta comunidade foi removido por um administrador.',
-    data: { companyId: community.companyId, communityId },
+    body: publicCommunity(community)
+      ? 'Você não participa mais desta comunidade, mas as publicações públicas continuam disponíveis na pesquisa.'
+      : 'Seu acesso a esta comunidade foi removido por um administrador.',
+    data: { companyId: community.companyId, communityId, targetView: 'notifications' },
     read: false,
     status: 'new',
     createdAt: nowIso()
-  });
+  };
+  await fsPut(env, 'notifications', notificationId, notification);
+  deferPushes(ctx, [sendPushToUser(env, targetUid, {
+    title: notification.title,
+    body: notification.body,
+    notificationId,
+    type: notification.type,
+    companyId: community.companyId,
+    communityId,
+    targetView: 'notifications',
+    url: `/?notifications=1&company=${encodeURIComponent(community.companyId)}`
+  })]);
 
   return { ok: true };
 }
@@ -1483,7 +1552,7 @@ async function createInviteNotification(env, invite, uid, ctx) {
   else await pushTask;
 }
 
-async function acceptInvite(env, identity, body) {
+async function acceptInvite(env, identity, body, ctx) {
   let invite=null; let acceptedByToken=false;
   if(body.token){const hash=await sha256(String(body.token));const found=await fsWhere(env,'invites','tokenHash',hash,5);invite=found[0]||null;acceptedByToken=true;}
   else if(body.inviteId)invite=await fsGet(env,'invites',clean(body.inviteId,120));
@@ -1501,10 +1570,11 @@ async function acceptInvite(env, identity, body) {
     throw httpError(403,'Crie ou entre com a conta do e-mail que recebeu o convite.');
   }
   await ensureUser(env,identity);
+  let joiningUser=null;
   if(invite.type==='company'){
     const existingMember = await fsGet(env,'companyMembers',`${invite.companyId}_${identity.uid}`);
     if(!existingMember || existingMember.status!=='active') await assertMemberCapacity(env, invite.companyId, false);
-    const joiningUser=await fsGet(env,'users',identity.uid);
+    joiningUser=await fsGet(env,'users',identity.uid);
     await fsPut(env,'companyMembers',`${invite.companyId}_${identity.uid}`,{id:`${invite.companyId}_${identity.uid}`,companyId:invite.companyId,uid:identity.uid,displayName:joiningUser?.displayName||identity.name||'',email:normalizeEmail(identity.email||''),role:'member',status:'active',joinedAt:nowIso()});
   } else {
     const member=await fsGet(env,'companyMembers',`${invite.companyId}_${identity.uid}`);if(!member||member.status!=='active')throw httpError(403,'Você precisa fazer parte da empresa antes de entrar na comunidade.');
@@ -1512,7 +1582,69 @@ async function acceptInvite(env, identity, body) {
   }
   invite.status='accepted';invite.acceptedBy=identity.uid;invite.acceptedAt=nowIso();await fsPut(env,'invites',invite.id,invite);
   const nid=`invite_${invite.id}_${identity.uid}`;const n=await fsGet(env,'notifications',nid);if(n)await fsPut(env,'notifications',nid,{...n,read:true,status:'accepted'});
+  if(invite.type==='company'){
+    const notifyTask=notifyCompanyAdminsAboutAcceptedInvite(env,invite,joiningUser||{},identity)
+      .catch(error=>console.error('Falha ao avisar administradores sobre convite aceito:',error));
+    if(ctx?.waitUntil)ctx.waitUntil(notifyTask);else await notifyTask;
+  }
   return {ok:true,companyId:invite.companyId,communityId:invite.communityId||null};
+}
+
+async function notifyCompanyAdminsAboutAcceptedInvite(env, invite, joiningUser, identity) {
+  const [company, communities, companyMembers] = await Promise.all([
+    fsGet(env, 'companies', invite.companyId),
+    fsWhere(env, 'communities', 'companyId', invite.companyId, 120),
+    fsWhere(env, 'companyMembers', 'companyId', invite.companyId, 250)
+  ]);
+  const activeCommunities = communities.filter(community => community.archived !== true && community.status !== 'inactive');
+  if (!activeCommunities.length) return;
+
+  const administrators = companyMembers.filter(member =>
+    member.uid &&
+    member.uid !== identity.uid &&
+    member.status === 'active' &&
+    (member.role === 'owner' || member.role === 'admin')
+  );
+  if (!administrators.length) return;
+
+  const memberName = joiningUser.displayName || identity.name || joiningUser.email || identity.email || 'Um novo colaborador';
+  const companyName = company?.name || invite.companyName || 'sua empresa';
+  const communityCount = activeCommunities.length;
+  const createdAt = nowIso();
+  const body = communityCount === 1
+    ? `Adicione ${memberName} à comunidade ativa da empresa.`
+    : `Escolha em quais das ${communityCount} comunidades ativas ${memberName} deve participar.`;
+
+  const notifications = administrators.map(administrator => ({
+    collection: 'notifications',
+    id: `member_joined_${invite.id}_${administrator.uid}`,
+    data: {
+      recipientUid: administrator.uid,
+      type: 'company_member_joined',
+      title: `${memberName} entrou em ${companyName}`,
+      body,
+      data: {
+        companyId: invite.companyId,
+        memberUid: identity.uid,
+        targetView: 'admin'
+      },
+      read: false,
+      status: 'new',
+      createdAt
+    }
+  }));
+
+  await fsBatchPut(env, notifications);
+  await Promise.allSettled(notifications.map(notification => sendPushToUser(env, notification.data.recipientUid, {
+    title: notification.data.title,
+    body: notification.data.body,
+    notificationId: notification.id,
+    type: notification.data.type,
+    companyId: invite.companyId,
+    memberUid: identity.uid,
+    targetView: 'admin',
+    url: `/?admin=1&company=${encodeURIComponent(invite.companyId)}`
+  })));
 }
 
 async function getCommunityPosts(env, identity, communityId) {
@@ -1530,8 +1662,11 @@ async function getCommunityPosts(env, identity, communityId) {
   const pollVoteMap = new Map(pollVotes.map(vote => [vote.postId, vote.optionId]));
 
   return {
-    community,
-    posts: enrichPosts(posts, likedIds, readIds, pollVoteMap).slice(0, 100)
+    community: communityView(community),
+    posts: enrichPosts(posts.map(post => ({
+      ...post,
+      communityVisibility: normalizedCommunityVisibility(community.visibility)
+    })), likedIds, readIds, pollVoteMap).slice(0, 100)
   };
 }
 
@@ -1700,12 +1835,14 @@ async function sendPushToUser(env, uid, payload) {
     postId: payload.postId || '',
     companyId: payload.companyId || '',
     communityId: payload.communityId || '',
+    memberUid: payload.memberUid || '',
+    targetView: payload.targetView || '',
     openComments: payload.openComments || '',
-    url: payload.postId
+    url: payload.url || (payload.postId
       ? `/?post=${encodeURIComponent(payload.postId)}${payload.companyId ? `&company=${encodeURIComponent(payload.companyId)}` : ''}${payload.openComments ? '&comments=1' : ''}`
       : payload.inviteId
         ? '/?notifications=1'
-        : '/'
+        : '/')
   })) {
     data[key] = String(value || '');
   }
@@ -1856,6 +1993,7 @@ async function createPost(env, identity, body, ctx) {
     companyName: company?.name || '',
     communityId: communityId || '',
     communityName: community?.name || '',
+    communityVisibility: community ? normalizedCommunityVisibility(community.visibility) : '',
     type,
     text,
     title: type === 'announcement' || type === 'event' ? title : '',
@@ -2284,19 +2422,32 @@ async function searchPosts(env, identity, params) {
   if (companyId) {
     const companyMember = await requireCompanyMember(env, identity.uid, companyId);
     const isAdmin = companyMember.role === 'owner' || companyMember.role === 'admin';
-    const cms = await fsWhere(env, 'communityMembers', 'uid', identity.uid, 150);
+    const [cms, companyCommunities, raw] = await Promise.all([
+      fsWhere(env, 'communityMembers', 'uid', identity.uid, 150),
+      fsWhere(env, 'communities', 'companyId', companyId, 120),
+      fsWhere(env, 'posts', 'companyId', companyId, 160)
+    ]);
     const allowed = new Set(cms.filter(m => m.companyId === companyId).map(m => m.communityId));
-    const raw = await fsWhere(env, 'posts', 'companyId', companyId, 160);
+    const visibilityByCommunity = new Map(companyCommunities.map(community => [
+      community.id,
+      normalizedCommunityVisibility(community.visibility)
+    ]));
+    const publicCommunityIds = new Set(
+      companyCommunities.filter(publicCommunity).map(community => community.id)
+    );
 
     posts = raw.filter(post =>
       (
         post.scope === 'company' ||
-        (post.scope === 'community' && (isAdmin || allowed.has(post.communityId)))
+        (post.scope === 'community' && (isAdmin || allowed.has(post.communityId) || publicCommunityIds.has(post.communityId)))
       ) &&
       `${post.title || ''} ${post.text || ''} ${post.communityName || ''} ${post.eventLocation || ''}`
         .toLocaleLowerCase('pt-BR')
         .includes(q)
-    );
+    ).map(post => post.scope === 'community' ? {
+      ...post,
+      communityVisibility: visibilityByCommunity.get(post.communityId) || 'private'
+    } : post);
   } else {
     const raw = await fsWhere(env, 'posts', 'scope', 'world', 100);
     posts = raw.filter(post =>
@@ -2351,7 +2502,11 @@ async function uploadMedia(request, env, identity, params) {
 async function getMedia(env, identity, mediaId) {
   const media=await fsGetRequired(env,'media',mediaId,'Arquivo não encontrado.');
   if(media.scope==='company')await requireCompanyMember(env,identity.uid,media.companyId);
-  else if(media.scope==='community')await requireCommunityMember(env,identity.uid,media.communityId);
+  else if(media.scope==='community'){
+    const community=await fsGetRequired(env,'communities',media.communityId,'Comunidade não encontrada.');
+    if(community.companyId!==media.companyId)throw httpError(403,'Comunidade inválida.');
+    await requireCommunityAccess(env,identity.uid,community);
+  }
   const object=await env.MEDIA.get(media.key);if(!object)throw httpError(404,'Arquivo não encontrado no armazenamento.');
   const headers=new Headers();object.writeHttpMetadata(headers);
   headers.set('Cache-Control',media.scope==='world'||media.scope==='avatar'?'private, max-age=300':'private, no-store');
@@ -2383,9 +2538,10 @@ async function requirePostAccess(env, uid, post) {
   if(post.scope==='world')return true;
   if(post.scope==='company')return requireCompanyMember(env,uid,post.companyId);
   if(post.scope==='community'){
-    const companyMember=await requireCompanyMember(env,uid,post.companyId);
-    if(companyMember.role==='owner'||companyMember.role==='admin')return companyMember;
-    return requireCommunityMember(env,uid,post.communityId);
+    const community=await fsGetRequired(env,'communities',post.communityId,'Comunidade não encontrada.');
+    if(community.companyId!==post.companyId)throw httpError(403,'Comunidade inválida.');
+    post.communityVisibility=normalizedCommunityVisibility(community.visibility);
+    return requireCommunityAccess(env,uid,community);
   }
   throw httpError(403,'Sem permissão.');
 }
