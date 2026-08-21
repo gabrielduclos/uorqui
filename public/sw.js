@@ -39,7 +39,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: "/assets/uorqui-icon-192.png",
+      icon: "/assets/uorqui-icon-192.png?v=1.2.11",
       badge: "/assets/uorqui-favicon.png",
       tag: `uorqui-${notificationId}`,
       renotify: type === "read_required",

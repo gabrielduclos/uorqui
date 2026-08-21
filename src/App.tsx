@@ -665,7 +665,7 @@ export default function App() {
 
       {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
         <aside className="pwa-install-banner" role="status">
-          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png" alt="" /></div>
+          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png?v=1.2.11" alt="" /></div>
           <div className="pwa-install-copy">
             <strong>Instale o Uorqui</strong>
             <span>Abra mais rápido e use como um app no celular.</span>
