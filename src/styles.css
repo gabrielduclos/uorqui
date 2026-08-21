@@ -104,7 +104,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 }
 @media(max-width:850px){
   body{padding-bottom:70px}.app-shell{display:block;max-width:680px}.sidebar,.rightbar{display:none}.main{border:0;min-height:100dvh}
-  .topbar-line{height:64px;padding:0 10px;display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:8px;align-items:center}.topbar-brand{position:static;transform:none;display:block;min-width:0}.mobile-logo{display:block;width:78px}.mobile-logo img{width:78px;height:36px;object-fit:contain;object-position:left center}.topbar h1{display:none}.mobile-header-search{display:flex;align-items:center;gap:6px;min-width:0;background:#f3f4f5;border:1px solid var(--line);border-radius:999px;padding:7px 10px}.mobile-header-search svg{flex:none;color:#7a7d85}.mobile-header-search input{min-width:0;width:100%;border:0;background:transparent;box-shadow:none;padding:0;font-size:11px}.mobile-header-search input:focus{box-shadow:none}.topbar-actions{justify-self:end}.top-bell{display:grid;z-index:2}.mobile-admin-button{display:grid;z-index:2}
+  .topbar-line{height:64px;padding:0 10px;display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:8px;align-items:center}.topbar-brand{position:static;transform:none;display:block;min-width:0}.mobile-logo{display:block;width:78px}.mobile-logo img{width:78px;height:36px;object-fit:contain;object-position:left center}.topbar h1{display:none}.mobile-header-search{display:flex;align-items:center;gap:6px;min-width:0;background:#f3f4f5;border:1px solid var(--line);border-radius:999px;padding:7px 10px}.mobile-header-search svg{flex:none;color:#7a7d85}.mobile-header-search input{min-width:0;width:100%;border:0;background:transparent;box-shadow:none;padding:0;font-size:11px}.mobile-header-search input:focus{box-shadow:none}.topbar-actions{justify-self:end}.top-bell{display:grid;z-index:2}.mobile-plan-button{display:grid;z-index:2}
   .tabs{padding:0 13px;gap:20px}.tabs button{padding-bottom:11px}
   .feed{padding:9px}.post-card{border-radius:14px;padding:14px;margin-bottom:9px}.quick-compose{padding:12px 13px}.quick-compose .avatar{width:39px!important;height:39px!important}.quick-compose>button{font-size:11px}
   .page-section{padding:14px;min-height:calc(100dvh - 57px)}
@@ -112,7 +112,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
   .mobile-nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#7b7e86;position:relative}.mobile-nav button.active{color:#111}.mobile-nav small{font-size:8px}.mobile-create{width:48px!important;height:48px!important;border-radius:15px!important;background:#111!important;color:#fff!important;align-self:center;justify-self:center}.mobile-badge{position:absolute;top:10px;right:calc(50% - 22px);background:#111;color:#fff;border-radius:999px;font-size:8px;padding:2px 5px}
   .community-grid,.admin-grid,.profile-grid{grid-template-columns:1fr}
   .admin-community-row{grid-template-columns:40px 1fr auto}.admin-community-row .private-pill{display:none}
-  .auth-layout{display:block;background:#f6f7f8;padding:20px}.auth-brand{display:none}.auth-card{margin:8vh auto}.auth-mobile-logo{display:block;width:140px;margin-bottom:22px}
+  .auth-layout{display:block;background:#f6f7f8;padding:20px}.auth-brand{display:none}.auth-card{margin:8vh auto}.auth-mobile-logo{display:block;width:190px;max-width:72%;margin:0 auto 22px}
 }
 @media(max-width:520px){
   .page-heading{flex-direction:column}.page-heading .btn{align-self:flex-start}
@@ -258,7 +258,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 
 /* v1.1.5 — header mobile e gestão de empresas no Perfil */
 .topbar-actions{display:flex;align-items:center;gap:3px}
-.mobile-header-search,.mobile-admin-button{display:none}
+.mobile-header-search,.mobile-plan-button{display:none}
 .profile-companies-card{margin-top:12px}
 .profile-companies-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px}
 .profile-companies-head>div>strong{font-size:13px}
@@ -291,7 +291,7 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 /* v1.1.6 — correção final do header mobile e identidade visual */
 @media(max-width:850px){
   .mobile-header-search{display:flex!important}
-  .mobile-admin-button{display:grid!important}
+  .mobile-plan-button{display:grid!important}
 
   body{padding-bottom:62px}
 
@@ -710,13 +710,17 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .sent-invites-head h3{margin-bottom:3px}
 .sent-invites-head small{display:block;color:var(--muted);font-size:9px}
 .sent-invite-list{display:flex;flex-direction:column}
-.sent-invite-row{display:grid;grid-template-columns:minmax(0,1fr) auto 82px;align-items:center;gap:10px;border-top:1px solid #f0f0f1;padding:10px 0}
+.sent-invite-row{display:grid;grid-template-columns:minmax(0,1fr) auto 82px auto;align-items:center;gap:10px;border-top:1px solid #f0f0f1;padding:10px 0}
 .sent-invite-row strong{font-size:11px}
 .sent-invite-row small{display:block;margin-top:3px;color:var(--muted);font-size:9px}
 .invite-status{border-radius:999px;padding:5px 8px;background:#fff7df;color:#755a16;font-size:9px;font-weight:750}
 .invite-status.accepted{background:#edf8ef;color:#2f6e39}
 .invite-status.expired{background:#f2f2f3;color:#6c7077}
+.invite-status.canceled{background:#fff3f1;color:#963b33}
 .sent-invite-row .invite-delivery{text-align:right;margin:0}
+.sent-invite-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.sent-invite-actions .btn{padding:6px 8px;font-size:9px;white-space:nowrap}
+.sent-invite-actions .invite-cancel-button{color:#963b33}
 .company-membership-actions{display:flex;justify-content:flex-end;border-top:1px solid #f0f0f1;margin-top:12px;padding-top:12px}
 
 @media(max-width:620px){
@@ -725,6 +729,7 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   .company-address-grid .street{grid-column:1/-1}
   .sent-invite-row{grid-template-columns:minmax(0,1fr) auto}
   .sent-invite-row .invite-delivery{grid-column:1/-1;text-align:left;margin-top:-6px}
+  .sent-invite-actions{grid-column:1/-1;justify-content:flex-start}
 }
 
 
@@ -845,4 +850,14 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   .premium-ribbon{margin:-15px -15px 13px}
   .admin-company-context{flex-wrap:wrap}
   .admin-company-context .admin-plan-button{margin-left:50px}
+}
+
+/* v1.2.11 — convites, navegação e refinamentos mobile */
+.mobile-nav-spacer{display:block}
+.mobile-plan-button.active{background:#f0f1f2;color:#111}
+
+@media(max-width:520px){
+  .post-actions{gap:10px}
+  .post-actions .resolve-action{min-width:0;justify-content:flex-end;white-space:nowrap}
+  .post-actions .resolve-action .action-label{display:inline!important;font-size:8.5px}
 }

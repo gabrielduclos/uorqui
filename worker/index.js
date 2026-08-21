@@ -91,6 +91,18 @@ async function routeApi(request, env, identity, url, ctx) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await createCompanyInvite(env, identity, companyId, await readJson(request), env.APP_ORIGIN || url.origin), 201);
   }
+  if (method === 'DELETE' && /^\/companies\/[^/]+\/invites\/[^/]+$/.test(path)) {
+    const parts = path.split('/');
+    const companyId = decodeURIComponent(parts[2]);
+    const inviteId = decodeURIComponent(parts[4]);
+    return json(await cancelCompanyInvite(env, identity, companyId, inviteId));
+  }
+  if (method === 'POST' && /^\/companies\/[^/]+\/invites\/[^/]+\/resend$/.test(path)) {
+    const parts = path.split('/');
+    const companyId = decodeURIComponent(parts[2]);
+    const inviteId = decodeURIComponent(parts[4]);
+    return json(await resendCompanyInvite(env, identity, companyId, inviteId, env.APP_ORIGIN || url.origin));
+  }
   if (method === 'POST' && /^\/companies\/[^/]+\/leave$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await leaveCompany(env, identity, companyId, await readJson(request), ctx));
@@ -1021,9 +1033,129 @@ async function getCompanyInvites(env, identity, companyId) {
         emailSent: Boolean(invite.emailSent),
         createdAt: invite.createdAt || '',
         expiresAt: invite.expiresAt || '',
-        acceptedAt: invite.acceptedAt || ''
+        acceptedAt: invite.acceptedAt || '',
+        canceledAt: invite.canceledAt || '',
+        lastResentAt: invite.lastResentAt || '',
+        resendCount: Number(invite.resendCount || 0)
       }))
       .sort(byCreatedDesc)
+  };
+}
+
+async function requireManagedInvite(env, identity, companyId, inviteId) {
+  await requireCompanyAdmin(env, identity.uid, companyId);
+  const invite = await fsGetRequired(env, 'invites', inviteId, 'Convite não encontrado.');
+  if (invite.companyId !== companyId) throw httpError(403, 'Este convite pertence a outra empresa.');
+  return invite;
+}
+
+async function cancelCompanyInvite(env, identity, companyId, inviteId) {
+  const invite = await requireManagedInvite(env, identity, companyId, inviteId);
+  if (invite.status === 'accepted') throw httpError(409, 'Um convite já aceito não pode ser cancelado.');
+  if (invite.status === 'canceled') return { ok: true, alreadyCanceled: true };
+
+  const canceledAt = nowIso();
+  const updated = {
+    ...invite,
+    status: 'canceled',
+    tokenHash: '',
+    canceledAt,
+    canceledBy: identity.uid,
+    updatedAt: canceledAt
+  };
+  const operations = [
+    { update: { collection: 'invites', id: invite.id, data: updated } }
+  ];
+
+  if (invite.targetUid) {
+    const notificationId = `invite_${invite.id}_${invite.targetUid}`;
+    const notification = await fsGet(env, 'notifications', notificationId);
+    if (notification) {
+      operations.push({
+        update: {
+          collection: 'notifications',
+          id: notificationId,
+          data: { ...notification, read: true, status: 'canceled', updatedAt: canceledAt }
+        }
+      });
+    }
+  }
+
+  await fsCommit(env, operations);
+  return { ok: true, inviteId: invite.id, status: 'canceled' };
+}
+
+async function resendCompanyInvite(env, identity, companyId, inviteId, origin) {
+  const invite = await requireManagedInvite(env, identity, companyId, inviteId);
+  if (invite.status === 'accepted') throw httpError(409, 'Este convite já foi aceito.');
+
+  const lastSentAt = new Date(invite.lastResentAt || invite.emailSentAt || invite.createdAt || 0).getTime();
+  if (Number.isFinite(lastSentAt) && Date.now() - lastSentAt < 60 * 1000) {
+    throw httpError(429, 'Aguarde um minuto antes de reenviar este convite.');
+  }
+
+  let targetUid = invite.targetUid || '';
+  if (invite.type === 'company') {
+    const users = invite.email ? await fsWhere(env, 'users', 'email', invite.email, 5) : [];
+    if (users[0]) targetUid = users[0].uid;
+    if (targetUid) {
+      const existingMember = await fsGet(env, 'companyMembers', `${companyId}_${targetUid}`);
+      if (existingMember?.status === 'active') throw httpError(409, 'Este usuário já faz parte da empresa.');
+    }
+    if (invite.status !== 'pending' || isExpired(invite.expiresAt)) {
+      await assertMemberCapacity(env, companyId, true);
+    }
+  } else {
+    if (!targetUid) throw httpError(400, 'O destinatário deste convite não está mais disponível.');
+    const companyMember = await fsGet(env, 'companyMembers', `${companyId}_${targetUid}`);
+    if (!companyMember || companyMember.status !== 'active') {
+      throw httpError(409, 'O destinatário não faz mais parte da empresa.');
+    }
+    const communityMember = await fsGet(env, 'communityMembers', `${invite.communityId}_${targetUid}`);
+    if (communityMember) throw httpError(409, 'Este usuário já participa da comunidade.');
+  }
+
+  const token = randomToken();
+  const lastResentAt = nowIso();
+  const updated = {
+    ...invite,
+    targetUid,
+    status: 'pending',
+    tokenHash: await sha256(token),
+    expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    canceledAt: '',
+    canceledBy: '',
+    lastResentAt,
+    lastResentBy: identity.uid,
+    resendCount: Number(invite.resendCount || 0) + 1,
+    updatedAt: lastResentAt
+  };
+  await fsPut(env, 'invites', invite.id, updated);
+
+  if (targetUid) await createInviteNotification(env, updated, targetUid);
+
+  let inviteUrl = '';
+  let emailSent = false;
+  if (invite.type === 'company') {
+    inviteUrl = `${origin.replace(/\/$/,'')}/?invite=${encodeURIComponent(token)}`;
+    emailSent = await maybeSendInviteEmail(env, invite.email, invite.companyName, inviteUrl);
+  }
+
+  const finalInvite = {
+    ...updated,
+    emailSent,
+    emailSentAt: emailSent ? lastResentAt : '',
+    updatedAt: nowIso()
+  };
+  await fsPut(env, 'invites', invite.id, finalInvite);
+
+  return {
+    ok: true,
+    inviteId: invite.id,
+    inviteUrl,
+    emailSent,
+    status: 'pending',
+    expiresAt: finalInvite.expiresAt
   };
 }
 
@@ -1167,7 +1299,7 @@ async function createCommunityInvite(env, identity, communityId, body) {
 }
 
 async function createInviteNotification(env, invite, uid) {
-  await fsPut(env,'notifications',`invite_${invite.id}_${uid}`,{recipientUid:uid,type:invite.type==='company'?'company_invite':'community_invite',title:invite.type==='company'?`${invite.companyName} convidou você`:`Convite para ${invite.communityName}`,body:invite.type==='company'?'Aceite para entrar no ambiente privado da empresa.':`A empresa convidou você para ${invite.communityName}.`,data:{inviteId:invite.id,companyId:invite.companyId,communityId:invite.communityId||''},read:false,status:'pending',createdAt:invite.createdAt});
+  await fsPut(env,'notifications',`invite_${invite.id}_${uid}`,{recipientUid:uid,type:invite.type==='company'?'company_invite':'community_invite',title:invite.type==='company'?`${invite.companyName} convidou você`:`Convite para ${invite.communityName}`,body:invite.type==='company'?'Aceite para entrar no ambiente privado da empresa.':`A empresa convidou você para ${invite.communityName}.`,data:{inviteId:invite.id,companyId:invite.companyId,communityId:invite.communityId||''},read:false,status:'pending',createdAt:invite.lastResentAt||invite.createdAt,updatedAt:nowIso()});
 }
 
 async function acceptInvite(env, identity, body) {

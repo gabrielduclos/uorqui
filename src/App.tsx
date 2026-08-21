@@ -579,9 +579,9 @@ export default function App() {
                   <Bell size={21} />
                   {unread > 0 && <span className="count-badge">{unread > 99 ? "99+" : unread}</span>}
                 </button>
-                {data.canAdmin && (
-                  <button className={`icon-btn mobile-admin-button ${view === "admin" ? "active" : ""}`} onClick={() => navigate("admin")} aria-label="Administrar empresa">
-                    <Settings size={21} />
+                {!!data.company && (
+                  <button className={`icon-btn mobile-plan-button ${view === "plans" ? "active" : ""}`} onClick={() => openPlans("manual")} aria-label="Planos">
+                    <Crown size={21} />
                   </button>
                 )}
               </div>
@@ -623,7 +623,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.10</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.11</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -632,7 +632,9 @@ export default function App() {
           <MobileNav active={view === "home" && homeTab !== "world"} icon={<Home />} label="Início" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
           <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
           <button className="mobile-create" onClick={() => setComposerOpen(true)} aria-label="Publicar"><Plus size={26} /></button>
-          <MobileNav active={view === "companies"} icon={<Building2 />} label="Empresas" onClick={() => navigate("companies")} />
+          {data.canAdmin
+            ? <MobileNav active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />
+            : <span className="mobile-nav-spacer" aria-hidden="true" />}
           <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
         </nav>
       )}
@@ -1410,6 +1412,9 @@ type SentInvite = {
   createdAt?: string;
   expiresAt?: string;
   acceptedAt?: string;
+  canceledAt?: string;
+  lastResentAt?: string;
+  resendCount?: number;
 };
 
 function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequired }: {
@@ -1422,6 +1427,7 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
   const [inviteLink, setInviteLink] = useState("");
   const [sentInvites, setSentInvites] = useState<SentInvite[]>([]);
   const [invitesLoading, setInvitesLoading] = useState(false);
+  const [inviteActionBusy, setInviteActionBusy] = useState("");
   const manageableCompanies = data.companies.filter((company) => company.role === "owner" || company.role === "admin");
 
   const loadSentInvites = async () => {
@@ -1465,6 +1471,51 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
         return;
       }
       showToast(errorMessage(err));
+    }
+  };
+
+  const cancelInvite = async (invite: SentInvite) => {
+    if (!confirm(`Cancelar o convite enviado para ${invite.email || "este usuário"}?`)) return;
+    const actionKey = `cancel:${invite.id}`;
+    setInviteActionBusy(actionKey);
+    try {
+      await api(`/companies/${data.selectedCompanyId}/invites/${encodeURIComponent(invite.id)}`, {
+        method: "DELETE"
+      });
+      showToast("Convite cancelado.");
+      await loadSentInvites();
+    } catch (err) {
+      showToast(errorMessage(err));
+    } finally {
+      setInviteActionBusy("");
+    }
+  };
+
+  const resendInvite = async (invite: SentInvite) => {
+    const actionKey = `resend:${invite.id}`;
+    setInviteActionBusy(actionKey);
+    try {
+      const result = await api<{ inviteUrl?: string; emailSent?: boolean }>(
+        `/companies/${data.selectedCompanyId}/invites/${encodeURIComponent(invite.id)}/resend`,
+        { method: "POST" }
+      );
+      if (invite.type === "community") {
+        showToast("Convite interno reenviado.");
+      } else if (result.emailSent) {
+        showToast("Convite reenviado por e-mail.");
+      } else {
+        setInviteLink(result.inviteUrl || "");
+        showToast("Convite renovado. Use o novo link.");
+      }
+      await loadSentInvites();
+    } catch (err) {
+      if (isPlanLimitError(err)) {
+        onUpgradeRequired(errorMessage(err));
+        return;
+      }
+      showToast(errorMessage(err));
+    } finally {
+      setInviteActionBusy("");
     }
   };
 
@@ -1553,8 +1604,16 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
         {invitesLoading && !sentInvites.length && <div className="loading-line">Carregando convites…</div>}
         <div className="sent-invite-list">
           {sentInvites.map((invite) => {
-            const statusLabel = invite.status === "accepted" ? "Aceito" : invite.status === "expired" ? "Expirado" : "Pendente";
+            const statusLabel = invite.status === "accepted"
+              ? "Aceito"
+              : invite.status === "expired"
+                ? "Expirado"
+                : invite.status === "canceled"
+                  ? "Cancelado"
+                  : "Pendente";
             const dateLabel = invite.createdAt ? new Date(invite.createdAt).toLocaleDateString("pt-BR") : "";
+            const canCancel = invite.status === "pending";
+            const canResend = invite.status !== "accepted";
             return (
               <div className="sent-invite-row" key={invite.id}>
                 <div className="ellipsis">
@@ -1563,6 +1622,30 @@ function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequire
                 </div>
                 <span className={`invite-status ${invite.status}`}>{statusLabel}</span>
                 <small className="invite-delivery">{invite.type === "community" ? "Convite interno" : invite.emailSent ? "E-mail enviado" : "Link gerado"}</small>
+                <div className="sent-invite-actions">
+                  {canResend && (
+                    <button
+                      className="btn secondary small"
+                      disabled={!!inviteActionBusy}
+                      onClick={() => resendInvite(invite)}
+                      title="Reenviar convite"
+                    >
+                      <Send size={14} />
+                      {inviteActionBusy === `resend:${invite.id}` ? "Reenviando…" : "Reenviar"}
+                    </button>
+                  )}
+                  {canCancel && (
+                    <button
+                      className="btn secondary small invite-cancel-button"
+                      disabled={!!inviteActionBusy}
+                      onClick={() => cancelInvite(invite)}
+                      title="Cancelar convite"
+                    >
+                      <X size={14} />
+                      {inviteActionBusy === `cancel:${invite.id}` ? "Cancelando…" : "Cancelar"}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
