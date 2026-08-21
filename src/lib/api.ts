@@ -18,7 +18,7 @@ const commentsByPost = new Map<string, Comment[]>([
   ["demo-question", [
     { id: "comment-question-1", postId: "demo-question", authorUid: "demo-beatriz", authorName: "Beatriz Alves", text: "Os clientes que recebem o checklist antes da primeira reunião avançam quase dois dias mais rápido.", reactionCount: 18, createdAt: ago(46) },
     { id: "comment-question-2", postId: "demo-question", authorUid: "demo-joao", authorName: "João Lima", text: "Consigo criar um gatilho no CRM e deixar os dados básicos pré-preenchidos.", reactionCount: 11, createdAt: ago(35) },
-    { id: "comment-question-mine", postId: "demo-question", authorUid: "demo-me", authorName: "Gabriel Duclos", text: "Vamos testar com os próximos dez clientes e comparar com a coorte atual.", reactionCount: 7, liked: true, createdAt: ago(22) },
+    { id: "comment-question-mine", postId: "demo-question", authorUid: "demo-me", authorName: "Daniel Carvalho", text: "Vamos testar com os próximos dez clientes e comparar com a coorte atual.", reactionCount: 7, liked: true, createdAt: ago(22) },
   ]],
   ["demo-event", [
     { id: "comment-event-1", postId: "demo-event", authorUid: "demo-ana", authorName: "Ana Ribeiro", text: "Quem estiver em visita poderá acompanhar a gravação depois?", reactionCount: 3, createdAt: ago(82) },
@@ -62,7 +62,7 @@ export async function api<T = any>(path: string, init: RequestInit = {}): Promis
       id: `demo-comment-${Date.now()}`,
       postId,
       authorUid: "demo-me",
-      authorName: "Gabriel Duclos",
+      authorName: "Daniel Carvalho",
       text,
       reactionCount: 0,
       createdAt: new Date().toISOString(),
