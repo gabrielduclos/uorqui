@@ -136,6 +136,7 @@ export interface Post {
   eventEnd?: string;
   eventLocation?: string;
   eventTimeZone?: string;
+  updatedAt?: string;
 }
 
 export interface Comment {
@@ -145,7 +146,10 @@ export interface Comment {
   authorName?: string;
   authorAvatarMediaId?: string;
   text: string;
+  reactionCount?: number;
+  liked?: boolean;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Member {

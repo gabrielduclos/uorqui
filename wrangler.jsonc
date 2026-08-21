@@ -18,6 +18,22 @@
       "bucket_name": "uorqui-media"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REALTIME",
+        "class_name": "RealtimeHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-realtime",
+      "new_sqlite_classes": [
+        "RealtimeHub"
+      ]
+    }
+  ],
   "vars": {
     "FIREBASE_PROJECT_ID": "uorqui-ba281",
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",

@@ -135,6 +135,7 @@ export function PostCard({
   currentUid,
   canAdmin = false,
   initialCommentsOpen = false,
+  initialCommentId = "",
   onChanged,
   showToast,
 }: {
@@ -148,6 +149,7 @@ export function PostCard({
   currentUid?: string;
   canAdmin?: boolean;
   initialCommentsOpen?: boolean;
+  initialCommentId?: string;
   onChanged?: () => Promise<void> | void;
   showToast?: (message: string) => void;
 }) {
@@ -156,6 +158,9 @@ export function PostCard({
   const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [commentsBusy, setCommentsBusy] = useState(false);
   const commentsRequestRef = useRef<Promise<void> | null>(null);
+  const commentLikeBusyRef = useRef(new Set<string>());
+  const commentElementsRef = useRef(new Map<string, HTMLElement>());
+  const [highlightedCommentId, setHighlightedCommentId] = useState("");
   const likeBusyRef = useRef(false);
   const pollBusyRef = useRef(false);
   const [localCommentCount, setLocalCommentCount] = useState(Number(post.commentCount || 0));
@@ -167,6 +172,7 @@ export function PostCard({
   const [pollTotal, setPollTotal] = useState(Number(post.pollTotalVotes || 0));
   const [myPollOptionId, setMyPollOptionId] = useState(post.myPollOptionId || "");
   const [pollBusy, setPollBusy] = useState(false);
+  const hasFocusedComment = Boolean(initialCommentId && comments.some((comment) => comment.id === initialCommentId));
 
   useEffect(() => setLocalCommentCount(Number(post.commentCount || 0)), [post.commentCount]);
   useEffect(() => {
@@ -190,22 +196,25 @@ export function PostCard({
     post.authorUid === currentUid || (canAdmin && post.scope !== "world")
   );
 
-  const loadComments = () => {
-    if (commentsLoaded) return Promise.resolve();
+  const loadComments = (force = false, focusCommentId = initialCommentId) => {
+    if (commentsLoaded && !force) return Promise.resolve();
     if (commentsRequestRef.current) return commentsRequestRef.current;
 
     setCommentsBusy(true);
-    const request = api<{ comments: Comment[] }>(`/posts/${post.id}/comments`)
+    const focusQuery = focusCommentId ? `?commentId=${encodeURIComponent(focusCommentId)}` : "";
+    const request = api<{ comments: Comment[] }>(`/posts/${post.id}/comments${focusQuery}`)
       .then((result) => {
         setComments(result.comments);
         setLocalCommentCount(result.comments.length);
         setCommentsLoaded(true);
       })
       .catch((error) => {
-        commentsRequestRef.current = null;
         showToast?.(error instanceof Error ? error.message : "Não foi possível carregar as respostas.");
       })
-      .finally(() => setCommentsBusy(false));
+      .finally(() => {
+        commentsRequestRef.current = null;
+        setCommentsBusy(false);
+      });
 
     commentsRequestRef.current = request;
     return request;
@@ -247,11 +256,66 @@ export function PostCard({
   useEffect(() => {
     if (initialCommentsOpen) {
       setCommentsOpen(true);
-      warmComments();
+      void loadComments(commentsLoaded && Boolean(initialCommentId), initialCommentId);
     }
     // Deve executar somente quando a navegação pedir a abertura das respostas.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCommentsOpen]);
+  }, [initialCommentsOpen, initialCommentId]);
+
+  useEffect(() => {
+    if (!commentsOpen || !commentsLoaded || !post.updatedAt) return;
+    void loadComments(true);
+    // O timestamp muda quando outra pessoa responde ou curte uma resposta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.updatedAt]);
+
+  useEffect(() => {
+    if (!commentsLoaded || !initialCommentId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const element = commentElementsRef.current.get(initialCommentId);
+      if (!element) return;
+      setHighlightedCommentId(initialCommentId);
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const timer = window.setTimeout(() => setHighlightedCommentId(""), 3600);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [commentsLoaded, hasFocusedComment, initialCommentId]);
+
+  const toggleCommentLike = async (comment: Comment) => {
+    if (commentLikeBusyRef.current.has(comment.id)) return;
+    commentLikeBusyRef.current.add(comment.id);
+
+    const previousLiked = Boolean(comment.liked);
+    const previousCount = Number(comment.reactionCount || 0);
+    const nextLiked = !previousLiked;
+    setComments((current) => current.map((item) => item.id === comment.id ? {
+      ...item,
+      liked: nextLiked,
+      reactionCount: Math.max(0, previousCount + (nextLiked ? 1 : -1)),
+    } : item));
+
+    try {
+      const result = await api<{ liked: boolean; reactionCount: number }>(`/comments/${encodeURIComponent(comment.id)}/reaction`, { method: "POST" });
+      setComments((current) => current.map((item) => item.id === comment.id ? {
+        ...item,
+        liked: Boolean(result.liked),
+        reactionCount: Math.max(0, Number(result.reactionCount || 0)),
+      } : item));
+      void onChanged?.();
+    } catch (error) {
+      setComments((current) => current.map((item) => item.id === comment.id ? {
+        ...item,
+        liked: previousLiked,
+        reactionCount: previousCount,
+      } : item));
+      showToast?.(error instanceof Error ? error.message : "Não foi possível curtir a resposta.");
+    } finally {
+      commentLikeBusyRef.current.delete(comment.id);
+    }
+  };
 
   const addComment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -553,11 +617,32 @@ export function PostCard({
               {commentsBusy && !commentsLoaded && <div className="inline-comments-loading">Carregando respostas…</div>}
               <div className="inline-comment-list">
                 {comments.map((comment) => (
-                  <article className="inline-comment" key={comment.id}>
+                  <article
+                    className={`inline-comment ${highlightedCommentId === comment.id ? "highlighted" : ""}`}
+                    key={comment.id}
+                    id={`comment-${comment.id}`}
+                    ref={(element) => {
+                      if (element) commentElementsRef.current.set(comment.id, element);
+                      else commentElementsRef.current.delete(comment.id);
+                    }}
+                  >
                     <Avatar name={comment.authorName} mediaId={comment.authorAvatarMediaId} size={34} />
                     <div className="inline-comment-body">
                       <strong>{comment.authorName || "Usuário"}</strong>
                       <p>{comment.text}</p>
+                      <div className="inline-comment-actions">
+                        <button
+                          type="button"
+                          className={`inline-comment-like ${comment.liked ? "liked" : ""}`}
+                          aria-label={comment.liked ? "Remover curtida da resposta" : "Curtir resposta"}
+                          aria-pressed={Boolean(comment.liked)}
+                          onClick={() => toggleCommentLike(comment)}
+                        >
+                          <Heart size={14} fill={comment.liked ? "currentColor" : "none"} />
+                          <span>{comment.liked ? "Curtido" : "Curtir"}</span>
+                          {Number(comment.reactionCount || 0) > 0 && <b>{count(comment.reactionCount)}</b>}
+                        </button>
+                      </div>
                       {post.acceptedCommentId === comment.id && <span className="solution">✓ Solução aceita</span>}
                       {!post.acceptedCommentId && post.type === "question" && (post.authorUid === currentUid || canAdmin) && post.authorUid !== comment.authorUid && (
                         <button className="text-button solution-button" onClick={() => acceptSolution(comment.id)}>✓ Marcar como solução</button>

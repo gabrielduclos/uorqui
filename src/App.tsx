@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import {
   ArrowLeft, BarChart3, Bell, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
-  KeyRound, LogOut, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
+  Images, KeyRound, LogOut, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
   ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, X
 } from "lucide-react";
 import {
@@ -12,13 +12,15 @@ import {
   signInWithEmailAndPassword, updatePassword, updateProfile, type User
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
-import { ApiError, api, prefetchPostMedia } from "./lib/api";
+import { ApiError, api, mediaBlobUrl, prefetchPostMedia } from "./lib/api";
+import { connectRealtime } from "./lib/realtime";
 import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
 import { usePwaInstall } from "./lib/pwa";
 import type {
   BootstrapData, Community, CommunityMember, HomeTab, NotificationItem, Post, View
 } from "./types";
 import { Avatar } from "./components/Avatar";
+import { AvatarCropModal } from "./components/AvatarCropModal";
 import { Modal } from "./components/Modal";
 import { PostCard } from "./components/PostCard";
 import "./styles.css";
@@ -92,6 +94,7 @@ export default function App() {
   const [pushPermissionBusy, setPushPermissionBusy] = useState(false);
   const [planOfferReason, setPlanOfferReason] = useState<PlanOfferReason>(null);
   const [lastCreatedPost, setLastCreatedPost] = useState<Post | null>(null);
+  const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [, setAuthRevision] = useState(0);
   const pwaInstall = usePwaInstall();
 
@@ -104,10 +107,12 @@ export default function App() {
     }
   }), []);
 
-  const refresh = async (companyId = selectedCompanyId) => {
+  const refresh = async (companyId = selectedCompanyId, silent = false) => {
     if (!auth.currentUser) return;
-    setLoading(true);
-    setFatal("");
+    if (!silent) {
+      setLoading(true);
+      setFatal("");
+    }
     try {
       const suffix = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
       const next = await api<BootstrapData>(`/bootstrap${suffix}`);
@@ -123,9 +128,9 @@ export default function App() {
         localStorage.setItem("uorqui-company", next.selectedCompanyId);
       }
     } catch (error) {
-      setFatal(errorMessage(error));
+      if (!silent) setFatal(errorMessage(error));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -261,6 +266,24 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, data.me.uid, selectedCompanyId, loading]);
+
+  useEffect(() => {
+    if (!user || !data.me.uid) return;
+
+    return connectRealtime(selectedCompanyId, () => {
+      setRealtimeRevision((current) => current + 1);
+      void refresh(selectedCompanyId, true);
+
+      const postId = sharedPost?.id;
+      if (postId) {
+        void api<{ post: Post }>(`/posts/${encodeURIComponent(postId)}`)
+          .then((result) => setSharedPost(result.post))
+          .catch(() => {});
+      }
+    });
+    // A conexão só muda com o usuário, a empresa ativa ou a publicação aberta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, data.me.uid, selectedCompanyId, sharedPost?.id]);
 
   useEffect(() => {
     if (!user || !data.me.uid || loading) return;
@@ -432,6 +455,8 @@ export default function App() {
       const params = new URLSearchParams(location.search);
       params.delete("post");
       params.delete("company");
+      params.delete("comments");
+      params.delete("comment");
       const query = params.toString();
       history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
     }
@@ -486,8 +511,15 @@ export default function App() {
       const params = new URLSearchParams(location.search);
       params.set("post", postId);
       if (companyId) params.set("company", companyId);
-      if (notification.data?.openComments === "true") params.set("comments", "1");
+      const commentId = notification.data?.commentId || "";
+      const shouldOpenComments = notification.data?.openComments === "true"
+        || Boolean(commentId)
+        || notification.type === "comment"
+        || notification.type === "comment_like";
+      if (shouldOpenComments) params.set("comments", "1");
       else params.delete("comments");
+      if (commentId) params.set("comment", commentId);
+      else params.delete("comment");
       history.replaceState({}, "", `${location.pathname}?${params.toString()}`);
 
       setSharedPostLoading(true);
@@ -510,6 +542,7 @@ export default function App() {
     params.delete("post");
     params.delete("company");
     params.delete("comments");
+    params.delete("comment");
     const query = params.toString();
     history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
   };
@@ -552,6 +585,7 @@ export default function App() {
     if (view === "communities") return (
       <CommunitiesPage
         data={data}
+        realtimeRevision={realtimeRevision}
         lastCreatedPost={lastCreatedPost}
         selectedCommunityId={selectedCommunityId}
         onSelectCommunity={setSelectedCommunityId}
@@ -760,7 +794,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.16</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.17</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -1267,6 +1301,7 @@ function SharedPostPage({
         currentUid={data.me.uid}
         canAdmin={data.canAdmin}
         initialCommentsOpen={new URLSearchParams(location.search).get("comments") === "1"}
+        initialCommentId={new URLSearchParams(location.search).get("comment") || ""}
         onChanged={reload}
         showToast={showToast}
       />
@@ -1275,10 +1310,11 @@ function SharedPostPage({
 }
 
 function CommunitiesPage({
-  data, lastCreatedPost, selectedCommunityId, onSelectCommunity, onBack, openMembersRequested, onMembersOpened,
+  data, realtimeRevision, lastCreatedPost, selectedCommunityId, onSelectCommunity, onBack, openMembersRequested, onMembersOpened,
   onComposeCommunity, refresh, showToast, onUpgradeRequired
 }: {
   data: BootstrapData;
+  realtimeRevision: number;
   lastCreatedPost: Post | null;
   selectedCommunityId: string;
   onSelectCommunity: (id: string) => void;
@@ -1349,6 +1385,14 @@ function CommunitiesPage({
     void loadCommunityPosts(selectedCommunityId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunityId, data.selectedCompanyId]);
+
+  useEffect(() => {
+    if (!selectedCommunityId || !realtimeRevision) return;
+    void loadCommunityPosts(selectedCommunityId);
+    if (membersPage) void loadCommunityMembers(selectedCommunityId);
+    // Atualiza somente o detalhe aberto sem reiniciar o estado da tela.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeRevision]);
 
   useEffect(() => {
     if (!openMembersRequested || !selectedCommunityId) return;
@@ -2962,6 +3006,11 @@ function ProfilePage({
   onInstallPwa: () => Promise<unknown>;
 }) {
   const [photoError, setPhotoError] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [avatarEditorFile, setAvatarEditorFile] = useState<File | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [passwordError, setPasswordError] = useState("");
   const [companyError, setCompanyError] = useState("");
   const [createCompanyOpen, setCreateCompanyOpen] = useState(false);
@@ -2971,24 +3020,52 @@ function ProfilePage({
   const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState("");
 
-  const uploadPhoto = async (file?: File) => {
-    if (!file) return;
+  const selectAvatarFile = (file?: File) => {
+    if (!file || photoBusy) return;
+    setAvatarMenuOpen(false);
     setPhotoError("");
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) return setPhotoError("Use uma imagem JPG, PNG ou WebP.");
     if (file.size > 5 * 1024 * 1024) return setPhotoError("A foto pode ter no máximo 5 MB.");
+    setAvatarEditorFile(file);
+  };
+
+  const uploadPhoto = async (file: File) => {
+    if (photoBusy) return;
+    setPhotoError("");
+    setPhotoBusy(true);
     try {
       const qs = new URLSearchParams({ scope: "avatar", name: file.name });
       const result = await api<{ media: { id: string } }>(`/media/upload?${qs}`, {
         method: "POST", headers: { "Content-Type": file.type, "X-File-Name": file.name }, body: file
       });
       await api("/me", { method: "PATCH", body: JSON.stringify({ avatarMediaId: result.media.id }) });
-      showToast("Foto atualizada."); await refresh();
-    } catch (err) { setPhotoError(errorMessage(err)); }
+      await mediaBlobUrl(result.media.id);
+      showToast("Foto atualizada.");
+      await refresh();
+      setAvatarEditorFile(null);
+    } catch (err) {
+      setPhotoError(errorMessage(err));
+      throw err;
+    } finally {
+      setPhotoBusy(false);
+    }
   };
 
   const removePhoto = async () => {
-    try { await api("/me", { method: "PATCH", body: JSON.stringify({ avatarMediaId: "" }) }); showToast("Foto removida."); await refresh(); }
-    catch (err) { setPhotoError(errorMessage(err)); }
+    if (photoBusy || !data.me.avatarMediaId) return;
+    if (!confirm("Remover sua foto de perfil?")) return;
+    setAvatarMenuOpen(false);
+    setPhotoError("");
+    setPhotoBusy(true);
+    try {
+      await api("/me", { method: "PATCH", body: JSON.stringify({ avatarMediaId: "" }) });
+      showToast("Foto removida.");
+      await refresh();
+    } catch (err) {
+      setPhotoError(errorMessage(err));
+    } finally {
+      setPhotoBusy(false);
+    }
   };
 
   const changePassword = async (event: FormEvent<HTMLFormElement>) => {
@@ -3115,20 +3192,61 @@ function ProfilePage({
 
   return (
     <section className="page-section">
+      {photoBusy && (
+        <div className="profile-photo-blocker" role="status" aria-live="polite" aria-label="Atualizando foto de perfil">
+          <div><span className="profile-photo-spinner" /> <strong>Atualizando sua foto…</strong></div>
+        </div>
+      )}
       <div className="profile-grid">
         <section className="panel-card profile-panel">
           <div className="profile-head">
             <div className="avatar-edit">
               <Avatar name={data.me.displayName || data.me.email} mediaId={data.me.avatarMediaId} size={92} />
-              <label className="camera-button" title="Trocar foto"><Camera size={18} /><input type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadPhoto(e.target.files?.[0])} /></label>
+              {photoBusy && <span className="avatar-photo-busy"><span className="profile-photo-spinner" /></span>}
+              <button
+                type="button"
+                className="camera-button"
+                title="Editar foto"
+                aria-label="Editar foto de perfil"
+                aria-expanded={avatarMenuOpen}
+                disabled={photoBusy}
+                onClick={() => setAvatarMenuOpen((current) => !current)}
+              ><Camera size={18} /></button>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                hidden
+                capture="user"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  selectAvatarFile(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                hidden
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  selectAvatarFile(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+              />
+              {avatarMenuOpen && (
+                <>
+                  <button className="avatar-photo-menu-scrim" type="button" aria-label="Fechar opções da foto" onClick={() => setAvatarMenuOpen(false)} />
+                  <div className="avatar-photo-menu" role="menu">
+                    <button type="button" role="menuitem" onClick={() => cameraInputRef.current?.click()}><Camera size={17} /> Tirar uma foto</button>
+                    <button type="button" role="menuitem" onClick={() => galleryInputRef.current?.click()}><Images size={17} /> Escolher da galeria</button>
+                    {data.me.avatarMediaId && <button type="button" role="menuitem" className="danger" onClick={removePhoto}><Trash2 size={17} /> Remover a foto</button>}
+                  </div>
+                </>
+              )}
             </div>
             <div><h2>{data.me.displayName || "Usuário"}</h2><p>{data.me.email}</p><span className="private-pill">{auth.currentUser?.emailVerified ? "E-mail verificado" : "E-mail não verificado"}</span></div>
           </div>
           <p className="muted">Sua conta Uorqui pertence a você, mesmo quando você troca de empresa.</p>
-          <div className="inline-actions">
-            <label className="btn secondary"><Camera size={17} /> Trocar foto<input type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadPhoto(e.target.files?.[0])} /></label>
-            {data.me.avatarMediaId && <button className="btn ghost" onClick={removePhoto}>Remover foto</button>}
-          </div>
           {photoError && <div className="form-error">{photoError}</div>}
           {!auth.currentUser?.emailVerified && (
             <div className="profile-verification-actions">
@@ -3174,6 +3292,14 @@ function ProfilePage({
           </button>
         )}
       </section>
+      {avatarEditorFile && (
+        <AvatarCropModal
+          file={avatarEditorFile}
+          busy={photoBusy}
+          onCancel={() => !photoBusy && setAvatarEditorFile(null)}
+          onConfirm={uploadPhoto}
+        />
+      )}
 
       {data.isSuperadmin && (
         <section className="panel-card superadmin-profile-card">
@@ -3450,7 +3576,7 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost, onOpenAdmin, 
                     void openNotification(item);
                   }}
                 >
-                  Abrir publicação
+                  {item.data?.commentId ? "Abrir resposta" : "Abrir publicação"}
                 </button>
               )}
 

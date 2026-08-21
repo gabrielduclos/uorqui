@@ -1,6 +1,81 @@
+import { DurableObject } from 'cloudflare:workers';
+
 const FIREBASE_JWKS = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 let jwksCache = { expires: 0, keys: [] };
 let googleTokenCache = { expires: 0, token: '' };
+
+export class RealtimeHub extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+  }
+
+  async createTicket(uid) {
+    const ticket = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+    const expiresAt = Date.now() + 90000;
+    await this.ctx.storage.put(`ticket:${ticket}`, { uid: String(uid || ''), expiresAt });
+    const currentAlarm = await this.ctx.storage.getAlarm();
+    if (!currentAlarm || currentAlarm > expiresAt) await this.ctx.storage.setAlarm(expiresAt);
+    return { ticket, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname !== '/connect' || request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+      return new Response('WebSocket obrigatório.', { status: 426 });
+    }
+
+    const ticket = url.searchParams.get('ticket') || '';
+    const record = ticket ? await this.ctx.storage.get(`ticket:${ticket}`) : null;
+    if (!record || Number(record.expiresAt || 0) < Date.now()) {
+      if (ticket) await this.ctx.storage.delete(`ticket:${ticket}`);
+      return new Response('Ticket de tempo real inválido ou expirado.', { status: 401 });
+    }
+    await this.ctx.storage.delete(`ticket:${ticket}`);
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ uid: record.uid || '' });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async broadcast(message) {
+    const payload = JSON.stringify({ ...message, sentAt: new Date().toISOString() });
+    let delivered = 0;
+    for (const socket of this.ctx.getWebSockets()) {
+      try {
+        socket.send(payload);
+        delivered += 1;
+      } catch {}
+    }
+    return delivered;
+  }
+
+  async alarm() {
+    const now = Date.now();
+    const tickets = await this.ctx.storage.list({ prefix: 'ticket:' });
+    let nextExpiration = 0;
+    for (const [key, record] of tickets) {
+      const expiresAt = Number(record?.expiresAt || 0);
+      if (!expiresAt || expiresAt <= now) await this.ctx.storage.delete(key);
+      else if (!nextExpiration || expiresAt < nextExpiration) nextExpiration = expiresAt;
+    }
+    if (nextExpiration) await this.ctx.storage.setAlarm(nextExpiration);
+  }
+
+  webSocketMessage() {
+    // ping/pong é respondido sem acordar o objeto pelo auto-response acima.
+  }
+
+  webSocketClose(socket, code, reason) {
+    try { socket.close(code, reason); } catch {}
+  }
+
+  webSocketError(socket) {
+    try { socket.close(1011, 'realtime error'); } catch {}
+  }
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -20,6 +95,14 @@ export default {
       return new Response('Not found', { status: 404 });
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/realtime') {
+      try {
+        return await connectRealtimeSocket(request, env, url);
+      } catch (error) {
+        return json({ error: error?.message || 'Não foi possível abrir o tempo real.' }, error?.status || 500);
+      }
+    }
+
     // O webhook financeiro é público para o Asaas, mas protegido por token próprio.
     if (request.method === 'POST' && url.pathname === '/api/webhooks/asaas') {
       try {
@@ -33,6 +116,10 @@ export default {
     try {
       const identity = await requireAuth(request, env);
       const response = await routeApi(request, env, identity, url, ctx);
+      if (response.ok && !['GET', 'HEAD'].includes(request.method.toUpperCase())) {
+        const task = broadcastSelectedCompanyMutation(env, identity, request, url);
+        if (ctx?.waitUntil) ctx.waitUntil(task);
+      }
       return sameOrigin ? response : withCors(response, request, env);
     } catch (error) {
       console.error(error);
@@ -51,6 +138,9 @@ async function routeApi(request, env, identity, url, ctx) {
   const method = request.method.toUpperCase();
 
   if (method === 'GET' && path === '/bootstrap') return json(await bootstrap(env, identity, url.searchParams.get('companyId'), ctx));
+  if (method === 'POST' && path === '/realtime/ticket') {
+    return json(await createRealtimeTicket(env, identity, await readJson(request)));
+  }
   if (method === 'GET' && path === '/superadmin/overview') {
     return json(await getSuperadminOverview(env, identity));
   }
@@ -160,7 +250,7 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'GET' && /^\/posts\/[^/]+\/comments$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
-    return json(await getComments(env, identity, postId));
+    return json(await getComments(env, identity, postId, url.searchParams.get('commentId') || ''));
   }
   if (method === 'POST' && /^\/posts\/[^/]+\/comments$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
@@ -170,21 +260,25 @@ async function routeApi(request, env, identity, url, ctx) {
     const postId = decodeURIComponent(path.split('/')[2]);
     return json(await toggleReaction(env, identity, postId, ctx));
   }
+  if (method === 'POST' && /^\/comments\/[^/]+\/reaction$/.test(path)) {
+    const commentId = decodeURIComponent(path.split('/')[2]);
+    return json(await toggleCommentReaction(env, identity, commentId, ctx));
+  }
   if (method === 'POST' && /^\/posts\/[^/]+\/read$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
     return json(await confirmRead(env, identity, postId));
   }
   if (method === 'POST' && /^\/posts\/[^/]+\/solution$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
-    return json(await acceptSolution(env, identity, postId, await readJson(request)));
+    return json(await acceptSolution(env, identity, postId, await readJson(request), ctx));
   }
   if (method === 'POST' && /^\/posts\/[^/]+\/resolve$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
-    return json(await setPostResolved(env, identity, postId, await readJson(request)));
+    return json(await setPostResolved(env, identity, postId, await readJson(request), ctx));
   }
   if (method === 'POST' && /^\/posts\/[^/]+\/poll-vote$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
-    return json(await votePoll(env, identity, postId, await readJson(request)));
+    return json(await votePoll(env, identity, postId, await readJson(request), ctx));
   }
   if (method === 'GET' && path === '/search') return json(await searchPosts(env, identity, url.searchParams));
   if (method === 'POST' && path === '/media/upload') return json(await uploadMedia(request, env, identity, url.searchParams), 201);
@@ -197,6 +291,81 @@ async function routeApi(request, env, identity, url, ctx) {
     return json(await markNotificationRead(env, identity, notificationId));
   }
   throw httpError(404, 'Rota não encontrada.');
+}
+
+function realtimeStub(env, scope, companyId = '') {
+  if (!env.REALTIME) throw httpError(503, 'O tempo real ainda não está disponível neste ambiente.');
+  const name = scope === 'world' ? 'world:public' : `company:${companyId}`;
+  return env.REALTIME.get(env.REALTIME.idFromName(name));
+}
+
+async function createRealtimeTicket(env, identity, body) {
+  const scope = body.scope === 'world' ? 'world' : body.scope === 'company' ? 'company' : '';
+  if (!scope) throw httpError(400, 'Escopo de tempo real inválido.');
+
+  const companyId = scope === 'company' ? clean(body.companyId, 150) : '';
+  if (scope === 'company') await requireCompanyMember(env, identity.uid, companyId);
+  const ticket = await realtimeStub(env, scope, companyId).createTicket(identity.uid);
+  return { ...ticket, scope, companyId };
+}
+
+async function connectRealtimeSocket(request, env, url) {
+  if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+    throw httpError(426, 'WebSocket obrigatório.');
+  }
+  const scope = url.searchParams.get('scope') === 'world'
+    ? 'world'
+    : url.searchParams.get('scope') === 'company'
+      ? 'company'
+      : '';
+  if (!scope) throw httpError(400, 'Escopo de tempo real inválido.');
+  const companyId = scope === 'company' ? clean(url.searchParams.get('companyId'), 150) : '';
+  if (scope === 'company' && !companyId) throw httpError(400, 'Empresa inválida.');
+
+  const target = new URL(url);
+  target.pathname = '/connect';
+  target.searchParams.delete('scope');
+  target.searchParams.delete('companyId');
+  return realtimeStub(env, scope, companyId).fetch(new Request(target.toString(), request));
+}
+
+async function broadcastRealtime(env, scope, companyId, event = 'mutation') {
+  if (!env.REALTIME) return;
+  try {
+    await realtimeStub(env, scope, companyId).broadcast({ type: 'refresh', event });
+  } catch (error) {
+    console.warn('Realtime broadcast:', error?.message || error);
+  }
+}
+
+async function broadcastRealtimeForPost(env, post, event) {
+  if (post.scope === 'world') return broadcastRealtime(env, 'world', '', event);
+  if (post.companyId) return broadcastRealtime(env, 'company', post.companyId, event);
+}
+
+function deferRealtime(ctx, promise) {
+  const task = Promise.resolve(promise).catch(() => {});
+  if (ctx?.waitUntil) ctx.waitUntil(task);
+  else return task;
+}
+
+async function broadcastSelectedCompanyMutation(env, identity, request, url) {
+  if (!env.REALTIME) return;
+  if (
+    url.pathname === '/api/realtime/ticket' ||
+    url.pathname === '/api/push/register' ||
+    url.pathname === '/api/media/upload' ||
+    /^\/api\/notifications\/[^/]+\/read$/.test(url.pathname)
+  ) return;
+
+  const companyId = clean(request.headers.get('X-Uorqui-Company') || '', 150);
+  if (!companyId) return;
+  try {
+    await requireCompanyMember(env, identity.uid, companyId);
+    await broadcastRealtime(env, 'company', companyId, 'mutation');
+  } catch {
+    // Cabeçalhos desatualizados ou forjados nunca criam canais de atualização.
+  }
 }
 
 const FREE_PLAN_LIMITS = Object.freeze({ members: 5, communities: 2 });
@@ -715,6 +884,7 @@ async function deleteUserAccount(env, identity, body) {
     notifications,
     pushSubscriptions,
     reactions,
+    commentReactions,
     readReceipts,
     pollVotes,
     authoredPosts,
@@ -730,6 +900,7 @@ async function deleteUserAccount(env, identity, body) {
     fsWhere(env, 'notifications', 'recipientUid', identity.uid, 500),
     fsWhere(env, 'pushSubscriptions', 'uid', identity.uid, 100),
     fsWhere(env, 'reactions', 'uid', identity.uid, 500),
+    fsWhere(env, 'commentReactions', 'uid', identity.uid, 500),
     fsWhere(env, 'readReceipts', 'uid', identity.uid, 500),
     fsWhere(env, 'pollVotes', 'uid', identity.uid, 500),
     fsWhere(env, 'posts', 'authorUid', identity.uid, 500),
@@ -828,6 +999,7 @@ async function deleteUserAccount(env, identity, body) {
     ...notifications.map(item => ({ collection: 'notifications', id: item.id })),
     ...pushSubscriptions.map(item => ({ collection: 'pushSubscriptions', id: item.id })),
     ...reactions.map(item => ({ collection: 'reactions', id: item.id })),
+    ...commentReactions.map(item => ({ collection: 'commentReactions', id: item.id })),
     ...readReceipts.map(item => ({ collection: 'readReceipts', id: item.id })),
     ...pollVotes.map(item => ({ collection: 'pollVotes', id: item.id })),
     { collection: 'users', id: identity.uid }
@@ -1047,6 +1219,9 @@ async function deleteCompany(env, identity, companyId, body) {
 
     const reactions = await fsWhere(env, 'reactions', 'postId', post.id, 500);
     for (const reaction of reactions) await fsDelete(env, 'reactions', reaction.id);
+
+    const commentReactions = await fsWhere(env, 'commentReactions', 'postId', post.id, 500);
+    for (const reaction of commentReactions) await fsDelete(env, 'commentReactions', reaction.id);
 
     const pollVotes = await fsWhere(env, 'pollVotes', 'postId', post.id, 500);
     for (const vote of pollVotes) await fsDelete(env, 'pollVotes', vote.id);
@@ -1826,6 +2001,7 @@ async function sendPushToUser(env, uid, payload) {
   const endpoint = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/messages:send`;
   const title = clean(payload.title || 'Uorqui', 160);
   const body = clean(payload.body || 'Você tem uma nova atualização.', 240);
+  const openComments = payload.openComments || payload.commentId ? 'true' : '';
 
   const data = {};
   for (const [key, value] of Object.entries({
@@ -1833,13 +2009,14 @@ async function sendPushToUser(env, uid, payload) {
     type: payload.type || '',
     inviteId: payload.inviteId || '',
     postId: payload.postId || '',
+    commentId: payload.commentId || '',
     companyId: payload.companyId || '',
     communityId: payload.communityId || '',
     memberUid: payload.memberUid || '',
     targetView: payload.targetView || '',
-    openComments: payload.openComments || '',
+    openComments,
     url: payload.url || (payload.postId
-      ? `/?post=${encodeURIComponent(payload.postId)}${payload.companyId ? `&company=${encodeURIComponent(payload.companyId)}` : ''}${payload.openComments ? '&comments=1' : ''}`
+      ? `/?post=${encodeURIComponent(payload.postId)}${payload.companyId ? `&company=${encodeURIComponent(payload.companyId)}` : ''}${openComments ? '&comments=1' : ''}${payload.commentId ? `&comment=${encodeURIComponent(payload.commentId)}` : ''}`
       : payload.inviteId
         ? '/?notifications=1'
         : '/')
@@ -2025,15 +2202,18 @@ async function createPost(env, identity, body, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(notificationTask);
   else await notificationTask;
 
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'post_created'));
+
   return { post };
 }
 
 async function cleanupDeletedPost(env, post, keepNotifications) {
   const postId = post.id;
   try {
-    const [comments, reactions, pollVotes, receipts, notifications] = await Promise.all([
+    const [comments, reactions, commentReactions, pollVotes, receipts, notifications] = await Promise.all([
       fsWhere(env, 'comments', 'postId', postId, 250),
       fsWhere(env, 'reactions', 'postId', postId, 250),
+      fsWhere(env, 'commentReactions', 'postId', postId, 500),
       fsWhere(env, 'pollVotes', 'postId', postId, 250),
       fsWhere(env, 'readReceipts', 'postId', postId, 250),
       fsWhere(env, 'notifications', 'data.postId', postId, 250).catch(() => [])
@@ -2042,6 +2222,7 @@ async function cleanupDeletedPost(env, post, keepNotifications) {
     await fsBatchDelete(env, [
       ...comments.map(item => ({ collection: 'comments', id: item.id })),
       ...reactions.map(item => ({ collection: 'reactions', id: item.id })),
+      ...commentReactions.map(item => ({ collection: 'commentReactions', id: item.id })),
       ...pollVotes.map(item => ({ collection: 'pollVotes', id: item.id })),
       ...receipts.map(item => ({ collection: 'readReceipts', id: item.id })),
       ...(keepNotifications ? [] : notifications.map(item => ({ collection: 'notifications', id: item.id })))
@@ -2112,6 +2293,7 @@ async function deletePost(env, identity, postId, ctx) {
     const cleanup = cleanupDeletedPost(env, post, true);
     if (ctx?.waitUntil) ctx.waitUntil(cleanup);
     else await cleanup;
+    deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'post_deleted'));
     return { ok: true, tombstone: true, post: tombstone };
   }
 
@@ -2119,6 +2301,7 @@ async function deletePost(env, identity, postId, ctx) {
   const cleanup = cleanupDeletedPost(env, post, false);
   if (ctx?.waitUntil) ctx.waitUntil(cleanup);
   else await cleanup;
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'post_deleted'));
   return { ok: true, tombstone: false };
 }
 
@@ -2140,13 +2323,28 @@ async function getPostDetail(env, identity, postId) {
   };
 }
 
-async function getComments(env, identity, postId) {
-  const [post, commentsResult] = await Promise.all([
+async function getComments(env, identity, postId, focusCommentId = '') {
+  const [post, commentsResult, reactionsResult] = await Promise.all([
     fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.'),
-    fsWhere(env, 'comments', 'postId', postId, 100)
+    fsWhere(env, 'comments', 'postId', postId, 100),
+    fsWhere(env, 'commentReactions', 'postId', postId, 500).catch(() => [])
   ]);
   await requirePostAccess(env, identity.uid, post);
-  const comments = commentsResult.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const requestedCommentId = clean(focusCommentId, 150);
+  if (requestedCommentId && !commentsResult.some(comment => comment.id === requestedCommentId)) {
+    const requestedComment = await fsGet(env, 'comments', requestedCommentId);
+    if (requestedComment?.postId === postId) commentsResult.push(requestedComment);
+  }
+  const likedCommentIds = new Set(
+    reactionsResult.filter(reaction => reaction.uid === identity.uid).map(reaction => reaction.commentId)
+  );
+  const comments = commentsResult
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .map(comment => ({
+      ...comment,
+      reactionCount: Math.max(0, Number(comment.reactionCount || 0)),
+      liked: likedCommentIds.has(comment.id)
+    }));
   return { post, comments };
 }
 async function addComment(env, identity, postId, body, ctx) {
@@ -2166,6 +2364,7 @@ async function addComment(env, identity, postId, body, ctx) {
     authorName: user.displayName || 'Usuário',
     authorAvatarMediaId: user.avatarMediaId || '',
     text,
+    reactionCount: 0,
     createdAt: nowIso()
   };
 
@@ -2188,7 +2387,8 @@ async function addComment(env, identity, postId, body, ctx) {
         postId,
         commentId,
         companyId: post.companyId || '',
-        communityId: post.communityId || ''
+        communityId: post.communityId || '',
+        openComments: 'true'
       },
       read: false,
       persistent: false,
@@ -2203,10 +2403,14 @@ async function addComment(env, identity, postId, body, ctx) {
       notificationId,
       type: 'comment',
       postId,
+      commentId,
       companyId: post.companyId || '',
-      communityId: post.communityId || ''
+      communityId: post.communityId || '',
+      openComments: 'true'
     })]);
   }
+
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'comment_created'));
 
   return { comment };
 }
@@ -2269,7 +2473,80 @@ async function toggleReaction(env, identity, postId, ctx) {
     })]);
   }
 
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'post_reaction'));
+
   return { liked, reactionCount: post.reactionCount };
+}
+
+async function toggleCommentReaction(env, identity, commentId, ctx) {
+  const comment = await fsGetRequired(env, 'comments', commentId, 'Resposta não encontrada.');
+  const post = await fsGetRequired(env, 'posts', comment.postId, 'Publicação não encontrada.');
+  await requirePostAccess(env, identity.uid, post);
+  if (post.deletedByAdmin) throw httpError(410, 'Esta publicação foi removida por um administrador.');
+
+  const reactionId = `${commentId}_${identity.uid}`;
+  const existing = await fsGet(env, 'commentReactions', reactionId);
+  const changedAt = nowIso();
+  let liked = false;
+
+  if (existing) {
+    await fsDelete(env, 'commentReactions', reactionId);
+    comment.reactionCount = Math.max(0, Number(comment.reactionCount || 0) - 1);
+  } else {
+    await fsPut(env, 'commentReactions', reactionId, {
+      id: reactionId,
+      commentId,
+      postId: post.id,
+      uid: identity.uid,
+      kind: 'like',
+      createdAt: changedAt
+    });
+    comment.reactionCount = Number(comment.reactionCount || 0) + 1;
+    liked = true;
+  }
+
+  comment.updatedAt = changedAt;
+  await fsPut(env, 'comments', commentId, comment);
+  await fsPut(env, 'posts', post.id, { ...post, updatedAt: changedAt });
+
+  if (liked && comment.authorUid && comment.authorUid !== identity.uid) {
+    const user = await ensureUser(env, identity);
+    const notificationId = `comment_like_${commentId}_${identity.uid}`;
+    const notification = {
+      recipientUid: comment.authorUid,
+      type: 'comment_like',
+      title: `${user.displayName || 'Alguém'} curtiu sua resposta`,
+      body: comment.text ? comment.text.slice(0, 160) : 'Sua resposta recebeu uma curtida.',
+      data: {
+        postId: post.id,
+        commentId,
+        companyId: post.companyId || '',
+        communityId: post.communityId || '',
+        openComments: 'true'
+      },
+      read: false,
+      persistent: false,
+      status: 'new',
+      createdAt: changedAt
+    };
+
+    await fsPut(env, 'notifications', notificationId, notification);
+    deferPushes(ctx, [sendPushToUser(env, comment.authorUid, {
+      title: notification.title,
+      body: 'Abra o Uorqui para ver a resposta curtida.',
+      notificationId,
+      type: notification.type,
+      postId: post.id,
+      commentId,
+      companyId: post.companyId || '',
+      communityId: post.communityId || '',
+      openComments: 'true'
+    })]);
+  }
+
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'comment_reaction'));
+
+  return { liked, reactionCount: comment.reactionCount };
 }
 
 async function confirmRead(env, identity, postId) {
@@ -2311,7 +2588,7 @@ async function confirmRead(env, identity, postId) {
   return { ok: true, readAt };
 }
 
-async function acceptSolution(env, identity, postId, body) {
+async function acceptSolution(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
   if (post.type !== 'question') throw httpError(400, 'Esta publicação não é uma pergunta.');
 
@@ -2330,10 +2607,11 @@ async function acceptSolution(env, identity, postId, body) {
   post.followUpReminderFor = post.lastCommentAt || '';
   post.updatedAt = nowIso();
   await fsPut(env, 'posts', postId, post);
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'solution_accepted'));
   return { ok: true, isResolved: true };
 }
 
-async function setPostResolved(env, identity, postId, body) {
+async function setPostResolved(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
   if (!['post', 'question'].includes(post.type)) {
     throw httpError(400, 'Somente posts e perguntas podem ser marcados como resolvidos.');
@@ -2354,10 +2632,11 @@ async function setPostResolved(env, identity, postId, body) {
   post.updatedAt = nowIso();
 
   await fsPut(env, 'posts', postId, post);
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'post_resolved'));
   return { ok: true, isResolved: resolved };
 }
 
-async function votePoll(env, identity, postId, body) {
+async function votePoll(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Enquete não encontrada.');
   if (post.type !== 'poll') throw httpError(400, 'Esta publicação não é uma enquete.');
   if (post.deletedByAdmin) throw httpError(410, 'Esta publicação foi removida por um administrador.');
@@ -2408,6 +2687,8 @@ async function votePoll(env, identity, postId, body) {
     pollTotalVotes: total,
     updatedAt: nowIso()
   });
+
+  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'poll_voted'));
 
   return { ok: true, optionId, pollOptions: options, pollTotalVotes: total };
 }
@@ -3112,7 +3393,7 @@ function corsPreflight(request, env, requestOrigin=''){
   const headers = new Headers();
   if(origin) headers.set('Access-Control-Allow-Origin', origin);
   headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-File-Name');
+  headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-File-Name, X-Uorqui-Company');
   headers.set('Access-Control-Max-Age', '86400');
   headers.append('Vary', 'Origin');
   return new Response(null, { status: 204, headers });
