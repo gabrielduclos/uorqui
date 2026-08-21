@@ -994,3 +994,88 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .inline-comment-like{border:0;background:transparent;padding:3px 0;display:inline-flex;align-items:center;gap:4px;color:#777b83;font-size:8.5px;font-weight:700}
 .inline-comment-like:hover,.inline-comment-like.liked{color:#b4233d}
 .inline-comment-like b{font-size:8px}
+
+/* v1.2.19 — exclusão de respostas e dados cadastrais da empresa */
+.inline-comment-delete{border:0;background:transparent;margin-left:auto;padding:3px;display:inline-flex;align-items:center;justify-content:center;color:#8a8d94;border-radius:6px}
+.inline-comment-delete:hover{background:#fff0ee;color:#a02f26}
+.inline-comment-delete:disabled{opacity:.45;cursor:wait}
+.admin-company-buttons{margin-left:auto;display:flex;align-items:center;gap:7px}
+.admin-company-context .admin-company-buttons .admin-plan-button{margin-left:0}
+.company-data-page>.back-button{margin-bottom:12px}
+.company-data-form{width:min(720px,100%);padding:18px}
+.company-data-note{margin:2px 0 0;font-size:9px;line-height:1.5}
+.company-data-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:4px}
+
+@media(max-width:680px){
+  .admin-company-buttons{width:100%;margin-left:50px}
+  .admin-company-buttons .btn{flex:1}
+  .admin-company-context .admin-company-buttons .admin-plan-button{margin-left:0}
+  .company-data-form{padding:14px}
+  .company-data-actions{display:grid;grid-template-columns:1fr 1fr}
+  .company-data-actions .btn{width:100%}
+}
+
+/* v1.2.18 — vagas, colaboradores e central de notificações */
+.header-admin-button.active{background:#f0f1f2;color:#111}
+.member-admin-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex:none}
+.member-admin-actions .role-select{width:auto;max-width:175px}
+.member-remove-button{width:34px;height:34px;color:#8d3a33;background:#fff7f6;border:1px solid #f3d8d5}
+.member-remove-button:hover{background:#fff0ee;color:#a02f26}
+
+.notification-page-actions{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:32px}
+.notification-delete-button{width:30px;height:30px;color:#858890}
+.notification-delete-button:hover{background:#fff0ee;color:#a02f26}
+
+.jobs-heading{align-items:center}
+.jobs-tabs{display:flex;gap:7px;margin-bottom:12px;padding:5px;background:#eceef0;border-radius:13px}
+.jobs-tabs button{flex:1;border:0;border-radius:10px;background:transparent;padding:9px 11px;display:flex;align-items:center;justify-content:center;gap:7px;color:#666a72;font-size:10px;font-weight:750}
+.jobs-tabs button.active{background:#fff;color:#111;box-shadow:0 2px 10px rgba(20,25,35,.06)}
+.jobs-tabs button span{min-width:19px;padding:2px 5px;border-radius:999px;background:#e7e8ea;font-size:8px}
+.jobs-tabs button.active span{background:#f1f2f3}
+.jobs-list{display:flex;flex-direction:column;gap:10px}
+.job-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.02)}
+.job-card-head{display:flex;align-items:center;gap:10px}
+.job-company-mark{width:42px;height:42px;border-radius:12px;background:#151619;color:#fff;display:grid;place-items:center;flex:none;font-size:9px;font-weight:800}
+.job-card-head>.ellipsis{flex:1}
+.job-card-head strong,.job-card-head small{display:block}
+.job-card-head strong{font-size:13px}
+.job-card-head small{margin-top:3px;color:var(--muted);font-size:9px}
+.job-audience-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:6px 8px;background:#f0f1f2;color:#5d6169;font-size:8.5px;font-weight:800;white-space:nowrap}
+.job-audience-pill.world{background:#edf6ff;color:#28669a}
+.job-description{margin:14px 0 12px;color:#454950;font-size:11px;line-height:1.6;white-space:pre-wrap}
+.job-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:#777b83;font-size:9px}
+.job-meta span{display:inline-flex;align-items:center;gap:5px}
+.job-card-actions{display:flex;align-items:center;gap:7px;margin-top:14px;padding-top:12px;border-top:1px solid #f0f0f1}
+.job-card-actions .btn{text-decoration:none}
+.job-delete-button{margin-left:auto;color:#8d3a33;background:#fff7f6;border:1px solid #f3d8d5}
+.job-delete-button:hover{background:#fff0ee;color:#a02f26}
+.job-form-grid{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:10px}
+.job-audience-fieldset{border:0;padding:0;margin:2px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.job-audience-fieldset legend{grid-column:1/-1;margin-bottom:7px;padding:0;color:#696d75;font-size:10px;font-weight:700}
+.job-audience-fieldset button{min-width:0;border:1px solid var(--line-strong);border-radius:13px;background:#fff;padding:11px;display:grid;grid-template-columns:20px minmax(0,1fr) 18px;align-items:center;gap:8px;text-align:left;color:#5d6169}
+.job-audience-fieldset button.selected{border-color:#858991;background:#f6f7f8;color:#111;box-shadow:0 0 0 2px rgba(30,30,35,.04)}
+.job-audience-fieldset button>span{min-width:0}
+.job-audience-fieldset strong,.job-audience-fieldset small{display:block}
+.job-audience-fieldset strong{font-size:10px}
+.job-audience-fieldset small{margin-top:3px;color:var(--muted);font-size:8px;line-height:1.4}
+
+@media(max-width:850px){
+  .mobile-header-search{width:100%;max-width:260px;justify-self:end}
+}
+
+@media(max-width:620px){
+  .jobs-heading{align-items:flex-start;flex-direction:column}
+  .jobs-heading .btn{width:100%}
+  .job-form-grid,.job-audience-fieldset{grid-template-columns:1fr}
+  .job-audience-fieldset legend{grid-column:1}
+  .member-row{align-items:flex-start}
+  .member-admin-actions{align-items:flex-end;flex-direction:column}
+}
+
+@media(max-width:430px){
+  .job-card{padding:13px}
+  .job-card-head{align-items:flex-start;flex-wrap:wrap}
+  .job-card-head>.ellipsis{width:calc(100% - 52px)}
+  .job-audience-pill{margin-left:52px}
+  .jobs-tabs button{padding-left:7px;padding-right:7px;font-size:9px}
+}

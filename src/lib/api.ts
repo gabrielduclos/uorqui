@@ -27,9 +27,7 @@ async function executeApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
   const selectedCompanyId = localStorage.getItem("uorqui-company") || "";
-  if (selectedCompanyId && !headers.has("X-Uorqui-Company")) {
-    headers.set("X-Uorqui-Company", selectedCompanyId);
-  }
+  if (selectedCompanyId) headers.set("X-Uorqui-Company", selectedCompanyId);
 
   if (
     init.body &&

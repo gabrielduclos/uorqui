@@ -1,4 +1,4 @@
-export type View = "home" | "communities" | "search" | "admin" | "profile" | "notifications" | "companies" | "plans" | "superadmin";
+export type View = "home" | "communities" | "search" | "jobs" | "admin" | "company-data" | "profile" | "notifications" | "companies" | "plans" | "superadmin";
 export type HomeTab = "for-you" | "recent" | "announcement" | "world";
 
 export interface UserProfile {
@@ -83,6 +83,23 @@ export interface NotificationItem {
   status?: string;
   createdAt?: string;
   data?: Record<string, string>;
+}
+
+export interface JobOpening {
+  id: string;
+  companyId: string;
+  companyName: string;
+  authorUid: string;
+  authorName?: string;
+  title: string;
+  description: string;
+  location?: string;
+  contractType?: "clt" | "pj" | "internship" | "temporary" | "other";
+  contactEmail?: string;
+  audience: "company" | "world";
+  status: "open" | "closed";
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Attachment {

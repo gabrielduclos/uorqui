@@ -158,6 +158,10 @@ async function routeApi(request, env, identity, url, ctx) {
     return json(await unregisterPushToken(env, identity, await readJson(request)));
   }
   if (method === 'POST' && path === '/companies') return json(await createCompany(env, identity, await readJson(request)), 201);
+  if (method === 'PATCH' && /^\/companies\/[^/]+$/.test(path)) {
+    const companyId = decodeURIComponent(path.split('/')[2]);
+    return json(await updateCompany(env, identity, companyId, await readJson(request), ctx));
+  }
   if (method === 'DELETE' && /^\/companies\/[^/]+$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await deleteCompany(env, identity, companyId, await readJson(request)));
@@ -204,6 +208,12 @@ async function routeApi(request, env, identity, url, ctx) {
     const targetUid = decodeURIComponent(parts[4]);
     return json(await updateCompanyMemberRole(env, identity, companyId, targetUid, await readJson(request)));
   }
+  if (method === 'DELETE' && /^\/companies\/[^/]+\/members\/[^/]+$/.test(path)) {
+    const parts = path.split('/');
+    const companyId = decodeURIComponent(parts[2]);
+    const targetUid = decodeURIComponent(parts[4]);
+    return json(await removeCompanyMember(env, identity, companyId, targetUid, ctx));
+  }
   if (method === 'POST' && /^\/companies\/[^/]+\/communities$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await createCommunity(env, identity, companyId, await readJson(request)), 201);
@@ -239,6 +249,16 @@ async function routeApi(request, env, identity, url, ctx) {
     return json(await deleteCommunity(env, identity, communityId));
   }
   if (method === 'POST' && path === '/invites/accept') return json(await acceptInvite(env, identity, await readJson(request), ctx));
+  if (method === 'GET' && path === '/jobs') {
+    return json(await getJobs(env, identity, url.searchParams.get('companyId') || ''));
+  }
+  if (method === 'POST' && path === '/jobs') {
+    return json(await createJob(env, identity, await readJson(request), ctx), 201);
+  }
+  if (method === 'DELETE' && /^\/jobs\/[^/]+$/.test(path)) {
+    const jobId = decodeURIComponent(path.split('/')[2]);
+    return json(await deleteJob(env, identity, jobId, ctx));
+  }
   if (method === 'POST' && path === '/posts') return json(await createPost(env, identity, await readJson(request), ctx), 201);
   if (method === 'GET' && /^\/posts\/[^/]+$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
@@ -263,6 +283,10 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'POST' && /^\/comments\/[^/]+\/reaction$/.test(path)) {
     const commentId = decodeURIComponent(path.split('/')[2]);
     return json(await toggleCommentReaction(env, identity, commentId, ctx));
+  }
+  if (method === 'DELETE' && /^\/comments\/[^/]+$/.test(path)) {
+    const commentId = decodeURIComponent(path.split('/')[2]);
+    return json(await deleteComment(env, identity, commentId, ctx));
   }
   if (method === 'POST' && /^\/posts\/[^/]+\/read$/.test(path)) {
     const postId = decodeURIComponent(path.split('/')[2]);
@@ -289,6 +313,10 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'POST' && /^\/notifications\/[^/]+\/read$/.test(path)) {
     const notificationId = decodeURIComponent(path.split('/')[2]);
     return json(await markNotificationRead(env, identity, notificationId));
+  }
+  if (method === 'DELETE' && /^\/notifications\/[^/]+$/.test(path)) {
+    const notificationId = decodeURIComponent(path.split('/')[2]);
+    return json(await deleteNotification(env, identity, notificationId));
   }
   throw httpError(404, 'Rota não encontrada.');
 }
@@ -355,7 +383,8 @@ async function broadcastSelectedCompanyMutation(env, identity, request, url) {
     url.pathname === '/api/realtime/ticket' ||
     url.pathname === '/api/push/register' ||
     url.pathname === '/api/media/upload' ||
-    /^\/api\/notifications\/[^/]+\/read$/.test(url.pathname)
+    /^\/api\/jobs(?:\/[^/]+)?$/.test(url.pathname) ||
+    /^\/api\/notifications\/[^/]+(?:\/read)?$/.test(url.pathname)
   ) return;
 
   const companyId = clean(request.headers.get('X-Uorqui-Company') || '', 150);
@@ -889,6 +918,7 @@ async function deleteUserAccount(env, identity, body) {
     pollVotes,
     authoredPosts,
     authoredComments,
+    authoredJobs,
     ownedMedia,
     targetInvites,
     sentInvites
@@ -905,6 +935,7 @@ async function deleteUserAccount(env, identity, body) {
     fsWhere(env, 'pollVotes', 'uid', identity.uid, 500),
     fsWhere(env, 'posts', 'authorUid', identity.uid, 500),
     fsWhere(env, 'comments', 'authorUid', identity.uid, 500),
+    fsWhere(env, 'jobs', 'authorUid', identity.uid, 500),
     fsWhere(env, 'media', 'ownerUid', identity.uid, 500),
     fsWhere(env, 'invites', 'targetUid', identity.uid, 250),
     fsWhere(env, 'invites', 'invitedBy', identity.uid, 250)
@@ -949,6 +980,17 @@ async function deleteUserAccount(env, identity, body) {
       authorUid: '',
       authorName: 'Conta removida',
       authorAvatarMediaId: '',
+      authorAccountDeletedAt: deletedAt,
+      updatedAt: deletedAt
+    }
+  })));
+  await fsBatchPut(env, authoredJobs.map(job => ({
+    collection: 'jobs',
+    id: job.id,
+    data: {
+      ...job,
+      authorUid: '',
+      authorName: 'Conta removida',
       authorAccountDeletedAt: deletedAt,
       updatedAt: deletedAt
     }
@@ -1009,7 +1051,8 @@ async function deleteUserAccount(env, identity, body) {
     ok: true,
     deletedAt,
     anonymizedPosts: authoredPosts.length,
-    anonymizedComments: authoredComments.length
+    anonymizedComments: authoredComments.length,
+    anonymizedJobs: authoredJobs.length
   };
 }
 
@@ -1107,6 +1150,107 @@ async function createCompany(env, identity, body) {
   // Comunidades agora sao sempre criadas manualmente pelo administrador.
   // Publicacoes para toda a empresa continuam usando scope === 'company'.
   return { company };
+}
+
+async function syncCompanyNameReferences(env, companyId, companyName) {
+  const [posts, jobs, invites] = await Promise.all([
+    fsWhere(env, 'posts', 'companyId', companyId, 500),
+    fsWhere(env, 'jobs', 'companyId', companyId, 500).catch(() => []),
+    fsWhere(env, 'invites', 'companyId', companyId, 500).catch(() => [])
+  ]);
+  await fsBatchPut(env, [
+    ...posts.filter(item => item.companyName !== companyName).map(item => ({
+      collection: 'posts', id: item.id, data: { ...item, companyName }
+    })),
+    ...jobs.filter(item => item.companyName !== companyName).map(item => ({
+      collection: 'jobs', id: item.id, data: { ...item, companyName }
+    })),
+    ...invites.filter(item => item.companyName !== companyName).map(item => ({
+      collection: 'invites', id: item.id, data: { ...item, companyName }
+    }))
+  ]);
+}
+
+async function updateCompany(env, identity, companyId, body, ctx) {
+  await requireCompanyAdmin(env, identity.uid, companyId);
+  const company = await fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.');
+  const name = clean(body.name, 120);
+  if (!name) throw httpError(400, 'Informe o nome da empresa.');
+
+  const cnpjDigits = onlyDigits(body.cnpj).slice(0, 14);
+  if (!isValidCnpj(cnpjDigits)) throw httpError(400, 'Informe um CNPJ válido.');
+
+  const addressInput = body.address && typeof body.address === 'object' ? body.address : {};
+  const address = {
+    postalCode: onlyDigits(addressInput.postalCode).slice(0, 8),
+    street: clean(addressInput.street, 160),
+    number: clean(addressInput.number, 30),
+    complement: clean(addressInput.complement || '', 100),
+    district: clean(addressInput.district, 100),
+    city: clean(addressInput.city, 100),
+    state: clean(addressInput.state, 2).toUpperCase()
+  };
+  if (
+    address.postalCode.length !== 8 || !address.street || !address.number ||
+    !address.district || !address.city || !/^[A-Z]{2}$/.test(address.state)
+  ) {
+    throw httpError(400, 'Preencha o endereço completo da empresa para emissão de nota fiscal.');
+  }
+
+  const duplicates = await fsWhere(env, 'companies', 'cnpjDigits', cnpjDigits, 3);
+  if (duplicates.some(item => item.id !== companyId)) {
+    throw httpError(409, 'Já existe uma empresa cadastrada com este CNPJ.');
+  }
+
+  const updatedAt = nowIso();
+  const updated = {
+    ...company,
+    name,
+    slug: slugify(name),
+    cnpj: formatCnpj(cnpjDigits),
+    cnpjDigits,
+    address,
+    updatedAt,
+    updatedBy: identity.uid
+  };
+  const previousCnpjDigits = onlyDigits(company.cnpjDigits || company.cnpj).slice(0, 14);
+  const registry = {
+    cnpjDigits,
+    companyId,
+    companyName: name,
+    createdAt: company.createdAt || updatedAt,
+    updatedAt
+  };
+  const operations = [
+    { update: { collection: 'companies', id: companyId, data: updated } },
+    {
+      update: {
+        collection: 'companyCnpjRegistry',
+        id: cnpjDigits,
+        data: registry,
+        createOnly: previousCnpjDigits !== cnpjDigits
+      }
+    }
+  ];
+  if (previousCnpjDigits && previousCnpjDigits !== cnpjDigits) {
+    operations.push({ delete: { collection: 'companyCnpjRegistry', id: previousCnpjDigits } });
+  }
+
+  try {
+    await fsCommit(env, operations);
+  } catch (error) {
+    if (error?.status === 409) throw httpError(409, 'Já existe uma empresa cadastrada com este CNPJ.');
+    throw error;
+  }
+
+  if (company.name !== name) {
+    const syncTask = syncCompanyNameReferences(env, companyId, name)
+      .catch(error => console.error('Falha ao atualizar o nome da empresa nos conteúdos:', error));
+    if (ctx?.waitUntil) ctx.waitUntil(syncTask);
+    else await syncTask;
+  }
+  deferRealtime(ctx, broadcastRealtime(env, 'company', companyId, 'company_updated'));
+  return { company: companyPlanView(updated, env) };
 }
 
 async function cleanupCompanyAccessForUser(env, companyId, uid) {
@@ -1255,6 +1399,9 @@ async function deleteCompany(env, identity, companyId, body) {
   const invites = await fsWhere(env, 'invites', 'companyId', companyId, 500);
   for (const invite of invites) await fsDelete(env, 'invites', invite.id);
 
+  const jobs = await fsWhere(env, 'jobs', 'companyId', companyId, 500);
+  for (const job of jobs) await fsDelete(env, 'jobs', job.id);
+
   const companyMembers = await fsWhere(env, 'companyMembers', 'companyId', companyId, 500);
   for (const item of companyMembers) await fsDelete(env, 'companyMembers', item.id);
 
@@ -1298,6 +1445,57 @@ async function updateCompanyMemberRole(env, identity, companyId, targetUid, body
   });
 
   return { member: updated };
+}
+
+async function removeCompanyMember(env, identity, companyId, targetUid, ctx) {
+  const actor = await requireCompanyAdmin(env, identity.uid, companyId);
+  if (targetUid === identity.uid) {
+    throw httpError(400, 'Use a opção Sair da empresa para remover seu próprio acesso.');
+  }
+
+  const [company, target] = await Promise.all([
+    fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.'),
+    fsGetRequired(env, 'companyMembers', `${companyId}_${targetUid}`, 'Colaborador não encontrado.')
+  ]);
+  if (target.status !== 'active') throw httpError(400, 'Este colaborador não está ativo.');
+  if (target.role === 'owner' || company.ownerUid === targetUid) {
+    throw httpError(400, 'Transfira a propriedade antes de remover o proprietário.');
+  }
+  if (target.role === 'admin' && actor.role !== 'owner') {
+    throw httpError(403, 'Somente o proprietário pode remover outro administrador.');
+  }
+
+  await fsDelete(env, 'companyMembers', `${companyId}_${targetUid}`);
+
+  const notificationId = `company_removed_${companyId}_${targetUid}_${Date.now()}`;
+  const notification = {
+    recipientUid: targetUid,
+    type: 'company_member_removed',
+    title: `Você foi removido de ${company.name}`,
+    body: 'Um administrador removeu seu acesso à empresa e às comunidades vinculadas.',
+    data: { companyId, targetView: 'notifications' },
+    read: false,
+    status: 'new',
+    createdAt: nowIso()
+  };
+  await fsPut(env, 'notifications', notificationId, notification);
+
+  const cleanupTask = cleanupCompanyAccessForUser(env, companyId, targetUid)
+    .catch(error => console.error('Falha ao limpar comunidades do colaborador removido:', error));
+  if (ctx?.waitUntil) ctx.waitUntil(cleanupTask);
+  else await cleanupTask;
+
+  deferPushes(ctx, [sendPushToUser(env, targetUid, {
+    title: notification.title,
+    body: notification.body,
+    notificationId,
+    type: notification.type,
+    companyId,
+    targetView: 'notifications',
+    url: '/?notifications=1'
+  })]);
+
+  return { ok: true, removedUid: targetUid };
 }
 
 async function createCompanyInvite(env, identity, companyId, body, origin, ctx) {
@@ -1820,6 +2018,149 @@ async function notifyCompanyAdminsAboutAcceptedInvite(env, invite, joiningUser, 
     targetView: 'admin',
     url: `/?admin=1&company=${encodeURIComponent(invite.companyId)}`
   })));
+}
+
+function jobView(job) {
+  return {
+    id: job.id,
+    companyId: job.companyId,
+    companyName: job.companyName || '',
+    authorUid: job.authorUid,
+    authorName: job.authorName || '',
+    title: job.title,
+    description: job.description,
+    location: job.location || '',
+    contractType: job.contractType || 'clt',
+    contactEmail: job.contactEmail || '',
+    audience: job.audience === 'world' ? 'world' : 'company',
+    status: job.status === 'closed' ? 'closed' : 'open',
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt
+  };
+}
+
+async function getJobs(env, identity, requestedCompanyId) {
+  const companyId = clean(requestedCompanyId, 150);
+  if (companyId) await requireCompanyMember(env, identity.uid, companyId);
+
+  const [worldJobs, companyJobs] = await Promise.all([
+    fsWhere(env, 'jobs', 'audience', 'world', 250),
+    companyId ? fsWhere(env, 'jobs', 'companyId', companyId, 250) : Promise.resolve([])
+  ]);
+
+  const visible = new Map();
+  for (const job of [...companyJobs, ...worldJobs]) {
+    if (job.status === 'closed') continue;
+    if (job.audience !== 'world' && job.companyId !== companyId) continue;
+    visible.set(job.id, jobView(job));
+  }
+
+  return {
+    jobs: Array.from(visible.values()).sort(byCreatedDesc).slice(0, 250)
+  };
+}
+
+async function createJob(env, identity, body, ctx) {
+  const companyId = clean(body.companyId, 150);
+  await requireCompanyAdmin(env, identity.uid, companyId);
+  const [company, user] = await Promise.all([
+    fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.'),
+    ensureUser(env, identity)
+  ]);
+
+  const title = clean(body.title, 140);
+  const description = clean(body.description, 5000);
+  const location = clean(body.location || '', 160);
+  const audience = body.audience === 'world' ? 'world' : body.audience === 'company' ? 'company' : '';
+  const allowedContractTypes = new Set(['clt', 'pj', 'internship', 'temporary', 'other']);
+  const contractType = allowedContractTypes.has(body.contractType) ? body.contractType : 'clt';
+  const contactEmail = normalizeEmail(body.contactEmail || identity.email || '');
+
+  if (!title) throw httpError(400, 'Informe o título da vaga.');
+  if (description.length < 20) throw httpError(400, 'Descreva a vaga com pelo menos 20 caracteres.');
+  if (!audience) throw httpError(400, 'Escolha se a vaga é interna ou para o mundo.');
+  if (!isEmail(contactEmail)) throw httpError(400, 'Informe um e-mail válido para candidatura.');
+
+  const createdAt = nowIso();
+  const jobId = id();
+  const job = {
+    id: jobId,
+    companyId,
+    companyName: company.name,
+    authorUid: identity.uid,
+    authorName: user.displayName || identity.name || '',
+    title,
+    description,
+    location,
+    contractType,
+    contactEmail,
+    audience,
+    status: 'open',
+    createdAt,
+    updatedAt: createdAt
+  };
+  await fsPut(env, 'jobs', jobId, job);
+
+  if (audience === 'company') {
+    const notifyTask = notifyCompanyMembersAboutJob(env, job, identity.uid)
+      .then(() => broadcastRealtime(env, 'company', companyId, 'job_created'))
+      .catch(error => console.error('Falha ao avisar colaboradores sobre nova vaga:', error));
+    if (ctx?.waitUntil) ctx.waitUntil(notifyTask);
+    else await notifyTask;
+  } else {
+    deferRealtime(ctx, broadcastRealtime(env, 'world', '', 'job_created'));
+  }
+
+  return { job: jobView(job) };
+}
+
+async function notifyCompanyMembersAboutJob(env, job, authorUid) {
+  const memberships = (await fsWhere(env, 'companyMembers', 'companyId', job.companyId, 500))
+    .filter(member => member.status === 'active' && member.uid && member.uid !== authorUid);
+  if (!memberships.length) return;
+
+  const createdAt = nowIso();
+  const docs = memberships.map(member => ({
+    collection: 'notifications',
+    id: `job_${job.id}_${member.uid}`,
+    data: {
+      recipientUid: member.uid,
+      type: 'job_posted',
+      title: `Nova vaga interna: ${job.title}`,
+      body: `${job.companyName} publicou uma oportunidade para os colaboradores.`,
+      data: {
+        jobId: job.id,
+        companyId: job.companyId,
+        targetView: 'jobs'
+      },
+      read: false,
+      status: 'new',
+      createdAt
+    }
+  }));
+  await fsBatchPut(env, docs);
+  await Promise.allSettled(docs.map(doc => sendPushToUser(env, doc.data.recipientUid, {
+    title: doc.data.title,
+    body: doc.data.body,
+    notificationId: doc.id,
+    type: doc.data.type,
+    companyId: job.companyId,
+    targetView: 'jobs',
+    url: `/?jobs=1&company=${encodeURIComponent(job.companyId)}`
+  })));
+}
+
+async function deleteJob(env, identity, jobId, ctx) {
+  const job = await fsGetRequired(env, 'jobs', jobId, 'Vaga não encontrada.');
+  await requireCompanyAdmin(env, identity.uid, job.companyId);
+  await fsDelete(env, 'jobs', jobId);
+
+  if (job.audience === 'world') {
+    deferRealtime(ctx, broadcastRealtime(env, 'world', '', 'job_deleted'));
+  } else {
+    deferRealtime(ctx, broadcastRealtime(env, 'company', job.companyId, 'job_deleted'));
+  }
+  return { ok: true, deletedJobId: jobId };
 }
 
 async function getCommunityPosts(env, identity, communityId) {
@@ -2415,6 +2756,59 @@ async function addComment(env, identity, postId, body, ctx) {
   return { comment };
 }
 
+async function deleteComment(env, identity, commentId, ctx) {
+  const comment = await fsGetRequired(env, 'comments', commentId, 'Resposta não encontrada.');
+  const post = await fsGetRequired(env, 'posts', comment.postId, 'Publicação não encontrada.');
+  const access = await requirePostAccess(env, identity.uid, post);
+  if (post.deletedByAdmin) throw httpError(410, 'Esta publicação foi removida por um administrador.');
+
+  const isAuthor = comment.authorUid === identity.uid;
+  const isCompanyAdmin = !isAuthor && post.scope !== 'world' && ['owner', 'admin'].includes(access?.role);
+  if (!isAuthor && !isCompanyAdmin) {
+    throw httpError(403, 'Você não pode excluir esta resposta.');
+  }
+
+  const [postComments, reactions, notifications] = await Promise.all([
+    fsWhere(env, 'comments', 'postId', post.id, 500),
+    fsWhere(env, 'commentReactions', 'commentId', commentId, 500).catch(() => []),
+    fsWhere(env, 'notifications', 'data.commentId', commentId, 500).catch(() => [])
+  ]);
+  const remainingComments = postComments.filter(item => item.id !== commentId);
+  const lastCommentAt = remainingComments.reduce((latest, item) => {
+    const createdAt = item.createdAt || '';
+    return !latest || new Date(createdAt).getTime() > new Date(latest).getTime() ? createdAt : latest;
+  }, '');
+  const changedAt = nowIso();
+  const deletedAcceptedSolution = post.acceptedCommentId === commentId;
+  const updatedPost = {
+    ...post,
+    commentCount: Math.max(0, Number(post.commentCount || 0) - 1),
+    lastCommentAt,
+    followUpReminderFor: '',
+    followUpReminderAt: '',
+    acceptedCommentId: deletedAcceptedSolution ? '' : post.acceptedCommentId || '',
+    isResolved: deletedAcceptedSolution ? false : Boolean(post.isResolved),
+    resolvedAt: deletedAcceptedSolution ? '' : post.resolvedAt || '',
+    resolvedByUid: deletedAcceptedSolution ? '' : post.resolvedByUid || '',
+    updatedAt: changedAt
+  };
+
+  await fsCommit(env, [
+    { delete: { collection: 'comments', id: commentId } },
+    { update: { collection: 'posts', id: post.id, data: updatedPost } }
+  ]);
+
+  const cleanupTask = fsBatchDelete(env, [
+    ...reactions.map(item => ({ collection: 'commentReactions', id: item.id })),
+    ...notifications.map(item => ({ collection: 'notifications', id: item.id }))
+  ]).catch(error => console.error('Falha ao limpar vínculos da resposta excluída:', error));
+  if (ctx?.waitUntil) ctx.waitUntil(cleanupTask);
+  else await cleanupTask;
+
+  deferRealtime(ctx, broadcastRealtimeForPost(env, updatedPost, 'comment_deleted'));
+  return { ok: true, deletedCommentId: commentId, post: updatedPost };
+}
+
 async function toggleReaction(env, identity, postId, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
   await requirePostAccess(env, identity.uid, post);
@@ -2813,6 +3207,23 @@ async function markNotificationRead(env, identity, idValue) {
   });
 
   return { ok: true, persistent: false };
+}
+
+async function deleteNotification(env, identity, idValue) {
+  const notification = await fsGetRequired(env, 'notifications', idValue, 'Notificação não encontrada.');
+  if (notification.recipientUid !== identity.uid) throw httpError(403, 'Sem permissão.');
+  if (notification.persistent && notification.status === 'pending_confirmation') {
+    throw httpError(409, 'Confirme a leitura da publicação antes de excluir esta notificação.');
+  }
+  if (
+    notification.status === 'pending' &&
+    ['company_invite', 'community_invite'].includes(notification.type)
+  ) {
+    throw httpError(409, 'Aceite ou aguarde o encerramento do convite antes de excluir esta notificação.');
+  }
+
+  await fsDelete(env, 'notifications', idValue);
+  return { ok: true, deletedNotificationId: idValue };
 }
 
 async function requirePostAccess(env, uid, post) {

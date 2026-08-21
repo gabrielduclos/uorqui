@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
-  ArrowLeft, BarChart3, Bell, Building2, CalendarDays, Camera, Check, ChevronDown,
+  ArrowLeft, BarChart3, Bell, BriefcaseBusiness, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
-  Images, KeyRound, LogOut, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
+  Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
   ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, X
 } from "lucide-react";
 import {
@@ -17,7 +17,7 @@ import { connectRealtime } from "./lib/realtime";
 import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
 import { usePwaInstall } from "./lib/pwa";
 import type {
-  BootstrapData, Community, CommunityMember, HomeTab, NotificationItem, Post, View
+  BootstrapData, Community, CommunityMember, Company, HomeTab, JobOpening, NotificationItem, Post, View
 } from "./types";
 import { Avatar } from "./components/Avatar";
 import { AvatarCropModal } from "./components/AvatarCropModal";
@@ -203,7 +203,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!user || !data.me.uid || loading) return;
+    if (!user || !data.me.uid) return;
     const params = new URLSearchParams(location.search);
     const postId = params.get("post") || "";
     if (!postId) {
@@ -228,7 +228,7 @@ export default function App() {
 
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, data.me.uid, data.selectedCompanyId, loading]);
+  }, [user?.uid, data.me.uid]);
 
   useEffect(() => {
     if (!user || !data.me.uid || loading) return;
@@ -243,7 +243,7 @@ export default function App() {
         const title = payload.notification?.title || payload.data?.title || "Nova notificação no Uorqui";
         const body = payload.notification?.body || payload.data?.body || "Você tem uma nova atualização.";
         const type = payload.data?.type || "";
-        if (["company_member_joined", "community_added", "community_removed"].includes(type)) {
+        if (["company_member_joined", "company_member_removed", "community_added", "community_removed", "job_posted"].includes(type)) {
           void navigator.serviceWorker.ready.then((registration) => registration.showNotification(title, {
             body,
             icon: "/assets/uorqui-icon-192-v1215.png",
@@ -290,12 +290,14 @@ export default function App() {
     const params = new URLSearchParams(location.search);
     const adminRequested = params.get("admin") === "1";
     const notificationsRequested = params.get("notifications") === "1";
+    const jobsRequested = params.get("jobs") === "1";
     const communityId = params.get("community") || "";
-    if (!adminRequested && !notificationsRequested && !communityId) return;
+    if (!adminRequested && !notificationsRequested && !jobsRequested && !communityId) return;
 
     const companyId = params.get("company") || "";
     params.delete("admin");
     params.delete("notifications");
+    params.delete("jobs");
     params.delete("community");
     params.delete("company");
     const query = params.toString();
@@ -310,6 +312,10 @@ export default function App() {
 
       if (adminRequested) {
         setView("admin");
+        return;
+      }
+      if (jobsRequested) {
+        setView("jobs");
         return;
       }
       if (communityId) {
@@ -446,7 +452,7 @@ export default function App() {
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
+    home: "Início", communities: "Comunidades", search: "Buscar", jobs: "Vagas", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
   };
 
   const navigate = (next: View) => {
@@ -496,6 +502,22 @@ export default function App() {
     await refresh(id);
   };
 
+  const markNotificationReadLocal = (notificationId: string) => {
+    setData((current) => ({
+      ...current,
+      notifications: current.notifications.map((notification) =>
+        notification.id === notificationId ? { ...notification, read: true } : notification
+      )
+    }));
+  };
+
+  const deleteNotificationLocal = (notificationId: string) => {
+    setData((current) => ({
+      ...current,
+      notifications: current.notifications.filter((notification) => notification.id !== notificationId)
+    }));
+  };
+
   const openPostFromNotification = async (notification: NotificationItem) => {
     const postId = notification.data?.postId || "";
     const companyId = notification.data?.companyId || "";
@@ -505,7 +527,7 @@ export default function App() {
       if (companyId && companyId !== selectedCompanyId) {
         localStorage.setItem("uorqui-company", companyId);
         setSelectedCompanyId(companyId);
-        await refresh(companyId);
+        await refresh(companyId, true);
       }
 
       const params = new URLSearchParams(location.search);
@@ -599,9 +621,15 @@ export default function App() {
       />
     );
     if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "jobs") return <JobsPage
+      data={data}
+      realtimeRevision={realtimeRevision}
+      showToast={showToast}
+    />;
     if (view === "admin") return <AdminPage
       data={data}
       onCompanyChange={(id) => changeCompany(id, "admin")}
+      onEditCompany={() => navigate("company-data")}
       onManageCommunity={(communityId) => {
         setManageCommunityMembersId(communityId);
         openCommunity(communityId);
@@ -610,12 +638,28 @@ export default function App() {
       showToast={showToast}
       onUpgradeRequired={(message) => openPlans("limit", message)}
     />;
+    if (view === "company-data") return <CompanyDataPage
+      data={data}
+      onBack={() => navigate("admin")}
+      refresh={() => refresh()}
+      showToast={showToast}
+    />;
     if (view === "notifications") return <NotificationsPage
       data={data}
       refresh={() => refresh()}
       showToast={showToast}
       onOpenPost={openPostFromNotification}
+      onNotificationRead={markNotificationReadLocal}
+      onNotificationDeleted={deleteNotificationLocal}
       onOpenAdmin={(companyId) => changeCompany(companyId, "admin")}
+      onOpenJobs={async (companyId) => {
+        if (companyId && companyId !== selectedCompanyId) {
+          localStorage.setItem("uorqui-company", companyId);
+          setSelectedCompanyId(companyId);
+          await refresh(companyId, true);
+        }
+        setView("jobs");
+      }}
       onOpenCommunity={async (companyId, communityId) => {
         if (companyId && companyId !== selectedCompanyId) await changeCompany(companyId, "communities");
         setSelectedCommunityId(communityId);
@@ -689,7 +733,8 @@ export default function App() {
               <NavButton active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
               <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
               <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
-              {data.canAdmin && <NavButton active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
+              <NavButton active={view === "jobs"} icon={<BriefcaseBusiness />} label="Vagas" onClick={() => navigate("jobs")} />
+              {data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
               <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
             </>}
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
@@ -750,6 +795,11 @@ export default function App() {
                   <Bell size={21} />
                   {unread > 0 && <span className="count-badge">{unread > 99 ? "99+" : unread}</span>}
                 </button>
+                {data.canAdmin && (
+                  <button className={`icon-btn header-admin-button ${view === "admin" || view === "company-data" ? "active" : ""}`} onClick={() => navigate("admin")} aria-label="Administrar empresa">
+                    <Settings size={21} />
+                  </button>
+                )}
                 {!!data.company && (
                   <button className={`icon-btn mobile-plan-button ${view === "plans" ? "active" : ""}`} onClick={() => openPlans("manual")} aria-label="Planos">
                     <Crown size={21} />
@@ -794,7 +844,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.17</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.19</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -803,9 +853,7 @@ export default function App() {
           <MobileNav active={view === "home" && homeTab !== "world"} icon={<Home />} label="Início" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
           <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
           <button className="mobile-create" onClick={() => setComposerOpen(true)} aria-label="Publicar"><Plus size={26} /></button>
-          {data.canAdmin
-            ? <MobileNav active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />
-            : <span className="mobile-nav-spacer" aria-hidden="true" />}
+          <MobileNav active={view === "jobs"} icon={<BriefcaseBusiness />} label="Vagas" onClick={() => navigate("jobs")} />
           <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
         </nav>
       )}
@@ -987,22 +1035,77 @@ function companyRegistrationPayload(form: HTMLFormElement) {
   };
 }
 
-function CompanyRegistrationFields() {
+function CompanyRegistrationFields({ company }: { company?: Pick<Company, "name" | "cnpj" | "address"> }) {
+  const address = company?.address;
   return (
     <>
-      <label><span>Nome da empresa</span><input name="name" required maxLength={120} placeholder="Ex.: Minha Empresa" /></label>
-      <label><span>CNPJ</span><input name="cnpj" required inputMode="numeric" maxLength={18} placeholder="00.000.000/0000-00" /></label>
+      <label><span>Nome da empresa</span><input name="name" required maxLength={120} defaultValue={company?.name || ""} placeholder="Ex.: Minha Empresa" /></label>
+      <label><span>CNPJ</span><input name="cnpj" required inputMode="numeric" maxLength={18} defaultValue={company?.cnpj || ""} placeholder="00.000.000/0000-00" /></label>
       <div className="company-address-heading"><strong>Endereço para nota fiscal</strong><small>Todos os campos abaixo, exceto complemento, são obrigatórios.</small></div>
       <div className="company-address-grid">
-        <label className="postal-code"><span>CEP</span><input name="postalCode" required inputMode="numeric" maxLength={9} placeholder="00000-000" /></label>
-        <label className="street"><span>Logradouro</span><input name="street" required maxLength={160} placeholder="Rua, avenida…" /></label>
-        <label><span>Número</span><input name="number" required maxLength={30} /></label>
-        <label><span>Complemento</span><input name="complement" maxLength={100} placeholder="Sala, bloco…" /></label>
-        <label><span>Bairro</span><input name="district" required maxLength={100} /></label>
-        <label><span>Cidade</span><input name="city" required maxLength={100} /></label>
-        <label><span>UF</span><input name="state" required minLength={2} maxLength={2} autoCapitalize="characters" placeholder="SP" /></label>
+        <label className="postal-code"><span>CEP</span><input name="postalCode" required inputMode="numeric" maxLength={9} defaultValue={address?.postalCode || ""} placeholder="00000-000" /></label>
+        <label className="street"><span>Logradouro</span><input name="street" required maxLength={160} defaultValue={address?.street || ""} placeholder="Rua, avenida…" /></label>
+        <label><span>Número</span><input name="number" required maxLength={30} defaultValue={address?.number || ""} /></label>
+        <label><span>Complemento</span><input name="complement" maxLength={100} defaultValue={address?.complement || ""} placeholder="Sala, bloco…" /></label>
+        <label><span>Bairro</span><input name="district" required maxLength={100} defaultValue={address?.district || ""} /></label>
+        <label><span>Cidade</span><input name="city" required maxLength={100} defaultValue={address?.city || ""} /></label>
+        <label><span>UF</span><input name="state" required minLength={2} maxLength={2} autoCapitalize="characters" defaultValue={address?.state || ""} placeholder="SP" /></label>
       </div>
     </>
+  );
+}
+
+function CompanyDataPage({ data, onBack, refresh, showToast }: {
+  data: BootstrapData;
+  onBack: () => void;
+  refresh: () => Promise<void>;
+  showToast: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!data.canAdmin || !data.company) {
+    return <Empty title="Acesso restrito" text="Somente proprietários e administradores podem editar os dados da empresa." />;
+  }
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/companies/${encodeURIComponent(data.company!.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(companyRegistrationPayload(event.currentTarget))
+      });
+      await refresh();
+      showToast("Dados da empresa atualizados.");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="page-section company-data-page">
+      <button className="back-button" onClick={onBack}><ArrowLeft size={18} /> Administrar</button>
+      <div className="page-heading">
+        <div>
+          <h2>Dados da empresa</h2>
+          <p>Atualize os dados cadastrais e o endereço usados para faturamento e emissão de nota fiscal.</p>
+        </div>
+      </div>
+      <form className="panel-card stack-form company-data-form" key={data.company.id} onSubmit={submit}>
+        <CompanyRegistrationFields company={data.company} />
+        <p className="muted company-data-note">O CNPJ precisa ser válido e não pode estar cadastrado em outra empresa do Uorqui.</p>
+        {error && <div className="form-error">{error}</div>}
+        <div className="company-data-actions">
+          <button type="button" className="btn secondary" disabled={busy} onClick={onBack}>Cancelar</button>
+          <button className="btn" disabled={busy}>{busy ? "Salvando…" : "Salvar alterações"}</button>
+        </div>
+      </form>
+    </section>
   );
 }
 
@@ -1833,6 +1936,237 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   );
 }
 
+const jobContractLabels: Record<JobOpening["contractType"] & string, string> = {
+  clt: "CLT",
+  pj: "PJ",
+  internship: "Estágio",
+  temporary: "Temporário",
+  other: "Outro"
+};
+
+function JobsPage({ data, realtimeRevision, showToast }: {
+  data: BootstrapData;
+  realtimeRevision: number;
+  showToast: (message: string) => void;
+}) {
+  const [jobs, setJobs] = useState<JobOpening[]>([]);
+  const [tab, setTab] = useState<"company" | "world">("company");
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [audience, setAudience] = useState<"company" | "world">("company");
+  const [publishing, setPublishing] = useState(false);
+  const [deletingJobId, setDeletingJobId] = useState("");
+  const loadedCompanyRef = useRef("");
+
+  const loadJobs = async (silent = false) => {
+    if (!data.selectedCompanyId) return;
+    if (!silent) setLoadingJobs(true);
+    try {
+      const query = new URLSearchParams({ companyId: data.selectedCompanyId });
+      const result = await api<{ jobs: JobOpening[] }>(`/jobs?${query.toString()}`);
+      setJobs(result.jobs);
+      loadedCompanyRef.current = data.selectedCompanyId;
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      if (!silent) setLoadingJobs(false);
+    }
+  };
+
+  useEffect(() => {
+    const sameCompany = loadedCompanyRef.current === data.selectedCompanyId;
+    if (!sameCompany) {
+      setJobs([]);
+      setLoadingJobs(true);
+    }
+    void loadJobs(sameCompany);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.selectedCompanyId, realtimeRevision]);
+
+  const publishJob = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (publishing) return;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setPublishing(true);
+    try {
+      const result = await api<{ job: JobOpening }>("/jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          companyId: data.selectedCompanyId,
+          title: formData.get("title"),
+          description: formData.get("description"),
+          location: formData.get("location"),
+          contractType: formData.get("contractType"),
+          contactEmail: formData.get("contactEmail"),
+          audience
+        })
+      });
+      setJobs((current) => [result.job, ...current.filter((job) => job.id !== result.job.id)]);
+      setTab(audience);
+      setComposerOpen(false);
+      setAudience("company");
+      form.reset();
+      showToast(audience === "world" ? "Vaga publicada para o mundo." : "Vaga publicada para a empresa.");
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const removeJob = async (job: JobOpening) => {
+    if (deletingJobId || !confirm(`Excluir a vaga “${job.title}”?`)) return;
+    setDeletingJobId(job.id);
+    try {
+      await api(`/jobs/${encodeURIComponent(job.id)}`, { method: "DELETE" });
+      setJobs((current) => current.filter((item) => item.id !== job.id));
+      showToast("Vaga excluída.");
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setDeletingJobId("");
+    }
+  };
+
+  const visibleJobs = jobs.filter((job) => job.audience === tab);
+  const contractLabel = (value?: JobOpening["contractType"]) => jobContractLabels[value || "clt"] || "Outro";
+
+  return (
+    <section className="page-section jobs-page">
+      <div className="page-heading jobs-heading">
+        <div>
+          <h2>Vagas</h2>
+          <p>Divulgue oportunidades dentro da empresa ou para profissionais de qualquer lugar.</p>
+        </div>
+        {data.canAdmin && (
+          <button className="btn small" onClick={() => setComposerOpen(true)}>
+            <BriefcaseBusiness size={16} /> Divulgar vaga
+          </button>
+        )}
+      </div>
+
+      <div className="jobs-tabs" role="tablist" aria-label="Público das vagas">
+        <button className={tab === "company" ? "active" : ""} onClick={() => setTab("company")}>
+          <Building2 size={15} /> Internas
+          <span>{jobs.filter((job) => job.audience === "company").length}</span>
+        </button>
+        <button className={tab === "world" ? "active" : ""} onClick={() => setTab("world")}>
+          <Globe2 size={15} /> Para o mundo
+          <span>{jobs.filter((job) => job.audience === "world").length}</span>
+        </button>
+      </div>
+
+      {loadingJobs ? (
+        <div className="loading-line">Carregando vagas…</div>
+      ) : (
+        <div className="jobs-list">
+          {visibleJobs.map((job) => (
+            <article className="job-card" key={job.id}>
+              <div className="job-card-head">
+                <div className="job-company-mark">{job.companyName.slice(0, 2).toUpperCase()}</div>
+                <div className="ellipsis">
+                  <strong>{job.title}</strong>
+                  <small>{job.companyName}</small>
+                </div>
+                <span className={`job-audience-pill ${job.audience}`}>
+                  {job.audience === "world" ? <><Globe2 size={12} /> Mundo</> : <><Building2 size={12} /> Interna</>}
+                </span>
+              </div>
+
+              <p className="job-description">{job.description}</p>
+
+              <div className="job-meta">
+                <span><BriefcaseBusiness size={14} /> {contractLabel(job.contractType)}</span>
+                {job.location && <span><MapPin size={14} /> {job.location}</span>}
+                {job.createdAt && <span>Publicada em {new Date(job.createdAt).toLocaleDateString("pt-BR")}</span>}
+              </div>
+
+              <div className="job-card-actions">
+                {job.contactEmail && (
+                  <a className="btn secondary small" href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Candidatura — ${job.title}`)}`}>
+                    <Mail size={15} /> Candidatar-se
+                  </a>
+                )}
+                {data.canAdmin && job.companyId === data.selectedCompanyId && (
+                  <button className="icon-btn job-delete-button" disabled={!!deletingJobId} onClick={() => removeJob(job)} aria-label="Excluir vaga" title="Excluir vaga">
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+
+          {!visibleJobs.length && (
+            <Empty
+              title={tab === "company" ? "Nenhuma vaga interna" : "Nenhuma vaga pública"}
+              text={data.canAdmin
+                ? "Use “Divulgar vaga” para publicar a primeira oportunidade."
+                : "As novas oportunidades aparecerão aqui."}
+            />
+          )}
+        </div>
+      )}
+
+      {composerOpen && (
+        <Modal title="Divulgar vaga" onClose={() => !publishing && setComposerOpen(false)} wide>
+          <form className="stack-form job-form" onSubmit={publishJob}>
+            <label>
+              <span>Título da vaga</span>
+              <input name="title" required maxLength={140} placeholder="Ex.: Analista de atendimento" />
+            </label>
+            <label>
+              <span>Descrição</span>
+              <textarea name="description" required minLength={20} rows={7} placeholder="Responsabilidades, requisitos e informações importantes…" />
+            </label>
+            <div className="job-form-grid">
+              <label>
+                <span>Local ou modalidade</span>
+                <input name="location" maxLength={160} placeholder="Ex.: São Paulo · Híbrido" />
+              </label>
+              <label>
+                <span>Contratação</span>
+                <select name="contractType" defaultValue="clt">
+                  <option value="clt">CLT</option>
+                  <option value="pj">PJ</option>
+                  <option value="internship">Estágio</option>
+                  <option value="temporary">Temporário</option>
+                  <option value="other">Outro</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>E-mail para candidaturas</span>
+              <input name="contactEmail" type="email" required defaultValue={data.me.email || ""} placeholder="talentos@empresa.com" />
+            </label>
+
+            <fieldset className="job-audience-fieldset">
+              <legend>Quem poderá ver?</legend>
+              <button type="button" className={audience === "company" ? "selected" : ""} onClick={() => setAudience("company")}>
+                <Building2 size={18} />
+                <span><strong>Somente a empresa</strong><small>Visível apenas para os colaboradores.</small></span>
+                {audience === "company" && <Check size={17} />}
+              </button>
+              <button type="button" className={audience === "world" ? "selected" : ""} onClick={() => setAudience("world")}>
+                <Globe2 size={18} />
+                <span><strong>Para o mundo</strong><small>Visível para usuários de todas as empresas.</small></span>
+                {audience === "world" && <Check size={17} />}
+              </button>
+            </fieldset>
+
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" disabled={publishing} onClick={() => setComposerOpen(false)}>Cancelar</button>
+              <button className="btn" disabled={publishing}>
+                <BriefcaseBusiness size={16} /> {publishing ? "Publicando…" : "Publicar vaga"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </section>
+  );
+}
+
 type SentInvite = {
   id: string;
   type: "company" | "community";
@@ -1850,9 +2184,10 @@ type SentInvite = {
   resendCount?: number;
 };
 
-function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToast, onUpgradeRequired }: {
+function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, refresh, showToast, onUpgradeRequired }: {
   data: BootstrapData;
   onCompanyChange: (companyId: string) => Promise<void>;
+  onEditCompany: () => void;
   onManageCommunity: (communityId: string) => void;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
@@ -1862,6 +2197,7 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
   const [sentInvites, setSentInvites] = useState<SentInvite[]>([]);
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [inviteActionBusy, setInviteActionBusy] = useState("");
+  const [memberActionBusy, setMemberActionBusy] = useState("");
   const [communityVisibilityBusy, setCommunityVisibilityBusy] = useState("");
   const [communityVisibilityOverrides, setCommunityVisibilityOverrides] = useState<Record<string, "public" | "private">>({});
   const manageableCompanies = data.companies.filter((company) => company.role === "owner" || company.role === "admin");
@@ -2001,6 +2337,23 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
     } catch (err) { showToast(errorMessage(err)); }
   };
 
+  const removeMember = async (member: BootstrapData["members"][number]) => {
+    const name = member.displayName || member.email || "este colaborador";
+    if (!confirm(`Remover ${name} da empresa e de todas as comunidades?`)) return;
+    setMemberActionBusy(member.uid);
+    try {
+      await api(`/companies/${data.selectedCompanyId}/members/${encodeURIComponent(member.uid)}`, {
+        method: "DELETE"
+      });
+      showToast("Colaborador removido da empresa.");
+      await refresh();
+    } catch (err) {
+      showToast(errorMessage(err));
+    } finally {
+      setMemberActionBusy("");
+    }
+  };
+
   const changeCommunityVisibility = async (community: Community, visibility: "public" | "private") => {
     if (communityVisibilityBusy) return;
     const previous = communityVisibilityOverrides[community.id];
@@ -2050,9 +2403,14 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
       <div className="admin-company-context">
         <div className="company-profile-mark">{data.company?.name?.slice(0, 2).toUpperCase()}</div>
         <div><strong>{data.company?.name}</strong><small>{data.role === "owner" ? "Proprietário" : "Administrador"}</small></div>
-        <button className="btn secondary small admin-plan-button" onClick={() => onUpgradeRequired("")}>
-          <Crown size={15} /> {data.company?.effectivePlan === "premium" ? "Premium" : "Ver planos"}
-        </button>
+        <div className="admin-company-buttons">
+          <button className="btn secondary small" onClick={onEditCompany}>
+            <Building2 size={15} /> Editar dados
+          </button>
+          <button className="btn secondary small admin-plan-button" onClick={() => onUpgradeRequired("")}>
+            <Crown size={15} /> {data.company?.effectivePlan === "premium" ? "Premium" : "Ver planos"}
+          </button>
+        </div>
       </div>
       <div className="admin-grid">
         <form className="panel-card stack-form" onSubmit={inviteCompany}>
@@ -2152,25 +2510,40 @@ function AdminPage({ data, onCompanyChange, onManageCommunity, refresh, showToas
       <section className="panel-card">
         <h3>Colaboradores</h3>
         <div className="member-list">
-          {data.members.map((member) => (
+          {data.members.map((member) => {
+            const canRemove = member.role !== "owner" && member.uid !== data.me.uid && (data.role === "owner" || member.role !== "admin");
+            return (
             <div className="member-row" key={member.uid}>
               <Avatar name={member.displayName || member.email} size={38} />
               <div className="ellipsis">
                 <strong>{member.displayName || member.email}</strong>
                 <small>{member.email}</small>
               </div>
-              {member.role === "owner" ? (
-                <span className="private-pill">Proprietário</span>
-              ) : data.role === "owner" ? (
-                <select className="role-select" value={member.role === "admin" ? "admin" : "member"} onChange={(e) => changeRole(member.uid, e.target.value as "admin" | "member")}>
-                  <option value="member">Usuário</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              ) : (
-                <span className="private-pill">{member.role === "admin" ? "Administrador" : "Usuário"}</span>
-              )}
+              <div className="member-admin-actions">
+                {member.role === "owner" ? (
+                  <span className="private-pill">Proprietário</span>
+                ) : data.role === "owner" ? (
+                  <select className="role-select" value={member.role === "admin" ? "admin" : "member"} onChange={(e) => changeRole(member.uid, e.target.value as "admin" | "member")}>
+                    <option value="member">Usuário</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                ) : (
+                  <span className="private-pill">{member.role === "admin" ? "Administrador" : "Usuário"}</span>
+                )}
+                {canRemove && (
+                  <button
+                    className="icon-btn member-remove-button"
+                    disabled={!!memberActionBusy}
+                    onClick={() => removeMember(member)}
+                    aria-label={`Remover ${member.displayName || member.email || "colaborador"}`}
+                    title="Remover da empresa"
+                  >
+                    <UserMinus size={17} />
+                  </button>
+                )}
+              </div>
             </div>
-          ))}
+          );})}
         </div>
       </section>
 
@@ -3413,17 +3786,24 @@ function ProfilePage({
   );
 }
 
-function NotificationsPage({ data, refresh, showToast, onOpenPost, onOpenAdmin, onOpenCommunity }: {
+function NotificationsPage({
+  data, refresh, showToast, onOpenPost, onNotificationRead, onNotificationDeleted,
+  onOpenAdmin, onOpenJobs, onOpenCommunity
+}: {
   data: BootstrapData;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onOpenPost: (notification: NotificationItem) => Promise<void>;
+  onNotificationRead: (notificationId: string) => void;
+  onNotificationDeleted: (notificationId: string) => void;
   onOpenAdmin: (companyId: string) => Promise<void>;
+  onOpenJobs: (companyId: string) => Promise<void>;
   onOpenCommunity: (companyId: string, communityId: string) => Promise<void>;
 }) {
   const [pushState, setPushState] = useState<PushState>(() => currentPushState());
   const [pushBusy, setPushBusy] = useState(false);
   const [acceptingInviteId, setAcceptingInviteId] = useState("");
+  const [deletingNotificationId, setDeletingNotificationId] = useState("");
 
   const accept = async (notification: NotificationItem) => {
     const inviteId = notification.data?.inviteId;
@@ -3472,12 +3852,12 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost, onOpenAdmin, 
     if (!notification.read && !notification.persistent) {
       try {
         await api(`/notifications/${notification.id}/read`, { method: "POST" });
+        onNotificationRead(notification.id);
       } catch {}
     }
 
     if (notification.data?.postId) {
       await onOpenPost(notification);
-      if (!notification.persistent) void refresh();
       return;
     }
 
@@ -3486,13 +3866,30 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost, onOpenAdmin, 
       return;
     }
 
+    if (notification.data?.targetView === "jobs") {
+      await onOpenJobs(notification.data.companyId || "");
+      return;
+    }
+
     if (notification.data?.targetView === "community" && notification.data.companyId && notification.data.communityId) {
       await onOpenCommunity(notification.data.companyId, notification.data.communityId);
       return;
     }
 
-    if (!notification.read && !notification.persistent) {
-      await refresh();
+  };
+
+  const removeNotification = async (notification: NotificationItem) => {
+    if (!notification.id || deletingNotificationId) return;
+    if (!confirm("Excluir esta notificação da central?")) return;
+    setDeletingNotificationId(notification.id);
+    try {
+      await api(`/notifications/${encodeURIComponent(notification.id)}`, { method: "DELETE" });
+      onNotificationDeleted(notification.id);
+      showToast("Notificação excluída.");
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setDeletingNotificationId("");
     }
   };
 
@@ -3531,15 +3928,20 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost, onOpenAdmin, 
       </section>
 
       <div className="notifications-page-list">
-        {data.notifications.map((item, index) => (
+        {data.notifications.map((item, index) => {
+          const pendingInvite = item.status === "pending" && ["company_invite", "community_invite"].includes(item.type);
+          const canDelete = !(item.persistent && !item.read) && !pendingInvite;
+          return (
           <article
             className={`notification-page-item ${item.read ? "" : "unread"} ${item.persistent && !item.read ? "persistent" : ""}`}
             key={item.id || index}
             onClick={() => openNotification(item)}
           >
             <div className="notification-icon">
-              {item.type.includes("community") || item.type.includes("invite") || item.type === "company_member_joined"
+              {item.type.includes("community") || item.type.includes("invite") || ["company_member_joined", "company_member_removed"].includes(item.type)
                 ? <Users size={19} />
+                : item.type === "job_posted"
+                  ? <BriefcaseBusiness size={19} />
                 : item.type === "announcement" || item.type === "read_required"
                   ? <Megaphone size={19} />
                   : item.type === "post_follow_up"
@@ -3603,11 +4005,39 @@ function NotificationsPage({ data, refresh, showToast, onOpenPost, onOpenAdmin, 
                   Abrir comunidade
                 </button>
               )}
+
+              {item.data?.targetView === "jobs" && (
+                <button
+                  className="text-button notification-open-post"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void openNotification(item);
+                  }}
+                >
+                  Abrir vagas
+                </button>
+              )}
             </div>
 
-            {!item.read && <span className="unread-dot" aria-label="Não lida" />}
+            <div className="notification-page-actions">
+              {canDelete && item.id && (
+                <button
+                  className="icon-btn notification-delete-button"
+                  disabled={!!deletingNotificationId}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void removeNotification(item);
+                  }}
+                  aria-label="Excluir notificação"
+                  title="Excluir notificação"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+              {!item.read && <span className="unread-dot" aria-label="Não lida" />}
+            </div>
           </article>
-        ))}
+        );})}
 
         {!data.notifications.length && (
           <Empty title="Tudo em dia" text="Publicações relevantes, respostas, curtidas, convites e confirmações aparecerão aqui." />

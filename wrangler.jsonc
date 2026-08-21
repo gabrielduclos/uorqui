@@ -28,7 +28,7 @@
   },
   "migrations": [
     {
-      "tag": "v1-realtime",
+      "tag": "v1_realtime_hub",
       "new_sqlite_classes": [
         "RealtimeHub"
       ]
