@@ -160,6 +160,7 @@ export function PostCard({
   const commentsRequestRef = useRef<Promise<void> | null>(null);
   const commentLikeBusyRef = useRef(new Set<string>());
   const commentElementsRef = useRef(new Map<string, HTMLElement>());
+  const [commentDeleteBusy, setCommentDeleteBusy] = useState("");
   const [highlightedCommentId, setHighlightedCommentId] = useState("");
   const likeBusyRef = useRef(false);
   const pollBusyRef = useRef(false);
@@ -167,6 +168,7 @@ export function PostCard({
   const [localLiked, setLocalLiked] = useState(Boolean(post.liked));
   const [localReactionCount, setLocalReactionCount] = useState(Number(post.reactionCount || 0));
   const [resolved, setResolved] = useState(Boolean(post.isResolved));
+  const [acceptedCommentId, setAcceptedCommentId] = useState(post.acceptedCommentId || "");
   const [resolveBusy, setResolveBusy] = useState(false);
   const [pollOptions, setPollOptions] = useState<PollOption[]>(post.pollOptions || []);
   const [pollTotal, setPollTotal] = useState(Number(post.pollTotalVotes || 0));
@@ -180,6 +182,7 @@ export function PostCard({
     setLocalReactionCount(Number(post.reactionCount || 0));
   }, [post.liked, post.reactionCount]);
   useEffect(() => setResolved(Boolean(post.isResolved)), [post.isResolved]);
+  useEffect(() => setAcceptedCommentId(post.acceptedCommentId || ""), [post.acceptedCommentId]);
   useEffect(() => {
     setPollOptions(post.pollOptions || []);
     setPollTotal(Number(post.pollTotalVotes || 0));
@@ -317,6 +320,49 @@ export function PostCard({
     }
   };
 
+  const removeComment = async (comment: Comment) => {
+    if (commentDeleteBusy) return;
+    const ownComment = comment.authorUid === currentUid;
+    const adminDeleting = !ownComment && canAdmin && post.scope !== "world";
+    if (!ownComment && !adminDeleting) return;
+
+    const message = adminDeleting
+      ? "Apagar esta resposta como administrador? Esta ação não pode ser desfeita."
+      : "Excluir sua resposta? Esta ação não pode ser desfeita.";
+    if (!confirm(message)) return;
+
+    const previousComments = comments;
+    const previousCount = localCommentCount;
+    const previousAcceptedCommentId = acceptedCommentId;
+    const previousResolved = resolved;
+    setCommentDeleteBusy(comment.id);
+    setComments((current) => current.filter((item) => item.id !== comment.id));
+    setLocalCommentCount((current) => Math.max(0, current - 1));
+    if (acceptedCommentId === comment.id) {
+      setAcceptedCommentId("");
+      setResolved(false);
+    }
+
+    try {
+      const result = await api<{ post?: Post }>(`/comments/${encodeURIComponent(comment.id)}`, { method: "DELETE" });
+      if (result.post) {
+        setAcceptedCommentId(result.post.acceptedCommentId || "");
+        setResolved(Boolean(result.post.isResolved));
+        setLocalCommentCount(Math.max(0, Number(result.post.commentCount || 0)));
+      }
+      showToast?.(adminDeleting ? "Resposta removida pela administração." : "Resposta excluída.");
+      void onChanged?.();
+    } catch (error) {
+      setComments(previousComments);
+      setLocalCommentCount(previousCount);
+      setAcceptedCommentId(previousAcceptedCommentId);
+      setResolved(previousResolved);
+      showToast?.(error instanceof Error ? error.message : "Não foi possível excluir a resposta.");
+    } finally {
+      setCommentDeleteBusy("");
+    }
+  };
+
   const addComment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -343,6 +389,7 @@ export function PostCard({
     try {
       await api(`/posts/${post.id}/solution`, { method: "POST", body: JSON.stringify({ commentId }) });
       setResolved(true);
+      setAcceptedCommentId(commentId);
       showToast?.("Solução marcada e publicação resolvida.");
       await onChanged?.();
     } catch (error) {
@@ -357,6 +404,7 @@ export function PostCard({
       const next = !resolved;
       await api(`/posts/${post.id}/resolve`, { method: "POST", body: JSON.stringify({ resolved: next }) });
       setResolved(next);
+      if (!next) setAcceptedCommentId("");
       showToast?.(next ? "Publicação marcada como resolvida." : "Publicação reaberta.");
       void onChanged?.();
     } catch (error) {
@@ -568,7 +616,7 @@ export function PostCard({
               </div>
             )}
 
-            {(resolved || post.acceptedCommentId) && (post.type === "post" || post.type === "question") && (
+            {(resolved || acceptedCommentId) && (post.type === "post" || post.type === "question") && (
               <span className="solution"><CheckCircle2 size={14} /> Concluído</span>
             )}
 
@@ -642,9 +690,23 @@ export function PostCard({
                           <span>{comment.liked ? "Curtido" : "Curtir"}</span>
                           {Number(comment.reactionCount || 0) > 0 && <b>{count(comment.reactionCount)}</b>}
                         </button>
+                        {(comment.authorUid === currentUid || (canAdmin && post.scope !== "world")) && (
+                          <button
+                            type="button"
+                            className="inline-comment-delete"
+                            disabled={Boolean(commentDeleteBusy)}
+                            data-lock-action="true"
+                            aria-label={comment.authorUid === currentUid ? "Excluir sua resposta" : "Excluir resposta como administrador"}
+                            title={comment.authorUid === currentUid ? "Excluir resposta" : "Excluir como administrador"}
+                            onClick={() => removeComment(comment)}
+                          >
+                            <Trash2 size={13} />
+                            <span>Apagar</span>
+                          </button>
+                        )}
                       </div>
-                      {post.acceptedCommentId === comment.id && <span className="solution">✓ Solução aceita</span>}
-                      {!post.acceptedCommentId && post.type === "question" && (post.authorUid === currentUid || canAdmin) && post.authorUid !== comment.authorUid && (
+                      {acceptedCommentId === comment.id && <span className="solution">✓ Solução aceita</span>}
+                      {!acceptedCommentId && post.type === "question" && (post.authorUid === currentUid || canAdmin) && post.authorUid !== comment.authorUid && (
                         <button className="text-button solution-button" onClick={() => acceptSolution(comment.id)}>✓ Marcar como solução</button>
                       )}
                     </div>

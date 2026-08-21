@@ -996,7 +996,7 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .inline-comment-like b{font-size:8px}
 
 /* v1.2.19 — exclusão de respostas e dados cadastrais da empresa */
-.inline-comment-delete{border:0;background:transparent;margin-left:auto;padding:3px;display:inline-flex;align-items:center;justify-content:center;color:#8a8d94;border-radius:6px}
+.inline-comment-delete{border:0;background:transparent;margin-left:auto;padding:3px 5px;display:inline-flex;align-items:center;justify-content:center;gap:4px;color:#8a8d94;border-radius:6px;font-size:8.5px;font-weight:700}
 .inline-comment-delete:hover{background:#fff0ee;color:#a02f26}
 .inline-comment-delete:disabled{opacity:.45;cursor:wait}
 .admin-company-buttons{margin-left:auto;display:flex;align-items:center;gap:7px}
@@ -1027,6 +1027,8 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .notification-delete-button:hover{background:#fff0ee;color:#a02f26}
 
 .jobs-heading{align-items:center}
+.jobs-plan-usage{display:block;margin-top:6px;color:var(--muted);font-size:9px;font-weight:700}
+.jobs-plan-usage.limit{color:#94601d}
 .jobs-tabs{display:flex;gap:7px;margin-bottom:12px;padding:5px;background:#eceef0;border-radius:13px}
 .jobs-tabs button{flex:1;border:0;border-radius:10px;background:transparent;padding:9px 11px;display:flex;align-items:center;justify-content:center;gap:7px;color:#666a72;font-size:10px;font-weight:750}
 .jobs-tabs button.active{background:#fff;color:#111;box-shadow:0 2px 10px rgba(20,25,35,.06)}

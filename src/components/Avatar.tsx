@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { mediaBlobUrl } from "../lib/api";
+import { cachedMediaBlobUrl, mediaBlobUrl } from "../lib/api";
 
 function initials(name: string) {
   return (name || "U")
@@ -11,25 +11,30 @@ function initials(name: string) {
 }
 
 export function Avatar({ name, mediaId, size = 44, className = "" }: { name?: string; mediaId?: string; size?: number; className?: string }) {
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(() => mediaId ? cachedMediaBlobUrl(mediaId) : "");
   const letters = useMemo(() => initials(name || ""), [name]);
 
   useEffect(() => {
     let active = true;
-    let objectUrl = "";
     if (!mediaId) {
       setUrl("");
       return;
     }
+
+    const cached = cachedMediaBlobUrl(mediaId);
+    if (cached) {
+      setUrl(cached);
+      return;
+    }
+
+    setUrl("");
     mediaBlobUrl(mediaId)
       .then((next) => {
-        objectUrl = next;
         if (active) setUrl(next);
       })
       .catch(() => active && setUrl(""));
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [mediaId]);
 

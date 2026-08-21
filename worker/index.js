@@ -397,7 +397,7 @@ async function broadcastSelectedCompanyMutation(env, identity, request, url) {
   }
 }
 
-const FREE_PLAN_LIMITS = Object.freeze({ members: 5, communities: 2 });
+const FREE_PLAN_LIMITS = Object.freeze({ members: 5, communities: 2, jobs: 3 });
 
 function superadminUids(env) {
   return new Set(
@@ -513,6 +513,15 @@ async function assertMemberCapacity(env, companyId, includePendingInvites = fals
 
   if (active + reserved >= FREE_PLAN_LIMITS.members) {
     throw httpError(402, 'O plano Free permite até 5 membros na empresa. Ative o Uorqui Premium para aumentar a equipe.');
+  }
+}
+
+async function assertJobCapacity(env, company) {
+  if (hasPremiumAccess(company)) return;
+  const jobs = await fsWhere(env, 'jobs', 'companyId', company.id, FREE_PLAN_LIMITS.jobs + 2);
+  const activeJobs = jobs.filter(job => job.status !== 'closed');
+  if (activeJobs.length >= FREE_PLAN_LIMITS.jobs) {
+    throw httpError(402, 'O plano Free permite até 3 vagas ativas por empresa. Ative o Uorqui Premium para publicar mais vagas.');
   }
 }
 
@@ -1467,6 +1476,24 @@ async function removeCompanyMember(env, identity, companyId, targetUid, ctx) {
 
   await fsDelete(env, 'companyMembers', `${companyId}_${targetUid}`);
 
+  const targetEmail = normalizeEmail(target.email || '');
+  const companyInvites = await fsWhere(env, 'invites', 'companyId', companyId, 250);
+  const relatedInvites = companyInvites.filter(invite =>
+    invite.targetUid === targetUid ||
+    (targetEmail && normalizeEmail(invite.email || '') === targetEmail)
+  );
+  if (relatedInvites.length) {
+    const cleanup = [];
+    for (const invite of relatedInvites) {
+      cleanup.push({ collection: 'invites', id: invite.id });
+      const recipientUids = new Set([targetUid, invite.targetUid].filter(Boolean));
+      for (const recipientUid of recipientUids) {
+        cleanup.push({ collection: 'notifications', id: `invite_${invite.id}_${recipientUid}` });
+      }
+    }
+    await fsBatchDelete(env, cleanup);
+  }
+
   const notificationId = `company_removed_${companyId}_${targetUid}_${Date.now()}`;
   const notification = {
     recipientUid: targetUid,
@@ -1548,6 +1575,7 @@ async function getCompanyInvites(env, identity, companyId) {
 
   return {
     invites: invites
+      .filter(invite => invite.status !== 'accepted')
       .map(invite => ({
         id: invite.id,
         type: invite.type === 'community' ? 'community' : 'company',
@@ -2067,6 +2095,7 @@ async function createJob(env, identity, body, ctx) {
     fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.'),
     ensureUser(env, identity)
   ]);
+  await assertJobCapacity(env, company);
 
   const title = clean(body.title, 140);
   const description = clean(body.description, 5000);

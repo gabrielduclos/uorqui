@@ -16,6 +16,7 @@ export type BillingStatus = "inactive" | "pending" | "active" | "past_due" | "ca
 export interface PlanLimits {
   members: number | null;
   communities: number | null;
+  jobs: number | null;
 }
 
 export interface CompanyAddress {

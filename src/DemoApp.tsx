@@ -1,415 +1,345 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
-  BarChart3, Bell, BriefcaseBusiness, Building2, CalendarDays, Check, CheckCircle2,
-  ChevronDown, CirclePlus, Clock3, Eye, Globe2, Heart, Home, LockKeyhole, MapPin,
-  Megaphone, MessageCircle, MoreHorizontal, Plus, Search, Send, Settings, Share2,
-  Sparkles, Target, Trash2, TrendingUp, UserPlus, UserRound, Users, Vote, X
+  Bell, BriefcaseBusiness, Building2, Camera, Check, ChevronDown, CirclePlus, CreditCard,
+  Crown, Globe2, Home, LockKeyhole, LogOut, Mail, MapPin, Megaphone, MessageCircle,
+  Plus, Search, Settings, Trash2, UserPlus, UserRound, Users, X
 } from "lucide-react";
-import "./demo.css";
+import { Avatar } from "./components/Avatar";
+import { Modal } from "./components/Modal";
+import { PostCard } from "./components/PostCard";
+import type { Community, HomeTab, Post, View } from "./types";
+import "./styles.css";
 
-type DemoSection = "dashboard" | "feed" | "communities" | "jobs" | "notifications";
-type DemoPerson = { name: string; role: string; color: string };
-type DemoComment = { id: string; author: DemoPerson; text: string; time: string; likes: number; liked?: boolean; mine?: boolean };
-type DemoPollOption = { id: string; text: string; votes: number };
-type DemoPost = {
-  id: string;
-  type: "post" | "announcement" | "question" | "poll" | "event";
-  author: DemoPerson;
-  time: string;
-  scope: "company" | "community" | "world";
-  communityId?: string;
-  communityName?: string;
-  title?: string;
-  text: string;
-  likes: number;
-  liked?: boolean;
-  comments: DemoComment[];
-  resolved?: boolean;
-  requiresRead?: boolean;
-  read?: boolean;
-  poll?: DemoPollOption[];
-  event?: { date: string; location: string };
-};
+const company = { id: "demo-company", name: "Lumina Tecnologia" };
+const me = { uid: "demo-me", name: "Gabriel Duclos", email: "gabriel@lumina.demo" };
+const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
-const me: DemoPerson = { name: "Gabriel Duclos", role: "Proprietário", color: "#24272d" };
+const communities: Community[] = [
+  { id: "demo-geral", companyId: company.id, name: "Geral", description: "Novidades e conversas de toda a empresa", visibility: "public", memberCount: 248 },
+  { id: "demo-produto", companyId: company.id, name: "Produto & Tecnologia", description: "Roadmap, descobertas e decisões técnicas", visibility: "public", memberCount: 64 },
+  { id: "demo-comercial", companyId: company.id, name: "Comercial", description: "Oportunidades, playbooks e aprendizados", visibility: "private", memberCount: 38 },
+  { id: "demo-pessoas", companyId: company.id, name: "Pessoas & Cultura", description: "Benefícios, rituais e desenvolvimento", visibility: "public", memberCount: 248 },
+];
 
-const people = {
-  mariana: { name: "Mariana Costa", role: "Pessoas & Cultura", color: "#8a5b48" },
-  lucas: { name: "Lucas Martins", role: "Produto", color: "#426a73" },
-  ana: { name: "Ana Ribeiro", role: "Comercial", color: "#6b5c8e" },
-  joao: { name: "João Lima", role: "Tecnologia", color: "#496a4f" },
-  beatriz: { name: "Beatriz Alves", role: "Customer Success", color: "#8c5d73" },
-  rafael: { name: "Rafael Rocha", role: "Operações", color: "#6b6348" }
-} satisfies Record<string, DemoPerson>;
-
-const communities = [
-  { id: "geral", name: "Geral", description: "Novidades e conversas de toda a empresa", members: 248, posts: 684, visibility: "public", color: "#23262c", trend: "+18%" },
-  { id: "produto", name: "Produto & Tecnologia", description: "Roadmap, descobertas e decisões técnicas", members: 64, posts: 392, visibility: "public", color: "#456d76", trend: "+31%" },
-  { id: "comercial", name: "Comercial", description: "Oportunidades, playbooks e aprendizados", members: 38, posts: 276, visibility: "private", color: "#6c5a8d", trend: "+22%" },
-  { id: "pessoas", name: "Pessoas & Cultura", description: "Benefícios, rituais e desenvolvimento", members: 248, posts: 181, visibility: "public", color: "#8b5d48", trend: "+12%" },
-  { id: "lideranca", name: "Liderança", description: "Alinhamentos estratégicos e indicadores", members: 18, posts: 143, visibility: "private", color: "#5c6475", trend: "+9%" },
-  { id: "ideias", name: "Banco de ideias", description: "Sugestões que podem virar projetos", members: 171, posts: 166, visibility: "public", color: "#567154", trend: "+27%" }
-] as const;
-
-const initialPosts: DemoPost[] = [
+const initialPosts: Post[] = [
   {
-    id: "p1", type: "announcement", author: people.mariana, time: "há 18 min", scope: "company",
-    title: "Novo benefício: Wellhub disponível a partir de setembro",
-    text: "Fechamos uma parceria para ampliar o cuidado com saúde e bem-estar. O cadastro estará disponível no portal de benefícios na próxima segunda-feira. Leiam o guia e confirmem a ciência abaixo.",
-    likes: 47, requiresRead: true, comments: [
-      { id: "c11", author: people.beatriz, text: "Ótima novidade! O benefício também contempla dependentes?", time: "há 12 min", likes: 6 },
-      { id: "c12", author: people.mariana, text: "Sim, Bia. Até três dependentes, com contratação direto pelo aplicativo.", time: "há 8 min", likes: 9 }
-    ]
+    id: "demo-announcement", authorUid: "demo-mariana", authorName: "Mariana Costa", scope: "company",
+    companyId: company.id, companyName: company.name, type: "announcement", title: "Novo benefício: Wellhub disponível a partir de setembro",
+    text: "Fechamos uma parceria para ampliar o cuidado com saúde e bem-estar. O cadastro estará disponível no portal de benefícios na próxima segunda-feira.",
+    requiresReadReceipt: true, hasRead: false, reactionCount: 47, commentCount: 2, createdAt: ago(30), updatedAt: ago(18),
   },
   {
-    id: "p2", type: "question", author: people.lucas, time: "há 42 min", scope: "community", communityId: "produto", communityName: "Produto & Tecnologia",
-    title: "Como reduzir o tempo de ativação dos novos clientes?",
-    text: "Hoje a mediana está em 4,8 dias. Quero reunir ideias para chegar a menos de 3 dias sem aumentar o esforço do time de CS. O que vocês já observaram nas últimas implantações?",
-    likes: 29, comments: [
-      { id: "c21", author: people.beatriz, text: "Os clientes que recebem o checklist antes da primeira reunião avançam quase dois dias mais rápido. Podemos automatizar esse envio no aceite do contrato.", time: "há 31 min", likes: 18 },
-      { id: "c22", author: people.joao, text: "Consigo criar o gatilho no CRM e deixar os dados básicos pré-preenchidos. Faço um protótipo ainda esta semana.", time: "há 22 min", likes: 11 },
-      { id: "c23", author: me, text: "Vamos testar com os próximos dez clientes e comparar com a coorte atual.", time: "há 10 min", likes: 7, mine: true }
-    ]
+    id: "demo-question", authorUid: "demo-lucas", authorName: "Lucas Martins", scope: "community",
+    companyId: company.id, companyName: company.name, communityId: "demo-produto", communityName: "Produto & Tecnologia", communityVisibility: "public",
+    type: "question", title: "Como reduzir o tempo de ativação dos novos clientes?",
+    text: "Hoje a mediana está em 4,8 dias. Quero reunir ideias para chegar a menos de 3 dias sem aumentar o esforço do time de CS.",
+    reactionCount: 29, commentCount: 3, createdAt: ago(58), updatedAt: ago(22),
   },
   {
-    id: "p3", type: "poll", author: people.ana, time: "há 1 h", scope: "community", communityId: "comercial", communityName: "Comercial",
-    text: "Qual tema deve abrir o próximo encontro de capacitação comercial?", likes: 18, comments: [],
-    poll: [
-      { id: "o1", text: "Diagnóstico e perguntas", votes: 42 },
-      { id: "o2", text: "Negociação de valor", votes: 67 },
-      { id: "o3", text: "Demonstração do produto", votes: 31 },
-      { id: "o4", text: "Contorno de objeções", votes: 54 }
-    ]
+    id: "demo-poll", authorUid: "demo-ana", authorName: "Ana Ribeiro", scope: "community",
+    companyId: company.id, companyName: company.name, communityId: "demo-comercial", communityName: "Comercial", communityVisibility: "private",
+    type: "poll", text: "Qual tema deve abrir o próximo encontro de capacitação comercial?", reactionCount: 18, commentCount: 0,
+    pollOptions: [
+      { id: "poll-1", text: "Diagnóstico e perguntas", voteCount: 42 },
+      { id: "poll-2", text: "Negociação de valor", voteCount: 67 },
+      { id: "poll-3", text: "Demonstração do produto", voteCount: 31 },
+      { id: "poll-4", text: "Contorno de objeções", voteCount: 54 },
+    ],
+    pollTotalVotes: 194, createdAt: ago(88), updatedAt: ago(88),
   },
   {
-    id: "p4", type: "event", author: people.rafael, time: "há 2 h", scope: "company",
-    title: "Town Hall · Resultados do trimestre", text: "Vamos compartilhar os resultados do trimestre, reconhecer conquistas e apresentar as três prioridades para o próximo ciclo.",
-    likes: 63, comments: [{ id: "c41", author: people.ana, text: "Quem estiver em visita poderá acompanhar a gravação depois?", time: "há 1 h", likes: 3 }],
-    event: { date: "28 ago · 16h00", location: "Auditório + transmissão ao vivo" }
+    id: "demo-event", authorUid: "demo-rafael", authorName: "Rafael Rocha", scope: "company",
+    companyId: company.id, companyName: company.name, type: "event", title: "Town Hall · Resultados do trimestre",
+    text: "Vamos compartilhar os resultados do trimestre, reconhecer conquistas e apresentar as três prioridades para o próximo ciclo.",
+    eventStart: new Date(Date.now() + 7 * 86_400_000).toISOString(), eventEnd: new Date(Date.now() + 7 * 86_400_000 + 3_600_000).toISOString(),
+    eventLocation: "Auditório + transmissão ao vivo", reactionCount: 63, commentCount: 1, createdAt: ago(130), updatedAt: ago(82),
   },
   {
-    id: "p5", type: "post", author: people.beatriz, time: "ontem", scope: "world",
-    text: "Compartilhamos nosso playbook aberto de onboarding B2B: aprendizados de mais de 400 implantações, com exemplos de rituais, checklist e indicadores. Espero que ajude outras equipes!",
-    likes: 126, comments: [{ id: "c51", author: people.lucas, text: "Ficou excelente — e já gerou boas conversas com o mercado.", time: "há 19 h", likes: 14 }]
-  }
+    id: "demo-world", authorUid: "demo-beatriz", authorName: "Beatriz Alves", scope: "world",
+    companyId: company.id, companyName: company.name, type: "post",
+    text: "Compartilhamos nosso playbook aberto de onboarding B2B: aprendizados de mais de 400 implantações, com exemplos de rituais, checklist e indicadores.",
+    reactionCount: 126, commentCount: 1, createdAt: ago(220), updatedAt: ago(170),
+  },
 ];
 
 const jobs = [
-  { title: "Product Designer Sênior", area: "Produto", location: "São Paulo · Híbrido", type: "CLT", audience: "Mundo", applicants: 34, age: "há 2 dias" },
-  { title: "Analista de Customer Success", area: "Experiência do Cliente", location: "Remoto · Brasil", type: "CLT", audience: "Mundo", applicants: 51, age: "há 4 dias" },
-  { title: "Líder de Operações", area: "Operações", location: "Campinas · Presencial", type: "Oportunidade interna", audience: "Empresa", applicants: 8, age: "há 6 dias" }
+  { id: "job-1", title: "Product Designer Sênior", area: "Produto", location: "São Paulo · Híbrido", contract: "CLT", audience: "world" as const, description: "Pessoa para transformar descobertas de clientes em experiências simples e consistentes." },
+  { id: "job-2", title: "Analista de Customer Success", area: "Experiência do Cliente", location: "Remoto · Brasil", contract: "CLT", audience: "world" as const, description: "Atuação consultiva no onboarding e na evolução da carteira de clientes B2B." },
+  { id: "job-3", title: "Líder de Operações", area: "Operações", location: "Campinas · Presencial", contract: "Oportunidade interna", audience: "company" as const, description: "Oportunidade interna para liderar rotinas, indicadores e melhoria contínua." },
 ];
 
-const notifications = [
-  { icon: MessageCircle, color: "blue", title: "João Lima respondeu sua publicação", text: "Consigo criar o gatilho no CRM e deixar os dados básicos pré-preenchidos…", time: "há 22 min", unread: true },
-  { icon: UserPlus, color: "green", title: "Camila Souza entrou na empresa", text: "Sugestão: adicione a nova colaboradora às comunidades ativas.", time: "há 38 min", unread: true },
-  { icon: Heart, color: "red", title: "7 pessoas curtiram sua resposta", text: "Vamos testar com os próximos dez clientes e comparar com a coorte atual.", time: "há 1 h", unread: true },
-  { icon: Bell, color: "amber", title: "Confirmação de leitura pendente", text: "Novo benefício: Wellhub disponível a partir de setembro", time: "há 2 h", unread: false },
-  { icon: BriefcaseBusiness, color: "purple", title: "Nova candidatura interna", text: "Uma pessoa se candidatou à vaga Líder de Operações.", time: "ontem", unread: false }
+type DemoNotification = { id: string; title: string; body: string; read: boolean; type: "comment" | "member" | "like" | "read" };
+const initialNotifications: DemoNotification[] = [
+  { id: "notification-1", title: "João Lima respondeu sua publicação", body: "Consigo criar o gatilho no CRM e deixar os dados básicos pré-preenchidos…", read: false, type: "comment" },
+  { id: "notification-2", title: "Camila Souza entrou na empresa", body: "Sugestão: adicione a nova colaboradora às comunidades ativas.", read: false, type: "member" },
+  { id: "notification-3", title: "7 pessoas curtiram sua resposta", body: "Vamos testar com os próximos dez clientes e comparar com a coorte atual.", read: false, type: "like" },
+  { id: "notification-4", title: "Confirmação de leitura pendente", body: "Novo benefício: Wellhub disponível a partir de setembro", read: true, type: "read" },
 ];
 
-function initials(name: string) {
-  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+function NavButton({ active, icon, label, badge, onClick }: { active?: boolean; icon: ReactNode; label: string; badge?: number; onClick: () => void }) {
+  return <button className={active ? "active" : ""} onClick={onClick}>{icon}<span>{label}</span>{!!badge && <b className="nav-badge">{badge}</b>}</button>;
 }
 
-function DemoAvatar({ person, size = 38 }: { person: DemoPerson; size?: number }) {
-  return <span className="demo-avatar" style={{ width: size, height: size, background: person.color }}>{initials(person.name)}</span>;
-}
-
-function NavItem({ active, icon, children, count, onClick }: { active?: boolean; icon: ReactNode; children: ReactNode; count?: number; onClick: () => void }) {
-  return (
-    <button className={`demo-nav-item ${active ? "active" : ""}`} onClick={onClick}>
-      {icon}<span>{children}</span>{count ? <b>{count}</b> : null}
-    </button>
-  );
-}
-
-function MetricCard({ icon, label, value, detail, tone }: { icon: ReactNode; label: string; value: string; detail: string; tone: string }) {
-  return (
-    <article className="demo-metric-card">
-      <span className={`demo-metric-icon ${tone}`}>{icon}</span>
-      <div><small>{label}</small><strong>{value}</strong><p><TrendingUp size={13} /> {detail}</p></div>
-    </article>
-  );
-}
-
-function Dashboard({ onOpenFeed, onOpenCommunity }: { onOpenFeed: () => void; onOpenCommunity: (id: string) => void }) {
-  const chart = [48, 62, 57, 76, 69, 88, 81];
-  return (
-    <div className="demo-page demo-dashboard">
-      <div className="demo-page-title">
-        <div><span className="demo-eyebrow"><Sparkles size={14} /> Sexta-feira, 21 de agosto</span><h1>Bom dia, Gabriel</h1><p>Veja o que está movimentando a Lumina hoje.</p></div>
-        <button className="demo-primary" onClick={onOpenFeed}><Plus size={17} /> Nova publicação</button>
-      </div>
-
-      <div className="demo-metrics-grid">
-        <MetricCard icon={<Users />} label="Colaboradores ativos" value="248" detail="12 neste mês" tone="ink" />
-        <MetricCard icon={<MessageCircle />} label="Conversas no mês" value="1.842" detail="18,4% vs. julho" tone="blue" />
-        <MetricCard icon={<Target />} label="Taxa de participação" value="87%" detail="6,2 p.p. no trimestre" tone="green" />
-        <MetricCard icon={<CheckCircle2 />} label="Assuntos concluídos" value="326" detail="91% com resposta" tone="purple" />
-      </div>
-
-      <div className="demo-dashboard-grid">
-        <section className="demo-panel demo-engagement-panel">
-          <div className="demo-panel-head"><div><h2>Engajamento</h2><p>Interações nos últimos 7 dias</p></div><button>7 dias <ChevronDown size={14} /></button></div>
-          <div className="demo-chart-summary"><strong>4.286</strong><span><TrendingUp size={13} /> 14,8%</span></div>
-          <div className="demo-bar-chart">
-            {chart.map((value, index) => <div key={index}><i style={{ height: `${value}%` }} /><span>{["S", "T", "Q", "Q", "S", "S", "D"][index]}</span></div>)}
-          </div>
-        </section>
-
-        <section className="demo-panel demo-pulse-panel">
-          <div className="demo-panel-head"><div><h2>Pulso da empresa</h2><p>Pesquisa semanal · 193 respostas</p></div><MoreHorizontal size={18} /></div>
-          <div className="demo-pulse-score"><strong>8,7</strong><span>/ 10</span></div>
-          <div className="demo-pulse-track"><i /></div>
-          <div className="demo-pulse-labels"><span>Precisa de atenção</span><span>Excelente</span></div>
-          <div className="demo-pulse-footer"><span>Principal destaque</span><strong>Clareza das prioridades</strong></div>
-        </section>
-      </div>
-
-      <div className="demo-dashboard-grid lower">
-        <section className="demo-panel">
-          <div className="demo-panel-head"><div><h2>Comunidades em alta</h2><p>Onde as conversas mais cresceram</p></div><button onClick={() => onOpenCommunity("produto")}>Ver todas</button></div>
-          <div className="demo-ranking">
-            {communities.slice(1, 5).map((community, index) => (
-              <button key={community.id} onClick={() => onOpenCommunity(community.id)}>
-                <b>{index + 1}</b><span className="demo-community-mark" style={{ background: community.color }}>{initials(community.name)}</span>
-                <div><strong>{community.name}</strong><small>{community.posts} publicações</small></div><em>{community.trend}</em>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="demo-panel demo-activity-panel">
-          <div className="demo-panel-head"><div><h2>Atividade recente</h2><p>Movimentos importantes de hoje</p></div></div>
-          {notifications.slice(0, 4).map((item, index) => {
-            const Icon = item.icon;
-            return <div className="demo-activity" key={index}><span className={item.color}><Icon size={15} /></span><div><strong>{item.title}</strong><small>{item.time}</small></div></div>;
-          })}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-function DemoPostCard({ post, onLike, onComment, onDeleteComment, onResolve, showToast }: {
-  post: DemoPost;
-  onLike: (id: string) => void;
-  onComment: (id: string, text: string) => void;
-  onDeleteComment: (postId: string, commentId: string) => void;
-  onResolve: (id: string) => void;
-  showToast: (message: string) => void;
-}) {
-  const [commentsOpen, setCommentsOpen] = useState(post.id === "p2");
-  const [selectedPoll, setSelectedPoll] = useState("");
-  const [read, setRead] = useState(Boolean(post.read));
-  const totalVotes = (post.poll || []).reduce((sum, option) => sum + option.votes + (selectedPoll === option.id ? 1 : 0), 0);
-  const scope = post.scope === "world" ? "Mundo" : post.scope === "community" ? post.communityName : "Lumina Tech";
-
-  const addComment = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const value = String(new FormData(form).get("comment") || "").trim();
-    if (!value) return;
-    onComment(post.id, value);
-    form.reset();
-    setCommentsOpen(true);
-  };
-
-  return (
-    <article className="demo-post-card">
-      <header className="demo-post-head">
-        <DemoAvatar person={post.author} />
-        <div><strong>{post.author.name}</strong><span>{post.author.role} · {post.time}</span><small className={post.scope}>{post.scope === "world" ? <Globe2 size={11} /> : post.scope === "community" ? <Users size={11} /> : <Building2 size={11} />}{scope}</small></div>
-        <button className="demo-icon-button"><MoreHorizontal size={19} /></button>
-      </header>
-
-      <div className="demo-post-content">
-        {post.type === "announcement" && <span className="demo-post-kind announcement"><Megaphone size={13} /> COMUNICADO</span>}
-        {post.type === "question" && <span className="demo-post-kind question"><MessageCircle size={13} /> PERGUNTA</span>}
-        {post.type === "poll" && <span className="demo-post-kind poll"><Vote size={13} /> ENQUETE</span>}
-        {post.type === "event" && <span className="demo-post-kind event"><CalendarDays size={13} /> EVENTO</span>}
-        {post.title && <h2>{post.title}</h2>}
-        <p>{post.text}</p>
-
-        {post.event && <div className="demo-event-box"><span><CalendarDays size={17} /><b>{post.event.date}</b></span><span><MapPin size={17} />{post.event.location}</span><button onClick={() => showToast("Evento adicionado à agenda.")}><Plus size={14} /> Adicionar à agenda</button></div>}
-
-        {post.poll && <div className="demo-poll-options">
-          {post.poll.map((option) => {
-            const votes = option.votes + (selectedPoll === option.id ? 1 : 0);
-            const percentage = Math.round((votes / Math.max(1, totalVotes)) * 100);
-            return <button key={option.id} className={selectedPoll === option.id ? "selected" : ""} onClick={() => setSelectedPoll(option.id)}><i style={{ width: `${percentage}%` }} /><span>{option.text}</span><b>{percentage}%</b>{selectedPoll === option.id && <Check size={14} />}</button>;
-          })}
-          <small>{totalVotes} votos · votação demonstrativa</small>
-        </div>}
-
-        {post.requiresRead && <div className="demo-read-box"><div><Eye size={17} /><span><strong>Confirmação de leitura</strong><small>{read ? "Leitura confirmada por você" : "212 de 248 pessoas confirmaram"}</small></span></div><button className={read ? "done" : ""} onClick={() => { setRead(true); showToast("Leitura confirmada."); }}>{read ? <><Check size={14} /> Confirmado</> : "Confirmar leitura"}</button></div>}
-      </div>
-
-      <footer className="demo-post-actions">
-        <button className={post.liked ? "liked" : ""} onClick={() => onLike(post.id)}><Heart size={18} fill={post.liked ? "currentColor" : "none"} /><span>{post.likes}</span><em>curtidas</em></button>
-        <button className={commentsOpen ? "active" : ""} onClick={() => setCommentsOpen((value) => !value)}><MessageCircle size={18} /><span>{post.comments.length}</span><em>respostas</em></button>
-        <button onClick={() => showToast("Link da publicação copiado.")}><Share2 size={18} /><em>compartilhar</em></button>
-        {(post.type === "question" || post.type === "post") && post.scope !== "world" && <button className={`demo-resolve ${post.resolved ? "done" : ""}`} onClick={() => onResolve(post.id)}>{post.resolved ? <CheckCircle2 size={18} /> : <CheckCircle2 size={18} />}<em>{post.resolved ? "Concluído" : "Marcar como concluído"}</em></button>}
-      </footer>
-
-      {commentsOpen && <section className="demo-comments">
-        {post.comments.map((comment) => <article key={comment.id} className="demo-comment"><DemoAvatar person={comment.author} size={32} /><div><header><strong>{comment.author.name}</strong><span>{comment.time}</span></header><p>{comment.text}</p><footer><button className={comment.liked ? "liked" : ""}><Heart size={13} /> Curtir {comment.likes > 0 && <b>{comment.likes}</b>}</button><button className="demo-comment-delete" onClick={() => { if (confirm("Excluir esta resposta da demonstração?")) onDeleteComment(post.id, comment.id); }}><Trash2 size={13} /> Excluir</button></footer></div></article>)}
-        {!post.comments.length && <p className="demo-empty-comments">Seja a primeira pessoa a responder.</p>}
-        <form className="demo-comment-form" onSubmit={addComment}><DemoAvatar person={me} size={32} /><input name="comment" placeholder="Escreva uma resposta…" autoComplete="off" /><button><Send size={15} /></button></form>
-      </section>}
-    </article>
-  );
-}
-
-function Feed({ posts, setPosts, showToast, initialCommunityId = "" }: {
-  posts: DemoPost[];
-  setPosts: React.Dispatch<React.SetStateAction<DemoPost[]>>;
-  showToast: (message: string) => void;
-  initialCommunityId?: string;
-}) {
-  const [tab, setTab] = useState<"for-you" | "recent" | "announcements" | "world">("for-you");
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [communityId, setCommunityId] = useState(initialCommunityId);
-  const visible = posts.filter((post) => communityId ? post.communityId === communityId : tab === "world" ? post.scope === "world" : tab === "announcements" ? post.type === "announcement" : true);
-
-  const createPost = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const text = String(new FormData(form).get("text") || "").trim();
-    if (!text) return;
-    setPosts((current) => [{ id: `demo-${Date.now()}`, type: "post", author: me, time: "agora", scope: "company", text, likes: 0, comments: [] }, ...current]);
-    setComposerOpen(false);
-    showToast("Publicação criada na demonstração.");
-  };
-
-  const updatePost = (postId: string, updater: (post: DemoPost) => DemoPost) => setPosts((current) => current.map((post) => post.id === postId ? updater(post) : post));
-
-  return (
-    <div className="demo-page demo-feed-page">
-      <div className="demo-page-title compact"><div><h1>{communityId ? communities.find((item) => item.id === communityId)?.name : "Início"}</h1><p>{communityId ? "Conversas e decisões desta comunidade" : "Conversas que merecem sua atenção"}</p></div><button className="demo-primary" onClick={() => setComposerOpen(true)}><Plus size={17} /> Publicar</button></div>
-      {!communityId && <div className="demo-feed-tabs"><button className={tab === "for-you" ? "active" : ""} onClick={() => setTab("for-you")}>Para você</button><button className={tab === "recent" ? "active" : ""} onClick={() => setTab("recent")}>Recentes</button><button className={tab === "announcements" ? "active" : ""} onClick={() => setTab("announcements")}>Comunicados</button><button className={tab === "world" ? "active" : ""} onClick={() => setTab("world")}><Globe2 size={14} /> Mundo</button></div>}
-      {communityId && <button className="demo-clear-filter" onClick={() => setCommunityId("")}><X size={14} /> Ver todo o feed</button>}
-      <button className="demo-quick-compose" onClick={() => setComposerOpen(true)}><DemoAvatar person={me} /><span>Compartilhe uma novidade, pergunta ou ideia…</span><Sparkles size={18} /></button>
-      <div className="demo-feed">
-        {visible.map((post) => <DemoPostCard
-          key={post.id} post={post} showToast={showToast}
-          onLike={(id) => updatePost(id, (item) => ({ ...item, liked: !item.liked, likes: Math.max(0, item.likes + (item.liked ? -1 : 1)) }))}
-          onComment={(id, text) => updatePost(id, (item) => ({ ...item, comments: [...item.comments, { id: `comment-${Date.now()}`, author: me, text, time: "agora", likes: 0, mine: true }] }))}
-          onDeleteComment={(id, commentId) => { updatePost(id, (item) => ({ ...item, comments: item.comments.filter((comment) => comment.id !== commentId) })); showToast("Resposta excluída."); }}
-          onResolve={(id) => updatePost(id, (item) => ({ ...item, resolved: !item.resolved }))}
-        />)}
-      </div>
-
-      {composerOpen && <div className="demo-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setComposerOpen(false)}><div className="demo-modal"><header><div><span>Nova publicação</span><small>Lumina Tech</small></div><button onClick={() => setComposerOpen(false)}><X size={19} /></button></header><form onSubmit={createPost}><div className="demo-composer-author"><DemoAvatar person={me} /><div><strong>{me.name}</strong><button type="button"><Building2 size={13} /> Toda a empresa <ChevronDown size={13} /></button></div></div><textarea name="text" autoFocus placeholder="O que você quer compartilhar?" /><div className="demo-composer-types"><button type="button"><MessageCircle size={15} /> Pergunta</button><button type="button"><Vote size={15} /> Enquete</button><button type="button"><CalendarDays size={15} /> Evento</button></div><footer><small>Os dados desta tela são apenas demonstrativos.</small><button className="demo-primary"><Send size={15} /> Publicar</button></footer></form></div></div>}
-    </div>
-  );
-}
-
-function Communities({ onOpen }: { onOpen: (id: string) => void }) {
-  const [filter, setFilter] = useState<"all" | "mine" | "public">("all");
-  const list = communities.filter((community) => filter !== "public" || community.visibility === "public");
-  return (
-    <div className="demo-page">
-      <div className="demo-page-title"><div><h1>Comunidades</h1><p>Espaços para cada time, tema e iniciativa da Lumina.</p></div><button className="demo-primary"><CirclePlus size={17} /> Criar comunidade</button></div>
-      <div className="demo-community-toolbar"><div><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Todas</button><button className={filter === "mine" ? "active" : ""} onClick={() => setFilter("mine")}>Participo</button><button className={filter === "public" ? "active" : ""} onClick={() => setFilter("public")}>Públicas</button></div><label><Search size={16} /><input placeholder="Buscar comunidade" /></label></div>
-      <div className="demo-community-grid">
-        {list.map((community) => <article key={community.id} className="demo-community-card" onClick={() => onOpen(community.id)}><header><span className="demo-community-mark large" style={{ background: community.color }}>{initials(community.name)}</span><span className={`demo-visibility ${community.visibility}`}>{community.visibility === "public" ? <Globe2 size={12} /> : <LockKeyhole size={12} />}{community.visibility === "public" ? "Pública" : "Privada"}</span></header><h2>{community.name}</h2><p>{community.description}</p><footer><span><Users size={14} /> {community.members} membros</span><span><MessageCircle size={14} /> {community.posts}</span><b>{community.trend}</b></footer></article>)}
-      </div>
-    </div>
-  );
-}
-
-function Jobs() {
-  return (
-    <div className="demo-page">
-      <div className="demo-page-title"><div><h1>Vagas</h1><p>Oportunidades abertas para talentos internos e para o mercado.</p></div><button className="demo-primary"><Plus size={17} /> Publicar vaga</button></div>
-      <div className="demo-jobs-summary"><div><strong>3</strong><span>Vagas abertas</span></div><div><strong>93</strong><span>Candidaturas</span></div><div><strong>1</strong><span>Oportunidade interna</span></div></div>
-      <div className="demo-job-tabs"><button className="active">Todas <span>3</span></button><button>Somente empresa <span>1</span></button><button>Para o mundo <span>2</span></button></div>
-      <div className="demo-job-list">
-        {jobs.map((job) => <article key={job.title}><span className="demo-job-icon"><BriefcaseBusiness /></span><div className="demo-job-main"><small>{job.area}</small><h2>{job.title}</h2><p><MapPin size={14} /> {job.location}<span>·</span>{job.type}</p><div><span className={job.audience === "Mundo" ? "world" : "company"}>{job.audience === "Mundo" ? <Globe2 size={12} /> : <Building2 size={12} />}{job.audience}</span><em>{job.age}</em></div></div><aside><strong>{job.applicants}</strong><span>candidaturas</span><button>Ver vaga</button></aside></article>)}
-      </div>
-    </div>
-  );
-}
-
-function Notifications() {
-  const [items, setItems] = useState(notifications);
-  return (
-    <div className="demo-page demo-notifications-page">
-      <div className="demo-page-title"><div><h1>Notificações</h1><p>Acompanhe respostas, convites e ações que precisam de você.</p></div><button className="demo-secondary" onClick={() => setItems((current) => current.map((item) => ({ ...item, unread: false })))}><Check size={15} /> Marcar todas como lidas</button></div>
-      <div className="demo-notification-list">
-        {items.map((item, index) => { const Icon = item.icon; return <article className={item.unread ? "unread" : ""} key={`${item.title}-${index}`}><span className={item.color}><Icon size={18} /></span><div><strong>{item.title}</strong><p>{item.text}</p><small>{item.time}</small></div>{item.unread && <i />}<button onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={15} /></button></article>; })}
-      </div>
-    </div>
-  );
+function MobileNav({ active, icon, label, onClick }: { active?: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+  return <button className={active ? "active" : ""} onClick={onClick}>{icon}<small>{label}</small></button>;
 }
 
 export default function DemoApp() {
-  const [section, setSection] = useState<DemoSection>("dashboard");
+  const [view, setView] = useState<View>("home");
+  const [homeTab, setHomeTab] = useState<HomeTab>("for-you");
   const [posts, setPosts] = useState(initialPosts);
   const [selectedCommunityId, setSelectedCommunityId] = useState("");
   const [search, setSearch] = useState("");
+  const [notifications, setNotifications] = useState(initialNotifications);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [toast, setToast] = useState("");
-  const unread = notifications.filter((item) => item.unread).length;
-  const title = { dashboard: "Visão geral", feed: "Início", communities: "Comunidades", jobs: "Vagas", notifications: "Notificações" }[section];
-  const searchResults = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase("pt-BR");
-    if (query.length < 2) return [];
-    return posts.filter((post) => `${post.title || ""} ${post.text} ${post.communityName || ""}`.toLocaleLowerCase("pt-BR").includes(query));
-  }, [posts, search]);
+  const unread = notifications.filter((item) => !item.read).length;
 
-  const notify = (message: string) => {
+  const showToast = (message: string) => {
     setToast(message);
-    window.setTimeout(() => setToast(""), 2600);
+    window.setTimeout(() => setToast(""), 2400);
   };
-  const openCommunity = (id: string) => { setSelectedCommunityId(id); setSection("feed"); };
+
+  const navigate = (next: View) => {
+    setView(next);
+    if (next !== "communities") setSelectedCommunityId("");
+  };
+
+  const likePost = async (post: Post) => {
+    const liked = !post.liked;
+    const reactionCount = Math.max(0, Number(post.reactionCount || 0) + (liked ? 1 : -1));
+    setPosts((current) => current.map((item) => item.id === post.id ? { ...item, liked, reactionCount } : item));
+    return { liked, reactionCount };
+  };
+
+  const readPost = async (post: Post) => {
+    setPosts((current) => current.map((item) => item.id === post.id ? { ...item, hasRead: true } : item));
+    showToast("Leitura confirmada.");
+  };
+
+  const deletePost = async (post: Post) => {
+    if (!window.confirm(post.authorUid === me.uid ? "Excluir sua publicação?" : "Apagar esta publicação como administrador?")) return;
+    setPosts((current) => current.filter((item) => item.id !== post.id));
+    showToast("Publicação excluída na demonstração.");
+  };
+
+  const renderPost = (post: Post) => (
+    <PostCard
+      key={post.id}
+      post={post}
+      companyName={company.name}
+      community={communities.find((item) => item.id === post.communityId)}
+      onLike={likePost}
+      onRead={readPost}
+      canDelete={post.authorUid === me.uid || post.scope !== "world"}
+      onDelete={deletePost}
+      currentUid={me.uid}
+      canAdmin
+      onChanged={() => undefined}
+      showToast={showToast}
+    />
+  );
+
+  const visibleHomePosts = useMemo(() => {
+    if (homeTab === "world") return posts.filter((post) => post.scope === "world");
+    if (homeTab === "announcement") return posts.filter((post) => post.type === "announcement");
+    if (homeTab === "recent") return [...posts].sort((a, b) => +new Date(b.createdAt || 0) - +new Date(a.createdAt || 0));
+    return posts.filter((post) => post.scope !== "world");
+  }, [homeTab, posts]);
+
+  const submitPost = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const text = String(data.get("text") || "").trim();
+    if (!text) return;
+    const next: Post = {
+      id: `demo-post-${Date.now()}`, authorUid: me.uid, authorName: me.name, scope: "company", companyId: company.id,
+      companyName: company.name, type: "post", text, reactionCount: 0, commentCount: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    setPosts((current) => [next, ...current]);
+    setComposerOpen(false);
+    setHomeTab("recent");
+    setView("home");
+    showToast("Publicação criada na demonstração.");
+    form.reset();
+  };
+
+  const renderHome = () => (
+    <>
+      <section className="quick-compose">
+        <Avatar name={me.name} />
+        <button onClick={() => setComposerOpen(true)}>Compartilhe algo com sua empresa ou comunidade…</button>
+      </section>
+      <section className="feed">{visibleHomePosts.map(renderPost)}</section>
+    </>
+  );
+
+  const renderCommunities = () => {
+    const selected = communities.find((community) => community.id === selectedCommunityId);
+    if (selected) {
+      const communityPosts = posts.filter((post) => post.communityId === selected.id);
+      return (
+        <section className="page-section">
+          <section className="community-detail-head">
+            <button className="back-button" onClick={() => setSelectedCommunityId("")}>← Comunidades</button>
+            <div className="community-detail-title">
+              <div className="community-avatar large">{selected.name.slice(0, 2).toUpperCase()}</div>
+              <div><h2>{selected.name}</h2><p>{selected.description}</p><span className={`community-visibility-badge ${selected.visibility}`}>{selected.visibility === "public" ? "Pública" : "Privada"}</span></div>
+            </div>
+            <button className="community-manage-members-tag" onClick={() => showToast("Gerência de membros aberta na demonstração.")}><Users size={13} /> Gerenciar membros <b>{selected.memberCount}</b></button>
+          </section>
+          <section className="feed community-feed">{communityPosts.map(renderPost)}</section>
+        </section>
+      );
+    }
+    return (
+      <section className="page-section">
+        <div className="page-heading"><div><h2>Comunidades</h2><p>Encontre os espaços de conversa da {company.name}.</p></div><button className="btn" onClick={() => showToast("Nova comunidade simulada.")}><CirclePlus size={17} /> Nova comunidade</button></div>
+        <div className="community-grid">
+          {communities.map((community) => (
+            <button className="community-card community-link" key={community.id} onClick={() => setSelectedCommunityId(community.id)}>
+              <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
+              <div><strong>{community.name}</strong><p>{community.description}</p><span className="community-member-count"><Users size={12} /> {community.memberCount} membros</span></div>
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const renderSearch = () => {
+    const query = search.trim().toLowerCase();
+    const results = query.length >= 2 ? posts.filter((post) => `${post.title || ""} ${post.text} ${post.authorName || ""}`.toLowerCase().includes(query)) : [];
+    return (
+      <section className="page-section">
+        <div className="page-heading"><div><h2>Buscar</h2><p>Pesquise publicações da empresa e de comunidades públicas.</p></div></div>
+        <div className="large-search"><Search size={19} /><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Busque assuntos, respostas ou pessoas" />{search && <button className="icon-btn" onClick={() => setSearch("")}><X size={17} /></button>}</div>
+        <section className="feed search-results">{results.map(renderPost)}{query.length >= 2 && !results.length && <div className="empty-state"><Search /><h3>Nenhum resultado</h3><p>Tente outro termo.</p></div>}</section>
+      </section>
+    );
+  };
+
+  const renderJobs = () => (
+    <section className="page-section">
+      <div className="page-heading jobs-heading"><div><h2>Vagas</h2><p>Oportunidades internas e públicas da empresa.</p></div><button className="btn" onClick={() => showToast("Cadastro de vaga aberto na demonstração.")}><Plus size={17} /> Divulgar vaga</button></div>
+      <div className="jobs-tabs"><button className="active"><Building2 size={16} /> Todas <span>{jobs.length}</span></button><button><Users size={16} /> Internas <span>1</span></button><button><Globe2 size={16} /> Mundo <span>2</span></button></div>
+      <div className="jobs-list">{jobs.map((job) => (
+        <article className="job-card" key={job.id}>
+          <div className="job-card-head"><div className="job-company-mark">LT</div><div className="ellipsis"><strong>{job.title}</strong><small>{company.name} · {job.area}</small></div><span className={`job-audience-pill ${job.audience === "world" ? "world" : ""}`}>{job.audience === "world" ? <Globe2 size={12} /> : <Building2 size={12} />}{job.audience === "world" ? "Mundo" : "Empresa"}</span></div>
+          <p className="job-description">{job.description}</p><div className="job-meta"><span><MapPin size={13} /> {job.location}</span><span><BriefcaseBusiness size={13} /> {job.contract}</span></div>
+          <div className="job-card-actions"><button className="btn small" onClick={() => showToast("Interesse registrado na demonstração.")}>Tenho interesse</button></div>
+        </article>
+      ))}</div>
+    </section>
+  );
+
+  const renderAdmin = () => (
+    <section className="page-section">
+      <div className="page-heading admin-page-heading"><div><h2>Administrar</h2><p>Gerencie empresa, pessoas e comunidades.</p></div><button className="btn secondary" onClick={() => showToast("Dados fiscais disponíveis para edição.")}>Editar dados da empresa</button></div>
+      <div className="admin-company-context"><div className="company-profile-mark">LT</div><div><strong>{company.name}</strong><small>Plano Premium · 248 colaboradores</small></div><span className="plan-pill premium"><Crown size={12} /> Premium</span></div>
+      <div className="admin-grid">
+        <section className="panel-card"><h3>Membros da empresa</h3><div className="member-list">{["Gabriel Duclos", "Mariana Costa", "Lucas Martins", "Camila Souza"].map((name, index) => <div className="member-row" key={name}><Avatar name={name} size={38} /><div><strong>{name}</strong><small>{index === 0 ? "Proprietário" : index === 1 ? "Administrador" : "Colaborador"}</small></div><select defaultValue={index < 2 ? "admin" : "member"}><option value="admin">Administrador</option><option value="member">Colaborador</option></select></div>)}</div></section>
+        <section className="panel-card"><h3>Convidar colaborador</h3><form className="stack-form" onSubmit={(event) => { event.preventDefault(); showToast("Convite fictício enviado."); }}><label><span>E-mail</span><input type="email" defaultValue="novo.colaborador@lumina.demo" /></label><button className="btn"><Mail size={16} /> Enviar convite</button></form></section>
+      </div>
+      <section className="panel-card"><h3>Comunidades</h3><p className="admin-community-help">Defina a visibilidade e abra a gerência de membros.</p>{communities.map((community) => <div className="admin-community-row" key={community.id}><div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div><div><strong>{community.name}</strong><small>{community.memberCount} membros</small></div><span className="private-pill">{community.visibility === "public" ? "Pública" : "Privada"}</span><div className="admin-community-actions"><button className="btn secondary small" onClick={() => { setSelectedCommunityId(community.id); setView("communities"); }}><Users size={14} /> Gerenciar membros</button></div></div>)}</section>
+    </section>
+  );
+
+  const renderProfile = () => (
+    <section className="page-section">
+      <div className="profile-grid">
+        <section className="panel-card profile-panel"><div className="profile-head"><div className="avatar-edit"><Avatar name={me.name} size={92} /><button className="camera-button" onClick={() => showToast("Escolha de foto disponível na versão principal.")}><Camera size={18} /></button></div><div><h2>{me.name}</h2><p>{me.email}</p><span className="private-pill">E-mail verificado</span></div></div><p className="muted">Sua conta Uorqui pertence a você, mesmo quando você troca de empresa.</p></section>
+        <section className="panel-card"><div className="settings-heading"><LockKeyhole /><div><h3>Alterar senha</h3><p>Atualize sua senha de acesso.</p></div></div><form className="stack-form" onSubmit={(event) => { event.preventDefault(); showToast("Senha atualizada na simulação."); }}><label><span>Senha atual</span><input type="password" value="12345678" readOnly /></label><label><span>Nova senha</span><input type="password" value="novasenha" readOnly /></label><button className="btn">Salvar senha</button></form></section>
+      </div>
+      <section className="panel-card profile-companies-card"><div className="profile-companies-head"><div><strong>Suas empresas</strong><p className="muted">Ambientes de trabalho vinculados à sua conta.</p></div><button className="btn secondary small"><Plus size={15} /> Criar empresa</button></div><div className="profile-company-list"><div className="profile-company-row"><div className="company-profile-mark">LT</div><div><strong>{company.name}</strong><small>Proprietário · Premium</small></div><span className="private-pill">Atual</span></div></div></section>
+    </section>
+  );
+
+  const renderNotifications = () => (
+    <section className="page-section">
+      <div className="page-heading"><div><h2>Notificações</h2><p>Acompanhe respostas, curtidas, convites e confirmações.</p></div></div>
+      <div className="notifications-page-list">{notifications.map((item) => {
+        const Icon = item.type === "member" ? UserPlus : item.type === "like" ? Bell : item.type === "read" ? Megaphone : MessageCircle;
+        return <article className={`notification-page-item ${item.read ? "" : "unread"}`} key={item.id} onClick={() => { setNotifications((current) => current.map((notification) => notification.id === item.id ? { ...notification, read: true } : notification)); showToast("Notificação aberta."); }}><div className="notification-icon"><Icon size={17} /></div><div className="notification-page-copy"><strong>{item.title}</strong><p>{item.body}</p><span className="notification-open-post">Abrir conteúdo</span></div><div className="notification-page-actions">{!item.read && <span className="unread-dot" />}<button className="icon-btn notification-delete-button" onClick={(event) => { event.stopPropagation(); setNotifications((current) => current.filter((notification) => notification.id !== item.id)); }}><Trash2 size={15} /></button></div></article>;
+      })}</div>
+    </section>
+  );
+
+  const renderPlans = () => (
+    <section className="page-section">
+      <div className="page-heading plans-heading"><div><h2>Planos</h2><p>Escolha os limites ideais para a empresa.</p></div></div>
+      <div className="plans-company-summary"><div className="company-profile-mark">LT</div><div><strong>{company.name}</strong><small>248 membros · 4 comunidades</small></div><span className="plan-pill premium"><Crown size={12} /> Premium</span></div>
+      <div className="plans-grid">
+        <article className="plan-card"><div className="plan-card-head"><div><span className="plan-eyebrow">Comece gratuitamente</span><h3>Free</h3></div><strong className="plan-price">R$ 0<small>para sempre</small></strong></div><p className="plan-description">Para equipes pequenas validarem o Uorqui.</p><ul className="plan-features"><li><Check size={15} /> Até 5 colaboradores</li><li><Check size={15} /> Até 2 comunidades</li><li><Check size={15} /> Publicações e respostas</li></ul><button className="btn secondary plan-current-button">Plano básico</button></article>
+        <article className="plan-card premium-card current"><span className="premium-ribbon">Recomendado</span><div className="plan-card-head"><div><span className="plan-eyebrow"><Crown size={12} /> Equipes em crescimento</span><h3>Premium</h3></div><strong className="plan-price">R$ 49,90<small>por mês</small></strong></div><p className="plan-description">Comunidades e colaboradores sem os limites do Free.</p><ul className="plan-features"><li><Check size={15} /> Colaboradores ilimitados</li><li><Check size={15} /> Comunidades ilimitadas</li><li><Check size={15} /> Métricas e gestão avançada</li><li><Check size={15} /> Vagas internas e públicas</li></ul><button className="btn plan-upgrade-button" onClick={() => showToast("Premium já está ativo nesta demonstração.")}><CreditCard size={16} /> Premium ativo</button></article>
+      </div>
+    </section>
+  );
+
+  const renderPage = () => {
+    if (view === "home") return renderHome();
+    if (view === "communities") return renderCommunities();
+    if (view === "search") return renderSearch();
+    if (view === "jobs") return renderJobs();
+    if (view === "admin" || view === "company-data") return renderAdmin();
+    if (view === "notifications") return renderNotifications();
+    if (view === "plans") return renderPlans();
+    return renderProfile();
+  };
+
+  const pageTitle: Partial<Record<View, string>> = { home: "Início", communities: "Comunidades", search: "Buscar", jobs: "Vagas", admin: "Administrar", profile: "Perfil", notifications: "Notificações", plans: "Planos" };
 
   return (
-    <div className="demo-app">
-      <aside className="demo-sidebar">
-        <div className="demo-brand"><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /><span>DEMO</span></div>
-        <button className="demo-company-picker"><span>LT</span><div><strong>Lumina Tech</strong><small>Ambiente demonstrativo</small></div><ChevronDown size={16} /></button>
-        <nav>
-          <small>ESPAÇO DE TRABALHO</small>
-          <NavItem active={section === "dashboard"} icon={<BarChart3 />} onClick={() => setSection("dashboard")}>Visão geral</NavItem>
-          <NavItem active={section === "feed" && !selectedCommunityId} icon={<Home />} onClick={() => { setSelectedCommunityId(""); setSection("feed"); }}>Início</NavItem>
-          <NavItem active={section === "communities" || Boolean(selectedCommunityId)} icon={<Users />} onClick={() => setSection("communities")}>Comunidades</NavItem>
-          <NavItem active={section === "jobs"} icon={<BriefcaseBusiness />} onClick={() => setSection("jobs")}>Vagas</NavItem>
-          <small>GESTÃO</small>
-          <NavItem icon={<Building2 />} onClick={() => notify("Área da empresa disponível na versão completa.")}>Empresa</NavItem>
-          <NavItem icon={<Settings />} onClick={() => notify("Configurações disponíveis na versão completa.")}>Administrar</NavItem>
-        </nav>
-        <div className="demo-sidebar-card"><span><Sparkles size={16} /></span><strong>87% de participação</strong><p>Sua empresa está acima da média de engajamento.</p><button onClick={() => setSection("dashboard")}>Ver métricas</button></div>
-        <div className="demo-user"><DemoAvatar person={me} /><div><strong>{me.name}</strong><small>{me.role}</small></div><MoreHorizontal size={18} /></div>
-      </aside>
+    <>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <button className="brand-button" onClick={() => navigate("home")}><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /></button>
+          <label className="company-picker"><span className="company-mark">LT</span><select defaultValue={company.id}><option value={company.id}>{company.name}</option></select><ChevronDown size={16} /></label>
+          <nav className="side-nav">
+            <NavButton active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
+            <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
+            <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
+            <NavButton active={view === "jobs"} icon={<BriefcaseBusiness />} label="Vagas" onClick={() => navigate("jobs")} />
+            <NavButton active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />
+            <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => navigate("plans")} />
+            <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
+          </nav>
+          <button className="btn publish-main" onClick={() => setComposerOpen(true)}><Plus size={19} /> Publicar</button>
+          <div className="sidebar-user"><Avatar name={me.name} /><div className="ellipsis"><strong>{me.name}</strong><small>{me.email}</small></div><button className="icon-btn" onClick={() => showToast("A demonstração permanece aberta.")}><LogOut size={18} /></button></div>
+        </aside>
 
-      <main className="demo-main">
-        <header className="demo-topbar">
-          <div className="demo-mobile-brand"><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /><span>DEMO</span></div>
-          <h2>{title}</h2>
-          <div className="demo-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar conversas, pessoas e soluções" />{search && <button onClick={() => setSearch("")}><X size={15} /></button>}</div>
-          <button className="demo-top-icon" onClick={() => setSection("notifications")}><Bell size={20} />{unread > 0 && <b>{unread}</b>}</button>
-          <button className="demo-top-avatar" onClick={() => notify("Perfil demonstrativo de Gabriel Duclos.")}><DemoAvatar person={me} size={34} /></button>
-        </header>
+        <main className="main">
+          <header className="topbar">
+            <div className="topbar-line">
+              <div className="topbar-brand"><button className="mobile-logo" onClick={() => navigate("home")}><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /></button><h1>{pageTitle[view] || "Uorqui"}</h1></div>
+              <form className="mobile-header-search" onSubmit={(event) => { event.preventDefault(); navigate("search"); }}><Search size={17} /><input value={search} onChange={(event) => { setSearch(event.target.value); if (event.target.value.trim().length >= 2) navigate("search"); }} placeholder="Buscar" /></form>
+              <div className="topbar-actions"><button className={`icon-btn top-bell ${view === "notifications" ? "active" : ""}`} onClick={() => navigate("notifications")}><Bell size={21} />{unread > 0 && <span className="count-badge">{unread}</span>}</button><button className={`icon-btn header-admin-button ${view === "admin" ? "active" : ""}`} onClick={() => navigate("admin")}><Settings size={21} /></button><button className={`icon-btn mobile-plan-button ${view === "plans" ? "active" : ""}`} onClick={() => navigate("plans")}><Crown size={21} /></button></div>
+            </div>
+            {view === "home" && <div className="tabs">{([['for-you','Para você'],['recent','Recentes'],['announcement','Comunicados'],['world','Mundo']] as const).map(([id,label]) => <button key={id} className={homeTab === id ? "active" : ""} onClick={() => setHomeTab(id)}>{label}</button>)}</div>}
+          </header>
+          {renderPage()}
+        </main>
 
-        <div className="demo-banner"><Sparkles size={15} /><span><strong>Ambiente demonstrativo</strong> · Todos os nomes, números e conteúdos são fictícios.</span><button onClick={() => notify("Você está explorando a demonstração do Uorqui.")}>Saiba mais</button></div>
+        <aside className="rightbar">
+          <button className="global-search" onClick={() => navigate("search")}><Search size={18} /><span>Buscar conversas e soluções</span></button>
+          <section className="side-card"><strong>{company.name}</strong><small>Proprietário · ambiente demonstrativo</small></section>
+          <button className="side-card side-plan-card" onClick={() => navigate("plans")}><span className="plan-pill premium"><Crown size={12} /> Premium</span><strong>Plano da empresa</strong><small>Premium ativo</small></button>
+          <section className="side-card"><strong>Suas comunidades</strong>{communities.map((community) => <button className="mini-community" key={community.id} onClick={() => { setSelectedCommunityId(community.id); setView("communities"); }}><span>{community.name.slice(0,2).toUpperCase()}</span><div><b>{community.name}</b><small>{community.description}</small></div></button>)}</section>
+          <section className="side-card compact"><strong>Uorqui 1.2.20</strong><small>Demonstração com dados totalmente fictícios.</small></section>
+        </aside>
+      </div>
 
-        {search.trim().length >= 2 ? <div className="demo-page demo-search-page"><div className="demo-page-title compact"><div><h1>Resultados para “{search}”</h1><p>{searchResults.length} publicações encontradas nos dados demonstrativos.</p></div></div><div className="demo-feed">{searchResults.map((post) => <DemoPostCard key={post.id} post={post} showToast={notify} onLike={() => {}} onComment={() => {}} onDeleteComment={() => {}} onResolve={() => {}} />)}</div></div> :
-          section === "dashboard" ? <Dashboard onOpenFeed={() => setSection("feed")} onOpenCommunity={openCommunity} /> :
-          section === "feed" ? <Feed posts={posts} setPosts={setPosts} showToast={notify} initialCommunityId={selectedCommunityId} /> :
-          section === "communities" ? <Communities onOpen={openCommunity} /> :
-          section === "jobs" ? <Jobs /> : <Notifications />}
-      </main>
+      <nav className="mobile-nav">
+        <MobileNav active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
+        <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
+        <button className="mobile-create" onClick={() => setComposerOpen(true)}><Plus size={26} /></button>
+        <MobileNav active={view === "jobs"} icon={<BriefcaseBusiness />} label="Vagas" onClick={() => navigate("jobs")} />
+        <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
+      </nav>
 
-      <aside className="demo-rightbar">
-        <section><header><strong>Próximos eventos</strong><button><Plus size={15} /></button></header><div className="demo-next-event"><span><b>28</b><small>AGO</small></span><div><strong>Town Hall</strong><small><Clock3 size={12} /> 16h00 · Auditório</small></div></div><div className="demo-next-event"><span><b>02</b><small>SET</small></span><div><strong>All Hands Produto</strong><small><Clock3 size={12} /> 10h00 · Meet</small></div></div></section>
-        <section><header><strong>Suas comunidades</strong><button onClick={() => setSection("communities")}>Ver todas</button></header>{communities.slice(0, 4).map((community) => <button className="demo-mini-community" key={community.id} onClick={() => openCommunity(community.id)}><span style={{ background: community.color }}>{initials(community.name)}</span><div><strong>{community.name}</strong><small>{community.members} membros</small></div>{community.visibility === "private" && <LockKeyhole size={12} />}</button>)}</section>
-        <section className="demo-invite-card"><span><UserPlus size={20} /></span><strong>Convide sua equipe</strong><p>Traga as conversas e o conhecimento para um só lugar.</p><button onClick={() => notify("Convite demonstrativo criado.")}><Plus size={14} /> Convidar pessoas</button></section>
-      </aside>
-
-      <nav className="demo-mobile-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><BarChart3 /><span>Visão geral</span></button><button className={section === "feed" ? "active" : ""} onClick={() => { setSelectedCommunityId(""); setSection("feed"); }}><Home /><span>Início</span></button><button className="create" onClick={() => { setSelectedCommunityId(""); setSection("feed"); notify("Use o botão Publicar para criar um post."); }}><Plus /></button><button className={section === "communities" ? "active" : ""} onClick={() => setSection("communities")}><Users /><span>Comunidades</span></button><button className={section === "jobs" ? "active" : ""} onClick={() => setSection("jobs")}><BriefcaseBusiness /><span>Vagas</span></button></nav>
-      {toast && <div className="demo-toast"><CheckCircle2 size={17} /> {toast}</div>}
-    </div>
+      {composerOpen && <Modal title="Criar publicação" onClose={() => setComposerOpen(false)}><form className="composer-form" onSubmit={submitPost}><div className="audience-row"><button type="button" className="selected"><Building2 size={15} /> Empresa</button><button type="button"><Users size={15} /> Comunidade</button><button type="button"><Globe2 size={15} /> Mundo</button></div><label><span>O que você quer compartilhar?</span><textarea name="text" rows={5} required placeholder="Escreva sua publicação…" /></label><div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setComposerOpen(false)}>Cancelar</button><button className="btn">Publicar</button></div></form></Modal>}
+      {toast && <div className="toast">{toast}</div>}
+    </>
   );
 }
