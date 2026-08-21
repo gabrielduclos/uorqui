@@ -1,48 +1,12 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "uorqui-api",
-  "main": "./worker/index.js",
-  "compatibility_date": "2026-08-19",
-  "placement": {
-    "mode": "smart"
+  "compatibility_date": "2026-08-21",
+  "build": {
+    "command": "npm run build"
   },
   "assets": {
-    "not_found_handling": "single-page-application",
-    "run_worker_first": [
-      "/api/*"
-    ]
-  },
-  "r2_buckets": [
-    {
-      "binding": "MEDIA",
-      "bucket_name": "uorqui-media"
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "REALTIME",
-        "class_name": "RealtimeHub"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "v1_realtime_hub",
-      "new_sqlite_classes": [
-        "RealtimeHub"
-      ]
-    }
-  ],
-  "vars": {
-    "FIREBASE_PROJECT_ID": "uorqui-ba281",
-    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
-    "ASAAS_ENV": "sandbox",
-    "PREMIUM_MONTHLY_PRICE_BRL": "49.90"
-  },
-  "triggers": {
-    "crons": [
-      "0 */6 * * *"
-    ]
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
   }
 }
