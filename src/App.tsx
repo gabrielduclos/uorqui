@@ -12,7 +12,7 @@ import {
   signInWithEmailAndPassword, updatePassword, updateProfile, type User
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
-import { api, prefetchPostMedia } from "./lib/api";
+import { ApiError, api, prefetchPostMedia } from "./lib/api";
 import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
 import { usePwaInstall } from "./lib/pwa";
 import type {
@@ -34,6 +34,16 @@ function errorMessage(error: unknown) {
   return "Não foi possível concluir esta ação.";
 }
 
+function isPlanLimitError(error: unknown) {
+  return error instanceof ApiError && error.status === 402;
+}
+
+type PlanOfferReason =
+  | { kind: "company_created"; message?: string }
+  | { kind: "limit"; message?: string }
+  | { kind: "manual"; message?: string }
+  | null;
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -53,6 +63,7 @@ export default function App() {
   const [sharedPostLoading, setSharedPostLoading] = useState(false);
   const [pushPermissionPromptOpen, setPushPermissionPromptOpen] = useState(false);
   const [pushPermissionBusy, setPushPermissionBusy] = useState(false);
+  const [planOfferReason, setPlanOfferReason] = useState<PlanOfferReason>(null);
   const pwaInstall = usePwaInstall();
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
@@ -247,10 +258,10 @@ export default function App() {
     const billingCompany = params.get("billingCompany") || "";
     if (!billing) return;
 
-    setView("companies");
+    setView("plans");
     if (billing === "success") showToast("Pagamento concluído. O Premium será ativado assim que o Asaas confirmar o webhook.");
     else if (billing === "cancel") showToast("Pagamento cancelado. Nenhuma cobrança foi confirmada.");
-    else if (billing === "expired") showToast("O checkout expirou. Você pode gerar um novo na tela Empresas.");
+    else if (billing === "expired") showToast("O checkout expirou. Você pode gerar um novo na tela Planos.");
 
     params.delete("billing");
     params.delete("billingCompany");
@@ -264,12 +275,20 @@ export default function App() {
   if (!user) return <AuthScreen />;
   if (loading && !data.me.uid) return <Boot />;
   if (fatal) return <ErrorScreen message={fatal} onRetry={() => refresh()} onLogout={() => unregisterPushBeforeLogout()} />;
-  if (!data.companies.length && !data.isSuperadmin) return <Onboarding onCreated={(companyId) => refresh(companyId)} />;
+  if (!data.companies.length && !data.isSuperadmin) return <Onboarding onCreated={async (companyId) => {
+    localStorage.setItem("uorqui-company", companyId);
+    await refresh(companyId);
+    setPlanOfferReason({
+      kind: "company_created",
+      message: "Sua empresa foi criada no plano Free. Você pode continuar grátis ou ativar o Premium agora."
+    });
+    setView("plans");
+  }} />;
 
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações", companies: "Empresas", superadmin: "Superadmin"
+    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
   };
 
   const navigate = (next: View) => {
@@ -298,6 +317,14 @@ export default function App() {
   const openWorld = () => {
     setHomeTab("world");
     setView("home");
+  };
+
+  const openPlans = (
+    kind: "company_created" | "limit" | "manual" = "manual",
+    message = ""
+  ) => {
+    setPlanOfferReason({ kind, message });
+    setView("plans");
   };
 
   const changeCompany = async (id: string, nextView: View = "home") => {
@@ -392,17 +419,43 @@ export default function App() {
         onComposeCommunity={(communityId) => openComposer({ scope: "community", communityId })}
         refresh={() => refresh()}
         showToast={showToast}
+        onUpgradeRequired={(message) => openPlans("limit", message)}
       />
     );
     if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} />;
-    if (view === "admin") return <AdminPage data={data} onCompanyChange={(id) => changeCompany(id, "admin")} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "admin") return <AdminPage
+      data={data}
+      onCompanyChange={(id) => changeCompany(id, "admin")}
+      refresh={() => refresh()}
+      showToast={showToast}
+      onUpgradeRequired={(message) => openPlans("limit", message)}
+    />;
     if (view === "notifications") return <NotificationsPage data={data} refresh={() => refresh()} showToast={showToast} onOpenPost={openPostFromNotification} />;
-    if (view === "companies") return <CompaniesPage data={data} onSelectCompany={(id) => changeCompany(id, "home")} showToast={showToast} />;
+    if (view === "companies") return <CompaniesPage
+      data={data}
+      onSelectCompany={(id) => changeCompany(id, "home")}
+      onOpenPlans={() => openPlans("manual")}
+      showToast={showToast}
+    />;
+    if (view === "plans") return <PlansPage
+      data={data}
+      reason={planOfferReason}
+      onCompanyChange={(id) => changeCompany(id, "plans")}
+      refresh={() => refresh()}
+      showToast={showToast}
+    />;
     return <ProfilePage
       data={data}
       refresh={() => refresh()}
       showToast={showToast}
       onOpenSuperadmin={() => navigate("superadmin")}
+      onCompanyCreated={async (companyId) => {
+        setPlanOfferReason({
+          kind: "company_created",
+          message: "Sua nova empresa começou no Free. Veja a diferença para o Premium."
+        });
+        await changeCompany(companyId, "plans");
+      }}
       pwaInstalled={pwaInstall.installed}
       pwaMode={pwaInstall.mode}
       pwaInstalling={pwaInstall.installing}
@@ -434,6 +487,7 @@ export default function App() {
               <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
               <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
               {data.canAdmin && <NavButton active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
+              <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
             </>}
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
             <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
@@ -519,6 +573,15 @@ export default function App() {
             <strong>{companyName}</strong>
             <small>{data.role === "owner" ? "Proprietário" : data.role === "admin" ? "Administrador" : "Colaborador"}</small>
           </section>
+          {!!data.company && (
+            <button className="side-card side-plan-card" onClick={() => openPlans("manual")}>
+              <span className={`plan-pill ${data.company.effectivePlan === "premium" ? "premium" : "free"}`}>
+                {data.company.effectivePlan === "premium" ? <><Crown size={12} /> Premium</> : "Free"}
+              </span>
+              <strong>Plano da empresa</strong>
+              <small>{data.company.effectivePlan === "premium" ? "Premium ativo" : "Ver Free e Premium"}</small>
+            </button>
+          )}
           <section className="side-card">
             <strong>Suas comunidades</strong>
             {data.communities.slice(0, 5).map((c) => (
@@ -528,7 +591,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.7</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.8</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -839,7 +902,7 @@ function SharedPostPage({
 }
 
 function CommunitiesPage({
-  data, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, refresh, showToast
+  data, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, refresh, showToast, onUpgradeRequired
 }: {
   data: BootstrapData;
   selectedCommunityId: string;
@@ -848,6 +911,7 @@ function CommunitiesPage({
   onComposeCommunity: (id: string) => void;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
+  onUpgradeRequired: (message: string) => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [communityPosts, setCommunityPosts] = useState<Post[]>([]);
@@ -923,7 +987,14 @@ function CommunitiesPage({
       showToast("Comunidade criada.");
       await refresh();
       onSelectCommunity(result.community.id);
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      if (isPlanLimitError(err)) {
+        setCreateOpen(false);
+        onUpgradeRequired(errorMessage(err));
+        return;
+      }
+      showToast(errorMessage(err));
+    }
   };
 
   const like = async (post: Post) => {
@@ -1198,11 +1269,12 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   );
 }
 
-function AdminPage({ data, onCompanyChange, refresh, showToast }: {
+function AdminPage({ data, onCompanyChange, refresh, showToast, onUpgradeRequired }: {
   data: BootstrapData;
   onCompanyChange: (companyId: string) => Promise<void>;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
+  onUpgradeRequired: (message: string) => void;
 }) {
   const [inviteLink, setInviteLink] = useState("");
   const manageableCompanies = data.companies.filter((company) => company.role === "owner" || company.role === "admin");
@@ -1223,7 +1295,13 @@ function AdminPage({ data, onCompanyChange, refresh, showToast }: {
         showToast("Convite criado.");
       }
       await refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      if (isPlanLimitError(err)) {
+        onUpgradeRequired(errorMessage(err));
+        return;
+      }
+      showToast(errorMessage(err));
+    }
   };
 
   const createCommunity = async (event: FormEvent<HTMLFormElement>) => {
@@ -1233,7 +1311,13 @@ function AdminPage({ data, onCompanyChange, refresh, showToast }: {
     try {
       await api(`/companies/${data.selectedCompanyId}/communities`, { method: "POST", body: JSON.stringify({ name: fd.get("name"), description: fd.get("description") }) });
       form.reset(); showToast("Comunidade criada."); await refresh();
-    } catch (err) { showToast(errorMessage(err)); }
+    } catch (err) {
+      if (isPlanLimitError(err)) {
+        onUpgradeRequired(errorMessage(err));
+        return;
+      }
+      showToast(errorMessage(err));
+    }
   };
 
   const addToCommunity = async (uid: string, communityId: string) => {
@@ -1276,6 +1360,9 @@ function AdminPage({ data, onCompanyChange, refresh, showToast }: {
       <div className="admin-company-context">
         <div className="company-profile-mark">{data.company?.name?.slice(0, 2).toUpperCase()}</div>
         <div><strong>{data.company?.name}</strong><small>{data.role === "owner" ? "Proprietário" : "Administrador"}</small></div>
+        <button className="btn secondary small admin-plan-button" onClick={() => onUpgradeRequired("")}>
+          <Crown size={15} /> {data.company?.effectivePlan === "premium" ? "Premium" : "Ver planos"}
+        </button>
       </div>
       <div className="admin-grid">
         <form className="panel-card stack-form" onSubmit={inviteCompany}>
@@ -1648,13 +1735,246 @@ type CompanySummary = {
   communities: Array<{ id: string; name: string; description?: string; memberCount?: number }>;
 };
 
+function PlansPage({
+  data,
+  reason,
+  onCompanyChange,
+  refresh,
+  showToast
+}: {
+  data: BootstrapData;
+  reason: PlanOfferReason;
+  onCompanyChange: (companyId: string) => Promise<void>;
+  refresh: () => Promise<void>;
+  showToast: (message: string) => void;
+}) {
+  const [companies, setCompanies] = useState<CompanySummary[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
+  const [billingBusy, setBillingBusy] = useState(false);
+
+  const load = async () => {
+    setLoadingPlans(true);
+    try {
+      const result = await api<{ companies: CompanySummary[] }>("/companies/summary");
+      setCompanies(result.companies);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.selectedCompanyId, data.companies.length]);
+
+  const company =
+    companies.find(item => item.id === data.selectedCompanyId) ||
+    companies[0] ||
+    null;
+
+  const premium = company?.effectivePlan === "premium";
+  const owner = company?.role === "owner";
+  const pending = company?.billingStatus === "pending";
+  const price = company?.premiumMonthlyPrice || 49.9;
+
+  const currency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL"
+    }).format(value);
+
+  const upgrade = async () => {
+    if (!company || billingBusy || !owner) return;
+    setBillingBusy(true);
+    try {
+      const result = await api<{ url: string }>(
+        `/companies/${company.id}/billing/checkout`,
+        { method: "POST" }
+      );
+      window.location.href = result.url;
+    } catch (error) {
+      showToast(errorMessage(error));
+      setBillingBusy(false);
+    }
+  };
+
+  const offerTitle =
+    reason?.kind === "company_created"
+      ? "Sua empresa já está pronta"
+      : reason?.kind === "limit"
+        ? "Sua empresa chegou ao limite do Free"
+        : "";
+
+  return (
+    <section className="page-section plans-page">
+      <div className="page-heading plans-heading">
+        <div>
+          <h2>Planos</h2>
+          <p>O plano pertence à empresa. Sua mesma conta pode ter empresas Free e Premium.</p>
+        </div>
+
+        {data.companies.length > 1 && (
+          <label className="plans-company-picker">
+            <span>Empresa</span>
+            <select
+              value={data.selectedCompanyId}
+              onChange={(event) => onCompanyChange(event.target.value)}
+            >
+              {data.companies.map(item => (
+                <option value={item.id} key={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {offerTitle && company && (
+        <section className={`plan-offer-banner ${reason?.kind === "limit" ? "limit" : ""}`}>
+          <div className="plan-offer-icon"><Crown size={21} /></div>
+          <div>
+            <strong>{offerTitle}</strong>
+            <p>
+              {reason?.message ||
+                (reason?.kind === "company_created"
+                  ? "Você pode usar o Uorqui Free normalmente e ativar o Premium quando quiser."
+                  : "Ative o Premium para continuar expandindo esta empresa.")}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {loadingPlans && <div className="loading-line">Carregando planos…</div>}
+
+      {!loadingPlans && company && (
+        <>
+          <section className="plans-company-summary">
+            <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
+            <div>
+              <strong>{company.name}</strong>
+              <small>
+                {company.memberCount || 0} membros · {company.communityCount || 0} comunidades
+              </small>
+            </div>
+            <span className={`plan-pill ${premium ? "premium" : "free"}`}>
+              {premium ? <><Crown size={12} /> Premium</> : "Free"}
+            </span>
+          </section>
+
+          <div className="plans-grid">
+            <article className={`plan-card ${!premium ? "current" : ""}`}>
+              <div className="plan-card-head">
+                <div>
+                  <span className="plan-eyebrow">Para começar</span>
+                  <h3>Free</h3>
+                </div>
+                <strong className="plan-price">R$ 0<small>/mês</small></strong>
+              </div>
+
+              <p className="plan-description">
+                A empresa usa todas as funcionalidades essenciais do Uorqui dentro dos limites do plano.
+              </p>
+
+              <ul className="plan-features">
+                <li><Check size={16} /> Até 5 pessoas na empresa</li>
+                <li><Check size={16} /> Até 2 comunidades</li>
+                <li><Check size={16} /> Posts, perguntas e conclusões</li>
+                <li><Check size={16} /> Enquetes e eventos</li>
+                <li><Check size={16} /> Comunicados com confirmação de leitura</li>
+                <li><Check size={16} /> Busca, notificações push e Mundo</li>
+              </ul>
+
+              {!premium
+                ? <button className="btn secondary plan-current-button" disabled>Plano atual</button>
+                : <span className="plan-secondary-note">Disponível se o Premium for encerrado.</span>}
+            </article>
+
+            <article className={`plan-card premium-card ${premium ? "current" : ""}`}>
+              <div className="premium-ribbon">Uorqui para empresas</div>
+              <div className="plan-card-head">
+                <div>
+                  <span className="plan-eyebrow"><Crown size={13} /> Crescimento</span>
+                  <h3>Premium</h3>
+                </div>
+                <strong className="plan-price">{currency(price)}<small>/mês por empresa</small></strong>
+              </div>
+
+              <p className="plan-description">
+                Tudo do Free, sem os limites de 5 pessoas e 2 comunidades.
+              </p>
+
+              <ul className="plan-features">
+                <li><Check size={16} /> Mais de 5 pessoas</li>
+                <li><Check size={16} /> Mais de 2 comunidades</li>
+                <li><Check size={16} /> Todas as funcionalidades do Free</li>
+                <li><Check size={16} /> Plano independente das outras empresas da sua conta</li>
+                <li><Check size={16} /> Pagamento mensal via Pix ou cartão</li>
+              </ul>
+
+              {premium ? (
+                <div className="premium-active-box">
+                  <Crown size={18} />
+                  <div>
+                    <strong>Premium ativo</strong>
+                    <small>
+                      {company.premiumSource === "manual" && company.manualPremiumUntil
+                        ? `Cortesia até ${new Date(company.manualPremiumUntil).toLocaleDateString("pt-BR")}.`
+                        : company.premiumUntil
+                          ? `Acesso confirmado até ${new Date(company.premiumUntil).toLocaleDateString("pt-BR")}.`
+                          : "Assinatura ativa."}
+                    </small>
+                  </div>
+                </div>
+              ) : owner ? (
+                <>
+                  <button
+                    className="btn plan-upgrade-button"
+                    disabled={!company.billingReady || billingBusy}
+                    onClick={upgrade}
+                  >
+                    <CreditCard size={17} />
+                    {billingBusy
+                      ? "Abrindo checkout…"
+                      : pending
+                        ? "Continuar pagamento"
+                        : "Ativar Premium"}
+                  </button>
+                  <small className="plan-checkout-note">
+                    Pix ou cartão. O Premium só é ativado após a confirmação do pagamento.
+                  </small>
+                  {!company.billingReady && (
+                    <div className="billing-warning">
+                      A cobrança ainda não está habilitada para esta instalação do Uorqui.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="plan-owner-note">
+                  O Premium é contratado pelo proprietário desta empresa.
+                </div>
+              )}
+            </article>
+          </div>
+
+          <p className="plans-footnote">
+            O Free não é um teste: ele pode ser usado sem prazo. O Premium entra quando a empresa precisa crescer além dos limites do Free.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function CompaniesPage({
   data,
   onSelectCompany,
+  onOpenPlans,
   showToast
 }: {
   data: BootstrapData;
   onSelectCompany: (companyId: string) => Promise<void>;
+  onOpenPlans: () => void;
   showToast: (message: string) => void;
 }) {
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
@@ -1710,6 +2030,7 @@ function CompaniesPage({
     <section className="page-section companies-page">
       <div className="page-heading">
         <div><h2>Empresas</h2><p>Cada empresa possui seu próprio plano. A mesma conta pode participar de empresas Free e Premium.</p></div>
+        <button className="btn secondary small" onClick={onOpenPlans}><Crown size={15} /> Ver planos</button>
       </div>
 
       {loadingCompanies && <div className="loading-line">Carregando empresas…</div>}
@@ -1799,13 +2120,14 @@ function CompaniesPage({
 }
 
 function ProfilePage({
-  data, refresh, showToast, onOpenSuperadmin,
+  data, refresh, showToast, onOpenSuperadmin, onCompanyCreated,
   pwaInstalled, pwaMode, pwaInstalling, onInstallPwa
 }: {
   data: BootstrapData;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onOpenSuperadmin: () => void;
+  onCompanyCreated: (companyId: string) => Promise<void>;
   pwaInstalled: boolean;
   pwaMode: "installed" | "prompt" | "ios" | "manual";
   pwaInstalling: boolean;
@@ -1862,11 +2184,14 @@ function ProfilePage({
     const name = String(new FormData(form).get("name") || "").trim();
     if (!name) return;
     try {
-      await api("/companies", { method: "POST", body: JSON.stringify({ name }) });
+      const result = await api<{ company: { id: string } }>("/companies", {
+        method: "POST",
+        body: JSON.stringify({ name })
+      });
       form.reset();
       setCreateCompanyOpen(false);
       showToast("Empresa criada.");
-      await refresh();
+      await onCompanyCreated(result.company.id);
     } catch (err) { setCompanyError(errorMessage(err)); }
   };
 

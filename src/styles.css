@@ -688,3 +688,123 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .push-permission-prompt .modal-actions{justify-content:center}
 .post-actions .resolve-action.resolved{color:#2f6e39}
 .post-actions .resolve-action:disabled{opacity:.55;cursor:not-allowed}
+
+
+/* v1.2.8 — página de planos e upgrade contextual */
+.side-plan-card{
+  width:100%;
+  text-align:left;
+  cursor:pointer;
+  display:block;
+}
+.side-plan-card .plan-pill{margin-bottom:8px}
+.side-plan-card strong,.side-plan-card small{display:block}
+.side-plan-card small{margin-top:3px}
+.admin-company-context .admin-plan-button{margin-left:auto}
+
+.plans-heading{align-items:flex-end}
+.plans-company-picker{
+  min-width:220px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.plans-company-picker>span{font-size:8.5px;font-weight:750;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.plans-company-picker select{background:#fff}
+
+.plan-offer-banner{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+  margin-bottom:12px;
+  padding:13px 14px;
+  border:1px solid #ded8f5;
+  border-radius:15px;
+  background:#fbfaff;
+}
+.plan-offer-banner.limit{border-color:#ead9bd;background:#fffaf3}
+.plan-offer-icon{
+  width:40px;height:40px;border-radius:12px;background:#f0ecff;
+  display:grid;place-items:center;color:#6545aa
+}
+.plan-offer-banner.limit .plan-offer-icon{background:#fff0d8;color:#87601d}
+.plan-offer-banner strong{font-size:11px}
+.plan-offer-banner p{margin:3px 0 0;color:var(--muted);font-size:9px;line-height:1.45}
+
+.plans-company-summary{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:12px;
+  padding:11px 13px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:14px;
+}
+.plans-company-summary>div:nth-child(2){min-width:0;flex:1}
+.plans-company-summary strong,.plans-company-summary small{display:block}
+.plans-company-summary strong{font-size:11px}
+.plans-company-summary small{margin-top:2px;color:var(--muted);font-size:9px}
+
+.plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch}
+.plan-card{
+  position:relative;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:18px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.plan-card.current{border-color:#bfc2c8;box-shadow:0 12px 34px rgba(20,25,35,.08)}
+.plan-card.premium-card{border-color:#dcd5f1}
+.plan-card-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.plan-card h3{font-size:22px;margin:3px 0 0}
+.plan-eyebrow{
+  display:flex;align-items:center;gap:5px;
+  color:var(--muted);font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em
+}
+.plan-price{font-size:18px;text-align:right;white-space:nowrap}
+.plan-price small{display:block;margin-top:2px;font-size:8px;font-weight:650;color:var(--muted)}
+.plan-description{margin:14px 0;color:#5e626a;font-size:10px;line-height:1.5}
+.plan-features{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:9px}
+.plan-features li{display:flex;align-items:flex-start;gap:7px;font-size:10px;line-height:1.4}
+.plan-features li svg{flex:none;margin-top:1px}
+.plan-current-button,.plan-upgrade-button{width:100%}
+.plan-secondary-note,.plan-checkout-note{display:block;color:var(--muted);font-size:8.5px;line-height:1.4}
+.plan-checkout-note{margin-top:7px;text-align:center}
+.premium-ribbon{
+  display:inline-flex;
+  margin:-18px -18px 14px;
+  padding:7px 12px;
+  background:#141519;
+  color:#fff;
+  border-radius:0 0 12px 0;
+  font-size:8px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.premium-active-box{
+  display:flex;align-items:center;gap:9px;padding:10px;border-radius:12px;background:#f1f8f3;color:#315f3b
+}
+.premium-active-box strong,.premium-active-box small{display:block}
+.premium-active-box strong{font-size:10px}
+.premium-active-box small{margin-top:2px;font-size:8.5px}
+.plan-owner-note{
+  padding:10px;border-radius:11px;background:#f5f5f6;color:var(--muted);font-size:9px;line-height:1.4
+}
+.plans-footnote{margin:12px 2px 0;color:var(--muted);font-size:9px;text-align:center;line-height:1.5}
+
+@media(max-width:850px){
+  .plans-heading{align-items:stretch}
+  .plans-company-picker{min-width:0;width:100%}
+}
+@media(max-width:680px){
+  .plans-grid{grid-template-columns:1fr}
+  .plan-card{padding:15px}
+  .premium-ribbon{margin:-15px -15px 13px}
+  .admin-company-context{flex-wrap:wrap}
+  .admin-company-context .admin-plan-button{margin-left:50px}
+}
