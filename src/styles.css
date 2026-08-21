@@ -137,15 +137,17 @@ input,textarea,select{border:1px solid var(--line-strong);background:#fff;border
 .community-link:hover{border-color:#cfd1d5;box-shadow:0 8px 24px rgba(20,25,35,.05)}
 .community-link>div:nth-child(2){min-width:0;flex:1}
 .community-chevron{margin-left:auto;color:#a1a4aa;flex:none}
-.community-detail-head{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center}
+.community-detail-head{position:relative;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center}
 .back-button{grid-column:1/-1;justify-self:start;border:0;background:transparent;padding:0;display:flex;align-items:center;gap:6px;color:#666a72;font-size:11px}
+.community-detail-head>.back-button{padding-right:165px;min-height:24px}
 .community-detail-title{display:flex;align-items:center;gap:12px;min-width:0}
 .community-detail-title h2{margin:0;font-size:19px}
 .community-detail-title p{margin:4px 0 0;color:var(--muted);font-size:11px}
 .community-detail-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .community-detail-actions .btn{white-space:nowrap}
-.community-manage-members{border-color:#cbd7e5;background:#f3f7fb;color:#243b53}
-.community-manage-members span{min-width:21px;height:21px;border-radius:999px;background:#fff;border:1px solid #d9e2ec;display:grid;place-items:center;font-size:9px}
+.community-manage-members-tag{position:absolute;top:11px;right:11px;border:1px solid #d6e0ea;border-radius:999px;background:#f3f7fb;color:#344b61;padding:5px 7px;display:inline-flex;align-items:center;gap:5px;font-size:8.5px;font-weight:750;line-height:1;white-space:nowrap}
+.community-manage-members-tag:hover{background:#eaf1f7;border-color:#c5d3e0}
+.community-manage-members-tag b{min-width:17px;height:17px;border-radius:999px;background:#fff;border:1px solid #d9e2ec;display:grid;place-items:center;font-size:8px}
 .community-visibility-badge{width:max-content;display:inline-flex!important;align-items:center;gap:4px;border-radius:999px;padding:5px 8px;font-size:8px!important;font-weight:750}
 .community-visibility-badge.public{background:#edf6ff;color:#28669a}
 .community-visibility-badge.private{background:#f0f1f2;color:#676a72}

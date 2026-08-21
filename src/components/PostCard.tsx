@@ -157,6 +157,7 @@ export function PostCard({
   const [commentsBusy, setCommentsBusy] = useState(false);
   const commentsRequestRef = useRef<Promise<void> | null>(null);
   const likeBusyRef = useRef(false);
+  const pollBusyRef = useRef(false);
   const [localCommentCount, setLocalCommentCount] = useState(Number(post.commentCount || 0));
   const [localLiked, setLocalLiked] = useState(Boolean(post.liked));
   const [localReactionCount, setLocalReactionCount] = useState(Number(post.reactionCount || 0));
@@ -302,8 +303,25 @@ export function PostCard({
   };
 
   const votePoll = async (optionId: string) => {
-    if (pollBusy) return;
+    if (pollBusyRef.current || myPollOptionId === optionId) return;
+    if (!pollOptions.some((option) => option.id === optionId)) return;
+
+    pollBusyRef.current = true;
+    const previousOptions = pollOptions.map((option) => ({ ...option }));
+    const previousTotal = pollTotal;
+    const previousOptionId = myPollOptionId;
+    const optimisticOptions = previousOptions.map((option) => {
+      let voteCount = Number(option.voteCount || 0);
+      if (previousOptionId && option.id === previousOptionId) voteCount = Math.max(0, voteCount - 1);
+      if (option.id === optionId) voteCount += 1;
+      return { ...option, voteCount };
+    });
+
     setPollBusy(true);
+    setMyPollOptionId(optionId);
+    setPollOptions(optimisticOptions);
+    setPollTotal(previousOptionId ? previousTotal : previousTotal + 1);
+
     try {
       const result = await api<{ optionId: string; pollOptions: PollOption[]; pollTotalVotes: number }>(`/posts/${post.id}/poll-vote`, {
         method: "POST",
@@ -314,8 +332,12 @@ export function PostCard({
       setPollTotal(result.pollTotalVotes);
       void onChanged?.();
     } catch (error) {
+      setMyPollOptionId(previousOptionId);
+      setPollOptions(previousOptions);
+      setPollTotal(previousTotal);
       showToast?.(error instanceof Error ? error.message : "Não foi possível registrar seu voto.");
     } finally {
+      pollBusyRef.current = false;
       setPollBusy(false);
     }
   };

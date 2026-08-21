@@ -760,7 +760,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.15</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.16</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -1575,6 +1575,11 @@ function CommunitiesPage({
       <section className="page-section">
         <div className="community-detail-head">
           <button className="back-button" onClick={onBack}><ArrowLeft size={18} /> Comunidades</button>
+          <button className="community-manage-members-tag" onClick={openMembers}>
+            <Users size={13} />
+            {data.canAdmin ? "Gerenciar membros" : "Ver membros"}
+            <b>{memberCount}</b>
+          </button>
           <div className="community-detail-title">
             <div className="community-avatar large">{selectedCommunity.name.slice(0, 2).toUpperCase()}</div>
             <div>
@@ -1587,11 +1592,6 @@ function CommunitiesPage({
             </div>
           </div>
           <div className="community-detail-actions">
-            <button className="btn secondary community-manage-members" onClick={openMembers}>
-              <Users size={17} />
-              {data.canAdmin ? "Gerenciar membros" : "Ver membros"}
-              <span>{memberCount}</span>
-            </button>
             <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
           </div>
         </div>
