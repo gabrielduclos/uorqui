@@ -77,6 +77,16 @@ export function cachedMediaBlobUrl(mediaId: string): string {
   return resolvedMediaUrls.get(mediaId) || "";
 }
 
+export function cacheMediaBlobUrl(mediaId: string, blob: Blob): string {
+  const cached = resolvedMediaUrls.get(mediaId);
+  if (cached) return cached;
+
+  const url = URL.createObjectURL(blob);
+  resolvedMediaUrls.set(mediaId, url);
+  mediaUrlCache.set(mediaId, Promise.resolve(url));
+  return url;
+}
+
 export async function mediaBlobUrl(mediaId: string): Promise<string> {
   const resolved = resolvedMediaUrls.get(mediaId);
   if (resolved) return resolved;

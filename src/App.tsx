@@ -12,7 +12,7 @@ import {
   signInWithEmailAndPassword, updatePassword, updateProfile, type User
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
-import { ApiError, api, mediaBlobUrl, prefetchPostMedia } from "./lib/api";
+import { ApiError, api, cacheMediaBlobUrl, prefetchPostMedia } from "./lib/api";
 import { connectRealtime } from "./lib/realtime";
 import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
 import { usePwaInstall } from "./lib/pwa";
@@ -625,6 +625,7 @@ export default function App() {
       data={data}
       realtimeRevision={realtimeRevision}
       showToast={showToast}
+      onUpgradeRequired={(message) => openPlans("limit", message)}
     />;
     if (view === "admin") return <AdminPage
       data={data}
@@ -844,7 +845,7 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.19</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.20</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
@@ -1944,10 +1945,11 @@ const jobContractLabels: Record<JobOpening["contractType"] & string, string> = {
   other: "Outro"
 };
 
-function JobsPage({ data, realtimeRevision, showToast }: {
+function JobsPage({ data, realtimeRevision, showToast, onUpgradeRequired }: {
   data: BootstrapData;
   realtimeRevision: number;
   showToast: (message: string) => void;
+  onUpgradeRequired: (message: string) => void;
 }) {
   const [jobs, setJobs] = useState<JobOpening[]>([]);
   const [tab, setTab] = useState<"company" | "world">("company");
@@ -2009,7 +2011,9 @@ function JobsPage({ data, realtimeRevision, showToast }: {
       form.reset();
       showToast(audience === "world" ? "Vaga publicada para o mundo." : "Vaga publicada para a empresa.");
     } catch (error) {
-      showToast(errorMessage(error));
+      const message = errorMessage(error);
+      if (isPlanLimitError(error)) onUpgradeRequired(message);
+      else showToast(message);
     } finally {
       setPublishing(false);
     }
@@ -2030,7 +2034,18 @@ function JobsPage({ data, realtimeRevision, showToast }: {
   };
 
   const visibleJobs = jobs.filter((job) => job.audience === tab);
+  const companyJobs = jobs.filter((job) => job.companyId === data.selectedCompanyId);
+  const freeJobLimit = data.company?.effectivePlan === "premium" ? null : (data.company?.limits?.jobs ?? 3);
+  const jobLimitReached = freeJobLimit !== null && companyJobs.length >= freeJobLimit;
   const contractLabel = (value?: JobOpening["contractType"]) => jobContractLabels[value || "clt"] || "Outro";
+
+  const openComposer = () => {
+    if (jobLimitReached) {
+      onUpgradeRequired("O plano Free permite até 3 vagas ativas por empresa. Ative o Uorqui Premium para publicar mais vagas.");
+      return;
+    }
+    setComposerOpen(true);
+  };
 
   return (
     <section className="page-section jobs-page">
@@ -2038,9 +2053,14 @@ function JobsPage({ data, realtimeRevision, showToast }: {
         <div>
           <h2>Vagas</h2>
           <p>Divulgue oportunidades dentro da empresa ou para profissionais de qualquer lugar.</p>
+          {data.canAdmin && freeJobLimit !== null && (
+            <small className={`jobs-plan-usage ${jobLimitReached ? "limit" : ""}`}>
+              {companyJobs.length} de {freeJobLimit} vagas ativas no plano Free
+            </small>
+          )}
         </div>
         {data.canAdmin && (
-          <button className="btn small" onClick={() => setComposerOpen(true)}>
+          <button className="btn small" onClick={openComposer}>
             <BriefcaseBusiness size={16} /> Divulgar vaga
           </button>
         )}
@@ -2346,7 +2366,7 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
         method: "DELETE"
       });
       showToast("Colaborador removido da empresa.");
-      await refresh();
+      await Promise.all([refresh(), loadSentInvites()]);
     } catch (err) {
       showToast(errorMessage(err));
     } finally {
@@ -3040,6 +3060,7 @@ function PlansPage({
               <ul className="plan-features">
                 <li><Check size={16} /> Até 5 pessoas na empresa</li>
                 <li><Check size={16} /> Até 2 comunidades</li>
+                <li><Check size={16} /> Até 3 vagas ativas</li>
                 <li><Check size={16} /> Posts, perguntas e conclusões</li>
                 <li><Check size={16} /> Enquetes e eventos</li>
                 <li><Check size={16} /> Comunicados com confirmação de leitura</li>
@@ -3062,12 +3083,13 @@ function PlansPage({
               </div>
 
               <p className="plan-description">
-                Tudo do Free, sem os limites de 5 pessoas e 2 comunidades.
+                Tudo do Free, sem os limites de pessoas, comunidades e vagas.
               </p>
 
               <ul className="plan-features">
                 <li><Check size={16} /> Mais de 5 pessoas</li>
                 <li><Check size={16} /> Mais de 2 comunidades</li>
+                <li><Check size={16} /> Mais de 3 vagas ativas</li>
                 <li><Check size={16} /> Todas as funcionalidades do Free</li>
                 <li><Check size={16} /> Plano independente das outras empresas da sua conta</li>
                 <li><Check size={16} /> Pagamento mensal via Pix ou cartão</li>
@@ -3380,6 +3402,7 @@ function ProfilePage({
 }) {
   const [photoError, setPhotoError] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [pendingAvatarMediaId, setPendingAvatarMediaId] = useState("");
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [avatarEditorFile, setAvatarEditorFile] = useState<File | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -3412,10 +3435,11 @@ function ProfilePage({
         method: "POST", headers: { "Content-Type": file.type, "X-File-Name": file.name }, body: file
       });
       await api("/me", { method: "PATCH", body: JSON.stringify({ avatarMediaId: result.media.id }) });
-      await mediaBlobUrl(result.media.id);
-      showToast("Foto atualizada.");
-      await refresh();
+      cacheMediaBlobUrl(result.media.id, file);
+      setPendingAvatarMediaId(result.media.id);
       setAvatarEditorFile(null);
+      showToast("Foto atualizada.");
+      void refresh().finally(() => setPendingAvatarMediaId(""));
     } catch (err) {
       setPhotoError(errorMessage(err));
       throw err;
@@ -3574,7 +3598,7 @@ function ProfilePage({
         <section className="panel-card profile-panel">
           <div className="profile-head">
             <div className="avatar-edit">
-              <Avatar name={data.me.displayName || data.me.email} mediaId={data.me.avatarMediaId} size={92} />
+              <Avatar name={data.me.displayName || data.me.email} mediaId={pendingAvatarMediaId || data.me.avatarMediaId} size={92} />
               {photoBusy && <span className="avatar-photo-busy"><span className="profile-photo-spinner" /></span>}
               <button
                 type="button"
