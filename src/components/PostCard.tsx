@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Download, FileText, Heart, MessageCircle, Send, Share2, ShieldAlert, Trash2 } from "lucide-react";
+import {
+  CalendarDays, CalendarPlus, CheckCircle2, Download, FileText, Heart, MapPin,
+  MessageCircle, RotateCcw, Send, Share2, ShieldAlert, Trash2, Vote
+} from "lucide-react";
 import { Avatar } from "./Avatar";
-import { api, mediaBlobUrl } from "../lib/api";
-import type { Attachment, Comment, Community, Post } from "../types";
+import { api, cachedMediaBlobUrl, mediaBlobUrl } from "../lib/api";
+import type { Attachment, Comment, Community, PollOption, Post } from "../types";
 
 function relative(value?: string) {
   if (!value) return "";
@@ -30,33 +33,33 @@ function formatBytes(size = 0) {
 }
 
 function AttachmentPreview({ attachment }: { attachment: Attachment }) {
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(() => cachedMediaBlobUrl(attachment.id));
   const [failed, setFailed] = useState(false);
   const isImage = String(attachment.contentType || "").startsWith("image/");
 
   useEffect(() => {
     let active = true;
+    const cached = cachedMediaBlobUrl(attachment.id);
+    if (cached) {
+      setUrl(cached);
+      setFailed(false);
+      return () => { active = false; };
+    }
+
     setUrl("");
     setFailed(false);
-
-    // mediaBlobUrl is session-cached. App/page loaders prefetch image media
-    // before rendering the feed, so this normally resolves immediately.
     mediaBlobUrl(attachment.id)
-      .then((next) => {
-        if (active) setUrl(next);
-      })
+      .then((next) => active && setUrl(next))
       .catch(() => active && setFailed(true));
 
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [attachment.id]);
 
   if (isImage) {
     return (
       <div className="post-image-wrap">
         {url ? (
-          <img className="post-image" src={url} alt={attachment.name || "Foto da publicação"} loading="lazy" />
+          <img className="post-image" src={url} alt={attachment.name || "Foto da publicação"} loading="eager" decoding="async" />
         ) : (
           <div className="post-image-loading">{failed ? "Não foi possível carregar a foto." : "Carregando foto…"}</div>
         )}
@@ -78,6 +81,42 @@ function AttachmentPreview({ attachment }: { attachment: Attachment }) {
       )}
     </div>
   );
+}
+
+function postPermalink(post: Post) {
+  const url = new URL("/", window.location.origin);
+  url.searchParams.set("post", post.id);
+  if (post.scope !== "world" && post.companyId) url.searchParams.set("company", post.companyId);
+  return url.toString();
+}
+
+function calendarUtc(value: string) {
+  const date = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
+}
+
+function eventEnd(post: Post) {
+  if (post.eventEnd) return post.eventEnd;
+  return new Date(new Date(post.eventStart || Date.now()).getTime() + 60 * 60 * 1000).toISOString();
+}
+
+function eventDateLabel(post: Post) {
+  if (!post.eventStart) return "";
+  try {
+    const start = new Date(post.eventStart);
+    const end = post.eventEnd ? new Date(post.eventEnd) : null;
+    const startLabel = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeStyle: "short" }).format(start);
+    if (!end) return startLabel;
+    const endLabel = new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" }).format(end);
+    return `${startLabel} – ${endLabel}`;
+  } catch {
+    return new Date(post.eventStart).toLocaleString("pt-BR");
+  }
+}
+
+function icsEscape(value = "") {
+  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
 }
 
 export function PostCard({
@@ -110,16 +149,30 @@ export function PostCard({
   const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [commentsBusy, setCommentsBusy] = useState(false);
   const [localCommentCount, setLocalCommentCount] = useState(Number(post.commentCount || 0));
+  const [resolved, setResolved] = useState(Boolean(post.isResolved));
+  const [resolveBusy, setResolveBusy] = useState(false);
+  const [pollOptions, setPollOptions] = useState<PollOption[]>(post.pollOptions || []);
+  const [pollTotal, setPollTotal] = useState(Number(post.pollTotalVotes || 0));
+  const [myPollOptionId, setMyPollOptionId] = useState(post.myPollOptionId || "");
+  const [pollBusy, setPollBusy] = useState(false);
 
+  useEffect(() => setLocalCommentCount(Number(post.commentCount || 0)), [post.commentCount]);
+  useEffect(() => setResolved(Boolean(post.isResolved)), [post.isResolved]);
   useEffect(() => {
-    setLocalCommentCount(Number(post.commentCount || 0));
-  }, [post.commentCount]);
+    setPollOptions(post.pollOptions || []);
+    setPollTotal(Number(post.pollTotalVotes || 0));
+    setMyPollOptionId(post.myPollOptionId || "");
+  }, [post.pollOptions, post.pollTotalVotes, post.myPollOptionId]);
 
   const scope = post.scope === "world"
     ? "🌎 Mundo"
     : post.scope === "community"
       ? `Comunidade · ${community?.name || post.communityName || "Comunidade"}`
       : `🏢 ${companyName || post.companyName || "Empresa"}`;
+
+  const canResolve = (post.type === "post" || post.type === "question") && (
+    post.authorUid === currentUid || (canAdmin && post.scope !== "world")
+  );
 
   const loadComments = async () => {
     setCommentsBusy(true);
@@ -129,7 +182,7 @@ export function PostCard({
       setLocalCommentCount(result.comments.length);
       setCommentsLoaded(true);
     } catch (error) {
-      showToast?.(error instanceof Error ? error.message : "Não foi possível carregar as respostas.");
+      showToast?.(error instanceof Error ? error.message : "Não foi possível carregar os comentários.");
     } finally {
       setCommentsBusy(false);
     }
@@ -145,7 +198,7 @@ export function PostCard({
     event.preventDefault();
     const form = event.currentTarget;
     const text = String(new FormData(form).get("text") || "").trim();
-    if (!text) return;
+    if (!text || commentsBusy) return;
     setCommentsBusy(true);
     try {
       const result = await api<{ comment: Comment }>(`/posts/${post.id}/comments`, {
@@ -155,9 +208,9 @@ export function PostCard({
       setComments((current) => [...current, result.comment]);
       setLocalCommentCount((current) => current + 1);
       form.reset();
-      await onChanged?.();
+      void onChanged?.();
     } catch (error) {
-      showToast?.(error instanceof Error ? error.message : "Não foi possível responder.");
+      showToast?.(error instanceof Error ? error.message : "Não foi possível comentar.");
     } finally {
       setCommentsBusy(false);
     }
@@ -165,15 +218,120 @@ export function PostCard({
 
   const acceptSolution = async (commentId: string) => {
     try {
-      await api(`/posts/${post.id}/solution`, {
-        method: "POST",
-        body: JSON.stringify({ commentId })
-      });
-      showToast?.("Solução marcada.");
+      await api(`/posts/${post.id}/solution`, { method: "POST", body: JSON.stringify({ commentId }) });
+      setResolved(true);
+      showToast?.("Solução marcada e publicação resolvida.");
       await onChanged?.();
     } catch (error) {
       showToast?.(error instanceof Error ? error.message : "Não foi possível marcar a solução.");
     }
+  };
+
+  const toggleResolved = async () => {
+    if (resolveBusy) return;
+    setResolveBusy(true);
+    try {
+      const next = !resolved;
+      await api(`/posts/${post.id}/resolve`, { method: "POST", body: JSON.stringify({ resolved: next }) });
+      setResolved(next);
+      showToast?.(next ? "Publicação marcada como resolvida." : "Publicação reaberta.");
+      void onChanged?.();
+    } catch (error) {
+      showToast?.(error instanceof Error ? error.message : "Não foi possível alterar o status.");
+    } finally {
+      setResolveBusy(false);
+    }
+  };
+
+  const votePoll = async (optionId: string) => {
+    if (pollBusy) return;
+    setPollBusy(true);
+    try {
+      const result = await api<{ optionId: string; pollOptions: PollOption[]; pollTotalVotes: number }>(`/posts/${post.id}/poll-vote`, {
+        method: "POST",
+        body: JSON.stringify({ optionId })
+      });
+      setMyPollOptionId(result.optionId);
+      setPollOptions(result.pollOptions);
+      setPollTotal(result.pollTotalVotes);
+      void onChanged?.();
+    } catch (error) {
+      showToast?.(error instanceof Error ? error.message : "Não foi possível registrar seu voto.");
+    } finally {
+      setPollBusy(false);
+    }
+  };
+
+  const share = async () => {
+    const url = postPermalink(post);
+    const title = post.type === "event" ? post.title || "Evento no Uorqui" : post.title || "Publicação no Uorqui";
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text: post.text?.slice(0, 180) || title, url });
+        return;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        showToast?.("Link da publicação copiado.");
+        return;
+      }
+      window.prompt("Copie o link da publicação:", url);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url);
+          showToast?.("Link da publicação copiado.");
+        } else {
+          window.prompt("Copie o link da publicação:", url);
+        }
+      } catch {
+        window.prompt("Copie o link da publicação:", url);
+      }
+    }
+  };
+
+  const openGoogleCalendar = () => {
+    if (!post.eventStart) return;
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: post.title || "Evento Uorqui",
+      dates: `${calendarUtc(post.eventStart)}/${calendarUtc(eventEnd(post))}`,
+      details: `${post.text || ""}\n\n${postPermalink(post)}`,
+      location: post.eventLocation || ""
+    });
+    window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, "_blank", "noopener,noreferrer");
+  };
+
+  const downloadIcs = () => {
+    if (!post.eventStart) return;
+    const uid = `${post.id}@uorqui`;
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Uorqui//Eventos//PT-BR",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      `UID:${icsEscape(uid)}`,
+      `DTSTAMP:${calendarUtc(new Date().toISOString())}`,
+      `DTSTART:${calendarUtc(post.eventStart)}`,
+      `DTEND:${calendarUtc(eventEnd(post))}`,
+      `SUMMARY:${icsEscape(post.title || "Evento Uorqui")}`,
+      `DESCRIPTION:${icsEscape(`${post.text || ""}\n\n${postPermalink(post)}`)}`,
+      `LOCATION:${icsEscape(post.eventLocation || "")}`,
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ].join("\r\n");
+
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${(post.title || "evento-uorqui").replace(/[^a-z0-9-_]+/gi, "-").toLowerCase()}.ics`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
@@ -207,19 +365,77 @@ export function PostCard({
                 <small>📢 COMUNICADO{post.requiresReadReceipt ? " · LEITURA SOLICITADA" : ""}</small>
                 <strong>{post.title || "Comunicado"}</strong>
                 <p>{post.text}</p>
-                {post.requiresReadReceipt && (
-                  <button className={`btn small ${post.hasRead ? "secondary" : ""}`} disabled={post.hasRead} onClick={() => onRead(post)}>
-                    {post.hasRead ? "✓ Leitura confirmada" : "Confirmar leitura"}
-                  </button>
-                )}
+              </div>
+            ) : post.type === "poll" ? (
+              <div className="poll-block">
+                <span className="post-kind"><Vote size={13} /> ENQUETE</span>
+                <p className="poll-question">{post.text}</p>
+                <div className="poll-options">
+                  {pollOptions.map((option) => {
+                    const pct = pollTotal ? Math.round((Number(option.voteCount || 0) / pollTotal) * 100) : 0;
+                    const selected = myPollOptionId === option.id;
+                    return (
+                      <button key={option.id} className={`poll-option ${selected ? "selected" : ""}`} disabled={pollBusy} onClick={() => votePoll(option.id)}>
+                        <span className="poll-progress" style={{ width: `${pct}%` }} />
+                        <span className="poll-option-copy"><b>{option.text}</b><small>{pct}% · {option.voteCount || 0}</small></span>
+                        {selected && <CheckCircle2 size={17} />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <small className="poll-total">{pollTotal} {pollTotal === 1 ? "voto" : "votos"}{myPollOptionId ? " · você já votou" : ""}</small>
+              </div>
+            ) : post.type === "event" ? (
+              <div className="event-block">
+                <span className="post-kind"><CalendarDays size={13} /> EVENTO</span>
+                <h3>{post.title || "Evento"}</h3>
+                <div className="event-meta"><CalendarDays size={16} /><strong>{eventDateLabel(post)}</strong></div>
+                {post.eventLocation && <div className="event-meta"><MapPin size={16} /><span>{post.eventLocation}</span></div>}
+                {post.text && <p>{post.text}</p>}
+                <div className="event-calendar-actions">
+                  <button className="btn small secondary" onClick={openGoogleCalendar}><CalendarPlus size={16} /> Google Agenda</button>
+                  <button className="btn small secondary" onClick={downloadIcs}><Download size={16} /> Adicionar à agenda</button>
+                </div>
               </div>
             ) : (
               <>
                 {post.type === "question" && <span className="post-kind">PERGUNTA</span>}
                 <p>{post.text}</p>
-                {post.acceptedCommentId && <span className="solution">✓ Solução encontrada</span>}
               </>
             )}
+
+            {post.type === "announcement" && post.requiresReadReceipt && post.authorUid !== currentUid && (
+              <div className={`read-confirmation-box ${post.hasRead ? "confirmed" : ""}`}>
+                <div>
+                  <strong>{post.hasRead ? "Leitura confirmada" : "Confirmação de leitura solicitada"}</strong>
+                  <small>
+                    {post.hasRead
+                      ? "Sua confirmação foi registrada."
+                      : "Esta pendência continuará no sino até você confirmar a leitura."}
+                  </small>
+                </div>
+                <button
+                  className={`btn small ${post.hasRead ? "secondary" : ""}`}
+                  disabled={post.hasRead}
+                  onClick={() => onRead(post)}
+                >
+                  {post.hasRead ? "✓ Confirmado" : "Confirmar leitura"}
+                </button>
+              </div>
+            )}
+
+            {(resolved || post.acceptedCommentId) && (post.type === "post" || post.type === "question") && (
+              <span className="solution"><CheckCircle2 size={14} /> Resolvido</span>
+            )}
+
+            {canResolve && (
+              <div className="post-status-actions">
+                <button className="text-button resolve-button" disabled={resolveBusy} onClick={toggleResolved}>
+                  {resolved ? <><RotateCcw size={14} /> Reabrir</> : <><CheckCircle2 size={14} /> Marcar como resolvido</>}
+                </button>
+              </div>
+            )}
+
             {!!post.attachments?.length && (
               <div className={`post-attachments ${post.attachments.length === 1 ? "one" : ""}`}>
                 {post.attachments.map((attachment) => <AttachmentPreview key={attachment.id} attachment={attachment} />)}
@@ -233,12 +449,12 @@ export function PostCard({
               <span className="action-count">{count(post.reactionCount)}</span>
               <span className="action-label">curtidas</span>
             </button>
-            <button className={commentsOpen ? "active" : ""} onClick={toggleComments} aria-label="Abrir respostas">
+            <button className={commentsOpen ? "active" : ""} onClick={toggleComments} aria-label="Abrir comentários">
               <MessageCircle size={18} />
               <span className="action-count">{count(localCommentCount)}</span>
               <span className="action-label">comentários</span>
             </button>
-            {post.scope !== "world" && <button aria-label="Compartilhar"><Share2 size={18} /></button>}
+            <button onClick={share} aria-label="Compartilhar publicação"><Share2 size={18} /><span className="action-label">compartilhar</span></button>
           </footer>
 
           {commentsOpen && (

@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
-  ArrowLeft, Bell, Building2, Camera, Check, ChevronDown, ChevronRight, CirclePlus,
-  FileQuestion, Globe2, Home, KeyRound, LogOut, Megaphone, MessageSquareText,
-  Plus, Search, Send, Settings, UserRound, Users, X
+  ArrowLeft, BarChart3, Bell, Building2, CalendarDays, Camera, Check, ChevronDown,
+  ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
+  KeyRound, LogOut, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
+  ShieldCheck, Smartphone, UserRound, Users, X
 } from "lucide-react";
 import {
   createUserWithEmailAndPassword, EmailAuthProvider, onAuthStateChanged,
   reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail,
-  signInWithEmailAndPassword, signOut, updatePassword, updateProfile, type User
+  signInWithEmailAndPassword, updatePassword, updateProfile, type User
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
 import { api, prefetchPostMedia } from "./lib/api";
+import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
+import { usePwaInstall } from "./lib/pwa";
 import type {
   BootstrapData, Community, CommunityMember, HomeTab, NotificationItem, Post, View
 } from "./types";
@@ -22,7 +25,7 @@ import "./styles.css";
 
 const emptyData: BootstrapData = {
   me: { uid: "" }, companies: [], selectedCompanyId: "", company: null, role: null,
-  canAdmin: false, communities: [], communityMap: {}, posts: [], worldPosts: [],
+  canAdmin: false, isSuperadmin: false, communities: [], communityMap: {}, posts: [], worldPosts: [],
   notifications: [], allCompanyCommunities: [], members: []
 };
 
@@ -46,6 +49,9 @@ export default function App() {
   const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string }>({});
   const [headerSearch, setHeaderSearch] = useState("");
   const [searchSeed, setSearchSeed] = useState("");
+  const [sharedPost, setSharedPost] = useState<Post | null>(null);
+  const [sharedPostLoading, setSharedPostLoading] = useState(false);
+  const pwaInstall = usePwaInstall();
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
     setUser(next);
@@ -63,8 +69,13 @@ export default function App() {
     try {
       const suffix = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
       const next = await api<BootstrapData>(`/bootstrap${suffix}`);
-      await prefetchPostMedia([...next.posts, ...next.worldPosts]);
+      const visibleMedia = prefetchPostMedia([...next.posts, ...next.worldPosts], 8);
+      await Promise.race([
+        visibleMedia,
+        new Promise<void>((resolve) => window.setTimeout(resolve, 250))
+      ]);
       setData(next);
+      void prefetchPostMedia([...next.posts, ...next.worldPosts], 24);
       setSelectedCompanyId(next.selectedCompanyId || "");
       if (next.selectedCompanyId && next.selectedCompanyId !== companyId) {
         localStorage.setItem("uorqui-company", next.selectedCompanyId);
@@ -78,8 +89,10 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+    const params = new URLSearchParams(location.search);
+    const sharedCompany = params.get("company") || "";
     const stored = localStorage.getItem("uorqui-company") || "";
-    refresh(stored);
+    refresh(sharedCompany || stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -108,23 +121,106 @@ export default function App() {
     window.setTimeout(() => setToast(""), 2800);
   };
 
+  useEffect(() => {
+    if (!user || !data.me.uid || loading) return;
+    const params = new URLSearchParams(location.search);
+    const postId = params.get("post") || "";
+    if (!postId) {
+      setSharedPost(null);
+      return;
+    }
+
+    let active = true;
+    setSharedPostLoading(true);
+    api<{ post: Post }>(`/posts/${encodeURIComponent(postId)}`)
+      .then(async (result) => {
+        await prefetchPostMedia([result.post], 5);
+        if (active) setSharedPost(result.post);
+      })
+      .catch((error) => {
+        if (active) {
+          setSharedPost(null);
+          showToast(errorMessage(error));
+        }
+      })
+      .finally(() => active && setSharedPostLoading(false));
+
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, data.me.uid, data.selectedCompanyId, loading]);
+
+  useEffect(() => {
+    if (!user || !data.me.uid || loading) return;
+
+    let unsubscribe: (() => void) | undefined;
+    let active = true;
+
+    if (currentPushState() === "granted") {
+      void syncPushRegistration().catch(() => {});
+      void setupForegroundPush((payload) => {
+        if (!active) return;
+        const title = payload.notification?.title || payload.data?.title || "Nova notificação no Uorqui";
+        showToast(title);
+        void refresh();
+      }).then((cleanup) => {
+        if (active) unsubscribe = cleanup;
+        else cleanup();
+      }).catch(() => {});
+    }
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, data.me.uid, selectedCompanyId, loading]);
+
+  useEffect(() => {
+    if (!user || !data.me.uid || loading) return;
+    const params = new URLSearchParams(location.search);
+    const billing = params.get("billing");
+    const billingCompany = params.get("billingCompany") || "";
+    if (!billing) return;
+
+    setView("companies");
+    if (billing === "success") showToast("Pagamento concluído. O Premium será ativado assim que o Asaas confirmar o webhook.");
+    else if (billing === "cancel") showToast("Pagamento cancelado. Nenhuma cobrança foi confirmada.");
+    else if (billing === "expired") showToast("O checkout expirou. Você pode gerar um novo na tela Empresas.");
+
+    params.delete("billing");
+    params.delete("billingCompany");
+    const query = params.toString();
+    history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+    if (billingCompany) void refresh(billingCompany);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, data.me.uid, loading]);
+
   if (!authReady) return <Boot />;
   if (!user) return <AuthScreen />;
   if (loading && !data.me.uid) return <Boot />;
-  if (fatal) return <ErrorScreen message={fatal} onRetry={() => refresh()} onLogout={() => signOut(auth)} />;
-  if (!data.companies.length) return <Onboarding onCreated={(companyId) => refresh(companyId)} />;
+  if (fatal) return <ErrorScreen message={fatal} onRetry={() => refresh()} onLogout={() => unregisterPushBeforeLogout()} />;
+  if (!data.companies.length && !data.isSuperadmin) return <Onboarding onCreated={(companyId) => refresh(companyId)} />;
 
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações", companies: "Empresas"
+    home: "Início", communities: "Comunidades", search: "Buscar", admin: "Administrar", profile: "Perfil", notifications: "Notificações", companies: "Empresas", superadmin: "Superadmin"
   };
 
   const navigate = (next: View) => {
+    if (sharedPost) {
+      setSharedPost(null);
+      const params = new URLSearchParams(location.search);
+      params.delete("post");
+      params.delete("company");
+      const query = params.toString();
+      history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+    }
     setView(next);
   };
 
   const openComposer = (target: { scope?: "company" | "community" | "world"; communityId?: string } = {}) => {
+    pwaInstall.noteInteraction();
     setComposerTarget(target);
     setComposerOpen(true);
   };
@@ -147,7 +243,71 @@ export default function App() {
     await refresh(id);
   };
 
+  const openPostFromNotification = async (notification: NotificationItem) => {
+    const postId = notification.data?.postId || "";
+    const companyId = notification.data?.companyId || "";
+    if (!postId) return;
+
+    try {
+      if (companyId && companyId !== selectedCompanyId) {
+        localStorage.setItem("uorqui-company", companyId);
+        setSelectedCompanyId(companyId);
+        await refresh(companyId);
+      }
+
+      const params = new URLSearchParams(location.search);
+      params.set("post", postId);
+      if (companyId) params.set("company", companyId);
+      history.replaceState({}, "", `${location.pathname}?${params.toString()}`);
+
+      setSharedPostLoading(true);
+      const result = await api<{ post: Post }>(`/posts/${encodeURIComponent(postId)}`);
+      await Promise.race([
+        prefetchPostMedia([result.post], 5),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 180))
+      ]);
+      setSharedPost(result.post);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setSharedPostLoading(false);
+    }
+  };
+
+  const closeSharedPost = () => {
+    setSharedPost(null);
+    const params = new URLSearchParams(location.search);
+    params.delete("post");
+    params.delete("company");
+    const query = params.toString();
+    history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+  };
+
+  const reloadSharedPost = async () => {
+    if (!sharedPost?.id) return;
+    const result = await api<{ post: Post }>(`/posts/${encodeURIComponent(sharedPost.id)}`);
+    await Promise.race([
+      prefetchPostMedia([result.post], 5),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 180))
+    ]);
+    setSharedPost(result.post);
+  };
+
   const renderPage = () => {
+    if (data.isSuperadmin && (view === "superadmin" || (!data.companies.length && view !== "profile"))) {
+      return <SuperadminPage showToast={showToast} onProfile={() => navigate("profile")} />;
+    }
+    if (sharedPostLoading) return <div className="page-section"><div className="loading-line">Abrindo publicação…</div></div>;
+    if (sharedPost) return (
+      <SharedPostPage
+        data={data}
+        post={sharedPost}
+        onBack={closeSharedPost}
+        reload={reloadSharedPost}
+        refreshGlobal={() => refresh(sharedPost.companyId || selectedCompanyId)}
+        showToast={showToast}
+      />
+    );
     if (view === "home") return (
       <HomePage
         data={data}
@@ -171,9 +331,18 @@ export default function App() {
     );
     if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} />;
     if (view === "admin") return <AdminPage data={data} onCompanyChange={(id) => changeCompany(id, "admin")} refresh={() => refresh()} showToast={showToast} />;
-    if (view === "notifications") return <NotificationsPage data={data} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "notifications") return <NotificationsPage data={data} refresh={() => refresh()} showToast={showToast} onOpenPost={openPostFromNotification} />;
     if (view === "companies") return <CompaniesPage data={data} onSelectCompany={(id) => changeCompany(id, "home")} showToast={showToast} />;
-    return <ProfilePage data={data} refresh={() => refresh()} showToast={showToast} />;
+    return <ProfilePage
+      data={data}
+      refresh={() => refresh()}
+      showToast={showToast}
+      onOpenSuperadmin={() => navigate("superadmin")}
+      pwaInstalled={pwaInstall.installed}
+      pwaMode={pwaInstall.mode}
+      pwaInstalling={pwaInstall.installing}
+      onInstallPwa={() => pwaInstall.install()}
+    />;
   };
 
   return (
@@ -184,23 +353,28 @@ export default function App() {
             <img src="/assets/uorqui-wordmark.png" alt="Uorqui" />
           </button>
 
-          <label className="company-picker">
-            <span className="company-mark">{companyName.slice(0, 2).toUpperCase()}</span>
-            <select value={selectedCompanyId} onChange={(e) => changeCompany(e.target.value)}>
-              {data.companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-            </select>
-            <ChevronDown size={16} />
-          </label>
+          {!!data.companies.length && (
+            <label className="company-picker">
+              <span className="company-mark">{companyName.slice(0, 2).toUpperCase()}</span>
+              <select value={selectedCompanyId} onChange={(e) => changeCompany(e.target.value)}>
+                {data.companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+              </select>
+              <ChevronDown size={16} />
+            </label>
+          )}
 
           <nav className="side-nav">
-            <NavButton active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
-            <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
-            <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
-            {data.canAdmin && <NavButton active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
+            {!!data.companies.length && <>
+              <NavButton active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
+              <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
+              <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
+              {data.canAdmin && <NavButton active={view === "admin"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
+            </>}
+            {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
             <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
           </nav>
 
-          <button className="btn publish-main" onClick={() => openComposer()}><Plus size={19} /> Publicar</button>
+          {!!data.companies.length && <button className="btn publish-main" onClick={() => openComposer()}><Plus size={19} /> Publicar</button>}
 
           <div className="sidebar-user">
             <Avatar name={data.me.displayName || data.me.email} mediaId={data.me.avatarMediaId} />
@@ -208,7 +382,7 @@ export default function App() {
               <strong>{data.me.displayName || "Usuário"}</strong>
               <small>{data.me.email}</small>
             </div>
-            <button className="icon-btn" aria-label="Sair" onClick={() => signOut(auth)}><LogOut size={18} /></button>
+            <button className="icon-btn" aria-label="Sair" onClick={() => unregisterPushBeforeLogout()}><LogOut size={18} /></button>
           </div>
         </aside>
 
@@ -289,17 +463,60 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.1.7</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.4</strong><small>Conversas de trabalho que não se perdem.</small></section>
         </aside>
       </div>
 
-      <nav className="mobile-nav">
-        <MobileNav active={view === "home" && homeTab !== "world"} icon={<Home />} label="Início" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
-        <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
-        <button className="mobile-create" onClick={() => setComposerOpen(true)} aria-label="Publicar"><Plus size={26} /></button>
-        <MobileNav active={view === "companies"} icon={<Building2 />} label="Empresas" onClick={() => navigate("companies")} />
-        <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
-      </nav>
+      {!!data.companies.length && (
+        <nav className="mobile-nav">
+          <MobileNav active={view === "home" && homeTab !== "world"} icon={<Home />} label="Início" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
+          <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
+          <button className="mobile-create" onClick={() => setComposerOpen(true)} aria-label="Publicar"><Plus size={26} /></button>
+          <MobileNav active={view === "companies"} icon={<Building2 />} label="Empresas" onClick={() => navigate("companies")} />
+          <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
+        </nav>
+      )}
+
+      {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
+        <aside className="pwa-install-banner" role="status">
+          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192.png" alt="" /></div>
+          <div className="pwa-install-copy">
+            <strong>Instale o Uorqui</strong>
+            <span>Abra mais rápido e use como um app no celular.</span>
+          </div>
+          <button className="btn small" onClick={() => pwaInstall.install()} disabled={pwaInstall.installing}>
+            <Download size={15} /> {pwaInstall.installing ? "Abrindo…" : "Instalar"}
+          </button>
+          <button className="icon-btn pwa-install-close" onClick={pwaInstall.dismissBanner} aria-label="Agora não">
+            <X size={18} />
+          </button>
+        </aside>
+      )}
+
+      {pwaInstall.instructionsOpen && (
+        <Modal title="Instalar Uorqui" onClose={pwaInstall.closeInstructions}>
+          <div className="pwa-install-instructions">
+            <div className="pwa-install-instruction-icon"><Smartphone size={30} /></div>
+            {pwaInstall.isIOS ? (
+              <>
+                <h3>Adicionar à Tela de Início</h3>
+                <p>No Safari, toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.</p>
+                <ol>
+                  <li>Abra o menu <strong>Compartilhar</strong> do Safari.</li>
+                  <li>Role as opções e escolha <strong>Adicionar à Tela de Início</strong>.</li>
+                  <li>Confirme em <strong>Adicionar</strong>.</li>
+                </ol>
+              </>
+            ) : (
+              <>
+                <h3>Instalar pelo navegador</h3>
+                <p>Se o botão automático não estiver disponível, abra o menu do navegador e procure por <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>.</p>
+              </>
+            )}
+            <button className="btn" onClick={pwaInstall.closeInstructions}>Entendi</button>
+          </div>
+        </Modal>
+      )}
 
       {composerOpen && <Composer
         data={data}
@@ -405,7 +622,7 @@ function Onboarding({ onCreated }: { onCreated: (id: string) => void }) {
           {error && <div className="form-error">{error}</div>}
           <button className="btn">Criar empresa</button>
         </form>
-        <button className="text-button" onClick={() => signOut(auth)}>Sair desta conta</button>
+        <button className="text-button" onClick={() => unregisterPushBeforeLogout()}>Sair desta conta</button>
       </div>
     </div>
   );
@@ -479,6 +696,59 @@ function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
   );
 }
 
+function SharedPostPage({
+  data, post, onBack, reload, refreshGlobal, showToast
+}: {
+  data: BootstrapData;
+  post: Post;
+  onBack: () => void;
+  reload: () => Promise<void>;
+  refreshGlobal: () => Promise<void>;
+  showToast: (message: string) => void;
+}) {
+  const like = async () => {
+    try { await api(`/posts/${post.id}/reaction`, { method: "POST" }); await reload(); }
+    catch (error) { showToast(errorMessage(error)); }
+  };
+  const read = async () => {
+    try {
+      await api(`/posts/${post.id}/read`, { method: "POST" });
+      showToast("Leitura confirmada.");
+      await reload();
+      await refreshGlobal();
+    } catch (error) { showToast(errorMessage(error)); }
+  };
+  const remove = async () => {
+    const adminDeletingAnother = data.canAdmin && post.authorUid !== data.me.uid;
+    if (!confirm(adminDeletingAnother ? "Apagar esta publicação como administrador?" : "Excluir sua publicação?")) return;
+    try {
+      const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
+      if (result.tombstone) await reload();
+      else onBack();
+      showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
+    } catch (error) { showToast(errorMessage(error)); }
+  };
+
+  return (
+    <section className="page-section shared-post-page">
+      <button className="back-button shared-post-back" onClick={onBack}><ArrowLeft size={18} /> Voltar</button>
+      <PostCard
+        post={post}
+        companyName={post.companyName || data.company?.name}
+        community={data.communityMap[post.communityId || ""]}
+        onLike={like}
+        onRead={read}
+        canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
+        onDelete={remove}
+        currentUid={data.me.uid}
+        canAdmin={data.canAdmin}
+        onChanged={reload}
+        showToast={showToast}
+      />
+    </section>
+  );
+}
+
 function CommunitiesPage({
   data, selectedCommunityId, onSelectCommunity, onBack, onComposeCommunity, refresh, showToast
 }: {
@@ -494,39 +764,64 @@ function CommunitiesPage({
   const [communityPosts, setCommunityPosts] = useState<Post[]>([]);
   const [communityMembers, setCommunityMembers] = useState<CommunityMember[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersLoaded, setMembersLoaded] = useState(false);
   const [addUid, setAddUid] = useState("");
   const [membersPage, setMembersPage] = useState(false);
   const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
 
-  const loadCommunity = async (communityId: string) => {
-    setDetailLoading(true);
+  const loadCommunityPosts = async (communityId: string) => {
     try {
-      const [postResult, memberResult] = await Promise.all([
-        api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts`),
-        api<{ community: Community; members: CommunityMember[]; count: number }>(`/communities/${communityId}/members`)
-      ]);
-      await prefetchPostMedia(postResult.posts);
-      setCommunityPosts(postResult.posts);
-      setCommunityMembers(memberResult.members);
+      const result = await api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts`);
+      setCommunityPosts(result.posts);
+      setDetailLoading(false);
+      void prefetchPostMedia(result.posts, 16);
+    } catch (err) {
+      setDetailLoading(false);
+      showToast(errorMessage(err));
+    }
+  };
+
+  const loadCommunityMembers = async (communityId: string) => {
+    setMembersLoading(true);
+    try {
+      const result = await api<{ community: Community; members: CommunityMember[]; count: number }>(`/communities/${communityId}/members`);
+      setCommunityMembers(result.members);
+      setMembersLoaded(true);
     } catch (err) {
       showToast(errorMessage(err));
-      onBack();
     } finally {
-      setDetailLoading(false);
+      setMembersLoading(false);
     }
   };
 
   useEffect(() => {
     setMembersPage(false);
+    setCommunityMembers([]);
+    setMembersLoaded(false);
+    setAddUid("");
+
     if (!selectedCommunityId) {
       setCommunityPosts([]);
-      setCommunityMembers([]);
+      setDetailLoading(false);
       return;
     }
-    loadCommunity(selectedCommunityId);
+
+    // Bootstrap already carries the visible community posts. Render those on the
+    // first frame and refresh quietly in the background instead of blocking on
+    // another request plus the member list.
+    const cached = data.posts.filter(post => post.scope === "community" && post.communityId === selectedCommunityId);
+    setCommunityPosts(cached);
+    setDetailLoading(cached.length === 0);
+    void loadCommunityPosts(selectedCommunityId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCommunityId]);
+  }, [selectedCommunityId, data.selectedCompanyId]);
+
+  const openMembers = () => {
+    setMembersPage(true);
+    if (selectedCommunityId && !membersLoaded) void loadCommunityMembers(selectedCommunityId);
+  };
 
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -545,8 +840,16 @@ function CommunitiesPage({
   const like = async (post: Post) => {
     try {
       await api(`/posts/${post.id}/reaction`, { method: "POST" });
-      if (selectedCommunityId) await loadCommunity(selectedCommunityId);
-      await refresh();
+      if (selectedCommunityId) await loadCommunityPosts(selectedCommunityId);
+    } catch (err) { showToast(errorMessage(err)); }
+  };
+
+  const read = async (post: Post) => {
+    try {
+      await api(`/posts/${post.id}/read`, { method: "POST" });
+      showToast("Leitura confirmada.");
+      if (selectedCommunityId) await loadCommunityPosts(selectedCommunityId);
+      void refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
 
@@ -559,21 +862,19 @@ function CommunitiesPage({
     try {
       const result = await api<{ tombstone?: boolean }>(`/posts/${post.id}`, { method: "DELETE" });
       showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
-      if (selectedCommunityId) await loadCommunity(selectedCommunityId);
-      await refresh();
+      if (selectedCommunityId) await loadCommunityPosts(selectedCommunityId);
+      void refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
 
   const addMember = async () => {
     if (!selectedCommunityId || !addUid) return;
     try {
-      await api(`/communities/${selectedCommunityId}/members`, {
-        method: "POST", body: JSON.stringify({ uid: addUid })
-      });
+      await api(`/communities/${selectedCommunityId}/members`, { method: "POST", body: JSON.stringify({ uid: addUid }) });
       setAddUid("");
       showToast("Usuário adicionado à comunidade.");
-      await loadCommunity(selectedCommunityId);
-      await refresh();
+      await loadCommunityMembers(selectedCommunityId);
+      void refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
 
@@ -583,63 +884,50 @@ function CommunitiesPage({
     try {
       await api(`/communities/${selectedCommunityId}/members/${member.uid}`, { method: "DELETE" });
       showToast("Usuário removido da comunidade.");
-      await loadCommunity(selectedCommunityId);
-      await refresh();
+      await loadCommunityMembers(selectedCommunityId);
+      void refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
 
   if (selectedCommunityId && selectedCommunity) {
     const currentIds = new Set(communityMembers.map((member) => member.uid));
     const availableMembers = data.members.filter((member) => !currentIds.has(member.uid));
+    const memberCount = membersLoaded ? communityMembers.length : Number(selectedCommunity.memberCount || 0);
 
     if (membersPage) {
       return (
         <section className="page-section">
           <div className="members-page-head">
             <button className="back-button" onClick={() => setMembersPage(false)}><ArrowLeft size={18} /> {selectedCommunity.name}</button>
-            <div>
-              <h2>Membros de {selectedCommunity.name}</h2>
-              <p>{communityMembers.length} {communityMembers.length === 1 ? "membro" : "membros"} nesta comunidade.</p>
-            </div>
+            <div><h2>Membros de {selectedCommunity.name}</h2><p>{memberCount} {memberCount === 1 ? "membro" : "membros"} nesta comunidade.</p></div>
           </div>
 
           {data.canAdmin && (
             <section className="panel-card members-manage-card">
-              <div className="members-manage-copy">
-                <strong>Adicionar usuário</strong>
-                <small>Escolha um colaborador da empresa que ainda não participa desta comunidade.</small>
-              </div>
-              {availableMembers.length ? (
+              <div className="members-manage-copy"><strong>Adicionar usuário</strong><small>Escolha um colaborador da empresa que ainda não participa desta comunidade.</small></div>
+              {!membersLoading && availableMembers.length ? (
                 <div className="community-add-member">
                   <select value={addUid} onChange={(e) => setAddUid(e.target.value)}>
                     <option value="">Escolha um usuário…</option>
-                    {availableMembers.map((member) => (
-                      <option value={member.uid} key={member.uid}>{member.displayName || member.email}</option>
-                    ))}
+                    {availableMembers.map((member) => <option value={member.uid} key={member.uid}>{member.displayName || member.email}</option>)}
                   </select>
                   <button className="btn small" disabled={!addUid} onClick={addMember}><Plus size={15} /> Adicionar</button>
                 </div>
-              ) : (
-                <small className="muted">Todos os colaboradores da empresa já estão nesta comunidade.</small>
-              )}
+              ) : !membersLoading ? <small className="muted">Todos os colaboradores da empresa já estão nesta comunidade.</small> : null}
             </section>
           )}
 
           <section className="panel-card members-page-list">
-            {communityMembers.map((member) => (
+            {membersLoading && <div className="loading-line">Carregando membros…</div>}
+            {!membersLoading && communityMembers.map((member) => (
               <div className="community-member-row members-page-row" key={member.uid}>
                 <Avatar name={member.displayName || member.email} mediaId={member.avatarMediaId} size={42} />
-                <div className="ellipsis">
-                  <strong>{member.displayName || member.email}</strong>
-                  <small>{member.email}</small>
-                </div>
-                <span className="private-pill">
-                  {member.companyRole === "owner" ? "Proprietário" : member.companyRole === "admin" ? "Administrador" : "Usuário"}
-                </span>
+                <div className="ellipsis"><strong>{member.displayName || member.email}</strong><small>{member.email}</small></div>
+                <span className="private-pill">{member.companyRole === "owner" ? "Proprietário" : member.companyRole === "admin" ? "Administrador" : "Usuário"}</span>
                 {data.canAdmin && <button className="btn danger small" onClick={() => removeMember(member)}>Remover</button>}
               </div>
             ))}
-            {!communityMembers.length && <p className="muted">Nenhum usuário nesta comunidade.</p>}
+            {!membersLoading && membersLoaded && !communityMembers.length && <p className="muted">Nenhum usuário nesta comunidade.</p>}
           </section>
         </section>
       );
@@ -654,31 +942,27 @@ function CommunitiesPage({
             <div>
               <h2>{selectedCommunity.name}</h2>
               <p>{selectedCommunity.description || "Comunidade privada da empresa."}</p>
-              <button className="community-members-link" onClick={() => setMembersPage(true)}>
-                <Users size={14} />
-                {communityMembers.length} {communityMembers.length === 1 ? "membro" : "membros"}
-                <ChevronRight size={14} />
-              </button>
+              <button className="community-members-link" onClick={openMembers}><Users size={14} />{memberCount} {memberCount === 1 ? "membro" : "membros"}<ChevronRight size={14} /></button>
             </div>
           </div>
           <button className="btn small" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
         </div>
 
         <div className="feed community-feed">
-          {detailLoading && <div className="loading-line">Carregando publicações…</div>}
-          {!detailLoading && communityPosts.map((post) => (
+          {detailLoading && !communityPosts.length && <div className="loading-line">Carregando publicações…</div>}
+          {communityPosts.map((post) => (
             <PostCard
               key={post.id}
               post={post}
               companyName={data.company?.name}
               community={selectedCommunity}
               onLike={like}
-              onRead={() => {}}
+              onRead={read}
               canDelete={post.authorUid === data.me.uid || data.canAdmin}
               onDelete={removePost}
               currentUid={data.me.uid}
               canAdmin={data.canAdmin}
-              onChanged={async () => { await loadCommunity(selectedCommunityId); await refresh(); }}
+              onChanged={async () => { if (selectedCommunityId) await loadCommunityPosts(selectedCommunityId); }}
               showToast={showToast}
             />
           ))}
@@ -700,11 +984,7 @@ function CommunitiesPage({
         {listedCommunities.map((community) => (
           <button className="community-card community-link" key={community.id} onClick={() => onSelectCommunity(community.id)}>
             <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
-            <div>
-              <strong>{community.name}</strong>
-              <p>{community.description || "Comunidade privada da empresa."}</p>
-              <small className="community-member-count">{community.memberCount || 0} {(community.memberCount || 0) === 1 ? "membro" : "membros"}</small>
-            </div>
+            <div><strong>{community.name}</strong><p>{community.description || "Comunidade privada da empresa."}</p><small className="community-member-count">{community.memberCount || 0} {(community.memberCount || 0) === 1 ? "membro" : "membros"}</small></div>
             <ChevronRight className="community-chevron" size={18} />
           </button>
         ))}
@@ -728,26 +1008,31 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   const [posts, setPosts] = useState<Post[]>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
+  const searchRequestId = useRef(0);
 
   const runSearch = async (value: string) => {
     const normalized = value.trim();
     if (normalized.length < 2) {
+      searchRequestId.current += 1;
       setPosts([]);
       setSearched(false);
+      setSearching(false);
       return;
     }
 
+    const requestId = ++searchRequestId.current;
     setSearching(true);
     try {
       const qs = new URLSearchParams({ q: normalized, companyId: data.selectedCompanyId });
       const result = await api<{ posts: Post[] }>(`/search?${qs}`);
-      await prefetchPostMedia(result.posts);
+      if (requestId !== searchRequestId.current) return;
       setPosts(result.posts);
       setSearched(true);
+      void prefetchPostMedia(result.posts, 12);
     } catch (err) {
-      showToast(errorMessage(err));
+      if (requestId === searchRequestId.current) showToast(errorMessage(err));
     } finally {
-      setSearching(false);
+      if (requestId === searchRequestId.current) setSearching(false);
     }
   };
 
@@ -772,6 +1057,15 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   const like = async (post: Post) => {
     try { await api(`/posts/${post.id}/reaction`, { method: "POST" }); await refresh(); }
     catch (err) { showToast(errorMessage(err)); }
+  };
+
+  const read = async (post: Post) => {
+    try {
+      await api(`/posts/${post.id}/read`, { method: "POST" });
+      showToast("Leitura confirmada.");
+      await refresh();
+      await runSearch(query);
+    } catch (err) { showToast(errorMessage(err)); }
   };
 
   const remove = async (post: Post) => {
@@ -801,7 +1095,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
           companyName={data.company?.name}
           community={data.communityMap[post.communityId || ""]}
           onLike={like}
-          onRead={() => {}}
+          onRead={read}
           canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
           onDelete={remove}
           currentUid={data.me.uid}
@@ -956,16 +1250,313 @@ function AdminPage({ data, onCompanyChange, refresh, showToast }: {
   );
 }
 
+
+type SuperadminMetrics = {
+  totalUsers: number;
+  totalCompanies: number;
+  freeCompanies: number;
+  premiumCompanies: number;
+  paidPremiumCompanies: number;
+  manualPremiumCompanies: number;
+  activeMemberships: number;
+  totalCommunities: number;
+  totalPosts: number;
+  totalComments: number;
+  newUsers30d: number;
+  newCompanies30d: number;
+  posts30d: number;
+  comments30d: number;
+  estimatedMonthlyRecurringRevenue: number;
+  premiumMonthlyPrice: number;
+};
+
+type SuperadminCompany = {
+  id: string;
+  name: string;
+  effectivePlan: "free" | "premium";
+  billingStatus: string;
+  premiumSource?: "asaas" | "manual" | "";
+  premiumUntil?: string;
+  manualPremiumUntil?: string;
+  memberCount: number;
+  communityCount: number;
+  ownerName?: string;
+  ownerEmail?: string;
+  createdAt?: string;
+};
+
+function SuperadminPage({
+  showToast,
+  onProfile
+}: {
+  showToast: (message: string) => void;
+  onProfile?: () => void;
+}) {
+  const [metrics, setMetrics] = useState<SuperadminMetrics | null>(null);
+  const [companies, setCompanies] = useState<SuperadminCompany[]>([]);
+  const [query, setQuery] = useState("");
+  const [loadingSuperadmin, setLoadingSuperadmin] = useState(true);
+  const [busyCompany, setBusyCompany] = useState("");
+  const [daysByCompany, setDaysByCompany] = useState<Record<string, string>>({});
+
+  const load = async () => {
+    setLoadingSuperadmin(true);
+    try {
+      const result = await api<{
+        metrics: SuperadminMetrics;
+        companies: SuperadminCompany[];
+      }>("/superadmin/overview");
+      setMetrics(result.metrics);
+      setCompanies(result.companies);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setLoadingSuperadmin(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const grantPremium = async (company: SuperadminCompany) => {
+    if (busyCompany) return;
+    const days = Math.max(1, Math.min(3650, Number(daysByCompany[company.id] || 30)));
+    setBusyCompany(company.id);
+    try {
+      const result = await api<{ message?: string }>(
+        `/superadmin/companies/${company.id}/premium`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ action: "grant", days })
+        }
+      );
+      showToast(result.message || "Premium adicionado.");
+      await load();
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setBusyCompany("");
+    }
+  };
+
+  const revokePremium = async (company: SuperadminCompany) => {
+    if (
+      busyCompany ||
+      !confirm(`Remover o Premium manual de ${company.name}? Se houver assinatura paga ativa, ela continuará Premium.`)
+    ) return;
+
+    setBusyCompany(company.id);
+    try {
+      const result = await api<{ message?: string }>(
+        `/superadmin/companies/${company.id}/premium`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ action: "revoke" })
+        }
+      );
+      showToast(result.message || "Premium manual removido.");
+      await load();
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setBusyCompany("");
+    }
+  };
+
+  const money = (value = 0) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+
+  const date = (value?: string) =>
+    value ? new Date(value).toLocaleDateString("pt-BR") : "—";
+
+  const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
+  const visibleCompanies = companies.filter((company) => {
+    if (!normalizedQuery) return true;
+    return [
+      company.name,
+      company.ownerName || "",
+      company.ownerEmail || "",
+      company.effectivePlan
+    ].some(value => value.toLocaleLowerCase("pt-BR").includes(normalizedQuery));
+  });
+
+  return (
+    <section className="page-section superadmin-page">
+      <div className="page-heading superadmin-heading">
+        <div>
+          <span className="superadmin-kicker"><ShieldCheck size={15} /> Uorqui Superadmin</span>
+          <h2>Métricas e planos</h2>
+          <p>Visão operacional do produto. O Superadmin não recebe acesso ao conteúdo privado das empresas.</p>
+        </div>
+        <div className="superadmin-head-actions">
+          {onProfile && <button className="btn secondary small" onClick={onProfile}>Perfil</button>}
+          <button className="btn secondary small" disabled={loadingSuperadmin} onClick={load}>Atualizar</button>
+        </div>
+      </div>
+
+      {loadingSuperadmin && !metrics && <div className="loading-line">Carregando métricas…</div>}
+
+      {metrics && (
+        <>
+          <div className="superadmin-metrics">
+            <article className="superadmin-metric">
+              <Users size={19} />
+              <span>Usuários</span>
+              <strong>{metrics.totalUsers}</strong>
+              <small>+{metrics.newUsers30d} nos últimos 30 dias</small>
+            </article>
+            <article className="superadmin-metric">
+              <Building2 size={19} />
+              <span>Empresas</span>
+              <strong>{metrics.totalCompanies}</strong>
+              <small>+{metrics.newCompanies30d} nos últimos 30 dias</small>
+            </article>
+            <article className="superadmin-metric">
+              <Crown size={19} />
+              <span>Premium</span>
+              <strong>{metrics.premiumCompanies}</strong>
+              <small>{metrics.paidPremiumCompanies} pagas · {metrics.manualPremiumCompanies} cortesia</small>
+            </article>
+            <article className="superadmin-metric">
+              <BarChart3 size={19} />
+              <span>MRR estimado</span>
+              <strong>{money(metrics.estimatedMonthlyRecurringRevenue)}</strong>
+              <small>Somente empresas Premium pagas</small>
+            </article>
+            <article className="superadmin-metric">
+              <MessageSquareText size={19} />
+              <span>Publicações</span>
+              <strong>{metrics.totalPosts}</strong>
+              <small>+{metrics.posts30d} nos últimos 30 dias</small>
+            </article>
+            <article className="superadmin-metric">
+              <Users size={19} />
+              <span>Comunidades</span>
+              <strong>{metrics.totalCommunities}</strong>
+              <small>{metrics.activeMemberships} vínculos ativos de equipe</small>
+            </article>
+          </div>
+
+          <div className="superadmin-secondary-metrics">
+            <span><strong>{metrics.freeCompanies}</strong> empresas Free</span>
+            <span><strong>{metrics.totalComments}</strong> comentários</span>
+            <span><strong>{metrics.comments30d}</strong> comentários em 30 dias</span>
+            <span><strong>{money(metrics.premiumMonthlyPrice)}</strong> preço mensal atual</span>
+          </div>
+        </>
+      )}
+
+      <section className="panel-card superadmin-companies-panel">
+        <div className="superadmin-company-toolbar">
+          <div>
+            <h3>Empresas</h3>
+            <small>{visibleCompanies.length} de {companies.length}</small>
+          </div>
+          <label className="superadmin-search">
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar empresa ou proprietário"
+            />
+          </label>
+        </div>
+
+        <div className="superadmin-company-list">
+          {visibleCompanies.map((company) => {
+            const premium = company.effectivePlan === "premium";
+            const manual = company.premiumSource === "manual" && !!company.manualPremiumUntil;
+
+            return (
+              <article className="superadmin-company-row" key={company.id}>
+                <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
+
+                <div className="superadmin-company-main">
+                  <div className="superadmin-company-name">
+                    <strong>{company.name}</strong>
+                    <span className={`plan-pill ${premium ? "premium" : "free"}`}>
+                      {premium ? <><Crown size={12} /> Premium</> : "Free"}
+                    </span>
+                  </div>
+                  <small>
+                    {company.ownerName || "Proprietário"}{company.ownerEmail ? ` · ${company.ownerEmail}` : ""}
+                  </small>
+                  <small>
+                    {company.memberCount} membros · {company.communityCount} comunidades · criada em {date(company.createdAt)}
+                  </small>
+                  {manual && (
+                    <span className="manual-premium-note">
+                      Cortesia até {date(company.manualPremiumUntil)}
+                    </span>
+                  )}
+                  {!manual && company.premiumSource === "asaas" && (
+                    <span className="paid-premium-note">Premium via Asaas · {company.billingStatus}</span>
+                  )}
+                </div>
+
+                <div className="superadmin-premium-actions">
+                  <select
+                    value={daysByCompany[company.id] || "30"}
+                    onChange={(event) =>
+                      setDaysByCompany(current => ({ ...current, [company.id]: event.target.value }))
+                    }
+                    disabled={busyCompany === company.id}
+                  >
+                    <option value="30">30 dias</option>
+                    <option value="60">60 dias</option>
+                    <option value="90">90 dias</option>
+                    <option value="180">180 dias</option>
+                    <option value="365">1 ano</option>
+                  </select>
+                  <button
+                    className="btn small"
+                    disabled={busyCompany === company.id}
+                    onClick={() => grantPremium(company)}
+                  >
+                    <Crown size={15} /> {manual ? "Adicionar tempo" : "Dar Premium"}
+                  </button>
+                  {manual && (
+                    <button
+                      className="btn danger small"
+                      disabled={busyCompany === company.id}
+                      onClick={() => revokePremium(company)}
+                    >
+                      Remover cortesia
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+
+          {!loadingSuperadmin && !visibleCompanies.length && (
+            <p className="muted superadmin-empty">Nenhuma empresa encontrada.</p>
+          )}
+        </div>
+      </section>
+    </section>
+  );
+}
+
 type CompanySummary = {
   id: string;
   name: string;
   role: "owner" | "admin" | "member";
-  communities: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    memberCount?: number;
-  }>;
+  plan?: "free" | "premium";
+  effectivePlan?: "free" | "premium";
+  billingStatus?: "inactive" | "pending" | "active" | "past_due" | "canceled";
+  premiumUntil?: string;
+  manualPremiumUntil?: string;
+  premiumSource?: "asaas" | "manual" | "";
+  memberCount?: number;
+  communityCount?: number;
+  limits?: { members: number | null; communities: number | null };
+  billingReady?: boolean;
+  premiumMonthlyPrice?: number;
+  billingSubscriptionId?: string;
+  communities: Array<{ id: string; name: string; description?: string; memberCount?: number }>;
 };
 
 function CompaniesPage({
@@ -979,79 +1570,138 @@ function CompaniesPage({
 }) {
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [billingBusy, setBillingBusy] = useState("");
+
+  const loadCompanies = async () => {
+    setLoadingCompanies(true);
+    try {
+      const result = await api<{ companies: CompanySummary[] }>("/companies/summary");
+      setCompanies(result.companies);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
 
   useEffect(() => {
-    let active = true;
-    setLoadingCompanies(true);
+    void loadCompanies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.companies.length, data.selectedCompanyId]);
 
-    api<{ companies: CompanySummary[] }>("/companies/summary")
-      .then((result) => {
-        if (active) setCompanies(result.companies);
-      })
-      .catch((error) => {
-        if (active) showToast(errorMessage(error));
-      })
-      .finally(() => {
-        if (active) setLoadingCompanies(false);
-      });
+  const currency = (value = 49.9) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
-    return () => {
-      active = false;
-    };
-  }, [data.companies.length]);
+  const upgrade = async (company: CompanySummary) => {
+    if (billingBusy) return;
+    setBillingBusy(company.id);
+    try {
+      const result = await api<{ url: string }>(`/companies/${company.id}/billing/checkout`, { method: "POST" });
+      window.location.href = result.url;
+    } catch (error) {
+      showToast(errorMessage(error));
+      setBillingBusy("");
+    }
+  };
+
+  const cancelPremium = async (company: CompanySummary) => {
+    if (billingBusy || !confirm(`Cancelar a renovação do Premium de ${company.name}? O acesso Premium permanece até o fim do período já pago.`)) return;
+    setBillingBusy(company.id);
+    try {
+      await api(`/companies/${company.id}/billing/cancel`, { method: "POST" });
+      showToast("Renovação do Premium cancelada.");
+      await loadCompanies();
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setBillingBusy("");
+    }
+  };
 
   return (
     <section className="page-section companies-page">
       <div className="page-heading">
-        <div>
-          <h2>Empresas</h2>
-          <p>Um resumo das empresas e comunidades às quais sua conta tem acesso.</p>
-        </div>
+        <div><h2>Empresas</h2><p>Cada empresa possui seu próprio plano. A mesma conta pode participar de empresas Free e Premium.</p></div>
       </div>
 
       {loadingCompanies && <div className="loading-line">Carregando empresas…</div>}
 
       {!loadingCompanies && (
         <div className="companies-summary-list">
-          {companies.map((company) => (
-            <section className={`company-summary-card ${company.id === data.selectedCompanyId ? "current" : ""}`} key={company.id}>
-              <div className="company-summary-head">
-                <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
-                <div className="ellipsis">
-                  <strong>{company.name}</strong>
-                  <small>
-                    {company.role === "owner" ? "Proprietário" : company.role === "admin" ? "Administrador" : "Usuário"}
-                    {" · "}
-                    {company.communities.length} {company.communities.length === 1 ? "comunidade" : "comunidades"}
-                  </small>
-                </div>
-                {company.id === data.selectedCompanyId ? (
-                  <span className="private-pill">Atual</span>
-                ) : (
-                  <button className="btn secondary small" onClick={() => onSelectCompany(company.id)}>Abrir empresa</button>
-                )}
-              </div>
-
-              <div className="company-summary-communities">
-                {company.communities.map((community) => (
-                  <div className="company-summary-community" key={community.id}>
-                    <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
-                    <div className="ellipsis">
-                      <strong>{community.name}</strong>
-                      <small>
-                        {community.description || "Comunidade privada"}
-                        {typeof community.memberCount === "number" ? ` · ${community.memberCount} membros` : ""}
-                      </small>
-                    </div>
+          {companies.map((company) => {
+            const premium = company.effectivePlan === "premium";
+            const pending = company.billingStatus === "pending";
+            const memberLimit = company.limits?.members ?? 5;
+            const communityLimit = company.limits?.communities ?? 2;
+            return (
+              <section className={`company-summary-card ${company.id === data.selectedCompanyId ? "current" : ""}`} key={company.id}>
+                <div className="company-summary-head">
+                  <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
+                  <div className="ellipsis">
+                    <strong>{company.name}</strong>
+                    <small>{company.role === "owner" ? "Proprietário" : company.role === "admin" ? "Administrador" : "Usuário"}</small>
                   </div>
-                ))}
-                {!company.communities.length && (
-                  <p className="muted company-no-communities">Nenhuma comunidade disponível para sua conta nesta empresa.</p>
-                )}
-              </div>
-            </section>
-          ))}
+                  <span className={`plan-pill ${premium ? "premium" : "free"}`}>{premium ? <><Crown size={13} /> Premium</> : "Free"}</span>
+                  {company.id === data.selectedCompanyId ? <span className="private-pill">Atual</span> : <button className="btn secondary small" onClick={() => onSelectCompany(company.id)}>Abrir</button>}
+                </div>
 
+                <div className="company-plan-summary">
+                  <div className="plan-usage">
+                    <strong>{premium ? "Uorqui Premium" : "Uorqui Free"}</strong>
+                    <small>
+                      {premium
+                        ? `${company.memberCount || 0} membros · ${company.communityCount || 0} comunidades · sem os limites do Free`
+                        : `${company.memberCount || 0}/${memberLimit} membros · ${company.communityCount || 0}/${communityLimit} comunidades`}
+                    </small>
+                  </div>
+
+                  {!premium && company.role === "owner" && (
+                    <div className="upgrade-box">
+                      <div><Crown size={18} /><span><strong>Premium para empresas</strong><small>Mais de 5 membros e mais de 2 comunidades. Todo o restante já está liberado no Free.</small></span></div>
+                      <button className="btn small" disabled={!company.billingReady || billingBusy === company.id} onClick={() => upgrade(company)}>
+                        <CreditCard size={16} /> {pending ? "Continuar pagamento" : `Ativar · ${currency(company.premiumMonthlyPrice)}/mês`}
+                      </button>
+                      <small className="payment-methods">Pix ou cartão de crédito via Asaas.</small>
+                      {!company.billingReady && <small className="billing-warning">Configure os Secrets do Asaas no Worker para habilitar a cobrança.</small>}
+                    </div>
+                  )}
+
+                  {!premium && company.role !== "owner" && <small className="muted">O proprietário desta empresa gerencia o plano.</small>}
+
+                  {premium && (
+                    <div className="premium-status">
+                      <Crown size={17} />
+                      <div>
+                        <strong>Premium ativo</strong>
+                        <small>
+                          {company.premiumSource === "manual" && company.manualPremiumUntil
+                            ? `Cortesia Uorqui até ${new Date(company.manualPremiumUntil).toLocaleDateString("pt-BR")}.`
+                            : company.premiumUntil
+                              ? `Acesso pago até ${new Date(company.premiumUntil).toLocaleDateString("pt-BR")}.`
+                              : "Assinatura ativa."}
+                        </small>
+                      </div>
+                      {company.role === "owner" && company.billingSubscriptionId && company.billingStatus !== "canceled" && (
+                        <button className="text-button" disabled={billingBusy === company.id} onClick={() => cancelPremium(company)}>Cancelar renovação</button>
+                      )}
+                    </div>
+                  )}
+
+                  {company.billingStatus === "past_due" && <div className="billing-warning">Pagamento pendente. O Premium permanece disponível somente até o fim do período já confirmado.</div>}
+                  {company.billingStatus === "canceled" && premium && <div className="billing-warning">Renovação cancelada. O plano volta ao Free após o período pago.</div>}
+                </div>
+
+                <div className="company-summary-communities">
+                  {company.communities.map((community) => (
+                    <div className="company-summary-community" key={community.id}>
+                      <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
+                      <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || "Comunidade privada"}{typeof community.memberCount === "number" ? ` · ${community.memberCount} membros` : ""}</small></div>
+                    </div>
+                  ))}
+                  {!company.communities.length && <p className="muted company-no-communities">Nenhuma comunidade disponível para sua conta nesta empresa.</p>}
+                </div>
+              </section>
+            );
+          })}
           {!companies.length && <Empty title="Nenhuma empresa" text="As empresas das quais você participa aparecerão aqui." />}
         </div>
       )}
@@ -1059,7 +1709,19 @@ function CompaniesPage({
   );
 }
 
-function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void }) {
+function ProfilePage({
+  data, refresh, showToast, onOpenSuperadmin,
+  pwaInstalled, pwaMode, pwaInstalling, onInstallPwa
+}: {
+  data: BootstrapData;
+  refresh: () => Promise<void>;
+  showToast: (m: string) => void;
+  onOpenSuperadmin: () => void;
+  pwaInstalled: boolean;
+  pwaMode: "installed" | "prompt" | "ios" | "manual";
+  pwaInstalling: boolean;
+  onInstallPwa: () => Promise<unknown>;
+}) {
   const [photoError, setPhotoError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [companyError, setCompanyError] = useState("");
@@ -1169,6 +1831,38 @@ function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refres
           </form>
         </section>
       </div>
+      <section className={`panel-card profile-install-card ${pwaInstalled ? "installed" : ""}`}>
+        <div className="profile-install-icon">
+          {pwaInstalled ? <Check size={21} /> : <Download size={21} />}
+        </div>
+        <div className="profile-install-copy">
+          <strong>{pwaInstalled ? "Uorqui instalado" : "Instalar Uorqui"}</strong>
+          <p className="muted">
+            {pwaInstalled
+              ? "Você está usando o Uorqui como aplicativo."
+              : pwaMode === "ios"
+                ? "Adicione o Uorqui à Tela de Início para abrir como um app."
+                : "Tenha um ícone próprio, tela cheia e acesso mais rápido ao Uorqui."}
+          </p>
+        </div>
+        {!pwaInstalled && (
+          <button className="btn small" disabled={pwaInstalling} onClick={() => onInstallPwa()}>
+            <Download size={15} />
+            {pwaInstalling ? "Abrindo…" : pwaMode === "ios" ? "Como instalar" : "Instalar"}
+          </button>
+        )}
+      </section>
+
+      {data.isSuperadmin && (
+        <section className="panel-card superadmin-profile-card">
+          <div>
+            <strong>Superadmin Uorqui</strong>
+            <p className="muted">Métricas globais, empresas e concessão manual de Premium.</p>
+          </div>
+          <button className="btn small" onClick={onOpenSuperadmin}><ShieldCheck size={16} /> Abrir Superadmin</button>
+        </section>
+      )}
+
       <section className="panel-card profile-companies-card">
         <div className="profile-companies-head">
           <div>
@@ -1199,7 +1893,7 @@ function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refres
         {companyError && <div className="form-error">{companyError}</div>}
       </section>
 
-      <section className="panel-card session-card"><div><strong>Sessão</strong><p className="muted">Encerrar o acesso neste dispositivo.</p></div><button className="btn secondary" onClick={() => signOut(auth)}><LogOut size={17} /> Sair da conta</button></section>
+      <section className="panel-card session-card"><div><strong>Sessão</strong><p className="muted">Encerrar o acesso neste dispositivo.</p></div><button className="btn secondary" onClick={() => unregisterPushBeforeLogout()}><LogOut size={17} /> Sair da conta</button></section>
 
       {createCompanyOpen && (
         <Modal title="Criar empresa" onClose={() => setCreateCompanyOpen(false)}>
@@ -1232,9 +1926,15 @@ function ProfilePage({ data, refresh, showToast }: { data: BootstrapData; refres
   );
 }
 
-function NotificationsPage({ data, refresh, showToast }: {
-  data: BootstrapData; refresh: () => Promise<void>; showToast: (m: string) => void;
+function NotificationsPage({ data, refresh, showToast, onOpenPost }: {
+  data: BootstrapData;
+  refresh: () => Promise<void>;
+  showToast: (m: string) => void;
+  onOpenPost: (notification: NotificationItem) => Promise<void>;
 }) {
+  const [pushState, setPushState] = useState<PushState>(() => currentPushState());
+  const [pushBusy, setPushBusy] = useState(false);
+
   const accept = async (notification: NotificationItem) => {
     const inviteId = notification.data?.inviteId;
     if (!inviteId) return;
@@ -1248,12 +1948,43 @@ function NotificationsPage({ data, refresh, showToast }: {
     } catch (err) { showToast(errorMessage(err)); }
   };
 
-  const read = async (notification: NotificationItem) => {
-    if (!notification.id || notification.read) return;
+  const activatePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
     try {
-      await api(`/notifications/${notification.id}/read`, { method: "POST" });
+      const next = await enablePushNotifications();
+      setPushState(next);
+
+      if (next === "granted") showToast("Notificações push ativadas.");
+      else if (next === "denied") showToast("As notificações foram bloqueadas pelo navegador.");
+      else if (next === "not_configured") showToast("Falta configurar a chave pública VAPID do Firebase.");
+      else if (next === "unsupported") showToast("Este navegador não oferece suporte a notificações push.");
+    } catch (error) {
+      showToast(errorMessage(error));
+      setPushState(currentPushState());
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const openNotification = async (notification: NotificationItem) => {
+    if (!notification.id) return;
+
+    if (!notification.read && !notification.persistent) {
+      try {
+        await api(`/notifications/${notification.id}/read`, { method: "POST" });
+      } catch {}
+    }
+
+    if (notification.data?.postId) {
+      await onOpenPost(notification);
+      if (!notification.persistent) void refresh();
+      return;
+    }
+
+    if (!notification.read && !notification.persistent) {
       await refresh();
-    } catch {}
+    }
   };
 
   const unread = data.notifications.filter((item) => !item.read).length;
@@ -1266,25 +1997,81 @@ function NotificationsPage({ data, refresh, showToast }: {
           <p>{unread ? `${unread} ${unread === 1 ? "notificação não lida" : "notificações não lidas"}.` : "Você está em dia."}</p>
         </div>
       </div>
+
+      <section className={`push-activation-card ${pushState === "granted" ? "enabled" : ""}`}>
+        <div className="notification-icon"><Bell size={19} /></div>
+        <div>
+          <strong>{pushState === "granted" ? "Push ativado" : "Receba notificações mesmo fora do Uorqui"}</strong>
+          <p>
+            {pushState === "granted"
+              ? "Novas publicações relevantes, respostas, curtidas e confirmações pendentes podem chegar ao seu dispositivo."
+              : pushState === "denied"
+                ? "O navegador bloqueou as notificações. Reative a permissão nas configurações do site."
+                : pushState === "not_configured"
+                  ? "A integração está pronta, mas falta informar a chave pública VAPID do Firebase."
+                  : pushState === "unsupported"
+                    ? "Este navegador não oferece suporte ao sistema de push usado pelo Uorqui."
+                    : "Ative para receber novas publicações da sua empresa/comunidades, respostas e curtidas."}
+          </p>
+        </div>
+        {pushState === "default" && (
+          <button className="btn small" disabled={pushBusy} onClick={activatePush}>
+            {pushBusy ? "Ativando…" : "Ativar push"}
+          </button>
+        )}
+      </section>
+
       <div className="notifications-page-list">
         {data.notifications.map((item, index) => (
-          <article className={`notification-page-item ${item.read ? "" : "unread"}`} key={item.id || index} onClick={() => read(item)}>
+          <article
+            className={`notification-page-item ${item.read ? "" : "unread"} ${item.persistent && !item.read ? "persistent" : ""}`}
+            key={item.id || index}
+            onClick={() => openNotification(item)}
+          >
             <div className="notification-icon">
               {item.type.includes("community") || item.type.includes("invite")
                 ? <Users size={19} />
-                : item.type === "announcement" ? <Megaphone size={19} /> : <Bell size={19} />}
+                : item.type === "announcement" || item.type === "read_required"
+                  ? <Megaphone size={19} />
+                  : <Bell size={19} />}
             </div>
+
             <div className="notification-page-copy">
               <strong>{item.title}</strong>
               <p>{item.body}</p>
+
+              {item.persistent && !item.read && (
+                <span className="persistent-notification-note">
+                  Pendente até você confirmar a leitura na publicação.
+                </span>
+              )}
+
               {item.status === "pending" && item.type.includes("invite") && (
-                <button className="btn small" onClick={(event) => { event.stopPropagation(); accept(item); }}><Check size={16} /> Aceitar</button>
+                <button className="btn small" onClick={(event) => { event.stopPropagation(); accept(item); }}>
+                  <Check size={16} /> Aceitar
+                </button>
+              )}
+
+              {!!item.data?.postId && (
+                <button
+                  className="text-button notification-open-post"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void openNotification(item);
+                  }}
+                >
+                  Abrir publicação
+                </button>
               )}
             </div>
+
             {!item.read && <span className="unread-dot" aria-label="Não lida" />}
           </article>
         ))}
-        {!data.notifications.length && <Empty title="Tudo em dia" text="Convites, menções e comunicados aparecerão nesta página." />}
+
+        {!data.notifications.length && (
+          <Empty title="Tudo em dia" text="Publicações relevantes, respostas, curtidas, convites e confirmações aparecerão aqui." />
+        )}
       </div>
     </section>
   );
@@ -1299,21 +2086,36 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
   showToast: (m: string) => void;
 }) {
   const [scope, setScope] = useState<"company" | "community" | "world">(initialScope || "company");
-  const [type, setType] = useState<"post" | "question" | "announcement">("post");
+  const [type, setType] = useState<"post" | "question" | "announcement" | "poll" | "event">("post");
   const [communityId, setCommunityId] = useState(initialCommunityId || data.communities[0]?.id || "");
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [pollOptions, setPollOptions] = useState(["", ""]);
 
   useEffect(() => { if (type === "announcement") setScope("company"); }, [type]);
 
+  const updatePollOption = (index: number, value: string) => {
+    setPollOptions((current) => current.map((item, i) => i === index ? value : item));
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     const fd = new FormData(event.currentTarget);
     const text = String(fd.get("text") || "").trim();
     const title = String(fd.get("title") || "").trim();
+
     try {
       if (scope === "community" && !communityId) throw new Error("Escolha uma comunidade.");
+      if (type === "poll" && pollOptions.filter(option => option.trim()).length < 2) throw new Error("A enquete precisa de pelo menos 2 opções.");
+
+      const eventStartLocal = String(fd.get("eventStart") || "");
+      const eventEndLocal = String(fd.get("eventEnd") || "");
+      const eventStart = type === "event" && eventStartLocal ? new Date(eventStartLocal).toISOString() : "";
+      const eventEnd = type === "event" && eventEndLocal ? new Date(eventEndLocal).toISOString() : "";
+      const eventTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
       const attachmentIds: string[] = [];
       for (const file of files.slice(0, 5)) {
         const qs = new URLSearchParams({ scope, name: file.name });
@@ -1324,18 +2126,28 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
         });
         attachmentIds.push(uploaded.media.id);
       }
+
       await api("/posts", {
         method: "POST",
         body: JSON.stringify({
-          scope, type, text, title, companyId: scope === "world" ? "" : data.selectedCompanyId,
+          scope, type, text, title,
+          companyId: scope === "world" ? "" : data.selectedCompanyId,
           communityId: scope === "community" ? communityId : "",
           requiresReadReceipt: type === "announcement" && fd.get("receipt") === "on",
+          pollOptions: type === "poll" ? pollOptions.map(option => option.trim()).filter(Boolean) : [],
+          eventStart,
+          eventEnd,
+          eventLocation: type === "event" ? String(fd.get("eventLocation") || "").trim() : "",
+          eventTimeZone,
           attachmentIds
         })
       });
-      showToast("Publicado."); await onDone();
+
+      showToast(type === "event" ? "Evento publicado." : type === "poll" ? "Enquete publicada." : "Publicado.");
+      await onDone();
     } catch (err) {
-      showToast(errorMessage(err)); setBusy(false);
+      showToast(errorMessage(err));
+      setBusy(false);
     }
   };
 
@@ -1347,14 +2159,49 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
           <button type="button" className={scope === "community" ? "selected" : ""} onClick={() => setScope("community")} disabled={type === "announcement" || !data.communities.length}><Users size={17} /> Comunidade</button>
           <button type="button" className={scope === "world" ? "selected" : ""} onClick={() => setScope("world")} disabled={type === "announcement"}><Globe2 size={17} /> Mundo</button>
         </div>
+
         {scope === "community" && <label><span>Comunidade</span><select value={communityId} onChange={(e) => setCommunityId(e.target.value)}>{data.communities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+
         <div className="type-row">
           <button type="button" className={type === "post" ? "selected" : ""} onClick={() => setType("post")}><MessageSquareText size={16} /> Post</button>
           <button type="button" className={type === "question" ? "selected" : ""} onClick={() => setType("question")}><FileQuestion size={16} /> Pergunta</button>
+          <button type="button" className={type === "poll" ? "selected" : ""} onClick={() => setType("poll")}><BarChart3 size={16} /> Enquete</button>
+          <button type="button" className={type === "event" ? "selected" : ""} onClick={() => setType("event")}><CalendarDays size={16} /> Evento</button>
           {data.canAdmin && <button type="button" className={type === "announcement" ? "selected" : ""} onClick={() => setType("announcement")}><Megaphone size={16} /> Comunicado</button>}
         </div>
-        {type === "announcement" && <label><span>Título</span><input name="title" required maxLength={180} placeholder="Título do comunicado" /></label>}
-        <textarea name="text" rows={7} required maxLength={5000} placeholder={type === "question" ? "Qual é a sua dúvida?" : "O que você quer compartilhar?"} />
+
+        {(type === "announcement" || type === "event") && <label><span>{type === "event" ? "Nome do evento" : "Título"}</span><input name="title" required maxLength={180} placeholder={type === "event" ? "Ex.: Reunião mensal" : "Título do comunicado"} /></label>}
+
+        {type === "event" && (
+          <div className="event-form-grid">
+            <label><span>Início</span><input name="eventStart" type="datetime-local" required /></label>
+            <label><span>Término (opcional)</span><input name="eventEnd" type="datetime-local" /></label>
+            <label className="event-location-field"><span>Local ou link</span><input name="eventLocation" maxLength={240} placeholder="Sala, endereço ou link da reunião" /></label>
+          </div>
+        )}
+
+        <textarea
+          name="text"
+          rows={type === "event" ? 4 : 7}
+          required={type !== "event"}
+          maxLength={5000}
+          placeholder={type === "question" ? "Qual é a sua dúvida?" : type === "poll" ? "Qual pergunta você quer fazer?" : type === "event" ? "Descrição do evento (opcional)" : "O que você quer compartilhar?"}
+        />
+
+        {type === "poll" && (
+          <div className="poll-composer">
+            <strong>Opções da enquete</strong>
+            {pollOptions.map((option, index) => (
+              <div className="poll-option-input" key={index}>
+                <input value={option} required={index < 2} maxLength={160} onChange={(e) => updatePollOption(index, e.target.value)} placeholder={`Opção ${index + 1}`} />
+                {pollOptions.length > 2 && <button type="button" className="icon-btn" onClick={() => setPollOptions(current => current.filter((_, i) => i !== index))}><X size={16} /></button>}
+              </div>
+            ))}
+            {pollOptions.length < 6 && <button type="button" className="text-button poll-add-option" onClick={() => setPollOptions(current => [...current, ""])}><Plus size={14} /> Adicionar opção</button>}
+            <small className="muted">De 2 a 6 opções. Cada pessoa pode votar uma vez e alterar o voto.</small>
+          </div>
+        )}
+
         {type === "announcement" && <label className="check-row"><input type="checkbox" name="receipt" /> Solicitar confirmação de leitura</label>}
         <label className="file-button"><Camera size={17} /> Fotos/arquivos<input type="file" multiple hidden onChange={(e) => setFiles(Array.from(e.target.files || []).slice(0, 5))} /></label>
         {!!files.length && <small className="muted">{files.map((f) => f.name).join(", ")}</small>}
