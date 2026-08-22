@@ -9,6 +9,7 @@ export class ApiError extends Error {
 }
 
 const inFlightMutations = new Map<string, Promise<any>>();
+const inFlightReads = new Map<string, Promise<any>>();
 const mediaUrlCache = new Map<string, Promise<string>>();
 const resolvedMediaUrls = new Map<string, string>();
 
@@ -58,7 +59,12 @@ export async function api<T = any>(path: string, init: RequestInit = {}): Promis
   const method = String(init.method || "GET").toUpperCase();
 
   if (method === "GET" || method === "HEAD") {
-    return executeApi<T>(path, init);
+    const key = `${method}:${path}`;
+    const existing = inFlightReads.get(key);
+    if (existing) return existing as Promise<T>;
+    const request = executeApi<T>(path, init).finally(() => inFlightReads.delete(key));
+    inFlightReads.set(key, request);
+    return request;
   }
 
   const key = mutationKey(path, init);
@@ -131,7 +137,7 @@ export async function prefetchPostMedia(
 
   if (!imageIds.length) return;
 
-  const concurrency = 6;
+  const concurrency = 4;
   let cursor = 0;
 
   const worker = async () => {
