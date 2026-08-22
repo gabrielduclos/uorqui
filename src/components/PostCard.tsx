@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  CalendarDays, CalendarPlus, CheckCircle2, Download, FileText, Heart, MapPin,
-  MessageCircle, RotateCcw, Send, Share2, ShieldAlert, Trash2, Vote
+  CalendarDays, CalendarPlus, Camera, CheckCircle2, Download, FileText, Heart, MapPin,
+  MessageCircle, RotateCcw, Send, Share2, ShieldAlert, Trash2, Vote, X
 } from "lucide-react";
 import { Avatar } from "./Avatar";
-import { api, cachedMediaBlobUrl, mediaBlobUrl } from "../lib/api";
+import { api, cacheMediaBlobUrl, cachedMediaBlobUrl, mediaBlobUrl } from "../lib/api";
 import type { Attachment, Comment, Community, PollOption, Post } from "../types";
+
+const COMMENT_PHOTO_MARKER = /\n?\[\[uorqui-photo:([a-zA-Z0-9_-]+)\]\]\s*$/;
 
 function relative(value?: string) {
   if (!value) return "";
@@ -37,10 +39,18 @@ function formatBytes(size = 0) {
   return `${(size / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
-function AttachmentPreview({ attachment }: { attachment: Attachment }) {
+function commentPhoto(text = "") {
+  const match = text.match(COMMENT_PHOTO_MARKER);
+  return {
+    mediaId: match?.[1] || "",
+    text: text.replace(COMMENT_PHOTO_MARKER, "").trim()
+  };
+}
+
+function AttachmentPreview({ attachment, compact = false }: { attachment: Attachment; compact?: boolean }) {
   const [url, setUrl] = useState(() => cachedMediaBlobUrl(attachment.id));
   const [failed, setFailed] = useState(false);
-  const isImage = String(attachment.contentType || "").startsWith("image/");
+  const isImage = compact || String(attachment.contentType || "").startsWith("image/");
 
   useEffect(() => {
     let active = true;
@@ -62,11 +72,11 @@ function AttachmentPreview({ attachment }: { attachment: Attachment }) {
 
   if (isImage) {
     return (
-      <div className="post-image-wrap">
+      <div className={compact ? "comment-photo-wrap" : "post-image-wrap"}>
         {url ? (
-          <img className="post-image" src={url} alt={attachment.name || "Foto da publicação"} loading="eager" decoding="async" />
+          <img className={compact ? "comment-photo" : "post-image"} src={url} alt={attachment.name || "Foto"} loading={compact ? "lazy" : "eager"} decoding="async" />
         ) : (
-          <div className="post-image-loading">{failed ? "Não foi possível carregar a foto." : "Carregando foto…"}</div>
+          <div className={compact ? "comment-photo-loading" : "post-image-loading"}>{failed ? "Não foi possível carregar a foto." : "Carregando foto…"}</div>
         )}
       </div>
     );
@@ -157,6 +167,8 @@ export function PostCard({
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [commentsBusy, setCommentsBusy] = useState(false);
+  const [commentPhotoFile, setCommentPhotoFile] = useState<File | null>(null);
+  const commentPhotoInputRef = useRef<HTMLInputElement>(null);
   const commentsRequestRef = useRef<Promise<void> | null>(null);
   const commentLikeBusyRef = useRef(new Set<string>());
   const commentElementsRef = useRef(new Map<string, HTMLElement>());
@@ -223,14 +235,10 @@ export function PostCard({
     return request;
   };
 
-  const warmComments = () => {
-    if (!commentsLoaded && !post.deletedByAdmin) void loadComments();
-  };
-
   const toggleComments = () => {
     const next = !commentsOpen;
     setCommentsOpen(next);
-    if (next) warmComments();
+    if (next && !commentsLoaded) void loadComments();
   };
 
   const toggleLike = async () => {
@@ -264,13 +272,6 @@ export function PostCard({
     // Deve executar somente quando a navegação pedir a abertura das respostas.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialCommentsOpen, initialCommentId]);
-
-  useEffect(() => {
-    if (!commentsOpen || !commentsLoaded || !post.updatedAt) return;
-    void loadComments(true);
-    // O timestamp muda quando outra pessoa responde ou curte uma resposta.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.updatedAt]);
 
   useEffect(() => {
     if (!commentsLoaded || !initialCommentId) return;
@@ -307,7 +308,6 @@ export function PostCard({
         liked: Boolean(result.liked),
         reactionCount: Math.max(0, Number(result.reactionCount || 0)),
       } : item));
-      void onChanged?.();
     } catch (error) {
       setComments((current) => current.map((item) => item.id === comment.id ? {
         ...item,
@@ -363,21 +363,53 @@ export function PostCard({
     }
   };
 
+  const selectCommentPhoto = (file?: File) => {
+    if (!file) return;
+    if (!String(file.type || "").startsWith("image/")) {
+      showToast?.("Escolha uma imagem para anexar à resposta.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      showToast?.("A foto pode ter no máximo 20 MB.");
+      return;
+    }
+    setCommentPhotoFile(file);
+  };
+
   const addComment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
     const text = String(new FormData(form).get("text") || "").trim();
-    if (!text || commentsBusy) return;
+    if ((!text && !commentPhotoFile) || commentsBusy) return;
     setCommentsBusy(true);
     try {
+      let mediaId = "";
+      if (commentPhotoFile) {
+        const qs = new URLSearchParams({ scope: post.scope, name: commentPhotoFile.name || "foto-resposta.jpg" });
+        if (post.scope !== "world" && post.companyId) qs.set("companyId", post.companyId);
+        if (post.scope === "community" && post.communityId) qs.set("communityId", post.communityId);
+        const uploaded = await api<{ media: { id: string } }>(`/media/upload?${qs.toString()}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": commentPhotoFile.type || "image/jpeg",
+            "X-File-Name": commentPhotoFile.name || "foto-resposta.jpg"
+          },
+          body: commentPhotoFile
+        });
+        mediaId = uploaded.media.id;
+        cacheMediaBlobUrl(mediaId, commentPhotoFile);
+      }
+
+      const storedText = `${text || "Foto"}${mediaId ? `\n[[uorqui-photo:${mediaId}]]` : ""}`;
       const result = await api<{ comment: Comment }>(`/posts/${post.id}/comments`, {
         method: "POST",
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text: storedText })
       });
       setComments((current) => [...current, result.comment]);
       setLocalCommentCount((current) => current + 1);
+      setCommentPhotoFile(null);
+      if (commentPhotoInputRef.current) commentPhotoInputRef.current.value = "";
       form.reset();
-      void onChanged?.();
     } catch (error) {
       showToast?.(error instanceof Error ? error.message : "Não foi possível comentar.");
     } finally {
@@ -635,9 +667,6 @@ export function PostCard({
             </button>
             <button
               className={commentsOpen ? "active" : ""}
-              onPointerEnter={warmComments}
-              onPointerDown={warmComments}
-              onFocus={warmComments}
               onClick={toggleComments}
               aria-label="Abrir respostas"
             >
@@ -664,7 +693,9 @@ export function PostCard({
             <section className="inline-comments">
               {commentsBusy && !commentsLoaded && <div className="inline-comments-loading">Carregando respostas…</div>}
               <div className="inline-comment-list">
-                {comments.map((comment) => (
+                {comments.map((comment) => {
+                  const parsed = commentPhoto(comment.text);
+                  return (
                   <article
                     className={`inline-comment ${highlightedCommentId === comment.id ? "highlighted" : ""}`}
                     key={comment.id}
@@ -677,7 +708,8 @@ export function PostCard({
                     <Avatar name={comment.authorName} mediaId={comment.authorAvatarMediaId} size={34} />
                     <div className="inline-comment-body">
                       <strong>{comment.authorName || "Usuário"}</strong>
-                      <p>{comment.text}</p>
+                      {parsed.text && <p>{parsed.text}</p>}
+                      {parsed.mediaId && <AttachmentPreview compact attachment={{ id: parsed.mediaId, name: "Foto da resposta", contentType: "image/*" }} />}
                       <div className="inline-comment-actions">
                         <button
                           type="button"
@@ -690,6 +722,11 @@ export function PostCard({
                           <span>{comment.liked ? "Curtido" : "Curtir"}</span>
                           {Number(comment.reactionCount || 0) > 0 && <b>{count(comment.reactionCount)}</b>}
                         </button>
+                        {acceptedCommentId === comment.id ? (
+                          <span className="solution"><CheckCircle2 size={13} /> Solução aceita</span>
+                        ) : post.type === "question" && (post.authorUid === currentUid || canAdmin) && post.authorUid !== comment.authorUid ? (
+                          <button type="button" className="text-button solution-button" onClick={() => acceptSolution(comment.id)}><CheckCircle2 size={13} /> Marcar como solução</button>
+                        ) : null}
                         {(comment.authorUid === currentUid || (canAdmin && post.scope !== "world")) && (
                           <button
                             type="button"
@@ -705,18 +742,32 @@ export function PostCard({
                           </button>
                         )}
                       </div>
-                      {acceptedCommentId === comment.id && <span className="solution">✓ Solução aceita</span>}
-                      {!acceptedCommentId && post.type === "question" && (post.authorUid === currentUid || canAdmin) && post.authorUid !== comment.authorUid && (
-                        <button className="text-button solution-button" onClick={() => acceptSolution(comment.id)}>✓ Marcar como solução</button>
-                      )}
                     </div>
                   </article>
-                ))}
+                );})}
                 {commentsLoaded && !comments.length && <p className="no-comments">Nenhum comentário ainda.</p>}
               </div>
               <form className="inline-comment-form" onSubmit={addComment}>
-                <textarea name="text" rows={2} required maxLength={3000} placeholder="Escreva um comentário…" />
-                <button className="btn small" disabled={commentsBusy}><Send size={15} /> Comentar</button>
+                <textarea name="text" rows={2} maxLength={3000} placeholder="Escreva uma resposta…" />
+                <input
+                  ref={commentPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(event) => selectCommentPhoto(event.currentTarget.files?.[0])}
+                />
+                <div className="comment-compose-actions">
+                  <button type="button" className={`btn small secondary comment-photo-button ${commentPhotoFile ? "selected" : ""}`} disabled={commentsBusy} onClick={() => commentPhotoInputRef.current?.click()}>
+                    <Camera size={15} /> {commentPhotoFile ? "Trocar foto" : "Foto"}
+                  </button>
+                  {commentPhotoFile && (
+                    <span className="comment-photo-selected">
+                      <span>{commentPhotoFile.name}</span>
+                      <button type="button" onClick={() => { setCommentPhotoFile(null); if (commentPhotoInputRef.current) commentPhotoInputRef.current.value = ""; }} aria-label="Remover foto"><X size={14} /></button>
+                    </span>
+                  )}
+                  <button className="btn small" disabled={commentsBusy || (!commentPhotoFile)} data-allow-empty-text="true"><Send size={15} /> {commentsBusy ? "Enviando…" : "Responder"}</button>
+                </div>
               </form>
             </section>
           )}
