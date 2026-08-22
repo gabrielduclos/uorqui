@@ -766,7 +766,7 @@ export function PostCard({
                       <button type="button" onClick={() => { setCommentPhotoFile(null); if (commentPhotoInputRef.current) commentPhotoInputRef.current.value = ""; }} aria-label="Remover foto"><X size={14} /></button>
                     </span>
                   )}
-                  <button className="btn small" disabled={commentsBusy || (!commentPhotoFile)} data-allow-empty-text="true"><Send size={15} /> {commentsBusy ? "Enviando…" : "Responder"}</button>
+                  <button className="btn small" disabled={commentsBusy}><Send size={15} /> {commentsBusy ? "Enviando…" : "Responder"}</button>
                 </div>
               </form>
             </section>
