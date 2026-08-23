@@ -1,0 +1,204 @@
+name: Apply mentions 1.2.22 once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-mentions-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply mention support
+        shell: python
+        run: |
+          from pathlib import Path
+          import json, re
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"anchor not found: {label}")
+              return text.replace(old, new, 1)
+
+          # Version
+          package_path = Path('package.json')
+          package = json.loads(package_path.read_text())
+          package['version'] = '1.2.22'
+          package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2) + '\n')
+
+          # Frontend rendering and reply hint
+          post_path = Path('src/components/PostCard.tsx')
+          post = post_path.read_text()
+          marker = '''function commentPhoto(text = "") {
+            const match = text.match(COMMENT_PHOTO_MARKER);
+            return {
+              mediaId: match?.[1] || "",
+              text: text.replace(COMMENT_PHOTO_MARKER, "").trim()
+            };
+          }
+          '''
+          mention_component = marker + '''\nfunction MentionText({ text = "" }: { text?: string }) {
+            const parts = String(text).split(/(@[A-Za-zÀ-ÿ0-9_.-]{2,80})/g);
+            return <>{parts.map((part, index) => part.startsWith("@")
+              ? <span className="mention" key={`${part}-${index}`}>{part}</span>
+              : part)}</>;
+          }
+          '''
+          post = replace_once(post, marker, mention_component, 'mention component')
+          post = post.replace('<p>{post.text}</p>', '<p><MentionText text={post.text} /></p>')
+          post = post.replace('<p className="poll-question">{post.text}</p>', '<p className="poll-question"><MentionText text={post.text} /></p>')
+          post = post.replace('{post.text && <p>{post.text}</p>}', '{post.text && <p><MentionText text={post.text} /></p>}')
+          post = post.replace('{parsed.text && <p>{parsed.text}</p>}', '{parsed.text && <p><MentionText text={parsed.text} /></p>}')
+          post = post.replace('placeholder="Escreva uma resposta…"', 'placeholder="Escreva uma resposta… Use @nome para mencionar"')
+          post_path.write_text(post)
+
+          # Highlight style
+          style_path = Path('src/styles.css')
+          styles = style_path.read_text()
+          if '.mention{' not in styles:
+              styles += '\n/* v1.2.22 — menções */\n.mention{color:#245ac7;font-weight:750}\n'
+          style_path.write_text(styles)
+
+          # Backend mention resolution + notifications. Extra reads happen only when @ is present.
+          worker_path = Path('worker/index.js')
+          worker = worker_path.read_text()
+
+          helper_anchor = "async function createPost(env, identity, body, ctx) {"
+          helper_code = r'''function normalizeMentionKey(value) {
+            return String(value || '')
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              .toLowerCase().trim()
+              .replace(/^@+/, '')
+              .replace(/[^a-z0-9._-]+/g, '.').replace(/^\.+|\.+$/g, '');
+          }
+
+          function extractMentionKeys(text) {
+            const keys = new Set();
+            const regex = /(?:^|\s)@([A-Za-zÀ-ÿ0-9_.-]{2,80})/g;
+            let match;
+            while ((match = regex.exec(String(text || '')))) {
+              const key = normalizeMentionKey(match[1]);
+              if (key) keys.add(key);
+            }
+            return [...keys].slice(0, 12);
+          }
+
+          function memberMentionKeys(member) {
+            const keys = new Set();
+            const emailLocal = String(member?.email || '').split('@')[0];
+            const name = String(member?.displayName || '').trim();
+            const fullName = normalizeMentionKey(name);
+            const firstName = normalizeMentionKey(name.split(/\s+/)[0] || '');
+            const emailKey = normalizeMentionKey(emailLocal);
+            if (fullName) keys.add(fullName);
+            if (firstName) keys.add(firstName);
+            if (emailKey) keys.add(emailKey);
+            return keys;
+          }
+
+          async function resolveMentionRecipients(env, post, authorUid, text) {
+            const wanted = extractMentionKeys(text);
+            if (!wanted.length || !post?.companyId || post.scope === 'world') return [];
+
+            const companyMembers = (await fsWhere(env, 'companyMembers', 'companyId', post.companyId, 250))
+              .filter(member => member.status === 'active' && member.uid && member.uid !== authorUid);
+
+            let allowedUids = null;
+            if (post.scope === 'community' && post.communityId) {
+              const communityMembers = await fsWhere(env, 'communityMembers', 'communityId', post.communityId, 250);
+              allowedUids = new Set(communityMembers.map(member => member.uid));
+            }
+
+            const matches = [];
+            for (const key of wanted) {
+              const candidates = companyMembers.filter(member =>
+                (!allowedUids || allowedUids.has(member.uid)) && memberMentionKeys(member).has(key)
+              );
+              if (candidates.length === 1) matches.push(candidates[0]);
+            }
+            return Array.from(new Map(matches.map(member => [member.uid, member])).values()).slice(0, 12);
+          }
+
+          async function notifyMentions(env, post, actor, text, commentId, ctx) {
+            const recipients = await resolveMentionRecipients(env, post, actor.uid, text);
+            if (!recipients.length) return;
+            const createdAt = nowIso();
+            const isReply = Boolean(commentId);
+            const actorName = actor.displayName || actor.name || 'Alguém';
+            const docs = recipients.map(member => ({
+              collection: 'notifications',
+              id: `mention_${post.id}_${commentId || 'post'}_${member.uid}_${Date.now()}`,
+              data: {
+                recipientUid: member.uid,
+                type: isReply ? 'comment_mention' : 'post_mention',
+                title: `${actorName} mencionou você ${isReply ? 'em uma resposta' : 'em uma publicação'}`,
+                body: String(text || '').replace(/\s+/g, ' ').slice(0, 180),
+                data: {
+                  postId: post.id,
+                  commentId: commentId || '',
+                  companyId: post.companyId || '',
+                  communityId: post.communityId || '',
+                  openComments: isReply ? 'true' : ''
+                },
+                read: false,
+                persistent: false,
+                status: 'new',
+                createdAt
+              }
+            }));
+            await fsBatchPut(env, docs);
+            deferPushes(ctx, docs.map(doc => sendPushToUser(env, doc.data.recipientUid, {
+              title: doc.data.title,
+              body: doc.data.body,
+              notificationId: doc.id,
+              type: doc.data.type,
+              postId: post.id,
+              commentId: commentId || '',
+              companyId: post.companyId || '',
+              communityId: post.communityId || '',
+              openComments: isReply ? 'true' : ''
+            })));
+          }
+
+          ''' + helper_anchor
+          worker = replace_once(worker, helper_anchor, helper_code, 'worker helper')
+
+          post_notify_anchor = "  const notificationTask = notifyInterestedPostRecipients(env, post, identity.uid)\n    .catch(error => console.error('Falha ao notificar nova publicação:', error));"
+          post_notify_new = post_notify_anchor + "\n  const mentionTask = notifyMentions(env, post, user || identity, text, '', ctx)\n    .catch(error => console.error('Falha ao notificar menções da publicação:', error));"
+          worker = replace_once(worker, post_notify_anchor, post_notify_new, 'post mention call')
+
+          post_wait_anchor = "  if (ctx?.waitUntil) ctx.waitUntil(notificationTask);\n  else await notificationTask;"
+          post_wait_new = "  if (ctx?.waitUntil) { ctx.waitUntil(notificationTask); ctx.waitUntil(mentionTask); }\n  else { await notificationTask; await mentionTask; }"
+          worker = replace_once(worker, post_wait_anchor, post_wait_new, 'post mention wait')
+
+          comment_anchor = "  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'comment_created'));\n\n  return { comment };"
+          comment_new = "  const mentionTask = notifyMentions(env, post, user || identity, text, commentId, ctx)\n    .catch(error => console.error('Falha ao notificar menções da resposta:', error));\n  if (ctx?.waitUntil) ctx.waitUntil(mentionTask); else await mentionTask;\n\n  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'comment_created'));\n\n  return { comment };"
+          worker = replace_once(worker, comment_anchor, comment_new, 'comment mention call')
+          worker_path.write_text(worker)
+
+          # One-shot workflow: remove itself from the resulting product commit.
+          Path('.github/workflows/apply-mentions-once.yml').unlink(missing_ok=True)
+
+      - name: Validate
+        run: |
+          npm ci
+          npm run check
+          npm run build
+      - name: Commit to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add post and reply mentions (1.2.22)"
+          git push origin HEAD:main
