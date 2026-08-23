@@ -11,6 +11,20 @@ createRoot(document.getElementById("root")!).render(
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
 
+// Mention guidance without adding another data fetch to the composer.
+document.addEventListener("focusin", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLTextAreaElement)) return;
+  if (target.closest(".inline-comment-form")) {
+    target.placeholder = "Escreva uma resposta… Use @nome para mencionar";
+    return;
+  }
+  if (target.closest(".composer-form") && !target.placeholder.includes("@")) {
+    target.placeholder = target.placeholder
+      ? `${target.placeholder} · use @nome para mencionar`
+      : "Escreva sua publicação… use @nome para mencionar";
+  }
+});
 
 // Prevent accidental rapid double-clicks on write/action buttons. Navigation
 // remains instant; API-level mutation deduplication is the second line of defense.
