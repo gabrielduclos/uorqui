@@ -1,3 +1,4 @@
+# retrigger
 name: Apply mentions 1.2.22 once
 
 on:
@@ -31,13 +32,11 @@ jobs:
                   raise SystemExit(f"anchor not found: {label}")
               return text.replace(old, new, 1)
 
-          # Version
           package_path = Path('package.json')
           package = json.loads(package_path.read_text())
           package['version'] = '1.2.22'
           package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2) + '\n')
 
-          # Frontend rendering and reply hint
           post_path = Path('src/components/PostCard.tsx')
           post = post_path.read_text()
           marker = '''function commentPhoto(text = "") {
@@ -63,17 +62,14 @@ jobs:
           post = post.replace('placeholder="Escreva uma resposta…"', 'placeholder="Escreva uma resposta… Use @nome para mencionar"')
           post_path.write_text(post)
 
-          # Highlight style
           style_path = Path('src/styles.css')
           styles = style_path.read_text()
           if '.mention{' not in styles:
               styles += '\n/* v1.2.22 — menções */\n.mention{color:#245ac7;font-weight:750}\n'
           style_path.write_text(styles)
 
-          # Backend mention resolution + notifications. Extra reads happen only when @ is present.
           worker_path = Path('worker/index.js')
           worker = worker_path.read_text()
-
           helper_anchor = "async function createPost(env, identity, body, ctx) {"
           helper_code = r'''function normalizeMentionKey(value) {
             return String(value || '')
@@ -110,16 +106,13 @@ jobs:
           async function resolveMentionRecipients(env, post, authorUid, text) {
             const wanted = extractMentionKeys(text);
             if (!wanted.length || !post?.companyId || post.scope === 'world') return [];
-
             const companyMembers = (await fsWhere(env, 'companyMembers', 'companyId', post.companyId, 250))
               .filter(member => member.status === 'active' && member.uid && member.uid !== authorUid);
-
             let allowedUids = null;
             if (post.scope === 'community' && post.communityId) {
               const communityMembers = await fsWhere(env, 'communityMembers', 'communityId', post.communityId, 250);
               allowedUids = new Set(communityMembers.map(member => member.uid));
             }
-
             const matches = [];
             for (const key of wanted) {
               const candidates = companyMembers.filter(member =>
@@ -144,30 +137,14 @@ jobs:
                 type: isReply ? 'comment_mention' : 'post_mention',
                 title: `${actorName} mencionou você ${isReply ? 'em uma resposta' : 'em uma publicação'}`,
                 body: String(text || '').replace(/\s+/g, ' ').slice(0, 180),
-                data: {
-                  postId: post.id,
-                  commentId: commentId || '',
-                  companyId: post.companyId || '',
-                  communityId: post.communityId || '',
-                  openComments: isReply ? 'true' : ''
-                },
-                read: false,
-                persistent: false,
-                status: 'new',
-                createdAt
+                data: { postId: post.id, commentId: commentId || '', companyId: post.companyId || '', communityId: post.communityId || '', openComments: isReply ? 'true' : '' },
+                read: false, persistent: false, status: 'new', createdAt
               }
             }));
             await fsBatchPut(env, docs);
             deferPushes(ctx, docs.map(doc => sendPushToUser(env, doc.data.recipientUid, {
-              title: doc.data.title,
-              body: doc.data.body,
-              notificationId: doc.id,
-              type: doc.data.type,
-              postId: post.id,
-              commentId: commentId || '',
-              companyId: post.companyId || '',
-              communityId: post.communityId || '',
-              openComments: isReply ? 'true' : ''
+              title: doc.data.title, body: doc.data.body, notificationId: doc.id, type: doc.data.type,
+              postId: post.id, commentId: commentId || '', companyId: post.companyId || '', communityId: post.communityId || '', openComments: isReply ? 'true' : ''
             })));
           }
 
@@ -177,17 +154,13 @@ jobs:
           post_notify_anchor = "  const notificationTask = notifyInterestedPostRecipients(env, post, identity.uid)\n    .catch(error => console.error('Falha ao notificar nova publicação:', error));"
           post_notify_new = post_notify_anchor + "\n  const mentionTask = notifyMentions(env, post, user || identity, text, '', ctx)\n    .catch(error => console.error('Falha ao notificar menções da publicação:', error));"
           worker = replace_once(worker, post_notify_anchor, post_notify_new, 'post mention call')
-
           post_wait_anchor = "  if (ctx?.waitUntil) ctx.waitUntil(notificationTask);\n  else await notificationTask;"
           post_wait_new = "  if (ctx?.waitUntil) { ctx.waitUntil(notificationTask); ctx.waitUntil(mentionTask); }\n  else { await notificationTask; await mentionTask; }"
           worker = replace_once(worker, post_wait_anchor, post_wait_new, 'post mention wait')
-
           comment_anchor = "  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'comment_created'));\n\n  return { comment };"
           comment_new = "  const mentionTask = notifyMentions(env, post, user || identity, text, commentId, ctx)\n    .catch(error => console.error('Falha ao notificar menções da resposta:', error));\n  if (ctx?.waitUntil) ctx.waitUntil(mentionTask); else await mentionTask;\n\n  deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'comment_created'));\n\n  return { comment };"
           worker = replace_once(worker, comment_anchor, comment_new, 'comment mention call')
           worker_path.write_text(worker)
-
-          # One-shot workflow: remove itself from the resulting product commit.
           Path('.github/workflows/apply-mentions-once.yml').unlink(missing_ok=True)
 
       - name: Validate
