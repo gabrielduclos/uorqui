@@ -52,6 +52,7 @@ function previewText(text: string) {
 
 export default function SocialApp() {
   const [view, setView] = useState<"home" | "explore" | "communities" | "profile">("home");
+  const [globalSearch, setGlobalSearch] = useState("");
   const [profile, setProfile] = useState<SocialProfile>({
     name: "Gabriel Duclos",
     username: "@gabriel",
@@ -70,7 +71,11 @@ export default function SocialApp() {
   const fee = profile.creatorPlan === "premium" ? 15 : 30;
   const creatorReceives = profile.subscriptionPrice * (1 - fee / 100);
 
-  const visiblePosts = useMemo(() => posts, [posts]);
+  const visiblePosts = useMemo(() => {
+    const query = globalSearch.trim().toLowerCase();
+    if (!query) return posts;
+    return posts.filter((post) => `${post.author} ${post.username} ${post.community || ""} ${post.text}`.toLowerCase().includes(query));
+  }, [posts, globalSearch]);
 
   const submitPost = (event: FormEvent) => {
     event.preventDefault();
@@ -100,6 +105,20 @@ export default function SocialApp() {
 
   return (
     <div className="social-shell">
+      <header className="social-topbar">
+        <button className="social-topbar-brand" onClick={() => setView("home")} aria-label="Uorqui início">Uorqui</button>
+        <div className="social-topbar-search">
+          <Search size={18} />
+          <input value={globalSearch} onChange={(e) => setGlobalSearch(e.target.value)} placeholder="Buscar pessoas, assuntos e comunidades" />
+        </div>
+        <nav className="social-topbar-actions" aria-label="Atalhos">
+          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")} title="Início"><Home size={19} /></button>
+          <button className={view === "communities" ? "active" : ""} onClick={() => setView("communities")} title="Comunidades"><Users size={19} /></button>
+          <button title="Notificações"><Bell size={19} /><span className="social-notification-dot" /></button>
+          <button className="social-profile-shortcut" onClick={() => setView("profile")} title="Perfil"><span>{profile.name.slice(0, 1).toUpperCase()}</span></button>
+        </nav>
+      </header>
+
       <aside className="social-sidebar">
         <div className="social-brand">Uorqui</div>
         <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><Home size={19}/> Início</button>
