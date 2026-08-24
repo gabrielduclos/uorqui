@@ -724,7 +724,7 @@ export function PostCard({
                         </button>
                         {acceptedCommentId === comment.id ? (
                           <span className="solution"><CheckCircle2 size={13} /> Solução aceita</span>
-                        ) : post.type === "question" && (post.authorUid === currentUid || canAdmin) && post.authorUid !== comment.authorUid ? (
+                        ) : (post.type === "post" || post.type === "question") && (post.authorUid === currentUid || (canAdmin && post.scope !== "world")) && post.authorUid !== comment.authorUid ? (
                           <button type="button" className="text-button solution-button" onClick={() => acceptSolution(comment.id)}><CheckCircle2 size={13} /> Marcar como solução</button>
                         ) : null}
                         {(comment.authorUid === currentUid || (canAdmin && post.scope !== "world")) && (
