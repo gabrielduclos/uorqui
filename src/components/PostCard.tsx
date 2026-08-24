@@ -418,11 +418,12 @@ export function PostCard({
   };
 
   const acceptSolution = async (commentId: string) => {
+    if (acceptedCommentId) return;
     try {
       await api(`/posts/${post.id}/solution`, { method: "POST", body: JSON.stringify({ commentId }) });
       setResolved(true);
       setAcceptedCommentId(commentId);
-      showToast?.("Solução marcada e publicação resolvida.");
+      showToast?.("Solução marcada e publicação concluída.");
       await onChanged?.();
     } catch (error) {
       showToast?.(error instanceof Error ? error.message : "Não foi possível marcar a solução.");
@@ -724,7 +725,7 @@ export function PostCard({
                         </button>
                         {acceptedCommentId === comment.id ? (
                           <span className="solution"><CheckCircle2 size={13} /> Solução aceita</span>
-                        ) : (post.type === "post" || post.type === "question") && (post.authorUid === currentUid || (canAdmin && post.scope !== "world")) && post.authorUid !== comment.authorUid ? (
+                        ) : !acceptedCommentId && (post.type === "post" || post.type === "question") && (post.authorUid === currentUid || (canAdmin && post.scope !== "world")) && post.authorUid !== comment.authorUid ? (
                           <button type="button" className="text-button solution-button" onClick={() => acceptSolution(comment.id)}><CheckCircle2 size={13} /> Marcar como solução</button>
                         ) : null}
                         {(comment.authorUid === currentUid || (canAdmin && post.scope !== "world")) && (
