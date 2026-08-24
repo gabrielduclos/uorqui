@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import {
-  Bell, Compass, Crown, Globe2, Home, Lock, Plus, Search, Settings, UserRound, Users
+  Bell, Compass, Crown, Home, Lock, Plus, Search, Settings, UserRound, Users
 } from "lucide-react";
 import "./styles.css";
 import "./social.css";
@@ -49,7 +49,7 @@ const seedPosts: SocialPost[] = [
 ];
 
 function previewText(text: string) {
-  const visible = Math.max(24, Math.ceil(text.length * 0.16));
+  const visible = Math.max(24, Math.ceil(text.length * 0.30));
   return text.slice(0, visible).trimEnd();
 }
 
@@ -147,7 +147,7 @@ export default function SocialApp() {
     <div className="app-shell social-app-shell">
       <aside className="sidebar">
         <button className="brand-button" onClick={() => setView("home")} aria-label="Uorqui">
-          <img src="/assets/uorqui-logo.png" alt="Uorqui" />
+          <img src="/assets/uorqui-wordmark.png" alt="Uorqui" />
         </button>
 
         <nav className="side-nav">
@@ -170,14 +170,33 @@ export default function SocialApp() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-line">
-            <button className="mobile-logo" onClick={() => setView("home")}><img src="/assets/uorqui-logo.png" alt="Uorqui" /></button>
-            <div className="topbar-brand"><h1>{title}</h1></div>
-            <label className="mobile-header-search">
-              <Search size={15}/>
-              <input value={search} onChange={(e)=>setSearch(e.target.value)} onFocus={() => setView("explore")} placeholder="Buscar no Uorqui" />
-            </label>
+            <div className="topbar-brand">
+              <button className="mobile-logo" onClick={() => setView("home")}><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /></button>
+              <h1>{title}</h1>
+            </div>
+
+            <form
+              className="mobile-header-search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (search.trim().length >= 2) setView("explore");
+              }}
+            >
+              <Search size={17}/>
+              <input
+                value={search}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSearch(value);
+                  if (value.trim().length >= 2) setView("explore");
+                }}
+                placeholder="Buscar"
+                aria-label="Buscar no Uorqui"
+              />
+            </form>
+
             <div className="topbar-actions">
-              <button className="icon-btn top-bell" aria-label="Notificações"><Bell size={19}/><span className="count-badge">3</span></button>
+              <button className="icon-btn top-bell" aria-label="Notificações"><Bell size={21}/><span className="count-badge">3</span></button>
             </div>
           </div>
           {view === "home" && (
@@ -263,7 +282,7 @@ export default function SocialApp() {
       <nav className="mobile-nav">
         <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><Home/><small>Início</small></button>
         <button className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}><Compass/><small>Explorar</small></button>
-        <button className="mobile-create" onClick={() => setView("home")}><Plus/><small>Publicar</small></button>
+        <button className="mobile-create" onClick={() => setView("home")} aria-label="Publicar"><Plus size={26}/></button>
         <button className={view === "communities" ? "active" : ""} onClick={() => setView("communities")}><Users/><small>Comunidades</small></button>
         <button className={view === "profile" ? "active" : ""} onClick={() => setView("profile")}><UserRound/><small>Perfil</small></button>
       </nav>
