@@ -81,9 +81,9 @@ function SocialPostCard({ post }: { post: SocialPost }) {
         ) : <p>{post.text}</p>}
       </div>
       <div className="post-actions">
-        <button>♡ 24</button>
-        <button>💬 8</button>
-        <button>↗ Compartilhar</button>
+        <button>♡ <span className="action-count">24</span><span className="action-label">Curtir</span></button>
+        <button>💬 <span className="action-count">8</span><span className="action-label">Respostas</span></button>
+        <button>↗ <span className="action-label">Compartilhar</span></button>
       </div>
     </article>
   );
@@ -151,15 +151,15 @@ export default function SocialApp() {
         </button>
 
         <nav className="side-nav">
-          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><Home /> Início</button>
-          <button className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}><Compass /> Explorar</button>
-          <button className={view === "communities" ? "active" : ""} onClick={() => setView("communities")}><Users /> Comunidades</button>
-          <button className={view === "profile" ? "active" : ""} onClick={() => setView("profile")}><UserRound /> Perfil</button>
-          <button><Bell /> Notificações <span className="nav-badge">3</span></button>
-          <button><Settings /> Configurações</button>
+          <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><Home /><span>Início</span></button>
+          <button className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}><Compass /><span>Explorar</span></button>
+          <button className={view === "communities" ? "active" : ""} onClick={() => setView("communities")}><Users /><span>Comunidades</span></button>
+          <button className={view === "profile" ? "active" : ""} onClick={() => setView("profile")}><UserRound /><span>Perfil</span></button>
+          <button><Bell /><span>Notificações</span><span className="nav-badge">3</span></button>
+          <button><Settings /><span>Configurações</span></button>
         </nav>
 
-        <button className="btn publish-main" onClick={() => setView("home")}><Plus size={16}/> Publicar</button>
+        <button className="btn publish-main" onClick={() => setView("home")}><Plus size={16}/><span>Publicar</span></button>
 
         <div className="sidebar-user">
           <div className="avatar social-user-avatar">G</div>
@@ -170,11 +170,15 @@ export default function SocialApp() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-line">
-            <div className="topbar-brand">
-              <button className="mobile-logo" onClick={() => setView("home")}><img src="/assets/uorqui-logo.png" alt="Uorqui" /></button>
-              <h1>{title}</h1>
+            <button className="mobile-logo" onClick={() => setView("home")}><img src="/assets/uorqui-logo.png" alt="Uorqui" /></button>
+            <div className="topbar-brand"><h1>{title}</h1></div>
+            <label className="mobile-header-search">
+              <Search size={15}/>
+              <input value={search} onChange={(e)=>setSearch(e.target.value)} onFocus={() => setView("explore")} placeholder="Buscar no Uorqui" />
+            </label>
+            <div className="topbar-actions">
+              <button className="icon-btn top-bell" aria-label="Notificações"><Bell size={19}/><span className="count-badge">3</span></button>
             </div>
-            <button className="icon-btn top-bell" aria-label="Notificações"><Bell size={19}/><span className="count-badge">3</span></button>
           </div>
           {view === "home" && (
             <div className="tabs">
@@ -256,9 +260,10 @@ export default function SocialApp() {
         <section className="side-card compact creator-side-card"><Crown size={18}/><strong>Ganhe com sua audiência</strong><small>Ative o modo Criador e defina seu próprio preço de assinatura.</small><button className="btn small" onClick={() => setView("profile")}>Ver modo Criador</button></section>
       </aside>
 
-      <nav className="social-mobile-nav">
+      <nav className="mobile-nav">
         <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><Home/><small>Início</small></button>
         <button className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}><Compass/><small>Explorar</small></button>
+        <button className="mobile-create" onClick={() => setView("home")}><Plus/><small>Publicar</small></button>
         <button className={view === "communities" ? "active" : ""} onClick={() => setView("communities")}><Users/><small>Comunidades</small></button>
         <button className={view === "profile" ? "active" : ""} onClick={() => setView("profile")}><UserRound/><small>Perfil</small></button>
       </nav>
