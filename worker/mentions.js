@@ -256,7 +256,7 @@ async function getGoogleAccessToken(env) {
   const key = await importPrivateKey(env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY);
   const signature = await crypto.subtle.sign({ name: 'RSASSA-PKCS1-v1_5' }, key, new TextEncoder().encode(input));
   const assertion = `${input}.${b64url(new Uint8Array(signature))}`;
-  const body = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth2:jwt-bearer', assertion });
+  const body = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion });
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
