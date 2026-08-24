@@ -10,8 +10,17 @@ export default {
     const method = request.method.toUpperCase();
     const isPostCreate = method === 'POST' && url.pathname === '/api/posts';
     const isReplyCreate = method === 'POST' && /^\/api\/posts\/[^/]+\/comments$/.test(url.pathname);
-    const bodyCopy = isPostCreate || isReplyCreate ? request.clone() : null;
+    const isSolution = method === 'POST' && /^\/api\/posts\/[^/]+\/solution$/.test(url.pathname);
 
+    if (isSolution) {
+      const postId = decodeURIComponent(url.pathname.split('/')[3] || '');
+      const post = postId ? await fsGet(env, 'posts', postId).catch(() => null) : null;
+      if (post?.type === 'post') {
+        return acceptRegularPostSolution(request, env, ctx, url, post);
+      }
+    }
+
+    const bodyCopy = isPostCreate || isReplyCreate ? request.clone() : null;
     const response = await core.fetch(request, env, ctx);
 
     if (response.ok && bodyCopy) {
@@ -29,6 +38,46 @@ export default {
     if (typeof core.scheduled === 'function') return core.scheduled(controller, env, ctx);
   }
 };
+
+async function acceptRegularPostSolution(request, env, ctx, url, post) {
+  const body = await request.clone().json().catch(() => ({}));
+  const commentId = String(body?.commentId || '').trim().slice(0, 120);
+  if (!commentId) return jsonResponse({ error: 'Resposta inválida.' }, 400);
+
+  const comment = await fsGet(env, 'comments', commentId).catch(() => null);
+  if (!comment || comment.postId !== post.id) return jsonResponse({ error: 'Resposta inválida.' }, 400);
+
+  // Reutiliza a rota oficial de conclusão para validar token, acesso e papel do usuário.
+  const resolveUrl = new URL(`/api/posts/${encodeURIComponent(post.id)}/resolve`, url.origin);
+  const headers = new Headers(request.headers);
+  headers.set('Content-Type', 'application/json');
+  const authResponse = await core.fetch(new Request(resolveUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ resolved: true })
+  }), env, ctx);
+
+  if (!authResponse.ok) return authResponse;
+
+  const updated = await fsGet(env, 'posts', post.id);
+  if (!updated) return jsonResponse({ error: 'Publicação não encontrada.' }, 404);
+
+  const now = new Date().toISOString();
+  await fsBatchPut(env, [{
+    collection: 'posts',
+    id: post.id,
+    data: {
+      ...updated,
+      acceptedCommentId: comment.id,
+      isResolved: true,
+      resolvedAt: updated.resolvedAt || now,
+      followUpReminderFor: updated.lastCommentAt || updated.followUpReminderFor || '',
+      updatedAt: now
+    }
+  }]);
+
+  return jsonResponse({ ok: true, isResolved: true, acceptedCommentId: comment.id }, 200, authResponse.headers);
+}
 
 async function processMentions(request, response, env, url, isReply) {
   const body = await request.json().catch(() => ({}));
@@ -207,7 +256,7 @@ async function getGoogleAccessToken(env) {
   const key = await importPrivateKey(env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY);
   const signature = await crypto.subtle.sign({ name: 'RSASSA-PKCS1-v1_5' }, key, new TextEncoder().encode(input));
   const assertion = `${input}.${b64url(new Uint8Array(signature))}`;
-  const body = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion });
+  const body = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth2:jwt-bearer', assertion });
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -275,6 +324,12 @@ async function fsBatchPut(env, docs) {
     }
   }));
   await fsRequest(env, '/documents:commit', { method: 'POST', body: JSON.stringify({ writes }) });
+}
+
+function jsonResponse(payload, status = 200, sourceHeaders) {
+  const headers = new Headers(sourceHeaders || {});
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  return new Response(JSON.stringify(payload), { status, headers });
 }
 
 function fromDoc(doc) {
