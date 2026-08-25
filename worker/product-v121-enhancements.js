@@ -18,6 +18,10 @@ export default {
         return await lookupCep(request, env, ctx, url.pathname.split('/').pop() || '');
       }
 
+      if (method === 'GET' && /^\/api\/cnpj\/\d{14}$/.test(url.pathname)) {
+        return await lookupCnpj(request, env, ctx, url.pathname.split('/').pop() || '');
+      }
+
       if (method === 'PATCH' && /^\/api\/posts\/[^/]+$/.test(url.pathname)) {
         const postId = decodeURIComponent(url.pathname.split('/')[3] || '');
         return await editOwnPost(request, env, ctx, postId);
@@ -127,6 +131,39 @@ async function lookupCep(request, env, ctx, cep) {
     complement: clean(result.complemento || '', 100),
     district: clean(result.bairro || '', 100),
     city: clean(result.localidade || '', 100),
+    state: clean(result.uf || '', 2).toUpperCase()
+  });
+}
+
+async function lookupCnpj(request, env, ctx, cnpj) {
+  const authResponse = await coreBootstrap(request, env, ctx, '');
+  if (!authResponse.ok) return authResponse;
+
+  const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${encodeURIComponent(cnpj)}`, {
+    headers: { Accept: 'application/json' }
+  });
+  if (response.status === 404) throw httpError(404, 'CNPJ não encontrado.');
+  if (!response.ok) throw httpError(502, 'Não foi possível consultar o CNPJ agora.');
+  const result = await response.json();
+
+  const streetType = clean(result.descricao_tipo_de_logradouro || '', 40);
+  const streetName = clean(result.logradouro || '', 140);
+  const street = clean([streetType, streetName].filter(Boolean).join(' '), 160);
+  const postalDigits = String(result.cep || '').replace(/\D/g, '').slice(0, 8);
+  const postalCode = postalDigits.length === 8
+    ? `${postalDigits.slice(0, 5)}-${postalDigits.slice(5)}`
+    : clean(result.cep || '', 10);
+
+  return json({
+    name: clean(result.nome_fantasia || result.razao_social || '', 120),
+    legalName: clean(result.razao_social || '', 180),
+    cnpj: clean(result.cnpj || cnpj, 18),
+    postalCode,
+    street,
+    number: clean(result.numero || '', 30),
+    complement: clean(result.complemento || '', 100),
+    district: clean(result.bairro || '', 100),
+    city: clean(result.municipio || '', 100),
     state: clean(result.uf || '', 2).toUpperCase()
   });
 }
@@ -301,7 +338,7 @@ async function getGoogleAccessToken(env) {
   const key = await importPrivateKey(env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY);
   const signature = await crypto.subtle.sign({ name: 'RSASSA-PKCS1-v1_5' }, key, new TextEncoder().encode(input));
   const assertion = `${input}.${b64url(new Uint8Array(signature))}`;
-  const form = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth2:grant-type:jwt-bearer', assertion });
+  const form = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion });
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
