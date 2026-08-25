@@ -3,6 +3,7 @@
   "name": "uorqui-api",
   "main": "./worker/mentions.js",
   "compatibility_date": "2026-08-19",
+  "keep_vars": true,
   "placement": {
     "mode": "smart"
   },
@@ -39,6 +40,12 @@
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
     "ASAAS_ENV": "sandbox",
     "PREMIUM_MONTHLY_PRICE_BRL": "49.90"
+  },
+  "secrets": {
+    "required": [
+      "FIREBASE_SERVICE_ACCOUNT_EMAIL",
+      "FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY"
+    ]
   },
   "triggers": {
     "crons": [
