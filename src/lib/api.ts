@@ -12,6 +12,8 @@ const inFlightMutations = new Map<string, Promise<any>>();
 const inFlightReads = new Map<string, Promise<any>>();
 const mediaUrlCache = new Map<string, Promise<string>>();
 const resolvedMediaUrls = new Map<string, string>();
+const MEDIA_CACHE_VERSION = "uorqui-media-v122";
+const MEDIA_CACHE_TTL = 15 * 60 * 1000;
 let initialBootstrapNormalized = false;
 
 function mutationKey(path: string, init: RequestInit) {
@@ -52,8 +54,6 @@ function normalizeReadPath(path: string) {
   const firstBootstrap = !initialBootstrapNormalized;
   initialBootstrapNormalized = true;
 
-  // Um link direto pode escolher a empresa somente no primeiro bootstrap da página.
-  // Depois disso, a escolha feita pelo usuário no seletor sempre prevalece.
   if (firstBootstrap && requestedCompanyId && sharedCompany === requestedCompanyId) {
     if (storedCompanyId !== requestedCompanyId) {
       localStorage.setItem("uorqui-company", requestedCompanyId);
@@ -61,13 +61,10 @@ function normalizeReadPath(path: string) {
     return path;
   }
 
-  // Realtime/refresh atrasado nunca pode recolocar uma empresa anterior depois
-  // que o usuário já selecionou outra empresa.
   if (storedCompanyId && requestedCompanyId && requestedCompanyId !== storedCompanyId) {
     return bootstrapPathForCompany(path, storedCompanyId);
   }
 
-  // Mantém qualquer refresh sem parâmetro preso à empresa ativa atual.
   if (storedCompanyId && !requestedCompanyId) {
     return `/bootstrap?companyId=${encodeURIComponent(storedCompanyId)}`;
   }
@@ -107,9 +104,6 @@ async function executeApi<T>(path: string, init: RequestInit = {}, bootstrapRetr
     );
   }
 
-  // Se um bootstrap antigo terminar depois da troca de empresa, não entrega
-  // dados da empresa anterior para o React. Refaz uma única vez para a empresa
-  // que continua ativa no localStorage.
   const method = String(init.method || "GET").toUpperCase();
   if (
     (method === "GET" || method === "HEAD") &&
@@ -131,7 +125,6 @@ async function executeApi<T>(path: string, init: RequestInit = {}, bootstrapRetr
         return executeApi<T>(bootstrapPathForCompany(path, activeCompanyId), init, true);
       }
 
-      // Empresa removida/inválida: aceita a escolha válida devolvida pelo backend.
       if (!availableCompanyIds.has(activeCompanyId)) {
         localStorage.setItem("uorqui-company", responseCompanyId);
       }
@@ -168,6 +161,57 @@ export async function api<T = any>(path: string, init: RequestInit = {}): Promis
   return request;
 }
 
+function mediaCacheName() {
+  const uid = auth.currentUser?.uid || "anonymous";
+  return `${MEDIA_CACHE_VERSION}-${uid}`;
+}
+
+function mediaCacheRequest(mediaId: string) {
+  return new Request(`${location.origin}/__uorqui_media_cache__/${encodeURIComponent(mediaId)}`);
+}
+
+async function persistentMediaBlob(mediaId: string): Promise<Blob | null> {
+  if (!("caches" in window) || !auth.currentUser) return null;
+  try {
+    const cache = await caches.open(mediaCacheName());
+    const key = mediaCacheRequest(mediaId);
+    const cached = await cache.match(key);
+    if (!cached) return null;
+    const cachedAt = Number(cached.headers.get("X-Uorqui-Cached-At") || "0");
+    if (!cachedAt || Date.now() - cachedAt > MEDIA_CACHE_TTL) {
+      await cache.delete(key);
+      return null;
+    }
+    return cached.blob();
+  } catch {
+    return null;
+  }
+}
+
+async function persistMediaBlob(mediaId: string, blob: Blob) {
+  if (!("caches" in window) || !auth.currentUser) return;
+  try {
+    const cache = await caches.open(mediaCacheName());
+    await cache.put(mediaCacheRequest(mediaId), new Response(blob, {
+      headers: {
+        "Content-Type": blob.type || "application/octet-stream",
+        "X-Uorqui-Cached-At": String(Date.now())
+      }
+    }));
+  } catch {
+    // Cache persistente é uma otimização. A mídia continua funcionando sem ele.
+  }
+}
+
+export async function clearCurrentUserMediaCache() {
+  if (!("caches" in window)) return;
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  try {
+    await caches.delete(`${MEDIA_CACHE_VERSION}-${uid}`);
+  } catch {}
+}
+
 export function cachedMediaBlobUrl(mediaId: string): string {
   return resolvedMediaUrls.get(mediaId) || "";
 }
@@ -179,6 +223,7 @@ export function cacheMediaBlobUrl(mediaId: string, blob: Blob): string {
   const url = URL.createObjectURL(blob);
   resolvedMediaUrls.set(mediaId, url);
   mediaUrlCache.set(mediaId, Promise.resolve(url));
+  void persistMediaBlob(mediaId, blob);
   return url;
 }
 
@@ -193,40 +238,64 @@ export async function mediaBlobUrl(mediaId: string): Promise<string> {
     const user = auth.currentUser;
     if (!user) throw new ApiError("Faça login para continuar.", 401);
 
+    const persisted = await persistentMediaBlob(mediaId);
+    if (persisted) {
+      const url = URL.createObjectURL(persisted);
+      resolvedMediaUrls.set(mediaId, url);
+      return url;
+    }
+
     const token = await user.getIdToken();
     const response = await fetch(`/api/media/${encodeURIComponent(mediaId)}`, {
       headers: { Authorization: `Bearer ${token}` },
+      cache: "force-cache"
     });
 
     if (!response.ok) {
-      mediaUrlCache.delete(mediaId);
       throw new ApiError("Não foi possível carregar a mídia.", response.status);
     }
 
-    const url = URL.createObjectURL(await response.blob());
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
     resolvedMediaUrls.set(mediaId, url);
+    void persistMediaBlob(mediaId, blob);
     return url;
-  })();
+  })().catch((error) => {
+    mediaUrlCache.delete(mediaId);
+    throw error;
+  });
 
   mediaUrlCache.set(mediaId, request);
   return request;
+}
+
+function prioritizedImageIds(
+  posts: Array<{ attachments?: Array<{ id: string; contentType?: string }> }>,
+  maxImages: number
+) {
+  const firstPerPost: string[] = [];
+  const remaining: string[] = [];
+
+  for (const post of posts) {
+    const images = (post.attachments || [])
+      .filter((attachment) => String(attachment.contentType || "").startsWith("image/") && attachment.id)
+      .map((attachment) => attachment.id);
+    if (!images.length) continue;
+    firstPerPost.push(images[0]);
+    remaining.push(...images.slice(1));
+  }
+
+  return Array.from(new Set([...firstPerPost, ...remaining])).slice(0, maxImages);
 }
 
 export async function prefetchPostMedia(
   posts: Array<{ attachments?: Array<{ id: string; contentType?: string }> }>,
   maxImages = 16
 ): Promise<void> {
-  const imageIds = Array.from(new Set(
-    posts
-      .flatMap((post) => post.attachments || [])
-      .filter((attachment) => String(attachment.contentType || "").startsWith("image/"))
-      .map((attachment) => attachment.id)
-      .filter(Boolean)
-  )).slice(0, maxImages);
-
+  const imageIds = prioritizedImageIds(posts, maxImages);
   if (!imageIds.length) return;
 
-  const concurrency = 4;
+  const concurrency = 3;
   let cursor = 0;
 
   const worker = async () => {
