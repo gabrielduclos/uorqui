@@ -4,6 +4,7 @@ const PRODUCT_VERSION = "1.2.21";
 const PREMIUM_PRICE = 99.9;
 const ENTERPRISE_EXTRA = 19.9;
 const PREMIUM_INCLUDED_USERS = 10;
+const ENTERPRISE_STARTING_PRICE = PREMIUM_PRICE + ENTERPRISE_EXTRA;
 
 type TierSnapshot = {
   tier: "free" | "premium" | "enterprise";
@@ -124,13 +125,13 @@ function enterpriseCard() {
         <span class="plan-eyebrow">Escala</span>
         <h3>Enterprise</h3>
       </div>
-      <strong class="plan-price" data-enterprise-price>${money(PREMIUM_PRICE)}<small>/mês</small></strong>
+      <strong class="plan-price" data-enterprise-price>${money(ENTERPRISE_STARTING_PRICE)}<small>/mês com 11 usuários</small></strong>
     </div>
-    <p class="plan-description">Para empresas com mais de 10 usuários ativos.</p>
+    <p class="plan-description">A partir do 11º usuário ativo da empresa.</p>
     <ul class="plan-features">
       <li>✓ Tudo do Premium</li>
       <li>✓ 10 usuários incluídos na base</li>
-      <li>✓ ${money(ENTERPRISE_EXTRA)} por usuário ativo adicional</li>
+      <li>✓ ${money(ENTERPRISE_EXTRA)} por usuário ativo adicional a partir do 11º</li>
       <li>✓ Sem limite fixo de usuários</li>
       <li>✓ Cobrança acompanha os acessos ativos da empresa</li>
     </ul>
@@ -171,7 +172,9 @@ function status(card: HTMLElement, message: string, error = false) {
 function applyTier(card: HTMLElement, snapshot: TierSnapshot) {
   const price = card.querySelector<HTMLElement>("[data-enterprise-price]");
   if (price) {
-    price.innerHTML = `${money(snapshot.monthlyPrice || PREMIUM_PRICE)}<small>/mês hoje</small>`;
+    const enterpriseActiveAboveTen = snapshot.tier === "enterprise" && snapshot.activeUsers > PREMIUM_INCLUDED_USERS;
+    const displayPrice = enterpriseActiveAboveTen ? snapshot.monthlyPrice : ENTERPRISE_STARTING_PRICE;
+    price.innerHTML = `${money(displayPrice)}<small>${enterpriseActiveAboveTen ? "/mês hoje" : "/mês com 11 usuários"}</small>`;
   }
 
   const action = card.querySelector<HTMLButtonElement>("[data-enterprise-action]");
@@ -233,7 +236,7 @@ function applyTier(card: HTMLElement, snapshot: TierSnapshot) {
   action.disabled = false;
   action.textContent = "Ativar Enterprise";
   action.onclick = async () => {
-    if (!confirm(`Ativar o Enterprise? A base continua em ${money(PREMIUM_PRICE)}/mês e cada usuário ativo acima de 10 acrescenta ${money(ENTERPRISE_EXTRA)}/mês.`)) return;
+    if (!confirm(`Ativar o Enterprise? A cobrança Enterprise começa quando a empresa chegar ao 11º usuário: ${money(ENTERPRISE_STARTING_PRICE)}/mês. Depois, cada usuário ativo adicional acrescenta ${money(ENTERPRISE_EXTRA)}/mês.`)) return;
     action.disabled = true;
     status(card, "Atualizando assinatura…");
     try {
