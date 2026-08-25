@@ -11,6 +11,7 @@ import "./product-v121-enhancements";
 import "./company-lookup";
 import "./product-v121-media";
 import "./mention-label-v121";
+import "./notification-router-v121";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
