@@ -1,6 +1,6 @@
-const FEED_REFRESH_DISTANCE = 78;
-const FULL_REFRESH_DISTANCE = 150;
-const MAX_PULL_DISTANCE = 210;
+const FEED_REFRESH_DISTANCE = 72;
+const FULL_REFRESH_DISTANCE = 220;
+const MAX_PULL_DISTANCE = 280;
 
 let startX = 0;
 let startY = 0;
@@ -48,11 +48,21 @@ function ensureIndicator() {
   return indicator;
 }
 
-function setIndicator(message: string, visible = true, spinning = false) {
+function syncFeedIndicatorPosition() {
   const indicator = ensureIndicator();
+  const header = document.querySelector<HTMLElement>(".topbar");
+  const bottom = Math.max(0, Math.round(header?.getBoundingClientRect().bottom || 0));
+  indicator.style.setProperty("--uorqui-feed-indicator-top", `${bottom + 8}px`);
+}
+
+function setIndicator(message: string, visible = true, spinning = false, mode: "feed" | "full" = "feed") {
+  const indicator = ensureIndicator();
+  if (mode === "feed") syncFeedIndicatorPosition();
   indicator.querySelector("strong")!.textContent = message;
   indicator.classList.toggle("visible", visible);
   indicator.classList.toggle("spinning", spinning);
+  indicator.classList.toggle("feed-mode", mode === "feed");
+  indicator.classList.toggle("full-mode", mode === "full");
 }
 
 function resetPull(immediate = false) {
@@ -67,7 +77,7 @@ function resetPull(immediate = false) {
 
 function hideIndicatorLater(delay = 700) {
   window.clearTimeout(hideTimer);
-  hideTimer = window.setTimeout(() => setIndicator("Puxe para atualizar", false, false), delay);
+  hideTimer = window.setTimeout(() => setIndicator("Puxe para atualizar", false, false, "feed"), delay);
 }
 
 function softRefreshFeed() {
@@ -80,7 +90,7 @@ function softRefreshFeed() {
 }
 
 function fullRefresh() {
-  setIndicator("Atualizando Uorqui…", true, true);
+  setIndicator("Atualizando o Uorqui inteiro…", true, true, "full");
   resetPull();
   window.setTimeout(() => window.location.reload(), 120);
 }
@@ -103,6 +113,10 @@ document.addEventListener("click", (event) => {
   if (!button || !isHomeButton(button)) return;
   window.requestAnimationFrame(() => window.requestAnimationFrame(scrollHomeToTop));
 }, true);
+
+window.addEventListener("resize", () => {
+  if (document.getElementById("uorqui-pull-refresh")?.classList.contains("feed-mode")) syncFeedIndicatorPosition();
+}, { passive: true });
 
 if (isStandalonePwa()) {
   document.addEventListener("touchstart", (event) => {
@@ -140,19 +154,20 @@ if (isStandalonePwa()) {
     pullDistance = Math.min(MAX_PULL_DISTANCE, deltaY);
     event.preventDefault();
 
-    const visualDistance = Math.min(96, Math.round(pullDistance * 0.48));
+    const visualDistance = Math.min(108, Math.round(pullDistance * 0.42));
     document.documentElement.classList.remove("uorqui-pull-settling");
     document.documentElement.classList.add("uorqui-pulling");
     document.documentElement.style.setProperty("--uorqui-pull-offset", `${visualDistance}px`);
 
+    const homeFeed = isHomeFeed();
     if (pullDistance >= FULL_REFRESH_DISTANCE) {
-      setIndicator("Solte para atualizar o Uorqui", true, false);
-    } else if (pullDistance >= FEED_REFRESH_DISTANCE && isHomeFeed()) {
-      setIndicator("Solte para atualizar o feed", true, false);
-    } else if (isHomeFeed()) {
-      setIndicator("Puxe para atualizar o feed", true, false);
+      setIndicator("Solte para recarregar o Uorqui inteiro", true, false, "full");
+    } else if (homeFeed && pullDistance >= FEED_REFRESH_DISTANCE) {
+      setIndicator("Solte para atualizar somente o feed", true, false, "feed");
+    } else if (homeFeed) {
+      setIndicator("Puxe para atualizar o feed", true, false, "feed");
     } else {
-      setIndicator("Continue puxando para atualizar", true, false);
+      setIndicator("Puxe mais para recarregar o Uorqui", true, false, "full");
     }
   }, { passive: false });
 
@@ -168,9 +183,10 @@ if (isStandalonePwa()) {
 
     resetPull();
     if (distance >= FEED_REFRESH_DISTANCE && homeFeed) {
-      setIndicator("Atualizando feed…", true, true);
+      setIndicator("Atualizando somente o feed…", true, true, "feed");
       if (!softRefreshFeed()) {
-        window.location.reload();
+        setIndicator("Não foi possível atualizar o feed", true, false, "feed");
+        hideIndicatorLater(1200);
         return;
       }
       hideIndicatorLater(1000);
