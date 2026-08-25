@@ -20,6 +20,51 @@ function mutationKey(path: string, init: RequestInit) {
   return `${method}:${path}:${bodyKey}`;
 }
 
+function bootstrapCompanyId(path: string) {
+  if (!path.startsWith("/bootstrap")) return "";
+  const queryIndex = path.indexOf("?");
+  if (queryIndex < 0) return "";
+  return new URLSearchParams(path.slice(queryIndex + 1)).get("companyId") || "";
+}
+
+function sharedCompanyId() {
+  try {
+    return new URLSearchParams(window.location.search).get("company") || "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeReadPath(path: string) {
+  if (!path.startsWith("/bootstrap")) return path;
+
+  const requestedCompanyId = bootstrapCompanyId(path);
+  const storedCompanyId = localStorage.getItem("uorqui-company") || "";
+  const sharedCompany = sharedCompanyId();
+
+  // Links de publicação/comunidade podem abrir diretamente outra empresa.
+  // Nesse caso a empresa da URL passa a ser a empresa ativa da sessão.
+  if (requestedCompanyId && sharedCompany === requestedCompanyId && storedCompanyId !== requestedCompanyId) {
+    localStorage.setItem("uorqui-company", requestedCompanyId);
+    return path;
+  }
+
+  // Uma resposta/realtime antiga não pode voltar a sessão para a empresa anterior
+  // depois que o usuário já escolheu outra no seletor.
+  if (storedCompanyId && requestedCompanyId && requestedCompanyId !== storedCompanyId) {
+    const params = new URLSearchParams(path.slice(path.indexOf("?") + 1));
+    params.set("companyId", storedCompanyId);
+    return `/bootstrap?${params.toString()}`;
+  }
+
+  // Mantém qualquer refresh sem parâmetro preso à empresa ativa atual.
+  if (storedCompanyId && !requestedCompanyId) {
+    return `/bootstrap?companyId=${encodeURIComponent(storedCompanyId)}`;
+  }
+
+  return path;
+}
+
 async function executeApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const user = auth.currentUser;
   if (!user) throw new ApiError("Faça login para continuar.", 401);
@@ -57,12 +102,15 @@ async function executeApi<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const method = String(init.method || "GET").toUpperCase();
+  const effectivePath = method === "GET" || method === "HEAD"
+    ? normalizeReadPath(path)
+    : path;
 
   if (method === "GET" || method === "HEAD") {
-    const key = `${method}:${path}`;
+    const key = `${method}:${effectivePath}`;
     const existing = inFlightReads.get(key);
     if (existing) return existing as Promise<T>;
-    const request = executeApi<T>(path, init).finally(() => inFlightReads.delete(key));
+    const request = executeApi<T>(effectivePath, init).finally(() => inFlightReads.delete(key));
     inFlightReads.set(key, request);
     return request;
   }
