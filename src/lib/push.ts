@@ -25,6 +25,10 @@ export type PushState =
   | "denied"
   | "granted";
 
+type ExtendedNotificationOptions = NotificationOptions & {
+  renotify?: boolean;
+};
+
 function vapidKey() {
   return String(window.UORQUI_PUSH_CONFIG?.vapidKey || "").trim();
 }
@@ -119,8 +123,7 @@ async function showForegroundNotification(payload: MessagePayload) {
   const notificationId = data.notificationId || `${Date.now()}`;
   const type = data.type || "";
   const registration = await navigator.serviceWorker.ready;
-
-  await registration.showNotification(title, {
+  const options: ExtendedNotificationOptions = {
     body,
     icon: "/assets/uorqui-icon-192-v1215.png",
     badge: "/assets/uorqui-favicon.png",
@@ -132,7 +135,9 @@ async function showForegroundNotification(payload: MessagePayload) {
       notificationId,
       type
     }
-  });
+  };
+
+  await registration.showNotification(title, options);
 }
 
 export async function setupForegroundPush(
