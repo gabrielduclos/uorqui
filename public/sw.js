@@ -1,4 +1,4 @@
-const CACHE = "uorqui-react-v1.2.20";
+const CACHE = "uorqui-react-v1.2.21";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(
   caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())
@@ -18,7 +18,6 @@ self.addEventListener("fetch", (event) => {
     })));
   }
 });
-
 
 self.addEventListener("push", (event) => {
   let payload = {};
@@ -56,17 +55,32 @@ self.addEventListener("notificationclick", (event) => {
     event.notification?.data?.url || "/",
     self.location.origin
   ).href;
+  const notificationId = event.notification?.data?.notificationId || "";
+  const type = event.notification?.data?.type || "";
+  const title = event.notification?.title || "";
+  const body = event.notification?.body || "";
 
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
-      for (const client of windowClients) {
-        try {
-          const current = new URL(client.url);
-          const target = new URL(targetUrl);
-          if (current.origin === target.origin) {
-            return client.navigate(targetUrl).then(() => client.focus());
-          }
-        } catch {}
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windowClients) => {
+      const target = new URL(targetUrl);
+      const sameOriginClients = windowClients.filter((client) => {
+        try { return new URL(client.url).origin === target.origin; }
+        catch { return false; }
+      });
+
+      if (sameOriginClients.length) {
+        sameOriginClients.sort((a, b) => Number(Boolean(b.focused)) - Number(Boolean(a.focused)));
+        const client = sameOriginClients[0];
+        client.postMessage({
+          type: "uorqui-notification-open",
+          notificationId,
+          notificationType: type,
+          title,
+          body,
+          url: targetUrl
+        });
+        await client.focus();
+        return;
       }
 
       return clients.openWindow(targetUrl);
