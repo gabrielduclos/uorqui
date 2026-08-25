@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "uorqui-api",
-  "main": "./worker/product-v121-mentions-fix.js",
+  "main": "./worker/product-v122-stabilization.js",
   "compatibility_date": "2026-08-19",
   "keep_vars": true,
   "placement": {
