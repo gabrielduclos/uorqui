@@ -112,6 +112,29 @@ export async function syncPushRegistration() {
   return true;
 }
 
+async function showForegroundNotification(payload: MessagePayload) {
+  const data = payload.data || {};
+  const title = payload.notification?.title || data.title || "Uorqui";
+  const body = payload.notification?.body || data.body || "Você tem uma nova atualização.";
+  const notificationId = data.notificationId || `${Date.now()}`;
+  const type = data.type || "";
+  const registration = await navigator.serviceWorker.ready;
+
+  await registration.showNotification(title, {
+    body,
+    icon: "/assets/uorqui-icon-192-v1215.png",
+    badge: "/assets/uorqui-favicon.png",
+    tag: `uorqui-${notificationId}`,
+    renotify: type === "read_required",
+    requireInteraction: type === "read_required",
+    data: {
+      url: data.url || "/",
+      notificationId,
+      type
+    }
+  });
+}
+
 export async function setupForegroundPush(
   handler: (payload: MessagePayload) => void
 ): Promise<() => void> {
@@ -120,9 +143,13 @@ export async function setupForegroundPush(
   }
 
   const messaging = getMessaging(firebaseApp);
-  return onMessage(messaging, handler);
+  return onMessage(messaging, (payload) => {
+    // Com o Uorqui aberto, não chama o callback antigo que executava um
+    // refresh global com tela de carregamento. A interface já recebe as
+    // mudanças pelo realtime; o clique no push é roteado internamente pelo SW.
+    void showForegroundNotification(payload).catch(() => handler(payload));
+  });
 }
-
 
 export async function unregisterPushBeforeLogout() {
   const savedToken = localStorage.getItem("uorqui-push-token") || "";
