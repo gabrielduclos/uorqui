@@ -1,0 +1,21 @@
+.company-picker{position:relative;isolation:isolate}
+.company-picker select{position:absolute;inset:0;z-index:2;width:100%;height:100%;padding:0 34px 0 48px;border:0!important;border-radius:13px;background:transparent!important;box-shadow:none!important;appearance:none;cursor:pointer;font-size:12px;font-weight:700}
+.company-picker .company-mark,.company-picker>svg{position:relative;z-index:3;pointer-events:none}
+.company-picker>svg{margin-left:auto}
+
+/* v1.2.21: Uorqui Empresas volta a focar somente empresa e comunidades. */
+.composer-form .audience-row>button:nth-child(3),
+.jobs-tabs>button:nth-child(2),
+.job-audience-fieldset>button:nth-of-type(2){display:none!important}
+
+.plan-card.uorqui-enterprise-card{border-style:solid}
+.plan-card.uorqui-enterprise-card.current{border-color:#17181c;box-shadow:0 0 0 1px #17181c}
+.plan-enterprise-note{display:block;margin-top:9px;color:var(--muted);font-size:9px;line-height:1.45}
+.plan-enterprise-status{display:block;margin-top:8px;font-size:10px;color:var(--muted)}
+.plan-enterprise-status.error{color:var(--danger)}
+.plan-enterprise-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.plan-enterprise-actions .btn{flex:1}
+
+@media(max-width:850px){
+  .company-picker select{position:static;padding:0;border:0!important;background:transparent!important}
+}
