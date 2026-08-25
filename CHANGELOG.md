@@ -9,6 +9,7 @@
 - O comportamento de atualização completa passa a existir também no PWA do iPhone, onde o gesto nativo não é consistente como no navegador e no Android.
 - O indicador do refresh completo permanece no topo e informa explicitamente quando toda a aplicação será recarregada.
 - Ao tocar em **Início**, o Uorqui volta o feed para o topo mesmo quando o usuário já está na tela inicial.
+- Adicionada a opção **Responder** em respostas existentes. O campo mostra quem está sendo respondido, direciona a menção para essa pessoa e mantém a resposta visualmente encadeada sem aumentar indefinidamente o recuo.
 - Mantidas as otimizações de cache de mídia e as validações automáticas da versão 1.2.22.
 
 ## 1.2.22 — Stabilization
