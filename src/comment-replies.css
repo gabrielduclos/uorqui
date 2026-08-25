@@ -10,5 +10,6 @@
 .inline-comment-actions .solution{margin-top:0;padding:4px 7px;font-size:8.5px}
 .inline-comment-actions .solution-button{display:inline-flex;align-items:center;gap:4px;padding:3px 0;font-size:8.5px;font-weight:700;color:#397047;text-decoration:none}
 .inline-comment-actions .solution-button:hover{text-decoration:underline;text-underline-offset:3px}
+.topbar>.tabs{display:none!important}
 @media(min-width:521px){.inline-comment-form{flex-wrap:wrap}.inline-comment-form textarea{min-width:260px}.inline-comment-form .comment-compose-actions{width:100%}}
 @media(max-width:520px){.comment-compose-actions{width:100%;justify-content:stretch}.comment-compose-actions>.btn{flex:1!important;align-self:stretch!important}.comment-photo-selected{order:3;width:100%;max-width:none;justify-content:space-between}.comment-photo-wrap{width:100%}.comment-photo{max-height:440px}}
