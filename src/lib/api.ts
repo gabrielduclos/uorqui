@@ -12,6 +12,7 @@ const inFlightMutations = new Map<string, Promise<any>>();
 const inFlightReads = new Map<string, Promise<any>>();
 const mediaUrlCache = new Map<string, Promise<string>>();
 const resolvedMediaUrls = new Map<string, string>();
+let initialBootstrapNormalized = false;
 
 function mutationKey(path: string, init: RequestInit) {
   const method = String(init.method || "GET").toUpperCase();
@@ -35,26 +36,35 @@ function sharedCompanyId() {
   }
 }
 
+function bootstrapPathForCompany(path: string, companyId: string) {
+  const queryIndex = path.indexOf("?");
+  const params = new URLSearchParams(queryIndex >= 0 ? path.slice(queryIndex + 1) : "");
+  params.set("companyId", companyId);
+  return `/bootstrap?${params.toString()}`;
+}
+
 function normalizeReadPath(path: string) {
   if (!path.startsWith("/bootstrap")) return path;
 
   const requestedCompanyId = bootstrapCompanyId(path);
   const storedCompanyId = localStorage.getItem("uorqui-company") || "";
   const sharedCompany = sharedCompanyId();
+  const firstBootstrap = !initialBootstrapNormalized;
+  initialBootstrapNormalized = true;
 
-  // Links de publicação/comunidade podem abrir diretamente outra empresa.
-  // Nesse caso a empresa da URL passa a ser a empresa ativa da sessão.
-  if (requestedCompanyId && sharedCompany === requestedCompanyId && storedCompanyId !== requestedCompanyId) {
-    localStorage.setItem("uorqui-company", requestedCompanyId);
+  // Um link direto pode escolher a empresa somente no primeiro bootstrap da página.
+  // Depois disso, a escolha feita pelo usuário no seletor sempre prevalece.
+  if (firstBootstrap && requestedCompanyId && sharedCompany === requestedCompanyId) {
+    if (storedCompanyId !== requestedCompanyId) {
+      localStorage.setItem("uorqui-company", requestedCompanyId);
+    }
     return path;
   }
 
-  // Uma resposta/realtime antiga não pode voltar a sessão para a empresa anterior
-  // depois que o usuário já escolheu outra no seletor.
+  // Realtime/refresh atrasado nunca pode recolocar uma empresa anterior depois
+  // que o usuário já selecionou outra empresa.
   if (storedCompanyId && requestedCompanyId && requestedCompanyId !== storedCompanyId) {
-    const params = new URLSearchParams(path.slice(path.indexOf("?") + 1));
-    params.set("companyId", storedCompanyId);
-    return `/bootstrap?${params.toString()}`;
+    return bootstrapPathForCompany(path, storedCompanyId);
   }
 
   // Mantém qualquer refresh sem parâmetro preso à empresa ativa atual.
@@ -65,7 +75,7 @@ function normalizeReadPath(path: string) {
   return path;
 }
 
-async function executeApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function executeApi<T>(path: string, init: RequestInit = {}, bootstrapRetry = false): Promise<T> {
   const user = auth.currentUser;
   if (!user) throw new ApiError("Faça login para continuar.", 401);
 
@@ -95,6 +105,37 @@ async function executeApi<T>(path: string, init: RequestInit = {}): Promise<T> {
       typeof payload === "string" ? payload : payload?.error || "Erro no Uorqui.",
       response.status
     );
+  }
+
+  // Se um bootstrap antigo terminar depois da troca de empresa, não entrega
+  // dados da empresa anterior para o React. Refaz uma única vez para a empresa
+  // que continua ativa no localStorage.
+  const method = String(init.method || "GET").toUpperCase();
+  if (
+    (method === "GET" || method === "HEAD") &&
+    path.startsWith("/bootstrap") &&
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload)
+  ) {
+    const activeCompanyId = localStorage.getItem("uorqui-company") || "";
+    const responseCompanyId = String(payload.selectedCompanyId || "");
+    const availableCompanyIds = new Set(
+      Array.isArray(payload.companies)
+        ? payload.companies.map((company: any) => String(company?.id || "")).filter(Boolean)
+        : []
+    );
+
+    if (activeCompanyId && responseCompanyId && activeCompanyId !== responseCompanyId) {
+      if (!bootstrapRetry && availableCompanyIds.has(activeCompanyId)) {
+        return executeApi<T>(bootstrapPathForCompany(path, activeCompanyId), init, true);
+      }
+
+      // Empresa removida/inválida: aceita a escolha válida devolvida pelo backend.
+      if (!availableCompanyIds.has(activeCompanyId)) {
+        localStorage.setItem("uorqui-company", responseCompanyId);
+      }
+    }
   }
 
   return payload as T;
