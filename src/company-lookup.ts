@@ -32,6 +32,10 @@ function setField(form: HTMLFormElement, name: string, value: string, onlyIfEmpt
   const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
   if (!field || (onlyIfEmpty && field.value.trim())) return;
   field.value = value;
+  if (name === "postalCode") {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    if (digits.length === 8) field.dataset.uorquiLastCep = digits;
+  }
   field.dispatchEvent(new Event("input", { bubbles: true }));
   field.dispatchEvent(new Event("change", { bubbles: true }));
 }
