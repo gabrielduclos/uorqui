@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./comment-replies.css";
 import "./product-v121.css";
+import "./product-v121-enhancements.css";
 import "./product-v121";
+import "./product-v121-enhancements";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
