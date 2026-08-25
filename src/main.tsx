@@ -13,13 +13,33 @@ import "./product-v121-media";
 import "./mention-label-v121";
 import "./notification-router-v121";
 
+const PRODUCT_VERSION = "1.2.22";
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />
   </StrictMode>
 );
 
-if ("serviceWorker" in navigator && import.meta.env.PROD) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then((registration) => registration.update())
+      .catch(() => {});
+  });
+}
+
+function syncVisibleVersion() {
+  document.querySelectorAll<HTMLElement>(".side-card.compact strong").forEach((element) => {
+    if ((element.textContent || "").trim().startsWith("Uorqui ")) {
+      element.textContent = `Uorqui ${PRODUCT_VERSION}`;
+    }
+  });
+}
+
+const versionObserver = new MutationObserver(syncVisibleVersion);
+versionObserver.observe(document.documentElement, { childList: true, subtree: true });
+syncVisibleVersion();
 
 // Mention guidance without adding another data fetch to the composer.
 document.addEventListener("focusin", (event) => {
