@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "uorqui-api",
-  "main": "./worker/mentions.js",
+  "main": "./worker/product-v121.js",
   "compatibility_date": "2026-08-19",
   "keep_vars": true,
   "placement": {
@@ -39,7 +39,8 @@
     "FIREBASE_PROJECT_ID": "uorqui-ba281",
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
     "ASAAS_ENV": "sandbox",
-    "PREMIUM_MONTHLY_PRICE_BRL": "49.90"
+    "PREMIUM_MONTHLY_PRICE_BRL": "99.90",
+    "ENTERPRISE_EXTRA_USER_PRICE_BRL": "19.90"
   },
   "secrets": {
     "required": [
