@@ -35,6 +35,17 @@ function setTextIfChanged(element: Element | null, value: string) {
   if (element && element.textContent !== value) element.textContent = value;
 }
 
+function replaceOwnText(element: Element | null, value: string) {
+  if (!element) return;
+  const textNode = Array.from(element.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
+  const next = ` ${value}`;
+  if (textNode) {
+    if (textNode.textContent !== next) textNode.textContent = next;
+  } else {
+    element.appendChild(document.createTextNode(next));
+  }
+}
+
 function companyId() {
   return localStorage.getItem("uorqui-company") || "";
 }
@@ -64,16 +75,16 @@ function updatePlanCopy() {
   if (freeCard) {
     freeCard.querySelectorAll(".plan-features li").forEach((item) => {
       const value = item.textContent || "";
-      if (/Até 5 pessoas/i.test(value)) setTextIfChanged(item, "✓ Até 4 pessoas na empresa");
-      if (/Busca, notificações push e Mundo/i.test(value)) setTextIfChanged(item, "✓ Busca e notificações push");
+      if (/Até 5 pessoas/i.test(value)) replaceOwnText(item, "Até 4 pessoas na empresa");
+      if (/Busca, notificações push e Mundo/i.test(value)) replaceOwnText(item, "Busca e notificações push");
     });
   }
 
   if (premiumCard) {
     const price = premiumCard.querySelector<HTMLElement>(".plan-price");
-    if (price && !price.dataset.v121Price) {
-      price.innerHTML = `${money(PREMIUM_PRICE)}<small>/mês por empresa</small>`;
-      price.dataset.v121Price = "1";
+    if (price) {
+      replaceOwnText(price, money(PREMIUM_PRICE));
+      setTextIfChanged(price.querySelector("small"), "/mês por empresa");
     }
 
     setTextIfChanged(
@@ -83,7 +94,7 @@ function updatePlanCopy() {
 
     premiumCard.querySelectorAll(".plan-features li").forEach((item) => {
       const value = item.textContent || "";
-      if (/Mais de 5 pessoas/i.test(value)) setTextIfChanged(item, "✓ Até 10 pessoas na empresa");
+      if (/Mais de 5 pessoas/i.test(value)) replaceOwnText(item, "Até 10 pessoas na empresa");
     });
   }
 
@@ -173,7 +184,7 @@ function applyTier(card: HTMLElement, snapshot: TierSnapshot) {
   if (premiumCard && snapshot.tier === "enterprise") premiumCard.classList.remove("current");
 
   const pill = document.querySelector<HTMLElement>(".plans-company-summary .plan-pill");
-  if (pill && snapshot.tier === "enterprise") pill.textContent = "Enterprise";
+  if (pill && snapshot.tier === "enterprise") replaceOwnText(pill, "Enterprise");
 
   if (!snapshot.owner) {
     action.disabled = true;
