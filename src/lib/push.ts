@@ -8,7 +8,7 @@ import {
 } from "firebase/messaging";
 import { signOut } from "firebase/auth";
 import { auth, firebaseApp } from "./firebase";
-import { api } from "./api";
+import { api, clearCurrentUserMediaCache } from "./api";
 
 declare global {
   interface Window {
@@ -144,9 +144,6 @@ export async function setupForegroundPush(
 
   const messaging = getMessaging(firebaseApp);
   return onMessage(messaging, (payload) => {
-    // Com o Uorqui aberto, não chama o callback antigo que executava um
-    // refresh global com tela de carregamento. A interface já recebe as
-    // mudanças pelo realtime; o clique no push é roteado internamente pelo SW.
     void showForegroundNotification(payload).catch(() => handler(payload));
   });
 }
@@ -167,6 +164,10 @@ export async function unregisterPushBeforeLogout() {
     if (await messagingSupported()) {
       await deleteToken(getMessaging(firebaseApp));
     }
+  } catch {}
+
+  try {
+    await clearCurrentUserMediaCache();
   } catch {}
 
   localStorage.removeItem("uorqui-push-token");
