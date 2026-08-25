@@ -31,8 +31,9 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
 
 function syncVisibleVersion() {
   document.querySelectorAll<HTMLElement>(".side-card.compact strong").forEach((element) => {
-    if ((element.textContent || "").trim().startsWith("Uorqui ")) {
-      element.textContent = `Uorqui ${PRODUCT_VERSION}`;
+    const next = `Uorqui ${PRODUCT_VERSION}`;
+    if ((element.textContent || "").trim().startsWith("Uorqui ") && element.textContent !== next) {
+      element.textContent = next;
     }
   });
 }
