@@ -1,0 +1,48 @@
+@media (max-width:850px){
+  html,body,#root,.app-shell,.main{
+    background:#fff!important;
+  }
+
+  .topbar{
+    background:#fff!important;
+    -webkit-backdrop-filter:none!important;
+    backdrop-filter:none!important;
+    opacity:1!important;
+  }
+
+  .topbar-line,.quick-compose,.mobile-nav{
+    background:#fff!important;
+    opacity:1!important;
+    -webkit-backdrop-filter:none!important;
+    backdrop-filter:none!important;
+  }
+
+  .feed,.community-feed,.search-results{
+    background:#fff!important;
+    opacity:1!important;
+    filter:none!important;
+  }
+
+  .post-card{
+    background:#fff!important;
+    opacity:1!important;
+    filter:none!important;
+    mix-blend-mode:normal!important;
+  }
+
+  .post-card::before,.post-card::after,
+  .feed::before,.feed::after,
+  .main::before,.main::after{
+    opacity:1!important;
+    filter:none!important;
+    mix-blend-mode:normal!important;
+  }
+
+  .post-attachments,
+  .post-attachments .post-image-wrap,
+  .post-attachments .post-image{
+    opacity:1!important;
+    filter:none!important;
+    mix-blend-mode:normal!important;
+  }
+}
