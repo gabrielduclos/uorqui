@@ -17,6 +17,7 @@ import "./mention-label-v121";
 import "./notification-router-v121";
 import "./pull-refresh-v123";
 import "./reply-to-reply-v123";
+import "./login-logo-v123";
 
 const PRODUCT_VERSION = "1.2.23";
 
