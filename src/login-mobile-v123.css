@@ -37,13 +37,12 @@
   .auth-card::-webkit-scrollbar{display:none}
   .auth-mobile-logo{
     display:block!important;
-    width:min(330px,92%)!important;
-    max-width:none!important;
+    width:min(270px,76%)!important;
+    max-width:76%!important;
     height:auto!important;
     object-fit:contain!important;
-    margin:4px auto 24px!important;
-    transform:scale(1.18);
-    transform-origin:center center;
+    margin:2px auto 18px!important;
+    transform:none!important;
   }
 }
 
@@ -59,9 +58,10 @@
     border-radius:20px;
   }
   .auth-mobile-logo{
-    width:min(340px,94%)!important;
-    margin:2px auto 24px!important;
-    transform:scale(1.22);
+    width:min(280px,78%)!important;
+    max-width:78%!important;
+    margin:2px auto 18px!important;
+    transform:none!important;
   }
   .auth-card>p{margin-bottom:18px}
   .auth-card form{gap:11px}
@@ -70,7 +70,7 @@
 
 @media(max-height:740px) and (max-width:850px){
   .auth-card{padding-top:18px!important;padding-bottom:16px!important}
-  .auth-mobile-logo{width:min(300px,88%)!important;margin-bottom:14px!important;transform:scale(1.12)}
+  .auth-mobile-logo{width:min(250px,72%)!important;max-width:72%!important;margin-bottom:12px!important;transform:none!important}
   .auth-card>p{margin-bottom:12px}
   .auth-card form{gap:8px}
 }
