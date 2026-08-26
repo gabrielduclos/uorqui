@@ -1,0 +1,39 @@
+@media(max-width:850px){
+  .auth-layout{
+    width:100%;
+    height:100dvh;
+    min-height:100dvh;
+    padding:max(12px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom));
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+    background:#f6f7f8;
+  }
+  .auth-card{
+    width:min(410px,100%);
+    margin:0 auto!important;
+    max-height:calc(100dvh - max(24px,env(safe-area-inset-top)) - max(24px,env(safe-area-inset-bottom)));
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  .auth-mobile-logo{
+    display:block;
+    width:230px;
+    max-width:82%;
+    height:auto;
+    margin:0 auto 18px;
+  }
+}
+
+@media(max-width:520px){
+  .auth-layout{padding-left:12px;padding-right:12px}
+  .auth-card{padding:22px 20px;border-radius:18px}
+  .auth-mobile-logo{width:240px;max-width:86%;margin-bottom:17px}
+}
+
+@media(max-height:700px) and (max-width:850px){
+  .auth-card{padding-top:18px;padding-bottom:18px}
+  .auth-mobile-logo{width:205px;margin-bottom:12px}
+  .auth-card>p{margin-bottom:14px}
+}
