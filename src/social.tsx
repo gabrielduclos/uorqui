@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Search, UserPlus, Users } from "lucide-react";
 import { api } from "./lib/api";
 import { Avatar } from "./components/Avatar";
@@ -17,6 +17,8 @@ type ProfileResponse = {
   posts: Post[];
 };
 
+type LikeResult = { liked: boolean; reactionCount: number };
+
 function currentRoute() {
   const params = new URLSearchParams(location.search);
   return {
@@ -31,7 +33,8 @@ function pushRoute(next: { people?: boolean; profileUid?: string }) {
   params.delete("profile");
   if (next.people) params.set("people", "1");
   if (next.profileUid) params.set("profile", next.profileUid);
-  history.pushState({}, "", `${location.pathname}?${params.toString()}`);
+  const query = params.toString();
+  history.pushState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
@@ -86,6 +89,7 @@ function PeopleDirectory({ onOpen, onClose }: { onOpen: (uid: string) => void; o
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError("");
     const timer = window.setTimeout(() => {
       api<PeopleResponse>(`/social/people${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""}`)
         .then((result) => active && setPeople(result.people || []))
@@ -199,7 +203,7 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
             key={post.id}
             post={post}
             currentUid={data.isMe ? uid : undefined}
-            onLike={async (target) => api(`/posts/${target.id}/reaction`, { method: "POST" })}
+            onLike={async (target) => api<LikeResult>(`/posts/${target.id}/reaction`, { method: "POST" })}
             onRead={async (target) => { await api(`/posts/${target.id}/read`, { method: "POST" }); }}
             onChanged={load}
           />
