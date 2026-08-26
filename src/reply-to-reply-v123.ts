@@ -1,3 +1,5 @@
+export {};
+
 const REPLY_MARKER = /\n?\[\[uorqui-reply:([a-zA-Z0-9_-]+):([^\]]+)\]\]\s*$/;
 let enhanceQueued = false;
 
@@ -83,7 +85,7 @@ function decorateStoredReply(comment: HTMLElement) {
   comment.classList.add("uorqui-comment-reply");
   comment.dataset.replyToCommentId = parentId;
 
-  let reference = body.querySelector<HTMLElement>(":scope > .uorqui-reply-reference");
+  let reference = body.querySelector<HTMLButtonElement>(":scope > .uorqui-reply-reference");
   if (!reference) {
     reference = document.createElement("button");
     reference.type = "button";
@@ -141,6 +143,6 @@ document.addEventListener("submit", (event) => {
   }, 0);
 }, true);
 
-const observer = new MutationObserver(queueEnhance);
-observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+const replyObserver = new MutationObserver(queueEnhance);
+replyObserver.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 queueEnhance();
