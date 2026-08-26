@@ -38,6 +38,26 @@ function pushRoute(next: { people?: boolean; profileUid?: string }) {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
+function normalizedPersonName(value = "") {
+  return value.trim().replace(/^@/, "").toLocaleLowerCase("pt-BR");
+}
+
+async function openPublicProfileByVisibleName(name: string) {
+  const query = name.trim();
+  if (!query || query === "Usuário") return;
+
+  try {
+    const result = await api<PeopleResponse>(`/social/people?q=${encodeURIComponent(query)}`);
+    const target = result.people.find((person) => normalizedPersonName(person.displayName) === normalizedPersonName(query))
+      || result.people.find((person) => normalizedPersonName(person.username) === normalizedPersonName(query))
+      || result.people[0];
+    if (target?.uid) pushRoute({ profileUid: target.uid });
+    else pushRoute({ people: true });
+  } catch {
+    pushRoute({ people: true });
+  }
+}
+
 export function SocialLayer() {
   const [route, setRoute] = useState(currentRoute);
 
@@ -65,6 +85,35 @@ export function SocialLayer() {
     const observer = new MutationObserver(install);
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const onAuthorClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const postHead = target.closest(".post-head");
+      if (postHead && (target.closest(".avatar") || target.closest(".post-author strong"))) {
+        const name = postHead.querySelector(".post-author strong")?.textContent?.trim() || "";
+        if (!name) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void openPublicProfileByVisibleName(name);
+        return;
+      }
+
+      const comment = target.closest(".inline-comment");
+      if (comment && (target.closest(".avatar") || target.closest(".inline-comment-body > strong"))) {
+        const name = comment.querySelector(":scope .inline-comment-body > strong")?.textContent?.trim() || "";
+        if (!name) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void openPublicProfileByVisibleName(name);
+      }
+    };
+
+    document.addEventListener("click", onAuthorClick, true);
+    return () => document.removeEventListener("click", onAuthorClick, true);
   }, []);
 
   if (!route.people && !route.profileUid) return null;
