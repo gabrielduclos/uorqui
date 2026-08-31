@@ -561,7 +561,7 @@ export function PostCard({
 
   return (
     <article className={`post-card ${post.deletedByAdmin ? "post-tombstone" : ""}`}>
-      <header className="post-head">
+      <header className="post-head" data-author-uid={post.authorUid}>
         <Avatar name={post.authorName} mediaId={post.authorAvatarMediaId} />
         <div className="post-author">
           <div><strong>{post.authorName || "Usuário"}</strong><span> · {relative(post.deletedAt || post.createdAt)}</span></div>
@@ -698,7 +698,7 @@ export function PostCard({
                   const parsed = commentPhoto(comment.text);
                   return (
                   <article
-                    className={`inline-comment ${highlightedCommentId === comment.id ? "highlighted" : ""}`}
+                    className={`inline-comment ${highlightedCommentId === comment.id ? "highlighted" : ""}`} data-author-uid={comment.authorUid}
                     key={comment.id}
                     id={`comment-${comment.id}`}
                     ref={(element) => {
