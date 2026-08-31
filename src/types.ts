@@ -134,6 +134,11 @@ export interface Post {
   authorUid: string;
   authorName?: string;
   authorAvatarMediaId?: string;
+  authorAccountType?: "uorqui_agent" | string;
+  authorAiAssisted?: boolean;
+  authorTeamLabel?: string;
+  aiGenerated?: boolean;
+  aiDisclosure?: string;
   scope: "world" | "company" | "community";
   companyId?: string;
   companyName?: string;
