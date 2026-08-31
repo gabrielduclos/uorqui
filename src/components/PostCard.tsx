@@ -207,8 +207,8 @@ export function PostCard({
       ? `${community?.visibility === "public" || post.communityVisibility === "public" ? "Comunidade pública" : "Comunidade"} · ${community?.name || post.communityName || "Comunidade"}`
       : `🏢 ${companyName || post.companyName || "Empresa"}`;
 
-  const canResolve = (post.type === "post" || post.type === "question") && (
-    post.authorUid === currentUid || (canAdmin && post.scope !== "world")
+  const canResolve = post.type === "question" && Boolean(post.companyId) && (
+    post.authorUid === currentUid || canAdmin
   );
 
   const loadComments = (force = false, focusCommentId = initialCommentId) => {
