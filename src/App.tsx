@@ -88,6 +88,7 @@ export default function App() {
   const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string; topicId?: string }>({});
   const [headerSearch, setHeaderSearch] = useState("");
   const [headerHidden, setHeaderHidden] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(64);
   const lastScrollYRef = useRef(0);
   const [searchSeed, setSearchSeed] = useState("");
   const [sharedPost, setSharedPost] = useState<Post | null>(null);
@@ -104,14 +105,34 @@ export default function App() {
     const scroller = document.scrollingElement || document.documentElement;
     let lastY = Math.max(0, scroller.scrollTop || window.scrollY);
     let touchY = 0;
+    let hidden = false;
 
-    const header = () => document.querySelector<HTMLElement>(".topbar");
-    const setVisible = (visible: boolean) => {
-      const node = header();
-      if (!node) return;
-      node.classList.toggle("scroll-hidden", !visible);
-      setHeaderHidden(!visible);
+    const node = () => document.querySelector<HTMLElement>(".topbar");
+    const apply = (hide: boolean, immediate = false) => {
+      if (hidden === hide && node()) return;
+      hidden = hide;
+      const header = node();
+      if (header) {
+        header.style.transition = immediate ? "none" : "";
+        header.classList.toggle("scroll-hidden", hide);
+        if (immediate) requestAnimationFrame(() => {
+          if (header.isConnected) header.style.transition = "";
+        });
+      }
+      setHeaderHidden(hide);
     };
+
+    const measure = () => {
+      const header = node();
+      if (header) setHeaderHeight(Math.max(56, Math.ceil(header.getBoundingClientRect().height)));
+    };
+
+    measure();
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(measure)
+      : null;
+    const initialHeader = node();
+    if (initialHeader && observer) observer.observe(initialHeader);
 
     const onTouchStart = (event: TouchEvent) => {
       touchY = event.touches[0]?.clientY || 0;
@@ -121,22 +142,23 @@ export default function App() {
       const nextY = event.touches[0]?.clientY ?? touchY;
       const delta = nextY - touchY;
 
-      // No Safari, reagimos ao gesto antes de esperar o evento scroll.
-      if (delta > 1) setVisible(true);
-      else if (delta < -1 && lastY > 44) setVisible(false);
+      // Primeiro movimento do dedo para baixo = usuário quer voltar para cima.
+      // Mostra o header imediatamente e flutuando no viewport.
+      if (delta > 0.5) apply(false, true);
+      else if (delta < -0.5 && lastY > 44) apply(true);
 
       touchY = nextY;
     };
 
     const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0) setVisible(true);
-      else if (event.deltaY > 0 && lastY > 44) setVisible(false);
+      if (event.deltaY < 0) apply(false, true);
+      else if (event.deltaY > 0 && lastY > 44) apply(true);
     };
 
     const onScroll = () => {
       const current = Math.max(0, scroller.scrollTop || window.scrollY);
-      if (current <= 8 || current < lastY) setVisible(true);
-      else if (current > lastY && current > 44) setVisible(false);
+      if (current <= 8 || current < lastY) apply(false, true);
+      else if (current > lastY && current > 44) apply(true);
       lastY = current;
       lastScrollYRef.current = current;
     };
@@ -145,12 +167,15 @@ export default function App() {
     document.addEventListener("touchmove", onTouchMove, { passive: true, capture: true });
     window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", measure, { passive: true });
 
     return () => {
+      observer?.disconnect();
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", measure);
     };
   }, []);
 
@@ -875,6 +900,7 @@ export default function App() {
               </div>
             )}
           </header>
+          <div className="topbar-spacer" style={{ height: headerHeight }} aria-hidden="true" />
           {renderPage()}
         </main>
 
