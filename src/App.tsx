@@ -4061,6 +4061,12 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   const [userQuery,setUserQuery]=useState("");
   const [userResults,setUserResults]=useState<Array<{uid:string;displayName?:string;username?:string;avatarMediaId?:string;bio?:string}>>([]);
   const [userSearchBusy,setUserSearchBusy]=useState(false);
+  const [recordingAudio,setRecordingAudio]=useState(false);
+  const mediaRecorderRef=useRef<MediaRecorder|null>(null);
+  const mediaStreamRef=useRef<MediaStream|null>(null);
+  const audioChunksRef=useRef<Blob[]>([]);
+  const audioPointerHeldRef=useRef(false);
+  const audioSendingRef=useRef(false);
 
   const loadConversations=async(offset=0)=>{
     try{
@@ -4130,26 +4136,141 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
     sessionStorage.setItem("uorqui-message-target",person.uid);
   };
 
+  const sendMessagePayload=async({text="",payloadFiles=[],postId=""}:{text?:string;payloadFiles?:File[];postId?:string})=>{
+    if(!targetUid||busy||audioSendingRef.current)return null;
+    const attachmentIds:string[]=[];
+    for(const file of payloadFiles.slice(0,4)){
+      if(file.size>20*1024*1024)throw new Error("Cada arquivo pode ter no máximo 20 MB.");
+      const qs=new URLSearchParams({scope:"message",targetUid,name:file.name});
+      const uploaded=await api<{media:{id:string}}>(`/media/upload?${qs}`,{
+        method:"POST",
+        headers:{"Content-Type":file.type||"application/octet-stream","X-File-Name":file.name},
+        body:file
+      });
+      attachmentIds.push(uploaded.media.id);
+    }
+    return api<{message:DirectMessage;conversation:{id:string;status:string;requestedBy?:string}}>(
+      `/messages/${encodeURIComponent(targetUid)}`,
+      {method:"POST",body:JSON.stringify({text,attachmentIds,postId})}
+    );
+  };
+
+  const appendSentMessage=async(result:{message:DirectMessage;conversation:{id:string;status:string;requestedBy?:string}})=>{
+    setMessages(current=>current.some(item=>item.id===result.message.id)?current:[...current,result.message]);
+    setConversation(result.conversation);
+    await loadConversations();
+  };
+
+  const recordedAudioFile=(blob:Blob)=>{
+    const type=blob.type||"audio/webm";
+    const ext=type.includes("mp4")||type.includes("m4a")?"m4a":type.includes("ogg")?"ogg":"webm";
+    return new File([blob],`audio-${Date.now()}.${ext}`,{type});
+  };
+
+  const stopAudioTracks=()=>{
+    mediaStreamRef.current?.getTracks().forEach(track=>track.stop());
+    mediaStreamRef.current=null;
+  };
+
+  const finishAudioRecording=()=>{
+    audioPointerHeldRef.current=false;
+    const recorder=mediaRecorderRef.current;
+    if(recorder&&recorder.state!=="inactive"){
+      recorder.stop();
+    }else{
+      stopAudioTracks();
+      setRecordingAudio(false);
+    }
+  };
+
+  const startAudioRecording=async(event:React.PointerEvent<HTMLButtonElement>)=>{
+    event.preventDefault();
+    if(!targetUid||busy||audioSendingRef.current)return;
+    if(conversation?.status==="pending"&&conversation.requestedBy===me.uid)return;
+    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined"){
+      showToast("Este navegador não oferece gravação de áudio.");
+      return;
+    }
+
+    audioPointerHeldRef.current=true;
+    try{
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(!audioPointerHeldRef.current){
+        stream.getTracks().forEach(track=>track.stop());
+        return;
+      }
+
+      mediaStreamRef.current=stream;
+      audioChunksRef.current=[];
+
+      const preferred=[
+        "audio/mp4",
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus"
+      ];
+      const mimeType=preferred.find(type=>MediaRecorder.isTypeSupported?.(type))||"";
+      const recorder=mimeType?new MediaRecorder(stream,{mimeType}):new MediaRecorder(stream);
+      mediaRecorderRef.current=recorder;
+
+      recorder.ondataavailable=(chunk)=>{
+        if(chunk.data&&chunk.data.size>0)audioChunksRef.current.push(chunk.data);
+      };
+      recorder.onerror=()=>{
+        setRecordingAudio(false);
+        stopAudioTracks();
+        showToast("Não foi possível gravar o áudio.");
+      };
+      recorder.onstop=async()=>{
+        setRecordingAudio(false);
+        stopAudioTracks();
+        mediaRecorderRef.current=null;
+        const chunks=audioChunksRef.current.splice(0);
+        if(!chunks.length)return;
+        const blob=new Blob(chunks,{type:recorder.mimeType||chunks[0]?.type||"audio/webm"});
+        if(blob.size<500)return;
+        if(blob.size>20*1024*1024){
+          showToast("O áudio ultrapassou o limite de 20 MB.");
+          return;
+        }
+        audioSendingRef.current=true;
+        try{
+          const result=await sendMessagePayload({payloadFiles:[recordedAudioFile(blob)]});
+          if(result)await appendSentMessage(result);
+        }catch(error){
+          showToast(errorMessage(error));
+        }finally{
+          audioSendingRef.current=false;
+        }
+      };
+
+      recorder.start(250);
+      setRecordingAudio(true);
+    }catch(error){
+      audioPointerHeldRef.current=false;
+      stopAudioTracks();
+      setRecordingAudio(false);
+      const denied=error instanceof DOMException&&["NotAllowedError","SecurityError"].includes(error.name);
+      showToast(denied
+        ?"Autorize o acesso ao microfone para gravar mensagens de áudio."
+        : "Não foi possível acessar o microfone.");
+    }
+  };
+
   const sendMessage=async(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
     if(!targetUid||busy)return;
-    const fd=new FormData(event.currentTarget);
+    const form=event.currentTarget;
+    const fd=new FormData(form);
     const text=String(fd.get("message")||"").trim();
     setBusy(true);
     try{
-      const attachmentIds:string[]=[];
-      for(const file of files.slice(0,4)){
-        if(file.size>20*1024*1024)throw new Error("Cada arquivo pode ter no máximo 20 MB.");
-        const qs=new URLSearchParams({scope:"message",targetUid,name:file.name});
-        const uploaded=await api<{media:{id:string}}>(`/media/upload?${qs}`,{method:"POST",headers:{"Content-Type":file.type||"application/octet-stream","X-File-Name":file.name},body:file});
-        attachmentIds.push(uploaded.media.id);
-      }
-      const result=await api<{message:DirectMessage;conversation:{id:string;status:string;requestedBy?:string}}>(`/messages/${encodeURIComponent(targetUid)}`,{method:"POST",body:JSON.stringify({text,attachmentIds,postId:sharedPostId})});
+      const result=await sendMessagePayload({text,payloadFiles:files,postId:sharedPostId});
+      if(!result)return;
       setFiles([]);setSharedPostId("");sessionStorage.removeItem("uorqui-message-post");
-      event.currentTarget.reset();
-      setMessages(current=>current.some(item=>item.id===result.message.id)?current:[...current,result.message]);
-      setConversation(result.conversation);
-      await loadConversations();
+      form.reset();
+      await appendSentMessage(result);
     }catch(error){showToast(errorMessage(error));}finally{setBusy(false);}
   };
 
@@ -4223,23 +4344,33 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
           </div>
           <form className="message-composer" onSubmit={sendMessage}>
             {sharedPostId&&<div className="message-pending-share"><Share2 size={14}/><span>Publicação pronta para enviar</span><button type="button" onClick={()=>{setSharedPostId("");sessionStorage.removeItem("uorqui-message-post");}}><X size={14}/></button></div>}
-            {!!files.length&&<div className="message-file-preview">{files.map(file=><span key={file.name}>{file.name}</span>)}</div>}
+            {!!files.length&&<div className="message-file-preview">{files.map(file=><span key={file.name} className={file.type.startsWith("video/")?"is-video":"is-photo"}>{file.type.startsWith("video/")?<Video size={13}/>:<Camera size={13}/>}<b>{file.type.startsWith("video/")?"Vídeo":"Foto"}</b>{file.name}</span>)}</div>}
             <div className="message-compose-line">
               <div className="message-media-actions" aria-label="Adicionar mídia">
-                <label className="message-media-action" title="Enviar foto" aria-label="Enviar foto">
+                <label className="message-media-action message-photo-video-action" title="Enviar foto ou vídeo" aria-label="Enviar foto ou vídeo">
                   <Camera size={23}/>
-                  <input hidden type="file" accept="image/*" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,4))}/>
+                  <Video className="message-video-mark" size={11}/>
+                  <input hidden type="file" accept="image/*,video/*" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,4))}/>
                 </label>
-                <label className="message-media-action" title="Enviar vídeo" aria-label="Enviar vídeo">
-                  <Video size={23}/>
-                  <input hidden type="file" accept="video/*" onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,1))}/>
-                </label>
-                <label className="message-media-action" title="Enviar áudio" aria-label="Enviar áudio">
+                <button
+                  type="button"
+                  className={`message-media-action message-audio-record ${recordingAudio?"recording":""}`}
+                  title="Segure para gravar áudio"
+                  aria-label={recordingAudio?"Gravando áudio. Solte para enviar.":"Segure para gravar áudio"}
+                  onPointerDown={startAudioRecording}
+                  onPointerUp={finishAudioRecording}
+                  onPointerCancel={finishAudioRecording}
+                  onLostPointerCapture={()=>recordingAudio&&finishAudioRecording()}
+                  onContextMenu={event=>event.preventDefault()}
+                >
                   <Mic size={23}/>
-                  <input hidden type="file" accept="audio/*" onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,1))}/>
-                </label>
+                  {recordingAudio&&<span className="message-recording-dot"/>}
+                </button>
               </div>
-              <textarea name="message" rows={1} maxLength={4000} placeholder="Mensagem…" disabled={conversation?.status==="pending"&&conversation.requestedBy===me.uid}/>
+              <div className="message-text-wrap">
+                <textarea name="message" rows={1} maxLength={4000} placeholder={recordingAudio?"Gravando… solte para enviar":"Mensagem…"} disabled={recordingAudio||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)}/>
+                {recordingAudio&&<span className="message-recording-label">Gravando áudio</span>}
+              </div>
               <button className="icon-btn message-send" disabled={busy||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)} aria-label="Enviar mensagem"><Send size={21}/></button>
             </div>
           </form>
