@@ -145,6 +145,13 @@ export interface Post {
   authorTeamLabel?: string;
   aiGenerated?: boolean;
   aiDisclosure?: string;
+  aiDay?: string;
+  aiContentMode?: "news" | "evergreen" | string;
+  aiImageGenerated?: boolean;
+  sourceName?: string;
+  sourceUrl?: string;
+  sourcePublishedAt?: string;
+  sourceHeadline?: string;
   scope: "world" | "company" | "community";
   companyId?: string;
   companyName?: string;
