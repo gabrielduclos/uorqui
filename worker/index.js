@@ -3360,45 +3360,55 @@ async function votePoll(env, identity, postId, body, ctx) {
 }
 
 async function discoverContent(env, identity) {
-  const [worldPostsRaw, publicCommunities, worldJobs, follows, memberships, reactions] = await Promise.all([
-    fsWhere(env, 'posts', 'scope', 'world', 120),
-    fsWhere(env, 'communities', 'visibility', 'public', 120),
+  const [postResponse, communityResponse, worldJobs, follows, memberships, reactions] = await Promise.all([
+    fsListCollection(env, 'posts', 300),
+    fsListCollection(env, 'communities', 180),
     fsWhere(env, 'jobs', 'audience', 'world', 120),
     fsWhere(env, 'socialFollows', 'followerUid', identity.uid, 250).catch(() => []),
     fsWhere(env, 'communityMembers', 'uid', identity.uid, 250).catch(() => []),
     fsWhere(env, 'reactions', 'uid', identity.uid, 250).catch(() => [])
   ]);
 
-  const followedUids = new Set(follows.map(item => item.followingUid).filter(Boolean));
+  const allPosts = postResponse || [];
+  const allCommunities = communityResponse || [];
+  const communityById = new Map(allCommunities.map(community => [community.id, community]));
+  const followedUids = new Set(follows.map(item => item.targetUid).filter(Boolean));
   const joinedCommunityIds = new Set(memberships.map(item => item.communityId).filter(Boolean));
   const likedPostIds = new Set(reactions.map(item => item.postId).filter(Boolean));
 
+  const visiblePosts = allPosts.filter(post => {
+    if (!post || post.deletedAt || post.deletedByAdmin) return false;
+    if (post.scope === 'world') return true;
+    if (post.scope !== 'community' || !post.communityId) return false;
+    const community = communityById.get(post.communityId);
+    return Boolean(community && !community.companyId && publicCommunity(community));
+  });
+
   const scorePost = post => {
     const ageHours = Math.max(0, (Date.now() - new Date(post.createdAt || 0).getTime()) / 3600000);
-    const freshness = Math.max(0, 72 - ageHours) / 12;
+    const freshness = Math.max(0, 96 - ageHours) / 10;
     const social = Number(post.reactionCount || 0) * 1.5 + Number(post.commentCount || 0) * 2;
-    const followBoost = followedUids.has(post.authorUid) ? 18 : 0;
-    const likedBoost = likedPostIds.has(post.id) ? -4 : 0;
-    return freshness + social + followBoost + likedBoost;
+    const followBoost = followedUids.has(post.authorUid) ? 24 : 0;
+    const unseenBoost = likedPostIds.has(post.id) ? 0 : 3;
+    return freshness + social + followBoost + unseenBoost;
   };
 
-  const posts = [...worldPostsRaw]
-    .filter(post => !post.deletedByAdmin)
+  const posts = visiblePosts
     .sort((a,b) => scorePost(b) - scorePost(a))
-    .slice(0, 30);
+    .slice(0, 40);
 
-  const communities = publicCommunities
-    .filter(community => community.archived !== true && community.status !== 'inactive')
+  const communities = allCommunities
+    .filter(community => !community.companyId && publicCommunity(community) && community.archived !== true && community.status !== 'inactive')
     .map(community => ({
       ...communityView(community),
       alreadyMember: joinedCommunityIds.has(community.id),
-      verifiedCompany: Boolean(community.companyId)
+      verifiedCompany: false
     }))
     .sort((a,b) => {
       if (a.alreadyMember !== b.alreadyMember) return a.alreadyMember ? 1 : -1;
       return Number(b.memberCount || 0) - Number(a.memberCount || 0);
     })
-    .slice(0, 18);
+    .slice(0, 20);
 
   const jobs = worldJobs
     .filter(job => job.status !== 'closed')
@@ -4081,6 +4091,11 @@ async function fsCommit(env,operations){
   });
   await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
 }
+async function fsListCollection(env, collection, pageSize = 200) {
+  const response = await fsRequest(env, `/documents/${collection}?pageSize=${pageSize}`);
+  return (response?.documents || []).map(fromDoc);
+}
+
 async function fsWhere(env,collection,field,value,limit=100){const body={structuredQuery:{from:[{collectionId:collection}],where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:toValue(value)}},limit}};const rows=await fsRequest(env,'/documents:runQuery',{method:'POST',body:JSON.stringify(body)});return (Array.isArray(rows)?rows:[]).filter(x=>x.document).map(x=>fromDoc(x.document));}
 
 async function fsListCollection(env, collection, maxItems = 5000) {
