@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { ArrowLeft, Ban, Search, UserCheck, UserPlus, Users } from "lucide-react";
 import { api } from "./lib/api";
+import { auth } from "./lib/firebase";
 import { Avatar } from "./components/Avatar";
 import { PostCard } from "./components/PostCard";
 import type { Post, UserProfile } from "./types";
@@ -53,6 +55,13 @@ function closeSocialToFeed() {
 
 export function SocialLayer() {
   const [route, setRoute] = useState(currentRoute);
+  const [authReady, setAuthReady] = useState(false);
+  const [signedIn, setSignedIn] = useState(Boolean(auth.currentUser));
+
+  useEffect(() => onAuthStateChanged(auth, (user) => {
+    setSignedIn(Boolean(user));
+    setAuthReady(true);
+  }), []);
 
   useEffect(() => {
     const update = () => setRoute(currentRoute());
@@ -109,11 +118,25 @@ export function SocialLayer() {
 
   if (!route.people && !route.profileUid) return null;
 
+  if (!authReady) {
+    return (
+      <div className="social-overlay">
+        <div className="social-shell">
+          <section className="social-page">
+            <div className="social-empty">Restaurando sessão…</div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (!signedIn) return null;
+
   return (
     <div className="social-overlay">
       <div className="social-shell">
         {route.profileUid
-          ? <PublicProfile uid={route.profileUid} onBack={closeSocialToFeed} />
+          ? <PublicProfile key={`${route.profileUid}-${signedIn ? "auth" : "anon"}`} uid={route.profileUid} onBack={closeSocialToFeed} />
           : <PeopleDirectory onOpen={(uid) => pushRoute({ profileUid: uid })} onClose={closeSocialToFeed} />}
       </div>
     </div>
