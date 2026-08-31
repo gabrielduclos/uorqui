@@ -268,6 +268,10 @@ async function routeApi(request, env, identity, url, ctx) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await requestOrJoinCommunity(env, identity, communityId, ctx));
   }
+  if (method === 'DELETE' && /^\/communities\/[^/]+\/join$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await leaveSocialCommunity(env, identity, communityId));
+  }
   if (method === 'GET' && /^\/communities\/[^/]+\/join-status$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await getCommunityJoinStatus(env, identity, communityId));
@@ -374,6 +378,12 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'DELETE' && /^\/messages\/[^/]+\/request$/.test(path)) {
     const targetUid = decodeURIComponent(path.split('/')[2]);
     return json(await rejectMessageRequest(env, identity, targetUid));
+  }
+  if (method === 'DELETE' && /^\/messages\/[^/]+\/[^/]+$/.test(path)) {
+    const parts = path.split('/');
+    const targetUid = decodeURIComponent(parts[2]);
+    const messageId = decodeURIComponent(parts[3]);
+    return json(await cancelDirectMessage(env, identity, targetUid, messageId));
   }
   if (method === 'POST' && path === '/media/upload') return json(await uploadMedia(request, env, identity, url.searchParams), 201);
   if (method === 'GET' && /^\/media\/[^/]+$/.test(path)) {
@@ -2471,6 +2481,23 @@ async function requestOrJoinCommunity(env, identity, communityId, ctx) {
   return { status: 'pending', requestId, communityId };
 }
 
+async function leaveSocialCommunity(env, identity, communityId) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  if (community.companyId) throw httpError(403, 'Comunidades de empresa só podem ser gerenciadas pela empresa.');
+
+  const memberId = `${communityId}_${identity.uid}`;
+  const membership = await fsGet(env, 'communityMembers', memberId);
+  if (!membership) return { ok: true, left: true, alreadyLeft: true, communityId };
+  if (membership.role === 'owner' || community.createdBy === identity.uid) {
+    throw httpError(409, 'O proprietário não pode sair da comunidade antes de transferir a propriedade ou excluir a comunidade.');
+  }
+
+  await fsDelete(env, 'communityMembers', memberId);
+  const request = await fsGet(env, 'communityJoinRequests', memberId).catch(() => null);
+  if (request) await fsDelete(env, 'communityJoinRequests', memberId).catch(() => {});
+  return { ok: true, left: true, communityId };
+}
+
 async function respondCommunityJoinRequest(env, identity, requestId, body, ctx) {
   const request = await fsGetRequired(env, 'communityJoinRequests', requestId, 'Solicitação não encontrada.');
   if (request.status !== 'pending') throw httpError(409, 'Esta solicitação já foi respondida.');
@@ -4216,10 +4243,20 @@ async function getDirectMessages(env, identity, targetUid, params) {
   const messages = page.reverse();
 
   if (Number(conversation[`unread_${identity.uid}`] || 0) > 0) {
+    const readAt = nowIso();
+    const unreadForMe = rows.filter(item =>
+      item.recipientUid === identity.uid &&
+      !item.readAt &&
+      !item.cancelledAt
+    );
+    for (const message of unreadForMe) {
+      await fsPut(env, 'directMessages', message.id, { ...message, readAt });
+      message.readAt = readAt;
+    }
     await fsPut(env, 'messageConversations', conversationId, {
       ...conversation,
       [`unread_${identity.uid}`]: 0,
-      updatedAt: conversation.updatedAt || nowIso()
+      updatedAt: conversation.updatedAt || readAt
     });
   }
 
@@ -4256,6 +4293,36 @@ async function rejectMessageRequest(env, identity, targetUid) {
   const messages = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 100).catch(() => []);
   for (const message of messages) await fsDelete(env, 'directMessages', message.id);
   return { ok: true, rejected: true };
+}
+
+async function cancelDirectMessage(env, identity, targetUid, messageId) {
+  const conversationId = directConversationId(identity.uid, targetUid);
+  const message = await fsGetRequired(env, 'directMessages', messageId, 'Mensagem não encontrada.');
+  if (message.conversationId !== conversationId) throw httpError(403, 'Mensagem não pertence a esta conversa.');
+  if (message.senderUid !== identity.uid) throw httpError(403, 'Você só pode cancelar mensagens enviadas por você.');
+  if (message.cancelledAt) return { ok: true, message };
+
+  const cancelledAt = nowIso();
+  const updated = {
+    ...message,
+    text: '',
+    attachments: [],
+    sharedPost: null,
+    cancelledAt,
+    cancelledByUid: identity.uid,
+    updatedAt: cancelledAt
+  };
+  await fsPut(env, 'directMessages', messageId, updated);
+
+  const conversation = await fsGet(env, 'messageConversations', conversationId);
+  if (conversation?.lastSenderUid === identity.uid && conversation?.lastMessageAt === message.createdAt) {
+    await fsPut(env, 'messageConversations', conversationId, {
+      ...conversation,
+      lastMessagePreview: 'Mensagem cancelada',
+      updatedAt: cancelledAt
+    });
+  }
+  return { ok: true, message: updated };
 }
 
 async function sendDirectMessage(env, identity, targetUid, body, ctx) {
