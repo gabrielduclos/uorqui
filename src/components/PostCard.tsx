@@ -575,7 +575,7 @@ export function PostCard({
       <header className="post-head" data-author-uid={post.authorUid}>
         <Avatar name={post.authorName} mediaId={post.authorAvatarMediaId} />
         <div className="post-author">
-          <div><strong>{post.authorName || "Usuário"}</strong><span> · {relative(post.deletedAt || post.createdAt)}</span></div>
+          <div><strong>{post.authorName || "Usuário"}</strong>{post.authorAccountType === "uorqui_agent" && <span className="uorqui-ai-badge">Equipe Uorqui · IA</span>}<span> · {relative(post.deletedAt || post.createdAt)}</span></div>
           <small className={`scope ${post.scope}`}>{scope}</small>
         </div>
         {canDelete && onDelete && (
