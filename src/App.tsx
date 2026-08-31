@@ -17,7 +17,7 @@ import { connectRealtime } from "./lib/realtime";
 import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
 import { usePwaInstall } from "./lib/pwa";
 import type {
-  BootstrapData, Community, CommunityMember, Company, HomeTab, JobOpening, NotificationItem, Post, View
+  BootstrapData, Community, CommunityMember, CommunityTopic, Company, HomeTab, JobOpening, NotificationItem, Post, View
 } from "./types";
 import { Avatar } from "./components/Avatar";
 import { AvatarCropModal } from "./components/AvatarCropModal";
@@ -85,7 +85,7 @@ export default function App() {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedCommunityId, setSelectedCommunityId] = useState("");
   const [manageCommunityMembersId, setManageCommunityMembersId] = useState("");
-  const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string }>({});
+  const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string; topicId?: string }>({});
   const [headerSearch, setHeaderSearch] = useState("");
   const [headerHidden, setHeaderHidden] = useState(false);
   const lastScrollYRef = useRef(0);
@@ -101,23 +101,51 @@ export default function App() {
   const pwaInstall = usePwaInstall();
 
   useEffect(() => {
-    lastScrollYRef.current = window.scrollY;
-    let ticking = false;
-    const update = () => {
-      const current = Math.max(0, window.scrollY);
-      const previous = lastScrollYRef.current;
-      if (current <= 8 || current < previous) setHeaderHidden(false);
-      else if (current > previous + 2) setHeaderHidden(true);
-      lastScrollYRef.current = current;
-      ticking = false;
+    const scroller = document.scrollingElement || document.documentElement;
+    lastScrollYRef.current = scroller.scrollTop || window.scrollY;
+    let touchY = 0;
+
+    const reveal = () => setHeaderHidden(false);
+    const hide = () => {
+      const current = scroller.scrollTop || window.scrollY;
+      if (current > 48) setHeaderHidden(true);
     };
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) reveal();
+      else if (event.deltaY > 0) hide();
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      touchY = event.touches[0]?.clientY || 0;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const nextY = event.touches[0]?.clientY || touchY;
+      if (nextY > touchY + 1) reveal();
+      else if (nextY < touchY - 1) hide();
+      touchY = nextY;
+    };
+
     const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      window.requestAnimationFrame(update);
+      const current = Math.max(0, scroller.scrollTop || window.scrollY);
+      const previous = lastScrollYRef.current;
+      if (current <= 8 || current < previous) reveal();
+      else if (current > previous) hide();
+      lastScrollYRef.current = current;
     };
+
+    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
 
@@ -466,7 +494,7 @@ export default function App() {
     setView(next);
   };
 
-  const openComposer = (target: { scope?: "company" | "community" | "world"; communityId?: string } = {}) => {
+  const openComposer = (target: { scope?: "company" | "community" | "world"; communityId?: string; topicId?: string } = {}) => {
     pwaInstall.noteInteraction();
     setComposerTarget(target);
     setComposerOpen(true);
@@ -618,7 +646,7 @@ export default function App() {
         onBack={() => setSelectedCommunityId("")}
         openMembersRequested={manageCommunityMembersId === selectedCommunityId}
         onMembersOpened={() => setManageCommunityMembersId("")}
-        onComposeCommunity={(communityId) => openComposer({ scope: "community", communityId })}
+        onComposeCommunity={(communityId, topicId) => openComposer({ scope: "community", communityId, topicId })}
         refresh={() => refresh()}
         showToast={showToast}
         onUpgradeRequired={(message) => openPlans("limit", message)}
@@ -907,6 +935,7 @@ export default function App() {
         data={data}
         initialScope={composerTarget.scope}
         initialCommunityId={composerTarget.communityId}
+        initialTopicId={composerTarget.topicId}
         onClose={() => setComposerOpen(false)}
         onDone={(post) => {
           setComposerOpen(false);
@@ -1424,7 +1453,7 @@ function CommunitiesPage({
   onBack: () => void;
   openMembersRequested: boolean;
   onMembersOpened: () => void;
-  onComposeCommunity: (id: string) => void;
+  onComposeCommunity: (id: string, topicId?: string) => void;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onUpgradeRequired: (message: string) => void;
@@ -1440,6 +1469,10 @@ function CommunitiesPage({
   const [membersPage, setMembersPage] = useState(false);
   const [joinBusyId, setJoinBusyId] = useState("");
   const [joinStatusByCommunity, setJoinStatusByCommunity] = useState<Record<string, string>>({});
+  const [topics, setTopics] = useState<CommunityTopic[]>([]);
+  const [selectedTopicId, setSelectedTopicId] = useState("");
+  const [topicCreateOpen, setTopicCreateOpen] = useState(false);
+  const [topicBusy, setTopicBusy] = useState(false);
   const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
 
@@ -1467,13 +1500,43 @@ function CommunitiesPage({
 
   const loadCommunityPosts = async (communityId: string) => {
     try {
-      const result = await api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts`);
+      const qs = selectedTopicId ? `?topicId=${encodeURIComponent(selectedTopicId)}` : "";
+      const result = await api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts${qs}`);
       setCommunityPosts(result.posts);
       setDetailLoading(false);
       void prefetchPostMedia(result.posts, 16);
     } catch (err) {
       setDetailLoading(false);
       showToast(errorMessage(err));
+    }
+  };
+
+  const loadTopics = async (communityId: string) => {
+    try {
+      const result = await api<{ topics: CommunityTopic[] }>(`/communities/${encodeURIComponent(communityId)}/topics`);
+      setTopics(result.topics || []);
+    } catch (error) {
+      showToast(errorMessage(error));
+    }
+  };
+
+  const createTopic = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedCommunityId || topicBusy) return;
+    const fd = new FormData(event.currentTarget);
+    setTopicBusy(true);
+    try {
+      const result = await api<{ topic: CommunityTopic }>(`/communities/${encodeURIComponent(selectedCommunityId)}/topics`, {
+        method: "POST",
+        body: JSON.stringify({ name: fd.get("name"), description: fd.get("description") })
+      });
+      setTopics((current) => [...current, result.topic].sort((a,b) => a.name.localeCompare(b.name, "pt-BR")));
+      setTopicCreateOpen(false);
+      showToast(selectedCommunity?.companyId ? "Setor criado." : "Assunto criado.");
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setTopicBusy(false);
     }
   };
 
@@ -1496,6 +1559,8 @@ function CommunitiesPage({
     setMembersLoaded(false);
     setMemberSearch("");
     setMemberAction(null);
+    setTopics([]);
+    setSelectedTopicId("");
 
     if (!selectedCommunityId) {
       setCommunityPosts([]);
@@ -1513,9 +1578,20 @@ function CommunitiesPage({
     const joined = data.communities.some((community) => community.id === selectedCommunityId);
     const canRead = joined || communityVisibility(targetCommunity) === "public";
     setDetailLoading(canRead && cached.length === 0);
-    if (canRead) void loadCommunityPosts(selectedCommunityId);
+    if (canRead) {
+      void loadCommunityPosts(selectedCommunityId);
+      void loadTopics(selectedCommunityId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunityId, data.selectedCompanyId]);
+
+  useEffect(() => {
+    if (!selectedCommunityId) return;
+    const joined = data.communities.some((community) => community.id === selectedCommunityId);
+    const targetCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
+      || data.communities.find((community) => community.id === selectedCommunityId);
+    if (joined || communityVisibility(targetCommunity) === "public") void loadCommunityPosts(selectedCommunityId);
+  }, [selectedTopicId]);
 
   useEffect(() => {
     if (!selectedCommunityId || !realtimeRevision) return;
@@ -1773,20 +1849,46 @@ function CommunitiesPage({
               <button
                 className="btn"
                 disabled={joinBusyId === selectedCommunity.id || joinStatusByCommunity[selectedCommunity.id] === "pending"}
-                onClick={() => void joinCommunity(selectedCommunity)}
+                onClick={() => { if (!selectedCommunity.companyId) void joinCommunity(selectedCommunity); }}
               >
                 <UserPlus size={17} />
                 {joinBusyId === selectedCommunity.id
                   ? "Enviando…"
                   : joinStatusByCommunity[selectedCommunity.id] === "pending"
                     ? "Solicitação enviada"
-                    : communityVisibility(selectedCommunity) === "public"
-                      ? "Participar"
-                      : "Solicitar participação"}
+                    : selectedCommunity.companyId
+                      ? "Somente por convite"
+                      : communityVisibility(selectedCommunity) === "public"
+                        ? "Participar"
+                        : "Solicitar participação"}
               </button>
             )}
           </div>
         </div>
+
+        <section className="community-topics">
+          <div className="community-topics-head">
+            <strong>{selectedCommunity.companyId ? "Setores" : "Assuntos"}</strong>
+            {(data.canAdmin || selectedCommunity.createdBy === data.me.uid) && (
+              <button className="text-button" onClick={() => setTopicCreateOpen(true)}>
+                <Plus size={14} /> Novo {selectedCommunity.companyId ? "setor" : "assunto"}
+              </button>
+            )}
+          </div>
+          <div className="community-topic-tabs">
+            <button className={!selectedTopicId ? "active" : ""} onClick={() => setSelectedTopicId("")}>Todos</button>
+            {topics.map((topic) => (
+              <button key={topic.id} className={selectedTopicId === topic.id ? "active" : ""} onClick={() => setSelectedTopicId(topic.id)}>
+                {topic.name}
+              </button>
+            ))}
+          </div>
+          {!!selectedTopicId && isJoinedCommunity(selectedCommunity.id) && (
+            <button className="btn small community-topic-publish" onClick={() => onComposeCommunity(selectedCommunity.id, selectedTopicId)}>
+              <Plus size={15} /> Publicar em {topics.find(topic => topic.id === selectedTopicId)?.name || "assunto"}
+            </button>
+          )}
+        </section>
 
         <div className="feed community-feed">
           {!isJoinedCommunity(selectedCommunity.id) && communityVisibility(selectedCommunity) === "private" ? (
@@ -1855,9 +1957,9 @@ function CommunitiesPage({
                 <button
                   className="btn secondary small community-join-card-button"
                   disabled={joinBusyId === community.id || pending}
-                  onClick={() => void joinCommunity(community)}
+                  onClick={() => { if (!community.companyId) void joinCommunity(community); }}
                 >
-                  {pending ? "Solicitação enviada" : communityVisibility(community) === "public" ? "Participar" : "Solicitar participação"}
+                  {community.companyId ? "Somente por convite" : pending ? "Solicitação enviada" : communityVisibility(community) === "public" ? "Participar" : "Solicitar participação"}
                 </button>
               )}
             </article>
@@ -1865,6 +1967,15 @@ function CommunitiesPage({
         })}
       </div>
       {!listedCommunities.length && <Empty title={data.canAdmin ? "Crie a primeira comunidade" : "Você ainda não está em comunidades"} text={data.canAdmin ? "Crie apenas os grupos que sua empresa realmente precisa." : "Quando você for adicionado a uma comunidade, ela aparecerá aqui."} />}
+      {topicCreateOpen && selectedCommunity && (
+        <Modal title={selectedCommunity.companyId ? "Criar setor" : "Criar assunto"} onClose={() => setTopicCreateOpen(false)}>
+          <form className="stack-form" onSubmit={createTopic}>
+            <label><span>Nome</span><input name="name" required maxLength={80} placeholder={selectedCommunity.companyId ? "Ex.: Engenharia" : "Ex.: Manutenção"} /></label>
+            <label><span>Descrição</span><textarea name="description" maxLength={220} rows={3} placeholder="O que será discutido aqui?" /></label>
+            <button className="btn" disabled={topicBusy}>{topicBusy ? "Criando…" : selectedCommunity.companyId ? "Criar setor" : "Criar assunto"}</button>
+          </form>
+        </Modal>
+      )}
       {createOpen && <Modal title="Criar comunidade" onClose={() => setCreateOpen(false)}>
         <form className="stack-form" onSubmit={create}>
           <label><span>Nome</span><input name="name" required maxLength={90} placeholder="Ex.: Assistência Técnica" /></label>
@@ -3085,8 +3196,9 @@ function PlansPage({
               <ul className="plan-features">
                 <li><Check size={16}/> Selo de empresa verificada</li>
                 <li><Check size={16}/> CNPJ único e endereço fiscal</li>
-                <li><Check size={16}/> Setores como subcomunidades</li>
+                <li><Check size={16}/> Criação de setores dentro da comunidade</li>
                 <li><Check size={16}/> RH, Engenharia, Financeiro e outros setores</li>
+                <li><Check size={16}/> Entrada somente por convite da empresa</li>
                 <li><Check size={16}/> Membros ilimitados</li>
               </ul>
               {companyActive ? (
@@ -4072,10 +4184,11 @@ function NotificationsPage({
   );
 }
 
-function Composer({ data, initialScope, initialCommunityId, onClose, onDone, showToast }: {
+function Composer({ data, initialScope, initialCommunityId, initialTopicId, onClose, onDone, showToast }: {
   data: BootstrapData;
   initialScope?: "company" | "community" | "world";
   initialCommunityId?: string;
+  initialTopicId?: string;
   onClose: () => void;
   onDone: (post: Post) => Promise<void> | void;
   showToast: (m: string) => void;
@@ -4083,11 +4196,27 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
   const [scope, setScope] = useState<"company" | "community" | "world">(initialScope || "company");
   const [type, setType] = useState<"post" | "question" | "announcement" | "poll" | "event">("post");
   const [communityId, setCommunityId] = useState(initialCommunityId || data.communities[0]?.id || "");
+  const [topicId, setTopicId] = useState(initialTopicId || "");
+  const [composerTopics, setComposerTopics] = useState<CommunityTopic[]>([]);
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [pollOptions, setPollOptions] = useState(["", ""]);
 
   useEffect(() => { if (type === "announcement") setScope("company"); }, [type]);
+
+  useEffect(() => {
+    if (scope !== "community" || !communityId) {
+      setComposerTopics([]);
+      setTopicId("");
+      return;
+    }
+    api<{ topics: CommunityTopic[] }>(`/communities/${encodeURIComponent(communityId)}/topics`)
+      .then((result) => {
+        setComposerTopics(result.topics || []);
+        if (initialTopicId && result.topics?.some(topic => topic.id === initialTopicId)) setTopicId(initialTopicId);
+      })
+      .catch(() => setComposerTopics([]));
+  }, [scope, communityId, initialTopicId]);
 
   const updatePollOption = (index: number, value: string) => {
     setPollOptions((current) => current.map((item, i) => i === index ? value : item));
@@ -4128,6 +4257,7 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
           scope, type, text, title,
           companyId: scope === "world" ? "" : data.selectedCompanyId,
           communityId: scope === "community" ? communityId : "",
+          topicId: scope === "community" ? topicId : "",
           requiresReadReceipt: type === "announcement" && fd.get("receipt") === "on",
           pollOptions: type === "poll" ? pollOptions.map(option => option.trim()).filter(Boolean) : [],
           eventStart,
@@ -4155,7 +4285,10 @@ function Composer({ data, initialScope, initialCommunityId, onClose, onDone, sho
           <button type="button" className={scope === "world" ? "selected" : ""} onClick={() => setScope("world")} disabled={type === "announcement"}><Globe2 size={17} /> Mundo</button>
         </div>
 
-        {scope === "community" && <label><span>Comunidade</span><select value={communityId} onChange={(e) => setCommunityId(e.target.value)}>{data.communities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+        {scope === "community" && <>
+          <label><span>Comunidade</span><select value={communityId} onChange={(e) => { setCommunityId(e.target.value); setTopicId(""); }}>{data.communities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+          {!!composerTopics.length && <label><span>{data.communityMap[communityId]?.companyId ? "Setor" : "Assunto"} (opcional)</span><select value={topicId} onChange={(e) => setTopicId(e.target.value)}><option value="">Geral</option>{composerTopics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select></label>}
+        </>}
 
         <div className="type-row">
           <button type="button" className={type === "post" ? "selected" : ""} onClick={() => setType("post")}><MessageSquareText size={16} /> Post</button>
