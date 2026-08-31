@@ -1509,3 +1509,19 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 @media(max-width:520px){
   .official-uorqui-badge{font-size:7.5px;padding:3px 6px}
 }
+
+/* Superadmin — agentes editoriais */
+.superadmin-ai-panel{margin-bottom:14px}
+.superadmin-ai-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}
+.superadmin-ai-head h3{margin:6px 0 3px;font-size:15px}
+.superadmin-ai-head p{margin:0;font-size:9.5px}
+.superadmin-ai-summary{text-align:right;flex:none}.superadmin-ai-summary strong{display:block;font-size:23px}.superadmin-ai-summary span{font-size:8.5px;color:var(--muted)}
+.superadmin-ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.superadmin-ai-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:7px;padding:9px;border:1px solid var(--line);border-radius:10px}
+.superadmin-ai-row strong,.superadmin-ai-row small{display:block}.superadmin-ai-row strong{font-size:10px}.superadmin-ai-row small{font-size:8px;color:var(--muted);margin-top:2px}
+.superadmin-ai-row>span{font-size:7.5px;font-weight:750;padding:4px 6px;border-radius:999px;white-space:nowrap}
+.superadmin-ai-row>span.ok{background:#edf8f0;color:#337145}.superadmin-ai-row>span.warn{background:#fff3e5;color:#8a5a1f}.superadmin-ai-row>span.neutral{background:#f1f2f3;color:#656870}
+.discover-community-card.official{border-color:#cfd3da;box-shadow:0 5px 18px rgba(0,0,0,.055)}
+.discover-community-name{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
+.discover-community-name .official-uorqui-badge{font-size:7px;padding:2px 5px}
+@media(max-width:850px){.superadmin-ai-grid{grid-template-columns:1fr}.superadmin-ai-row{grid-template-columns:minmax(0,1fr) auto}.superadmin-ai-row>span:last-child{grid-column:1/-1;width:max-content}.superadmin-ai-head{flex-direction:column}.superadmin-ai-summary{text-align:left}}
