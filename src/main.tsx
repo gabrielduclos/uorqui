@@ -20,7 +20,7 @@ import "./pull-refresh-v123";
 import "./reply-to-reply-v123";
 import "./login-logo-v123";
 
-const PRODUCT_VERSION = "social-preview-1";
+const PRODUCT_VERSION = "1.3.3-runtime-fix";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -31,9 +31,16 @@ createRoot(document.getElementById("root")!).render(
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js")
+    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" })
       .then((registration) => registration.update())
       .catch(() => {});
+
+    let reloadingForServiceWorker = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadingForServiceWorker) return;
+      reloadingForServiceWorker = true;
+      window.location.reload();
+    });
   });
 }
 
