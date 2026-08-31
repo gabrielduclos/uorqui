@@ -1648,3 +1648,23 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   bottom:-6px;
   transform:rotate(225deg);
 }
+
+/* Agentes IA — fonte visível para pautas jornalísticas */
+.ai-news-source{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  width:fit-content;
+  max-width:100%;
+  margin:7px 0 2px;
+  padding:5px 8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#f7f7f8;
+  color:#4f5359;
+  text-decoration:none;
+  font-size:8.5px;
+}
+.ai-news-source span{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-news-source small{font-size:7.5px;color:var(--muted);white-space:nowrap}
