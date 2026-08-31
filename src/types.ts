@@ -150,6 +150,7 @@ export interface Post {
   aiImageGenerated?: boolean;
   sourceName?: string;
   sourceUrl?: string;
+  sourceImageUrl?: string;
   sourcePublishedAt?: string;
   sourceHeadline?: string;
   scope: "world" | "company" | "community";
