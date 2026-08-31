@@ -4218,10 +4218,12 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
         const uploaded=await api<{media:{id:string}}>(`/media/upload?${qs}`,{method:"POST",headers:{"Content-Type":file.type||"application/octet-stream","X-File-Name":file.name},body:file});
         attachmentIds.push(uploaded.media.id);
       }
-      await api(`/messages/${encodeURIComponent(targetUid)}`,{method:"POST",body:JSON.stringify({text,attachmentIds,postId:sharedPostId})});
+      const result=await api<{message:DirectMessage;conversation:{id:string;status:string;requestedBy?:string}}>(`/messages/${encodeURIComponent(targetUid)}`,{method:"POST",body:JSON.stringify({text,attachmentIds,postId:sharedPostId})});
       setFiles([]);setSharedPostId("");sessionStorage.removeItem("uorqui-message-post");
       event.currentTarget.reset();
-      await Promise.all([loadMessages(targetUid),loadConversations()]);
+      setMessages(current=>current.some(item=>item.id===result.message.id)?current:[...current,result.message]);
+      setConversation(result.conversation);
+      await loadConversations();
     }catch(error){showToast(errorMessage(error));}finally{setBusy(false);}
   };
 
@@ -4275,7 +4277,7 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
             <Avatar name={target?.displayName||"Usuário"} mediaId={target?.avatarMediaId} size={38}/>
             <div><strong>{target?.displayName||"Conversa"}</strong>{target?.username&&<small>@{target.username.replace(/^@/,"")}</small>}</div>
           </header>
-          {conversation?.status==="pending"&&conversation.requestedBy!==me.uid&&<div className="message-request-banner"><span>Esta pessoa quer iniciar uma conversa com você.</span><div><button className="btn small" onClick={()=>void decideRequest(true)}>Aceitar</button><button className="btn small secondary" onClick={()=>void decideRequest(false)}>Ignorar</button></div></div>}
+          {conversation?.status==="pending"&&conversation.requestedBy!==me.uid&&<div className="message-request-banner"><span>Solicitação de mensagem</span><div><button className="btn small" onClick={()=>void decideRequest(true)}>Aceitar</button><button className="btn small secondary" onClick={()=>void decideRequest(false)}>Ignorar</button></div></div>}
           <div className="message-scroll">
             {nextBefore&&<button className="text-button messages-more" onClick={()=>void loadMessages(targetUid,nextBefore)}>Mensagens anteriores</button>}
             {messages.map(message=><article key={message.id} className={`message-bubble-row ${message.senderUid===me.uid?"mine":""}`}>
@@ -4297,11 +4299,23 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
             {sharedPostId&&<div className="message-pending-share"><Share2 size={14}/><span>Publicação pronta para enviar</span><button type="button" onClick={()=>{setSharedPostId("");sessionStorage.removeItem("uorqui-message-post");}}><X size={14}/></button></div>}
             {!!files.length&&<div className="message-file-preview">{files.map(file=><span key={file.name}>{file.name}</span>)}</div>}
             <div className="message-compose-line">
-              <label className="icon-btn message-attach" title="Foto, áudio ou vídeo"><Camera size={18}/><input hidden type="file" accept="image/*,audio/*,video/*" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,4))}/></label>
+              <div className="message-media-actions" aria-label="Adicionar mídia">
+                <label className="message-media-action" title="Enviar foto" aria-label="Enviar foto">
+                  <Camera size={23}/>
+                  <input hidden type="file" accept="image/*" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,4))}/>
+                </label>
+                <label className="message-media-action" title="Enviar vídeo" aria-label="Enviar vídeo">
+                  <Video size={23}/>
+                  <input hidden type="file" accept="video/*" onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,1))}/>
+                </label>
+                <label className="message-media-action" title="Enviar áudio" aria-label="Enviar áudio">
+                  <Mic size={23}/>
+                  <input hidden type="file" accept="audio/*" onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,1))}/>
+                </label>
+              </div>
               <textarea name="message" rows={1} maxLength={4000} placeholder="Mensagem…" disabled={conversation?.status==="pending"&&conversation.requestedBy===me.uid}/>
-              <button className="icon-btn message-send" disabled={busy||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)}><Send size={19}/></button>
+              <button className="icon-btn message-send" disabled={busy||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)} aria-label="Enviar mensagem"><Send size={21}/></button>
             </div>
-            <small className="message-media-hint"><Mic size={12}/> áudio · <Video size={12}/> vídeo · fotos, até 20 MB por arquivo</small>
           </form>
         </>}
       </section>
