@@ -236,6 +236,18 @@ async function routeApi(request, env, identity, url, ctx) {
     const targetUid = decodeURIComponent(parts[4]);
     return json(await removeCommunityMember(env, identity, communityId, targetUid, ctx));
   }
+  if (method === 'POST' && /^\/communities\/[^/]+\/join$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await requestOrJoinCommunity(env, identity, communityId, ctx));
+  }
+  if (method === 'GET' && /^\/communities\/[^/]+\/join-status$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await getCommunityJoinStatus(env, identity, communityId));
+  }
+  if (method === 'POST' && /^\/community-join-requests\/[^/]+\/respond$/.test(path)) {
+    const requestId = decodeURIComponent(path.split('/')[2]);
+    return json(await respondCommunityJoinRequest(env, identity, requestId, await readJson(request), ctx));
+  }
   if (method === 'GET' && /^\/communities\/[^/]+\/posts$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await getCommunityPosts(env, identity, communityId));
@@ -397,7 +409,7 @@ async function broadcastSelectedCompanyMutation(env, identity, request, url) {
   }
 }
 
-const FREE_PLAN_LIMITS = Object.freeze({ members: 5, communities: 2, jobs: 3 });
+const FREE_PLAN_LIMITS = Object.freeze({ members: null, communities: null, jobs: null });
 
 function superadminUids(env) {
   return new Set(
@@ -485,35 +497,12 @@ async function companyUsage(env, companyId) {
   };
 }
 
-async function assertCommunityCapacity(env, companyId) {
-  const company = await fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.');
-  if (hasPremiumAccess(company)) return;
-  const communities = await fsWhere(env, 'communities', 'companyId', companyId, 10);
-  if (communities.length >= FREE_PLAN_LIMITS.communities) {
-    throw httpError(402, 'O plano Free permite até 2 comunidades. Ative o Uorqui Premium para criar mais comunidades.');
-  }
+async function assertCommunityCapacity() {
+  return;
 }
 
-async function assertMemberCapacity(env, companyId, includePendingInvites = false) {
-  const company = await fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.');
-  if (hasPremiumAccess(company)) return;
-
-  const active = (await fsWhere(env, 'companyMembers', 'companyId', companyId, 20))
-    .filter(member => member.status === 'active').length;
-
-  let reserved = 0;
-  if (includePendingInvites) {
-    const pending = await fsWhere(env, 'invites', 'companyId', companyId, 30);
-    reserved = pending.filter(invite =>
-      invite.type === 'company' &&
-      invite.status === 'pending' &&
-      !isExpired(invite.expiresAt)
-    ).length;
-  }
-
-  if (active + reserved >= FREE_PLAN_LIMITS.members) {
-    throw httpError(402, 'O plano Free permite até 5 membros na empresa. Ative o Uorqui Premium para aumentar a equipe.');
-  }
+async function assertMemberCapacity() {
+  return;
 }
 
 async function assertJobCapacity(env, company) {
@@ -1788,6 +1777,183 @@ async function requireCommunityAccess(env, uid, community) {
   if (publicCommunity(community)) return companyMember;
   await requireCommunityMember(env, uid, community.id);
   return companyMember;
+}
+
+async function getCommunityJoinStatus(env, identity, communityId) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  const membership = await fsGet(env, 'communityMembers', `${communityId}_${identity.uid}`);
+  const request = await fsGet(env, 'communityJoinRequests', `${communityId}_${identity.uid}`);
+  return {
+    community: communityView(community),
+    member: Boolean(membership),
+    requestStatus: request?.status || '',
+    canJoinImmediately: publicCommunity(community)
+  };
+}
+
+async function requestOrJoinCommunity(env, identity, communityId, ctx) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  await ensureUser(env, identity);
+
+  const memberId = `${communityId}_${identity.uid}`;
+  const existingMember = await fsGet(env, 'communityMembers', memberId);
+  if (existingMember) return { status: 'joined', alreadyMember: true, communityId };
+
+  if (publicCommunity(community)) {
+    const membership = {
+      id: memberId,
+      companyId: community.companyId || '',
+      communityId,
+      uid: identity.uid,
+      role: 'member',
+      joinedAt: nowIso(),
+      joinedBy: 'self'
+    };
+    await fsPut(env, 'communityMembers', memberId, membership);
+    return { status: 'joined', communityId };
+  }
+
+  const requestId = memberId;
+  const existing = await fsGet(env, 'communityJoinRequests', requestId);
+  if (existing?.status === 'pending') return { status: 'pending', requestId, communityId };
+
+  const user = await fsGet(env, 'users', identity.uid);
+  const request = {
+    id: requestId,
+    communityId,
+    companyId: community.companyId || '',
+    requesterUid: identity.uid,
+    requesterName: user?.displayName || identity.name || 'Usuário',
+    requesterEmail: user?.email || identity.email || '',
+    status: 'pending',
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  };
+  await fsPut(env, 'communityJoinRequests', requestId, request);
+
+  const recipients = new Set();
+  if (community.createdBy && community.createdBy !== identity.uid) recipients.add(community.createdBy);
+
+  const communityMembers = await fsWhere(env, 'communityMembers', 'communityId', communityId, 500);
+  for (const member of communityMembers) {
+    if (member.uid && member.uid !== identity.uid && ['owner','moderator','admin'].includes(member.role)) recipients.add(member.uid);
+  }
+
+  if (community.companyId) {
+    const companyMembers = await fsWhere(env, 'companyMembers', 'companyId', community.companyId, 500);
+    for (const member of companyMembers) {
+      if (member.uid && member.uid !== identity.uid && member.status === 'active' && ['owner','admin'].includes(member.role)) recipients.add(member.uid);
+    }
+  }
+
+  const createdAt = nowIso();
+  const notifications = [...recipients].map(uid => ({
+    collection: 'notifications',
+    id: `community_join_request_${communityId}_${identity.uid}_${uid}`,
+    data: {
+      recipientUid: uid,
+      type: 'community_join_request',
+      title: `${request.requesterName} quer participar de ${community.name}`,
+      body: 'Aceite ou recuse a solicitação de participação.',
+      data: {
+        requestId,
+        communityId,
+        companyId: community.companyId || '',
+        requesterUid: identity.uid,
+        targetView: 'notifications'
+      },
+      read: false,
+      persistent: true,
+      status: 'pending',
+      createdAt
+    }
+  }));
+  await fsBatchPut(env, notifications);
+  deferPushes(ctx, notifications.map(item => sendPushToUser(env, item.data.recipientUid, {
+    title: item.data.title,
+    body: item.data.body,
+    notificationId: item.id,
+    type: item.data.type,
+    requestId,
+    communityId,
+    companyId: community.companyId || ''
+  })));
+
+  return { status: 'pending', requestId, communityId };
+}
+
+async function respondCommunityJoinRequest(env, identity, requestId, body, ctx) {
+  const request = await fsGetRequired(env, 'communityJoinRequests', requestId, 'Solicitação não encontrada.');
+  if (request.status !== 'pending') throw httpError(409, 'Esta solicitação já foi respondida.');
+  const community = await fsGetRequired(env, 'communities', request.communityId, 'Comunidade não encontrada.');
+
+  let allowed = community.createdBy === identity.uid;
+  const communityMembership = await fsGet(env, 'communityMembers', `${community.id}_${identity.uid}`);
+  if (communityMembership && ['owner','moderator','admin'].includes(communityMembership.role)) allowed = true;
+  if (!allowed && community.companyId) {
+    const companyMembership = await fsGet(env, 'companyMembers', `${community.companyId}_${identity.uid}`);
+    if (companyMembership?.status === 'active' && ['owner','admin'].includes(companyMembership.role)) allowed = true;
+  }
+  if (!allowed) throw httpError(403, 'Você não pode responder solicitações desta comunidade.');
+
+  const decision = body?.decision === 'accept' ? 'accepted' : body?.decision === 'reject' ? 'rejected' : '';
+  if (!decision) throw httpError(400, 'Escolha aceitar ou recusar.');
+
+  const decidedAt = nowIso();
+  await fsPut(env, 'communityJoinRequests', requestId, {
+    ...request,
+    status: decision,
+    decidedAt,
+    decidedBy: identity.uid,
+    updatedAt: decidedAt
+  });
+
+  if (decision === 'accepted') {
+    await fsPut(env, 'communityMembers', `${community.id}_${request.requesterUid}`, {
+      id: `${community.id}_${request.requesterUid}`,
+      companyId: community.companyId || '',
+      communityId: community.id,
+      uid: request.requesterUid,
+      role: 'member',
+      joinedAt: decidedAt,
+      joinedBy: identity.uid
+    });
+  }
+
+  const resultNotificationId = `community_join_result_${community.id}_${request.requesterUid}_${Date.now()}`;
+  const accepted = decision === 'accepted';
+  const notification = {
+    recipientUid: request.requesterUid,
+    type: accepted ? 'community_join_approved' : 'community_join_rejected',
+    title: accepted ? `Você entrou em ${community.name}` : `Solicitação para ${community.name}`,
+    body: accepted ? 'Sua solicitação foi aceita.' : 'Sua solicitação não foi aceita.',
+    data: {
+      communityId: community.id,
+      companyId: community.companyId || '',
+      targetView: accepted ? 'community' : 'notifications'
+    },
+    read: false,
+    status: 'new',
+    createdAt: decidedAt
+  };
+  await fsPut(env, 'notifications', resultNotificationId, notification);
+  deferPushes(ctx, [sendPushToUser(env, request.requesterUid, {
+    title: notification.title,
+    body: notification.body,
+    notificationId: resultNotificationId,
+    type: notification.type,
+    communityId: community.id,
+    companyId: community.companyId || ''
+  })]);
+
+  const adminNotifications = await fsWhere(env, 'notifications', 'data.requestId', requestId, 100).catch(() => []);
+  await fsBatchPut(env, adminNotifications.map(item => ({
+    collection: 'notifications',
+    id: item.id,
+    data: { ...item, read: true, persistent: false, status: decision, updatedAt: decidedAt }
+  })));
+
+  return { ok: true, status: decision, communityId: community.id, requesterUid: request.requesterUid };
 }
 
 async function getCommunityMembers(env, identity, communityId) {
