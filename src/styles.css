@@ -1525,3 +1525,7 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .discover-community-name{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
 .discover-community-name .official-uorqui-badge{font-size:7px;padding:2px 5px}
 @media(max-width:850px){.superadmin-ai-grid{grid-template-columns:1fr}.superadmin-ai-row{grid-template-columns:minmax(0,1fr) auto}.superadmin-ai-row>span:last-child{grid-column:1/-1;width:max-content}.superadmin-ai-head{flex-direction:column}.superadmin-ai-summary{text-align:left}}
+
+.community-avatar-image{object-fit:cover;display:block}
+.community-image-upload{cursor:pointer}
+.community-image-upload input{display:none}
