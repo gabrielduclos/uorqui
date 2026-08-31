@@ -230,6 +230,13 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    if (params.get("discover") !== "1") return;
+    setSearchSeed("");
+    setView("search");
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
     const token = params.get("invite");
     if (!token || !user || loading) return;
     api<{ companyId?: string }>("/invites/accept", {
@@ -477,7 +484,7 @@ export default function App() {
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Rede", communities: "Comunidades", search: "Buscar", jobs: "Rede", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
+    home: "Rede", communities: "Comunidades", search: "Descobrir", jobs: "Rede", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
   };
 
   const navigate = (next: View) => {
@@ -706,6 +713,7 @@ export default function App() {
     />;
     if (view === "companies") return <CompaniesPage
       data={data}
+      realtimeRevision={realtimeRevision}
       onSelectCompany={(id) => changeCompany(id, "home")}
       onCompanyLeft={async (leftCompanyId, nextCompanyId) => {
         if (leftCompanyId === selectedCompanyId) {
@@ -862,7 +870,7 @@ export default function App() {
         <MobileNav active={view === "home" || view === "jobs"} icon={<Home />} label="Rede" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
         <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
         <button className="mobile-create" onClick={() => openComposer({ scope: "world" })} aria-label="Publicar"><Plus size={26} /></button>
-        <MobileNav active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
+        <MobileNav active={view === "search"} icon={<Compass />} label="Descobrir" onClick={() => { setSearchSeed(""); navigate("search"); }} />
         <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
       </nav>
 
@@ -1999,29 +2007,49 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
 }) {
   const [query, setQuery] = useState(initialQuery || "");
   const [posts, setPosts] = useState<Post[]>([]);
+  const [communities, setCommunities] = useState<(Community & { alreadyMember?: boolean })[]>([]);
+  const [jobs, setJobs] = useState<JobOpening[]>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [discoverLoading, setDiscoverLoading] = useState(true);
   const searchRequestId = useRef(0);
+
+  const loadDiscover = async () => {
+    setDiscoverLoading(true);
+    try {
+      const result = await api<{ posts: Post[]; communities: (Community & { alreadyMember?: boolean })[]; jobs: JobOpening[] }>("/discover");
+      setPosts(result.posts || []);
+      setCommunities(result.communities || []);
+      setJobs(result.jobs || []);
+      void prefetchPostMedia(result.posts || [], 12);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setDiscoverLoading(false);
+    }
+  };
 
   const runSearch = async (value: string) => {
     const normalized = value.trim();
     if (normalized.length < 2) {
       searchRequestId.current += 1;
-      setPosts([]);
       setSearched(false);
       setSearching(false);
+      await loadDiscover();
       return;
     }
 
     const requestId = ++searchRequestId.current;
     setSearching(true);
     try {
-      const qs = new URLSearchParams({ q: normalized, companyId: data.selectedCompanyId });
+      const qs = new URLSearchParams({ q: normalized });
       const result = await api<{ posts: Post[] }>(`/search?${qs}`);
       if (requestId !== searchRequestId.current) return;
-      setPosts(result.posts);
+      setPosts(result.posts || []);
+      setCommunities([]);
+      setJobs([]);
       setSearched(true);
-      void prefetchPostMedia(result.posts, 12);
+      void prefetchPostMedia(result.posts || [], 12);
     } catch (err) {
       if (requestId === searchRequestId.current) showToast(errorMessage(err));
     } finally {
@@ -2031,21 +2059,15 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
 
   useEffect(() => {
     if (initialQuery !== undefined && initialQuery !== query) setQuery(initialQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      runSearch(query);
-    }, 220);
+      if (query.trim().length >= 2) void runSearch(query);
+      else void loadDiscover();
+    }, 180);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, data.selectedCompanyId]);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    await runSearch(query);
-  };
+  }, [query]);
 
   const like = async (post: Post) => {
     try {
@@ -2058,61 +2080,103 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
     }
   };
 
-  const read = async (post: Post) => {
+  const shareJob = async (job: JobOpening) => {
+    const url = `${location.origin}/?discover=1&job=${encodeURIComponent(job.id)}`;
+    const text = `${job.title} — ${job.companyName}${job.location ? ` · ${job.location}` : ""}`;
     try {
-      await api(`/posts/${post.id}/read`, { method: "POST" });
-      showToast("Leitura confirmada.");
-      await refresh();
-      await runSearch(query);
-    } catch (err) { showToast(errorMessage(err)); }
-  };
-
-  const remove = async (post: Post) => {
-    const adminDeletingAnother = data.canAdmin && post.authorUid !== data.me.uid;
-    if (!confirm(adminDeletingAnother ? "Apagar como administrador? Ficará um aviso no lugar da publicação." : "Excluir sua publicação?")) return;
-
-    const previousPosts = posts;
-    setPosts((current) => adminDeletingAnother
-      ? current.map((item) => item.id === post.id ? optimisticTombstone(item) : item)
-      : current.filter((item) => item.id !== post.id));
-
-    try {
-      const result = await api<{ tombstone?: boolean; post?: Post }>(`/posts/${post.id}`, { method: "DELETE" });
-      if (result.post) setPosts((current) => current.map((item) => item.id === post.id ? result.post! : item));
-      showToast(result.tombstone ? "Conteúdo removido pela administração." : "Publicação excluída.");
-      void refresh();
-    } catch (err) {
-      setPosts(previousPosts);
-      showToast(errorMessage(err));
+      if (navigator.share) {
+        await navigator.share({ title: job.title, text, url });
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        showToast("Link da vaga copiado.");
+      }
+    } catch (error) {
+      if ((error as DOMException)?.name !== "AbortError") showToast("Não foi possível compartilhar a vaga.");
     }
   };
 
   return (
-    <section className="page-section">
-      <div className="page-heading"><div><h2>Encontre o que já foi discutido</h2><p>Procure problemas, soluções, comunicados e assuntos antigos.</p></div></div>
-      <form className="large-search" onSubmit={submit}>
+    <section className="page-section discover-page">
+      <div className="page-heading">
+        <div><h2>Descobrir</h2><p>Publicações, comunidades e oportunidades que podem interessar a você.</p></div>
+      </div>
+
+      <form className="large-search" onSubmit={(event) => { event.preventDefault(); void runSearch(query); }}>
         <Search size={20} />
-        <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ex.: erro E37, férias, procedimento…" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar no Uorqui" />
         <button className="btn small">Buscar</button>
       </form>
-      {searching && <div className="live-search-status">Buscando…</div>}
-      <div className="feed search-results">
-        {posts.map((post) => <PostCard
-          key={post.id}
-          post={post}
-          companyName={data.company?.name}
-          community={data.communityMap[post.communityId || ""]}
-          onLike={like}
-          onRead={read}
-          canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
-          onDelete={remove}
-          currentUid={data.me.uid}
-          canAdmin={data.canAdmin}
-          onChanged={refresh}
-          showToast={showToast}
-        />)}
-        {searched && !posts.length && <Empty title="Nenhum resultado" text="Tente outras palavras ou uma busca mais curta." />}
-      </div>
+
+      {(searching || discoverLoading) && <div className="live-search-status">{searching ? "Buscando…" : "Descobrindo…"}</div>}
+
+      {!searched && !!communities.length && (
+        <section className="discover-section">
+          <div className="discover-section-head"><strong>Comunidades para descobrir</strong></div>
+          <div className="discover-community-row">
+            {communities.slice(0, 10).map((community) => (
+              <button className="discover-community-card" key={community.id} onClick={() => {
+                const params = new URLSearchParams(location.search);
+                params.set("community", community.id);
+                if (community.companyId) params.set("company", community.companyId);
+                history.pushState({}, "", `${location.pathname}?${params.toString()}`);
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }}>
+                <span className="community-avatar">{community.name.slice(0,2).toUpperCase()}</span>
+                <strong>{community.name}</strong>
+                <small>{community.verifiedCompany ? "Empresa verificada" : community.description || "Comunidade pública"}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!searched && !!jobs.length && (
+        <section className="discover-section">
+          <div className="discover-section-head"><strong>Vagas que podem interessar</strong></div>
+          <div className="jobs-list discover-jobs">
+            {jobs.slice(0, 8).map((job) => (
+              <article className="job-card" key={job.id}>
+                <div className="job-card-head">
+                  <div className="job-company-mark">{job.companyName.slice(0,2).toUpperCase()}</div>
+                  <div className="ellipsis"><strong>{job.title}</strong><small>{job.companyName}</small></div>
+                  <span className="job-audience-pill world"><Globe2 size={12}/> Mundo</span>
+                </div>
+                <p className="job-description">{job.description}</p>
+                <div className="job-meta">
+                  <span><BriefcaseBusiness size={14}/> {jobContractLabels[job.contractType || "clt"] || "Outro"}</span>
+                  {job.location && <span><MapPin size={14}/> {job.location}</span>}
+                </div>
+                <div className="job-card-actions">
+                  {job.contactEmail && <a className="btn secondary small" href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Candidatura — ${job.title}`)}`}><Mail size={15}/> Candidatar-se</a>}
+                  <button className="btn secondary small" onClick={() => void shareJob(job)}><Share2 size={15}/> Compartilhar</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="discover-section">
+        {!searched && <div className="discover-section-head"><strong>Publicações para você</strong></div>}
+        <div className="feed search-results discover-feed">
+          {posts.map((post) => <PostCard
+            key={post.id}
+            post={post}
+            companyName={data.company?.name}
+            community={data.communityMap[post.communityId || ""]}
+            onLike={like}
+            onRead={async () => {}}
+            canDelete={post.authorUid === data.me.uid}
+            onDelete={async () => {}}
+            currentUid={data.me.uid}
+            canAdmin={false}
+            onChanged={refresh}
+            showToast={showToast}
+          />)}
+          {searched && !posts.length && <Empty title="Nenhum resultado" text="Tente outras palavras." />}
+          {!searched && !discoverLoading && !posts.length && <Empty title="Ainda há pouco para descobrir" text="Conforme a rede crescer, novas recomendações aparecerão aqui." />}
+        </div>
+      </section>
     </section>
   );
 }
@@ -2125,11 +2189,12 @@ const jobContractLabels: Record<JobOpening["contractType"] & string, string> = {
   other: "Outro"
 };
 
-function JobsPage({ data, realtimeRevision, showToast, onUpgradeRequired }: {
+function JobsPage({ data, realtimeRevision, showToast, onUpgradeRequired, embedded = false }: {
   data: BootstrapData;
   realtimeRevision: number;
   showToast: (message: string) => void;
   onUpgradeRequired: (message: string) => void;
+  embedded?: boolean;
 }) {
   const [jobs, setJobs] = useState<JobOpening[]>([]);
   const [tab, setTab] = useState<"company" | "world">("company");
@@ -2215,29 +2280,37 @@ function JobsPage({ data, realtimeRevision, showToast, onUpgradeRequired }: {
 
   const visibleJobs = jobs.filter((job) => job.audience === tab);
   const companyJobs = jobs.filter((job) => job.companyId === data.selectedCompanyId);
-  const freeJobLimit = data.company?.effectivePlan === "premium" ? null : (data.company?.limits?.jobs ?? 3);
-  const jobLimitReached = freeJobLimit !== null && companyJobs.length >= freeJobLimit;
   const contractLabel = (value?: JobOpening["contractType"]) => jobContractLabels[value || "clt"] || "Outro";
 
   const openComposer = () => {
-    if (jobLimitReached) {
-      onUpgradeRequired("O plano Free permite até 3 vagas ativas por empresa. Ative o Uorqui Premium para publicar mais vagas.");
+    if (data.company?.effectivePlan !== "premium") {
+      onUpgradeRequired("Converta a comunidade em Empresa para publicar vagas.");
       return;
     }
     setComposerOpen(true);
   };
 
+  const shareJob = async (job: JobOpening) => {
+    const url = `${location.origin}/?discover=1&job=${encodeURIComponent(job.id)}`;
+    const text = `${job.title} — ${job.companyName}${job.location ? ` · ${job.location}` : ""}`;
+    try {
+      if (navigator.share) await navigator.share({ title: job.title, text, url });
+      else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        showToast("Link da vaga copiado.");
+      }
+    } catch (error) {
+      if ((error as DOMException)?.name !== "AbortError") showToast("Não foi possível compartilhar a vaga.");
+    }
+  };
+
   return (
-    <section className="page-section jobs-page">
+    <section className={embedded ? "jobs-page jobs-embedded" : "page-section jobs-page"}>
       <div className="page-heading jobs-heading">
         <div>
           <h2>Vagas</h2>
           <p>Divulgue oportunidades dentro da empresa ou para profissionais de qualquer lugar.</p>
-          {data.canAdmin && freeJobLimit !== null && (
-            <small className={`jobs-plan-usage ${jobLimitReached ? "limit" : ""}`}>
-              {companyJobs.length} de {freeJobLimit} vagas ativas no plano Free
-            </small>
-          )}
+          {embedded && <small className="muted">As vagas públicas também podem aparecer em Descobrir.</small>}
         </div>
         {data.canAdmin && (
           <button className="btn small" onClick={openComposer}>
@@ -2288,6 +2361,7 @@ function JobsPage({ data, realtimeRevision, showToast, onUpgradeRequired }: {
                     <Mail size={15} /> Candidatar-se
                   </a>
                 )}
+                <button className="btn secondary small" onClick={() => void shareJob(job)}><Share2 size={15} /> Compartilhar</button>
                 {data.canAdmin && job.companyId === data.selectedCompanyId && (
                   <button className="icon-btn job-delete-button" disabled={!!deletingJobId} onClick={() => removeJob(job)} aria-label="Excluir vaga" title="Excluir vaga">
                     <Trash2 size={16} />
@@ -3224,12 +3298,14 @@ function PlansPage({
 
 function CompaniesPage({
   data,
+  realtimeRevision,
   onSelectCompany,
   onCompanyLeft,
   onOpenPlans,
   showToast
 }: {
   data: BootstrapData;
+  realtimeRevision: number;
   onSelectCompany: (companyId: string) => Promise<void>;
   onCompanyLeft: (leftCompanyId: string, nextCompanyId: string) => Promise<void>;
   onOpenPlans: () => void;
@@ -3412,6 +3488,18 @@ function CompaniesPage({
           })}
           {!companies.length && <Empty title="Nenhuma empresa" text="As empresas das quais você participa aparecerão aqui." />}
         </div>
+      )}
+
+      {data.company?.effectivePlan === "premium" && (
+        <section className="company-jobs-panel">
+          <JobsPage
+            data={data}
+            realtimeRevision={realtimeRevision}
+            showToast={showToast}
+            onUpgradeRequired={() => onOpenPlans()}
+            embedded
+          />
+        </section>
       )}
 
       {leaveTarget && (
