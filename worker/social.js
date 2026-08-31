@@ -41,6 +41,9 @@ async function routeSocial(request, env, identity, url) {
   if (method === 'GET' && path === '/people') {
     return json(await listPeople(env, identity, url.searchParams.get('q') || ''));
   }
+  if (method === 'GET' && path === '/feed') {
+    return json(await getSocialFeed(env, identity));
+  }
 
   const profileMatch = path.match(/^\/profiles\/([^/]+)$/);
   if (method === 'GET' && profileMatch) {
@@ -56,6 +59,82 @@ async function routeSocial(request, env, identity, url) {
   }
 
   return json({ error: 'Rota social não encontrada.' }, 404);
+}
+
+async function publicSocialPost(env, post, communityCache) {
+  if (!post || post.deletedAt || post.deletedByAdmin) return false;
+  if (post.scope === 'world') return true;
+  if (post.scope !== 'community' || !post.communityId) return false;
+
+  let community = communityCache.get(post.communityId);
+  if (community === undefined) {
+    community = await fsGet(env, 'communities', post.communityId);
+    communityCache.set(post.communityId, community || null);
+  }
+  if (!community) return false;
+  // Conteúdo empresarial continua fechado, mesmo se uma comunidade antiga estiver marcada como pública.
+  if (community.companyId) return false;
+  return community.visibility === 'public';
+}
+
+async function hydrateSocialPosts(env, identity, rows, limit = 60) {
+  const communityCache = new Map();
+  const visible = [];
+  for (const post of rows.sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))) {
+    if (await publicSocialPost(env, post, communityCache)) visible.push(post);
+    if (visible.length >= limit) break;
+  }
+
+  const [reactions, pollVotes] = await Promise.all([
+    queryCollection(env, 'reactions', 'uid', identity.uid, 500).catch(() => []),
+    queryCollection(env, 'pollVotes', 'uid', identity.uid, 500).catch(() => [])
+  ]);
+  const likedIds = new Set(reactions.map(item => item.postId));
+  const pollVoteMap = new Map(pollVotes.map(item => [item.postId, item.optionId]));
+
+  return visible.map(post => ({
+    ...post,
+    liked: likedIds.has(post.id),
+    myPollOptionId: pollVoteMap.get(post.id) || ''
+  }));
+}
+
+async function getSocialFeed(env, identity) {
+  const follows = await queryCollection(env, 'socialFollows', 'followerUid', identity.uid, 500);
+  const followedUids = [...new Set(follows.map(item => item.targetUid).filter(Boolean))];
+
+  let rawPosts = [];
+  if (followedUids.length) {
+    const batches = await Promise.all(
+      followedUids.slice(0, 120).map(uid => queryCollection(env, 'posts', 'authorUid', uid, 30).catch(() => []))
+    );
+    rawPosts = batches.flat();
+  } else {
+    const response = await fsRequest(env, '/documents/posts?pageSize=160');
+    rawPosts = (response?.documents || []).map(fromDoc);
+  }
+
+  const posts = await hydrateSocialPosts(env, identity, rawPosts, followedUids.length ? 80 : 45);
+
+  const communitiesResponse = await fsRequest(env, '/documents/communities?pageSize=120');
+  const communities = (communitiesResponse?.documents || [])
+    .map(fromDoc)
+    .filter(community => !community.companyId && community.visibility === 'public' && community.archived !== true)
+    .slice(0, 20)
+    .map(community => ({
+      id: community.id,
+      name: community.name || 'Comunidade',
+      description: community.description || '',
+      visibility: 'public',
+      memberCount: Number(community.memberCount || 0),
+      createdBy: community.createdBy || ''
+    }));
+
+  return {
+    followingCount: followedUids.length,
+    posts,
+    communities
+  };
 }
 
 async function listPeople(env, identity, query) {
@@ -90,10 +169,7 @@ async function getPublicProfile(env, identity, targetUid) {
     targetUid === identity.uid ? null : fsGet(env, 'socialFollows', followId(identity.uid, targetUid))
   ]);
 
-  const posts = postRows
-    .filter((post) => post.scope === 'world' && !post.deletedAt)
-    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
-    .slice(0, 30);
+  const posts = await hydrateSocialPosts(env, identity, postRows, 50);
 
   return {
     profile: publicUser(user),
