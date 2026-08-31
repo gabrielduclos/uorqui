@@ -207,7 +207,7 @@ export function PostCard({
       ? `${community?.visibility === "public" || post.communityVisibility === "public" ? "Comunidade pública" : "Comunidade"} · ${community?.name || post.communityName || "Comunidade"}`
       : `🏢 ${companyName || post.companyName || "Empresa"}`;
 
-  const canResolve = post.type === "question" && Boolean(post.companyId) && (
+  const canResolve = post.type === "question" && post.scope !== "world" && (
     post.authorUid === currentUid || canAdmin
   );
 
@@ -661,7 +661,7 @@ export function PostCard({
             )}
 
             {(resolved || acceptedCommentId) && (post.type === "post" || post.type === "question") && (
-              <span className="solution"><CheckCircle2 size={14} /> Concluído</span>
+              <span className="solution"><CheckCircle2 size={14} /> {post.type === "question" ? "Resolvido" : "Concluído"}</span>
             )}
 
             {!!post.attachments?.length && (
