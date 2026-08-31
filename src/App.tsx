@@ -546,8 +546,7 @@ export default function App() {
         return;
       }
       if (communityId) {
-        setSelectedCommunityId(communityId);
-        setView("communities");
+        await openCommunity(communityId);
         return;
       }
       setView("notifications");
@@ -1720,6 +1719,7 @@ function CommunitiesPage({
     try {
       const qs = selectedTopicId ? `?topicId=${encodeURIComponent(selectedTopicId)}` : "";
       const result = await api<{ community: Community; posts: Post[] }>(`/communities/${communityId}/posts${qs}`);
+      setExternalCommunity(result.community);
       setCommunityPosts(result.posts);
       setDetailLoading(false);
       void prefetchPostMedia(result.posts, 16);
@@ -1802,7 +1802,7 @@ function CommunitiesPage({
       void loadTopics(selectedCommunityId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCommunityId, data.selectedCompanyId]);
+  }, [selectedCommunityId, data.selectedCompanyId, externalCommunity?.id]);
 
   useEffect(() => {
     if (!selectedCommunityId) return;
