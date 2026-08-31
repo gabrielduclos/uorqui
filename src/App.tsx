@@ -1669,7 +1669,7 @@ function CommunitiesPage({
     || data.communities.find((community) => community.id === selectedCommunityId);
 
   const joinedCommunityIds = useMemo(() => new Set(data.communities.map((community) => community.id)), [data.communities]);
-  const isJoinedCommunity = (communityId: string) => joinedCommunityIds.has(communityId);
+  const isJoinedCommunity = (communityId: string) => joinedCommunityIds.has(communityId) || joinStatusByCommunity[communityId] === "joined";
 
   const joinCommunity = async (community: Community) => {
     if (joinBusyId) return;
@@ -2075,7 +2075,10 @@ function CommunitiesPage({
               </label>
             )}
             {isJoinedCommunity(selectedCommunity.id) ? (
-              <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+              <>
+                <button className="btn secondary small" disabled><Check size={16} /> Participando</button>
+                <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+              </>
             ) : (
               <button
                 className="btn"
@@ -2184,7 +2187,11 @@ function CommunitiesPage({
                 </div>
                 <ChevronRight className="community-chevron" size={18} />
               </button>
-              {!joined && (
+              {joined ? (
+                <button className="btn secondary small community-join-card-button" disabled>
+                  <Check size={15} /> Participando
+                </button>
+              ) : (
                 <button
                   className="btn secondary small community-join-card-button"
                   disabled={joinBusyId === community.id || pending}
