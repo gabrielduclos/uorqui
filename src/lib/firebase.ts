@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseOptions } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
 
 declare global {
   interface Window {
@@ -20,3 +20,8 @@ if (!normalizedConfig.messagingSenderId && normalizedConfig.appId) {
 
 export const firebaseApp = initializeApp(normalizedConfig);
 export const auth = getAuth(firebaseApp);
+
+// Mantém a sessão entre refresh, navegação direta e reabertura do Safari/PWA.
+void setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.error("Não foi possível configurar a persistência local do Firebase.", error);
+});
