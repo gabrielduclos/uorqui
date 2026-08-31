@@ -164,7 +164,7 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'DELETE' && /^\/companies\/[^/]+$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
-    return json(await deleteCompany(env, identity, companyId, await readJson(request)));
+    return json(await requestCompanyDeletion(env, identity, companyId, await readJson(request), ctx));
   }
   if (method === 'GET' && /^\/companies\/[^/]+\/billing$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[2]);
@@ -266,7 +266,11 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'DELETE' && /^\/communities\/[^/]+$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
-    return json(await deleteCommunity(env, identity, communityId));
+    return json(await requestCommunityDeletion(env, identity, communityId, ctx));
+  }
+  if (method === 'POST' && /^\/deletion-requests\/[^/]+\/approve$/.test(path)) {
+    const requestId = decodeURIComponent(path.split('/')[2]);
+    return json(await approveDeletionRequest(env, identity, requestId, ctx));
   }
   if (method === 'POST' && path === '/invites/accept') return json(await acceptInvite(env, identity, await readJson(request), ctx));
   if (method === 'GET' && path === '/jobs') {
@@ -1338,17 +1342,189 @@ async function leaveCompany(env, identity, companyId, body, ctx) {
   };
 }
 
-async function deleteCompany(env, identity, companyId, body) {
-  const company = await fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.');
-  const membership = await fsGet(env, 'companyMembers', `${companyId}_${identity.uid}`);
-  if (!membership || membership.status !== 'active' || membership.role !== 'owner' || company.ownerUid !== identity.uid) {
-    throw httpError(403, 'Somente o proprietário pode excluir esta empresa.');
+async function deletionApproversForCompany(env, companyId) {
+  const members = await fsWhere(env, 'companyMembers', 'companyId', companyId, 500);
+  return [...new Set(
+    members
+      .filter(member => member.status === 'active' && ['owner', 'admin'].includes(member.role))
+      .map(member => member.uid)
+      .filter(Boolean)
+  )];
+}
+
+async function deletionApproversForCommunity(env, community) {
+  if (community.companyId) return deletionApproversForCompany(env, community.companyId);
+
+  const members = await fsWhere(env, 'communityMembers', 'communityId', community.id, 500);
+  const approvers = new Set(
+    members
+      .filter(member => ['owner', 'admin', 'moderator'].includes(member.role))
+      .map(member => member.uid)
+      .filter(Boolean)
+  );
+  if (community.createdBy) approvers.add(community.createdBy);
+  return [...approvers];
+}
+
+async function createDeletionRequest(env, identity, entityType, entity, approverUids, ctx) {
+  if (!approverUids.length) throw httpError(409, 'Não há administradores elegíveis para aprovar esta exclusão.');
+  if (!approverUids.includes(identity.uid)) {
+    throw httpError(403, 'Somente um administrador pode solicitar a exclusão.');
   }
+
+  const existing = await fsWhere(env, 'deletionRequests', 'entityId', entity.id, 20);
+  const pending = existing.find(item => item.entityType === entityType && item.status === 'pending');
+  if (pending) return {
+    ok: true,
+    pending: true,
+    requestId: pending.id,
+    requiredApprovals: pending.requiredApproverUids?.length || approverUids.length,
+    approvals: pending.approvedByUids?.length || 0
+  };
+
+  const requestId = id();
+  const request = {
+    id: requestId,
+    entityType,
+    entityId: entity.id,
+    entityName: entity.name || (entityType === 'company' ? 'Empresa' : 'Comunidade'),
+    companyId: entityType === 'company' ? entity.id : (entity.companyId || ''),
+    requestedBy: identity.uid,
+    requiredApproverUids: approverUids,
+    approvedByUids: [],
+    status: 'pending',
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  };
+  await fsPut(env, 'deletionRequests', requestId, request);
+
+  const notificationWrites = approverUids.map(uid => ({
+    collection: 'notifications',
+    id: `deletion_approval_${requestId}_${uid}`,
+    data: {
+      recipientUid: uid,
+      type: 'deletion_approval_required',
+      title: entityType === 'company'
+        ? `Aprovar exclusão de ${request.entityName}`
+        : `Aprovar exclusão da comunidade ${request.entityName}`,
+      body: 'A exclusão só acontecerá quando todos os administradores aprovarem. Todo o conteúdo vinculado será removido automaticamente.',
+      data: {
+        deletionRequestId: requestId,
+        entityType,
+        entityId: entity.id,
+        entityName: request.entityName,
+        companyId: request.companyId || '',
+        targetView: 'notifications'
+      },
+      read: false,
+      persistent: true,
+      status: 'pending',
+      createdAt: request.createdAt
+    }
+  }));
+  await fsBatchPut(env, notificationWrites);
+
+  deferPushes(ctx, notificationWrites.map(item => sendPushToUser(env, item.data.recipientUid, {
+    title: item.data.title,
+    body: item.data.body,
+    notificationId: item.id,
+    type: item.data.type,
+    deletionRequestId: requestId,
+    companyId: request.companyId || '',
+    targetView: 'notifications',
+    url: '/?notifications=1'
+  })));
+
+  return {
+    ok: true,
+    pending: true,
+    requestId,
+    requiredApprovals: approverUids.length,
+    approvals: 0
+  };
+}
+
+async function requestCompanyDeletion(env, identity, companyId, body, ctx) {
+  const company = await fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.');
+  await requireCompanyAdmin(env, identity.uid, companyId);
 
   const confirmation = clean(body.confirmation || '', 160);
   if (confirmation !== company.name) {
-    throw httpError(400, 'Digite exatamente o nome da empresa para confirmar a exclusão.');
+    throw httpError(400, 'Digite exatamente o nome da empresa para confirmar a solicitação.');
   }
+
+  const approvers = await deletionApproversForCompany(env, companyId);
+  return createDeletionRequest(env, identity, 'company', company, approvers, ctx);
+}
+
+async function requestCommunityDeletion(env, identity, communityId, ctx) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  const approvers = await deletionApproversForCommunity(env, community);
+  return createDeletionRequest(env, identity, 'community', community, approvers, ctx);
+}
+
+async function deletePostCascade(env, post) {
+  const comments = await fsWhere(env, 'comments', 'postId', post.id, 500);
+  for (const comment of comments) {
+    const byComment = await fsWhere(env, 'commentReactions', 'commentId', comment.id, 500).catch(() => []);
+    for (const reaction of byComment) await fsDelete(env, 'commentReactions', reaction.id);
+    await fsDelete(env, 'comments', comment.id);
+  }
+
+  const relatedCollections = ['reactions', 'commentReactions', 'pollVotes', 'readReceipts'];
+  for (const collection of relatedCollections) {
+    const rows = await fsWhere(env, collection, 'postId', post.id, 500).catch(() => []);
+    for (const row of rows) await fsDelete(env, collection, row.id);
+  }
+
+  for (const attachment of (post.attachments || [])) {
+    const media = await fsGet(env, 'media', attachment.id);
+    if (!media) continue;
+    try { await env.MEDIA.delete(media.key); } catch {}
+    try { await fsDelete(env, 'media', media.id); } catch {}
+  }
+
+  await fsDelete(env, 'posts', post.id);
+}
+
+async function deleteCommunityCascade(env, communityId) {
+  const community = await fsGet(env, 'communities', communityId);
+  if (!community) return;
+
+  const posts = await fsWhere(env, 'posts', 'communityId', communityId, 500);
+  for (const post of posts) await deletePostCascade(env, post);
+
+  const topics = await fsWhere(env, 'communityTopics', 'communityId', communityId, 500).catch(() => []);
+  for (const topic of topics) {
+    const topicMembers = await fsWhere(env, 'communityTopicMembers', 'topicId', topic.id, 500).catch(() => []);
+    for (const member of topicMembers) await fsDelete(env, 'communityTopicMembers', member.id);
+    await fsDelete(env, 'communityTopics', topic.id);
+  }
+
+  const cleanupQueries = [
+    ['communityMembers', 'communityId'],
+    ['communityJoinRequests', 'communityId'],
+    ['invites', 'communityId']
+  ];
+  for (const [collection, field] of cleanupQueries) {
+    const rows = await fsWhere(env, collection, field, communityId, 500).catch(() => []);
+    for (const row of rows) await fsDelete(env, collection, row.id);
+  }
+
+  const mediaRows = await fsWhere(env, 'media', 'communityId', communityId, 500).catch(() => []);
+  for (const media of mediaRows) {
+    try { await env.MEDIA.delete(media.key); } catch {}
+    try { await fsDelete(env, 'media', media.id); } catch {}
+  }
+
+  const notifications = await fsWhere(env, 'notifications', 'data.communityId', communityId, 500).catch(() => []);
+  for (const notification of notifications) await fsDelete(env, 'notifications', notification.id);
+
+  await fsDelete(env, 'communities', communityId);
+}
+
+async function deleteCompanyCascade(env, company) {
+  const companyId = company.id;
 
   if (company.billingSubscriptionId && env.ASAAS_API_KEY) {
     try {
@@ -1357,71 +1533,138 @@ async function deleteCompany(env, identity, companyId, body) {
         body: JSON.stringify({ status: 'INACTIVE' })
       });
     } catch (error) {
-      console.warn('Não foi possível inativar a assinatura Asaas antes de excluir a empresa:', error?.message || error);
+      console.warn('Não foi possível inativar a assinatura antes da exclusão:', error?.message || error);
     }
   }
 
-  // Remove as publicações da empresa e seus dados vinculados.
-  const posts = await fsWhere(env, 'posts', 'companyId', companyId, 500);
-  for (const post of posts) {
-    const comments = await fsWhere(env, 'comments', 'postId', post.id, 500);
-    for (const comment of comments) await fsDelete(env, 'comments', comment.id);
+  const communities = await fsWhere(env, 'communities', 'companyId', companyId, 500);
+  for (const community of communities) await deleteCommunityCascade(env, community.id);
 
-    const reactions = await fsWhere(env, 'reactions', 'postId', post.id, 500);
-    for (const reaction of reactions) await fsDelete(env, 'reactions', reaction.id);
-
-    const commentReactions = await fsWhere(env, 'commentReactions', 'postId', post.id, 500);
-    for (const reaction of commentReactions) await fsDelete(env, 'commentReactions', reaction.id);
-
-    const pollVotes = await fsWhere(env, 'pollVotes', 'postId', post.id, 500);
-    for (const vote of pollVotes) await fsDelete(env, 'pollVotes', vote.id);
-
-    const receipts = await fsWhere(env, 'readReceipts', 'postId', post.id, 500);
-    for (const receipt of receipts) await fsDelete(env, 'readReceipts', receipt.id);
-
-    for (const attachment of (post.attachments || [])) {
-      const media = await fsGet(env, 'media', attachment.id);
-      if (!media) continue;
-      try { await env.MEDIA.delete(media.key); } catch {}
-      try { await fsDelete(env, 'media', media.id); } catch {}
-    }
-
-    await fsDelete(env, 'posts', post.id);
+  // Publicações gerais da empresa, não ligadas a uma comunidade.
+  const companyPosts = await fsWhere(env, 'posts', 'companyId', companyId, 500);
+  for (const post of companyPosts) {
+    const stillExists = await fsGet(env, 'posts', post.id);
+    if (stillExists) await deletePostCascade(env, stillExists);
   }
 
-  // Limpa uploads ainda não vinculados a publicações.
-  const remainingMedia = await fsWhere(env, 'media', 'companyId', companyId, 500);
-  for (const media of remainingMedia) {
+  const mediaRows = await fsWhere(env, 'media', 'companyId', companyId, 500).catch(() => []);
+  for (const media of mediaRows) {
     try { await env.MEDIA.delete(media.key); } catch {}
     try { await fsDelete(env, 'media', media.id); } catch {}
   }
 
-  const communityMembers = await fsWhere(env, 'communityMembers', 'companyId', companyId, 500);
-  for (const item of communityMembers) await fsDelete(env, 'communityMembers', item.id);
+  const cleanupQueries = [
+    ['invites', 'companyId'],
+    ['jobs', 'companyId'],
+    ['companyMembers', 'companyId']
+  ];
+  for (const [collection, field] of cleanupQueries) {
+    const rows = await fsWhere(env, collection, field, companyId, 500).catch(() => []);
+    for (const row of rows) await fsDelete(env, collection, row.id);
+  }
 
-  const communities = await fsWhere(env, 'communities', 'companyId', companyId, 250);
-  for (const community of communities) await fsDelete(env, 'communities', community.id);
-
-  const invites = await fsWhere(env, 'invites', 'companyId', companyId, 500);
-  for (const invite of invites) await fsDelete(env, 'invites', invite.id);
-
-  const jobs = await fsWhere(env, 'jobs', 'companyId', companyId, 500);
-  for (const job of jobs) await fsDelete(env, 'jobs', job.id);
-
-  const companyMembers = await fsWhere(env, 'companyMembers', 'companyId', companyId, 500);
-  for (const item of companyMembers) await fsDelete(env, 'companyMembers', item.id);
-
-  // Notificações antigas não devem continuar apontando para uma empresa apagada.
-  try {
-    const notifications = await fsWhere(env, 'notifications', 'data.companyId', companyId, 500);
-    for (const notification of notifications) await fsDelete(env, 'notifications', notification.id);
-  } catch {}
+  const notifications = await fsWhere(env, 'notifications', 'data.companyId', companyId, 500).catch(() => []);
+  for (const notification of notifications) await fsDelete(env, 'notifications', notification.id);
 
   await fsCommit(env, [
     { delete: { collection: 'companies', id: companyId } },
     ...(company.cnpjDigits ? [{ delete: { collection: 'companyCnpjRegistry', id: company.cnpjDigits } }] : [])
   ]);
-  return { ok: true, deletedCompanyId: companyId };
+}
+
+async function approveDeletionRequest(env, identity, requestId, ctx) {
+  const request = await fsGetRequired(env, 'deletionRequests', requestId, 'Solicitação de exclusão não encontrada.');
+  if (request.status !== 'pending') throw httpError(409, 'Esta solicitação já foi concluída.');
+
+  const required = Array.isArray(request.requiredApproverUids) ? request.requiredApproverUids : [];
+  if (!required.includes(identity.uid)) throw httpError(403, 'Você não é um dos administradores responsáveis por esta aprovação.');
+
+  const approvals = new Set(Array.isArray(request.approvedByUids) ? request.approvedByUids : []);
+  approvals.add(identity.uid);
+  const approvedByUids = [...approvals];
+  const complete = required.every(uid => approvals.has(uid));
+  const updatedAt = nowIso();
+
+  if (!complete) {
+    await fsPut(env, 'deletionRequests', requestId, {
+      ...request,
+      approvedByUids,
+      updatedAt
+    });
+    const notificationId = `deletion_approval_${requestId}_${identity.uid}`;
+    const notification = await fsGet(env, 'notifications', notificationId);
+    if (notification) {
+      await fsPut(env, 'notifications', notificationId, {
+        ...notification,
+        read: true,
+        persistent: false,
+        status: 'approved',
+        updatedAt
+      });
+    }
+    return {
+      ok: true,
+      deleted: false,
+      approvals: approvedByUids.length,
+      requiredApprovals: required.length
+    };
+  }
+
+  // Marca antes de iniciar a cascata para impedir dupla execução.
+  await fsPut(env, 'deletionRequests', requestId, {
+    ...request,
+    approvedByUids,
+    status: 'executing',
+    updatedAt
+  });
+
+  if (request.entityType === 'company') {
+    const company = await fsGetRequired(env, 'companies', request.entityId, 'Empresa não encontrada.');
+    await deleteCompanyCascade(env, company);
+  } else if (request.entityType === 'community') {
+    await deleteCommunityCascade(env, request.entityId);
+  } else {
+    throw httpError(400, 'Tipo de exclusão inválido.');
+  }
+
+  const completedAt = nowIso();
+  await fsPut(env, 'deletionRequests', requestId, {
+    ...request,
+    approvedByUids,
+    status: 'completed',
+    completedAt,
+    updatedAt: completedAt
+  });
+
+  // As notificações vinculadas à entidade podem ter sido apagadas pela cascata.
+  // Gera uma confirmação limpa para cada administrador.
+  for (const uid of required) {
+    await fsPut(env, 'notifications', `deletion_completed_${requestId}_${uid}`, {
+      recipientUid: uid,
+      type: 'deletion_completed',
+      title: request.entityType === 'company' ? 'Empresa excluída' : 'Comunidade excluída',
+      body: `${request.entityName} e todo o conteúdo vinculado foram removidos.`,
+      data: { targetView: 'notifications' },
+      read: false,
+      status: 'new',
+      createdAt: completedAt
+    });
+  }
+
+  deferPushes(ctx, required.map(uid => sendPushToUser(env, uid, {
+    title: request.entityType === 'company' ? 'Empresa excluída' : 'Comunidade excluída',
+    body: `${request.entityName} e todo o conteúdo vinculado foram removidos.`,
+    type: 'deletion_completed',
+    targetView: 'notifications',
+    url: '/?notifications=1'
+  })));
+
+  return {
+    ok: true,
+    deleted: true,
+    approvals: approvedByUids.length,
+    requiredApprovals: required.length
+  };
 }
 
 
@@ -1756,27 +1999,6 @@ async function updateCommunityVisibility(env, identity, communityId, body) {
   };
   await fsPut(env, 'communities', communityId, updated);
   return { community: communityView(updated) };
-}
-
-async function deleteCommunity(env, identity, communityId) {
-  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-  await requireCompanyAdmin(env, identity.uid, community.companyId);
-
-  const posts = await fsWhere(env, 'posts', 'communityId', communityId, 1);
-  if (posts.length) {
-    throw httpError(409, 'Esta comunidade possui publicações. Exclua ou mova o conteúdo antes de removê-la.');
-  }
-
-  const members = await fsWhere(env, 'communityMembers', 'communityId', communityId, 250);
-  for (const member of members) await fsDelete(env, 'communityMembers', member.id);
-
-  const invites = await fsWhere(env, 'invites', 'communityId', communityId, 100);
-  for (const invite of invites) {
-    if (invite.status === 'pending') await fsDelete(env, 'invites', invite.id);
-  }
-
-  await fsDelete(env, 'communities', communityId);
-  return { ok: true };
 }
 
 async function requireCommunityAccess(env, uid, community) {
