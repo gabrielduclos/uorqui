@@ -2302,7 +2302,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
           <div className="discover-section-head"><strong>Comunidades para descobrir</strong></div>
           <div className="discover-community-row">
             {communities.slice(0, 10).map((community) => (
-              <button className="discover-community-card" key={community.id} onClick={() => {
+              <button className={`discover-community-card ${community.officialUorqui ? "official" : ""}`} key={community.id} onClick={() => {
                 const params = new URLSearchParams(location.search);
                 params.set("community", community.id);
                 if (community.companyId) params.set("company", community.companyId);
@@ -2310,8 +2310,8 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
                 window.dispatchEvent(new PopStateEvent("popstate"));
               }}>
                 <span className="community-avatar">{community.name.slice(0,2).toUpperCase()}</span>
-                <strong>{community.name}</strong>
-                <small>{community.officialUorqui ? "Oficial Uorqui · " : ""}{community.verifiedCompany ? "Empresa verificada" : community.description || "Comunidade pública"}</small>
+                <div className="discover-community-name"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={10}/> Oficial</span>}</div>
+                <small>{community.verifiedCompany ? "Empresa verificada" : community.description || "Comunidade pública"}</small>
               </button>
             ))}
           </div>
@@ -3094,6 +3094,26 @@ type SuperadminMetrics = {
   premiumMonthlyPrice: number;
 };
 
+type SuperadminAiAgent = {
+  key: string;
+  name: string;
+  communityId: string;
+  communityName: string;
+  agentReady: boolean;
+  communityReady: boolean;
+  official: boolean;
+  publishedToday: boolean;
+  postId?: string;
+};
+
+type SuperadminAiStatus = {
+  day: string;
+  totalAgents: number;
+  communitiesReady: number;
+  postsToday: number;
+  agents: SuperadminAiAgent[];
+};
+
 type SuperadminCompany = {
   id: string;
   name: string;
@@ -3122,16 +3142,22 @@ function SuperadminPage({
   const [loadingSuperadmin, setLoadingSuperadmin] = useState(true);
   const [busyCompany, setBusyCompany] = useState("");
   const [daysByCompany, setDaysByCompany] = useState<Record<string, string>>({});
+  const [aiStatus, setAiStatus] = useState<SuperadminAiStatus | null>(null);
+  const [aiBusy, setAiBusy] = useState<"" | "seed" | "publish">("");
 
   const load = async () => {
     setLoadingSuperadmin(true);
     try {
-      const result = await api<{
-        metrics: SuperadminMetrics;
-        companies: SuperadminCompany[];
-      }>("/superadmin/overview");
+      const [result, agentStatus] = await Promise.all([
+        api<{
+          metrics: SuperadminMetrics;
+          companies: SuperadminCompany[];
+        }>("/superadmin/overview"),
+        api<SuperadminAiStatus>("/superadmin/ai-agents/status")
+      ]);
       setMetrics(result.metrics);
       setCompanies(result.companies);
+      setAiStatus(agentStatus);
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -3189,6 +3215,43 @@ function SuperadminPage({
     }
   };
 
+  const seedAiCommunities = async () => {
+    if (aiBusy) return;
+    setAiBusy("seed");
+    try {
+      const result = await api<SuperadminAiStatus>("/superadmin/ai-agents/seed", { method: "POST" });
+      setAiStatus(result);
+      showToast(`${result.communitiesReady}/${result.totalAgents} comunidades oficiais prontas.`);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setAiBusy("");
+    }
+  };
+
+  const publishAiNow = async () => {
+    if (aiBusy) return;
+    setAiBusy("publish");
+    try {
+      const result = await api<SuperadminAiStatus & { published?: number; skipped?: number; failed?: number }>(
+        "/superadmin/ai-agents/publish",
+        { method: "POST" }
+      );
+      setAiStatus(result);
+      showToast(
+        result.published
+          ? `${result.published} publicação(ões) dos agentes criada(s).`
+          : result.postsToday === result.totalAgents
+            ? "As 10 comunidades já receberam a publicação de hoje."
+            : "Nenhuma nova publicação foi gerada. Verifique o status dos agentes."
+      );
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setAiBusy("");
+    }
+  };
+
   const money = (value = 0) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
@@ -3216,11 +3279,45 @@ function SuperadminPage({
         </div>
         <div className="superadmin-head-actions">
           {onProfile && <button className="btn secondary small" onClick={onProfile}>Perfil</button>}
+          <button className="btn secondary small" disabled={Boolean(aiBusy)} onClick={() => void seedAiCommunities()}>
+            {aiBusy === "seed" ? "Criando…" : "Garantir comunidades"}
+          </button>
+          <button className="btn small" disabled={Boolean(aiBusy)} onClick={() => void publishAiNow()}>
+            {aiBusy === "publish" ? "Publicando…" : "Publicar agentes agora"}
+          </button>
           <button className="btn secondary small" disabled={loadingSuperadmin} onClick={load}>Atualizar</button>
         </div>
       </div>
 
       {loadingSuperadmin && !metrics && <div className="loading-line">Carregando métricas…</div>}
+
+      {aiStatus && (
+        <section className="panel-card superadmin-ai-panel">
+          <div className="superadmin-ai-head">
+            <div>
+              <span className="superadmin-kicker"><Crown size={14}/> Equipe Uorqui · IA</span>
+              <h3>Comunidades oficiais e publicações</h3>
+              <p className="muted">Uma publicação por comunidade por dia. O disparo manual respeita a trava diária e não cria duplicados.</p>
+            </div>
+            <div className="superadmin-ai-summary">
+              <strong>{aiStatus.postsToday}/{aiStatus.totalAgents}</strong>
+              <span>publicadas hoje</span>
+            </div>
+          </div>
+          <div className="superadmin-ai-grid">
+            {aiStatus.agents.map(agent => (
+              <div className="superadmin-ai-row" key={agent.key}>
+                <div>
+                  <strong>{agent.communityName}</strong>
+                  <small>{agent.name}</small>
+                </div>
+                <span className={agent.official ? "ok" : "warn"}>{agent.official ? "Oficial" : "Pendente"}</span>
+                <span className={agent.publishedToday ? "ok" : "neutral"}>{agent.publishedToday ? "Publicado hoje" : "Ainda não publicado"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {metrics && (
         <>
