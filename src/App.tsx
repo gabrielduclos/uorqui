@@ -102,18 +102,15 @@ export default function App() {
 
   useEffect(() => {
     const scroller = document.scrollingElement || document.documentElement;
-    lastScrollYRef.current = scroller.scrollTop || window.scrollY;
+    let lastY = Math.max(0, scroller.scrollTop || window.scrollY);
     let touchY = 0;
 
-    const reveal = () => setHeaderHidden(false);
-    const hide = () => {
-      const current = scroller.scrollTop || window.scrollY;
-      if (current > 48) setHeaderHidden(true);
-    };
-
-    const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0) reveal();
-      else if (event.deltaY > 0) hide();
+    const header = () => document.querySelector<HTMLElement>(".topbar");
+    const setVisible = (visible: boolean) => {
+      const node = header();
+      if (!node) return;
+      node.classList.toggle("scroll-hidden", !visible);
+      setHeaderHidden(!visible);
     };
 
     const onTouchStart = (event: TouchEvent) => {
@@ -121,33 +118,41 @@ export default function App() {
     };
 
     const onTouchMove = (event: TouchEvent) => {
-      const nextY = event.touches[0]?.clientY || touchY;
-      if (nextY > touchY + 1) reveal();
-      else if (nextY < touchY - 1) hide();
+      const nextY = event.touches[0]?.clientY ?? touchY;
+      const delta = nextY - touchY;
+
+      // No Safari, reagimos ao gesto antes de esperar o evento scroll.
+      if (delta > 1) setVisible(true);
+      else if (delta < -1 && lastY > 44) setVisible(false);
+
       touchY = nextY;
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) setVisible(true);
+      else if (event.deltaY > 0 && lastY > 44) setVisible(false);
     };
 
     const onScroll = () => {
       const current = Math.max(0, scroller.scrollTop || window.scrollY);
-      const previous = lastScrollYRef.current;
-      if (current <= 8 || current < previous) reveal();
-      else if (current > previous) hide();
+      if (current <= 8 || current < lastY) setVisible(true);
+      else if (current > lastY && current > 44) setVisible(false);
+      lastY = current;
       lastScrollYRef.current = current;
     };
 
+    document.addEventListener("touchstart", onTouchStart, { passive: true, capture: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: true, capture: true });
     window.addEventListener("wheel", onWheel, { passive: true });
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
     window.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
+      document.removeEventListener("touchstart", onTouchStart, true);
+      document.removeEventListener("touchmove", onTouchMove, true);
       window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("scroll", onScroll);
     };
   }, []);
-
 
   useEffect(() => {
     const goFeed = () => {
@@ -1308,6 +1313,9 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
 }) {
   const [hiddenPostIds, setHiddenPostIds] = useState<Set<string>>(() => new Set());
   const [postOverrides, setPostOverrides] = useState<Record<string, Post>>({});
+  const [socialFeedPosts, setSocialFeedPosts] = useState<Post[]>([]);
+  const [socialFollowingCount, setSocialFollowingCount] = useState<number | null>(null);
+  const [suggestedCommunities, setSuggestedCommunities] = useState<Community[]>([]);
 
   const communityPosts = useMemo(
     () => data.posts.filter((post) => post.scope === "community"),
@@ -1377,9 +1385,7 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
     }
   };
 
-  const [socialFeedPosts, setSocialFeedPosts] = useState<Post[]>([]);
-  const [socialFollowingCount, setSocialFollowingCount] = useState<number | null>(null);
-  const [suggestedCommunities, setSuggestedCommunities] = useState<Community[]>([]);
+
 
   const loadSocialFeed = async () => {
     try {
