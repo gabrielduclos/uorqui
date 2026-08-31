@@ -150,10 +150,12 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'POST' && path === '/superadmin/ai-agents/seed') {
     requireSuperadmin(env, identity);
     await ensureUorquiAiSeeds(env, true);
+    await ensureUorquiOfficialCommunityImages(env);
     return json(await getUorquiAiAgentStatus(env, identity));
   }
   if (method === 'POST' && path === '/superadmin/ai-agents/publish') {
     requireSuperadmin(env, identity);
+    await ensureUorquiOfficialCommunityImages(env);
     const result = await publishDailyUorquiAiPosts(env, true);
     return json({ ...result, ...(await getUorquiAiAgentStatus(env, identity)) });
   }
@@ -2320,13 +2322,27 @@ async function updateCommunityVisibility(env, identity, communityId, body) {
     throw httpError(403, 'Somente o dono ou moderadores podem alterar esta comunidade.');
   }
 
-  if (body.visibility !== 'public' && body.visibility !== 'private') {
+  const nextVisibility = body.visibility === undefined
+    ? normalizedCommunityVisibility(community.visibility)
+    : normalizedCommunityVisibility(body.visibility);
+
+  if (body.visibility !== undefined && body.visibility !== 'public' && body.visibility !== 'private') {
     throw httpError(400, 'Escolha se a comunidade é pública ou privada.');
+  }
+
+  let avatarMediaId = community.avatarMediaId || '';
+  if (body.avatarMediaId !== undefined) {
+    avatarMediaId = clean(body.avatarMediaId || '',150);
+    if (avatarMediaId) {
+      const media=await fsGetRequired(env,'media',avatarMediaId,'Foto da comunidade não encontrada.');
+      if(media.scope!=='community_avatar'||media.communityId!==communityId)throw httpError(403,'Foto inválida para esta comunidade.');
+    }
   }
 
   const updated = {
     ...community,
-    visibility: normalizedCommunityVisibility(body.visibility),
+    visibility: nextVisibility,
+    avatarMediaId,
     updatedAt: nowIso(),
     updatedBy: identity.uid
   };
@@ -4365,21 +4381,28 @@ async function sendDirectMessage(env, identity, targetUid, body, ctx) {
 
 async function uploadMedia(request, env, identity, params) {
   const scope=params.get('scope');
-  if(!['world','company','community','avatar','message'].includes(scope))throw httpError(400,'Audiência inválida.');
+  if(!['world','company','community','avatar','community_avatar','message'].includes(scope))throw httpError(400,'Audiência inválida.');
   const companyId=params.get('companyId')||'';const communityId=params.get('communityId')||'';const targetUid=params.get('targetUid')||'';
   if(scope==='company')await requireCompanyMember(env,identity.uid,companyId);
   if(scope==='community'){
     const community=await fsGetRequired(env,'communities',communityId,'Comunidade não encontrada.');
     await requireCommunityAccess(env,identity.uid,community);
   }
+  if(scope==='community_avatar'){
+    const community=await fsGetRequired(env,'communities',communityId,'Comunidade não encontrada.');
+    const canManage=community.companyId
+      ? Boolean(await requireCompanyAdmin(env,identity.uid,community.companyId))
+      : await canManageCommunityStructure(env,identity,community);
+    if(!canManage)throw httpError(403,'Somente administradores podem alterar a foto da comunidade.');
+  }
   if(scope==='message')await assertDirectMessageAllowed(env,identity.uid,targetUid);
 
-  const limit=scope==='avatar'?5*1024*1024:20*1024*1024;
+  const limit=(scope==='avatar'||scope==='community_avatar')?5*1024*1024:20*1024*1024;
   const length=Number(request.headers.get('content-length')||0);
   if(length>limit)throw httpError(413,scope==='avatar'?'A foto de perfil pode ter no máximo 5 MB.':'O limite por arquivo na v1 é 20 MB.');
 
   const contentType=(request.headers.get('content-type')||'application/octet-stream').slice(0,120);
-  if(scope==='avatar'&&!['image/jpeg','image/png','image/webp'].includes(contentType))throw httpError(415,'Use uma imagem JPG, PNG ou WebP.');
+  if((scope==='avatar'||scope==='community_avatar')&&!['image/jpeg','image/png','image/webp'].includes(contentType))throw httpError(415,'Use uma imagem JPG, PNG ou WebP.');
 
   const name=clean(request.headers.get('x-file-name')||params.get('name')||'arquivo',180);
   const body=await request.arrayBuffer();
@@ -4388,6 +4411,8 @@ async function uploadMedia(request, env, identity, params) {
   const mediaId=id();const safeName=name.replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-100)||'arquivo';
   const key=scope==='avatar'
     ? `users/${identity.uid}/avatar/${mediaId}-${safeName}`
+    : scope==='community_avatar'
+      ? `communities/${communityId}/avatar/${mediaId}-${safeName}`
     : scope==='world'
       ? `world/${identity.uid}/${mediaId}-${safeName}`
       : scope==='message'
@@ -4404,6 +4429,10 @@ async function uploadMedia(request, env, identity, params) {
 async function getMedia(env, identity, mediaId) {
   const media=await fsGetRequired(env,'media',mediaId,'Arquivo não encontrado.');
   if(media.scope==='company')await requireCompanyMember(env,identity.uid,media.companyId);
+  else if(media.scope==='community_avatar'){
+    const community=await fsGetRequired(env,'communities',media.communityId,'Comunidade não encontrada.');
+    if(!publicCommunity(community))await requireCommunityAccess(env,identity.uid,community);
+  }
   else if(media.scope==='message'){
     if(identity.uid!==media.ownerUid&&identity.uid!==media.targetUid)throw httpError(403,'Sem permissão para este arquivo.');
   }
@@ -5176,6 +5205,43 @@ async function ensureUorquiAiSeeds(env, force=false){
     version:1,
     updatedAt:createdAt
   });
+}
+
+async function generateUorquiOfficialCommunityImage(env,item,community){
+  if(!env.AI||community?.avatarMediaId)return community?.avatarMediaId||'';
+  try{
+    const result=await env.AI.run('@cf/bytedance/stable-diffusion-xl-lightning',{
+      prompt:`Square editorial community image for ${item.name}. Theme: ${item.specialty}. Clean modern social network visual, realistic but tasteful, no text, no logo, no watermark, centered composition, high contrast, suitable as a small community avatar.`
+    });
+    let bytes=null;
+    if(result instanceof ArrayBuffer) bytes=new Uint8Array(result);
+    else if(result instanceof Uint8Array) bytes=result;
+    else if(result?.image){
+      const raw=String(result.image).replace(/^data:image\/\w+;base64,/,'');
+      bytes=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));
+    }
+    if(!bytes?.byteLength)return '';
+    const mediaId=id();
+    const key=`communities/${community.id}/avatar/${mediaId}-ai.png`;
+    await env.MEDIA.put(key,bytes,{httpMetadata:{contentType:'image/png'},customMetadata:{scope:'community_avatar',communityId:community.id,mediaId,generatedBy:'uorqui_ai'}});
+    await fsPut(env,'media',mediaId,{
+      id:mediaId,key,ownerUid:community.createdBy||'',scope:'community_avatar',companyId:'',communityId:community.id,targetUid:'',
+      name:`${item.key}-oficial.png`,contentType:'image/png',size:bytes.byteLength,generatedByAi:true,createdAt:nowIso()
+    });
+    await fsPut(env,'communities',community.id,{...community,avatarMediaId:mediaId,avatarGeneratedByAi:true,updatedAt:nowIso()});
+    return mediaId;
+  }catch(error){
+    console.error('Uorqui official community image generation failed',item.key,error);
+    return '';
+  }
+}
+
+async function ensureUorquiOfficialCommunityImages(env){
+  for(const item of UORQUI_AI_COMMUNITIES){
+    const communityId=aiSeedId('community',item.key);
+    const community=await fsGet(env,'communities',communityId);
+    if(community&&!community.avatarMediaId)await generateUorquiOfficialCommunityImage(env,item,community);
+  }
 }
 
 async function generateUorquiAgentPost(env,item){
