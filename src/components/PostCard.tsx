@@ -641,9 +641,12 @@ export function PostCard({
             )}
 
             {post.sourceUrl && post.sourceName && (
-              <a className="ai-news-source" href={post.sourceUrl} target="_blank" rel="noopener noreferrer">
-                <span>Fonte: {post.sourceName}</span>
-                <small>{post.sourcePublishedAt ? "notícia recente" : "fonte da pauta"}</small>
+              <a className="ai-news-card" href={post.sourceUrl} target="_blank" rel="noopener noreferrer">
+                {post.sourceImageUrl && <img src={post.sourceImageUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />}
+                <span className="ai-news-source">
+                  <span>Fonte: {post.sourceName}</span>
+                  <small>{post.sourcePublishedAt ? "notícia recente" : "fonte da pauta"}</small>
+                </span>
               </a>
             )}
 
