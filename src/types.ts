@@ -1,4 +1,4 @@
-export type View = "home" | "communities" | "search" | "jobs" | "admin" | "company-data" | "profile" | "notifications" | "companies" | "plans" | "superadmin";
+export type View = "home" | "communities" | "search" | "jobs" | "admin" | "company-data" | "profile" | "messages" | "notifications" | "companies" | "plans" | "superadmin";
 export type HomeTab = "for-you" | "communities" | "world" | "recent";
 
 export interface UserProfile {
