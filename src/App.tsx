@@ -3291,7 +3291,7 @@ function SuperadminPage({
     if (aiBusy) return;
     setAiBusy("publish");
     try {
-      const result = await api<SuperadminAiStatus & { published?: number; skipped?: number; failed?: number }>(
+      const result = await api<SuperadminAiStatus & { published?: number; skipped?: number; failed?: number; results?: Array<{ name?: string; status?: string; error?: string }> }>(
         "/superadmin/ai-agents/publish",
         { method: "POST" }
       );
@@ -3301,7 +3301,9 @@ function SuperadminPage({
           ? `${result.published} publicação(ões) dos agentes criada(s).`
           : result.postsToday === result.totalAgents
             ? "As 10 comunidades já receberam a publicação de hoje."
-            : "Nenhuma nova publicação foi gerada. Verifique o status dos agentes."
+            : result.failed
+              ? `Falha em ${result.failed} agente(s): ${result.results?.find(item => item.status === "failed")?.error || "verifique o status no painel."}`
+              : "Nenhuma nova publicação foi gerada."
       );
     } catch (error) {
       showToast(errorMessage(error));
