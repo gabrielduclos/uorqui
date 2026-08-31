@@ -1184,3 +1184,24 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   .social-profile-actions{max-width:190px}
   .social-profile-actions .btn{padding-left:9px;padding-right:9px}
 }
+
+/* iOS Safari — evita zoom automático ao focar campos */
+@media(max-width:850px){
+  input,
+  textarea,
+  select,
+  .mobile-header-search input,
+  .large-search input,
+  .auth-card input,
+  .stack-form input,
+  .stack-form textarea,
+  .stack-form select,
+  .composer-form input,
+  .composer-form textarea,
+  .composer-form select{
+    font-size:16px!important;
+  }
+  .mobile-header-search{
+    min-height:38px;
+  }
+}
