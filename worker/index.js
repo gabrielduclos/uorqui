@@ -2422,7 +2422,30 @@ async function createCommunityTopic(env, identity, communityId, body) {
     createdAt: nowIso()
   };
   await fsPut(env, 'communityTopics', topicId, topic);
+  if (community.companyId) {
+    await fsPut(env, 'communityTopicMembers', `${topicId}_${identity.uid}`, {
+      id: `${topicId}_${identity.uid}`,
+      topicId,
+      communityId,
+      companyId: community.companyId,
+      uid: identity.uid,
+      role: 'admin',
+      joinedAt: nowIso()
+    });
+  }
   return { topic };
+}
+
+async function requireCompanySectorAccess(env, identityUid, post) {
+  if (!post?.companyId || !post?.topicId) return;
+  const companyMembership = await fsGet(env, 'companyMembers', `${post.companyId}_${identityUid}`);
+  if (!companyMembership || companyMembership.status !== 'active') {
+    throw httpError(403, 'Você não participa desta empresa.');
+  }
+  if (['owner', 'admin'].includes(companyMembership.role)) return;
+
+  const sectorMembership = await fsGet(env, 'communityTopicMembers', `${post.topicId}_${identityUid}`);
+  if (!sectorMembership) throw httpError(403, 'Você não participa deste setor.');
 }
 
 async function getCommunityPosts(env, identity, communityId, topicId = '') {
@@ -2433,6 +2456,23 @@ async function getCommunityPosts(env, identity, communityId, topicId = '') {
   posts = posts.filter(p => p.scope === 'community');
   const normalizedTopicId = clean(topicId, 150);
   if (normalizedTopicId) posts = posts.filter(post => post.topicId === normalizedTopicId);
+
+  if (community.companyId) {
+    const companyMembership = await fsGet(env, 'companyMembers', `${community.companyId}_${identity.uid}`);
+    const isAdmin = Boolean(companyMembership?.status === 'active' && ['owner', 'admin'].includes(companyMembership.role));
+    if (!isAdmin) {
+      const allowed = [];
+      for (const post of posts) {
+        if (!post.topicId) {
+          allowed.push(post);
+          continue;
+        }
+        const sectorMembership = await fsGet(env, 'communityTopicMembers', `${post.topicId}_${identity.uid}`);
+        if (sectorMembership) allowed.push(post);
+      }
+      posts = allowed;
+    }
+  }
 
   const reactions = await fsWhere(env, 'reactions', 'uid', identity.uid, 250);
   const likedIds = new Set(reactions.map(r => r.postId));
@@ -3256,7 +3296,9 @@ async function confirmRead(env, identity, postId) {
 
 async function acceptSolution(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
-  if (post.type !== 'question') throw httpError(400, 'Esta publicação não é uma pergunta.');
+  if (post.type !== 'question' || !post.companyId) {
+    throw httpError(400, 'Somente perguntas de empresa podem ter uma resposta aceita.');
+  }
 
   if (post.authorUid !== identity.uid) {
     if (!post.companyId) throw httpError(403, 'Sem permissão.');
@@ -3279,13 +3321,12 @@ async function acceptSolution(env, identity, postId, body, ctx) {
 
 async function setPostResolved(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
-  if (!['post', 'question'].includes(post.type)) {
-    throw httpError(400, 'Somente posts e perguntas podem ser marcados como resolvidos.');
+  if (post.type !== 'question' || !post.companyId) {
+    throw httpError(400, 'Somente perguntas de empresa podem ser marcadas como resolvidas.');
   }
   await requirePostAccess(env, identity.uid, post);
 
   if (post.authorUid !== identity.uid) {
-    if (!post.companyId) throw httpError(403, 'Somente o autor pode alterar este status.');
     await requireCompanyAdmin(env, identity.uid, post.companyId);
   }
 
@@ -3293,7 +3334,7 @@ async function setPostResolved(env, identity, postId, body, ctx) {
   post.isResolved = resolved;
   post.resolvedAt = resolved ? nowIso() : '';
   post.resolvedByUid = resolved ? identity.uid : '';
-  if (!resolved && post.type === 'question') post.acceptedCommentId = '';
+  if (!resolved) post.acceptedCommentId = '';
   post.followUpReminderFor = post.lastCommentAt || post.followUpReminderFor || '';
   post.updatedAt = nowIso();
 
