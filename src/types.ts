@@ -64,6 +64,10 @@ export interface Community {
   visibility?: "public" | "private";
   memberCount?: number;
   verifiedCompany?: boolean;
+  officialUorqui?: boolean;
+  officialLabel?: string;
+  seededByUorqui?: boolean;
+  aiCurated?: boolean;
   createdBy?: string;
 }
 
@@ -145,6 +149,8 @@ export interface Post {
   communityId?: string;
   communityName?: string;
   communityVisibility?: "public" | "private";
+  communityOfficialUorqui?: boolean;
+  communityOfficialLabel?: string;
   topicId?: string;
   topicName?: string;
   type: "post" | "question" | "announcement" | "poll" | "event";
