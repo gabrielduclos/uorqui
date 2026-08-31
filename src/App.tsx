@@ -177,7 +177,7 @@ export default function App() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", measure);
     };
-  }, []);
+  }, [user?.uid, view]);
 
   useEffect(() => {
     const goFeed = () => {
