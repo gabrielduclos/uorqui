@@ -343,6 +343,23 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'GET' && path === '/search') return json(await searchPosts(env, identity, url.searchParams));
   if (method === 'GET' && path === '/discover') return json(await discoverContent(env, identity));
+  if (method === 'GET' && path === '/messages') return json(await listMessageConversations(env, identity, url.searchParams));
+  if (method === 'GET' && /^\/messages\/[^/]+$/.test(path)) {
+    const targetUid = decodeURIComponent(path.split('/')[2]);
+    return json(await getDirectMessages(env, identity, targetUid, url.searchParams));
+  }
+  if (method === 'POST' && /^\/messages\/[^/]+$/.test(path)) {
+    const targetUid = decodeURIComponent(path.split('/')[2]);
+    return json(await sendDirectMessage(env, identity, targetUid, await readJson(request), ctx), 201);
+  }
+  if (method === 'POST' && /^\/messages\/[^/]+\/accept$/.test(path)) {
+    const targetUid = decodeURIComponent(path.split('/')[2]);
+    return json(await acceptMessageRequest(env, identity, targetUid));
+  }
+  if (method === 'DELETE' && /^\/messages\/[^/]+\/request$/.test(path)) {
+    const targetUid = decodeURIComponent(path.split('/')[2]);
+    return json(await rejectMessageRequest(env, identity, targetUid));
+  }
   if (method === 'POST' && path === '/media/upload') return json(await uploadMedia(request, env, identity, url.searchParams), 201);
   if (method === 'GET' && /^\/media\/[^/]+$/.test(path)) {
     const mediaId = decodeURIComponent(path.split('/')[2]);
@@ -3039,7 +3056,12 @@ async function getCommunityPosts(env, identity, communityId, topicId = '') {
 
 
 async function interestedPostRecipients(env, post, authorUid) {
-  if (!post || post.scope === 'world') return [];
+  if (!post) return [];
+
+  if (post.scope === 'world') {
+    const followers = await fsWhere(env, 'socialFollows', 'targetUid', authorUid, 500).catch(() => []);
+    return Array.from(new Set(followers.map(item => item.followerUid).filter(uid => uid && uid !== authorUid)));
+  }
 
   let memberships = [];
 
@@ -3067,9 +3089,11 @@ async function notifyInterestedPostRecipients(env, post, authorUid) {
     ? 'Confirmação de leitura pendente'
     : post.type === 'announcement'
       ? post.title || 'Novo comunicado'
-      : post.scope === 'community'
-        ? `Nova publicação em ${post.communityName || 'uma comunidade'}`
-        : `Nova publicação em ${post.companyName || 'sua empresa'}`;
+      : post.scope === 'world'
+        ? `${post.authorName || 'Alguém que você segue'} publicou`
+        : post.scope === 'community'
+          ? `Nova publicação em ${post.communityName || 'uma comunidade'}`
+          : `Nova publicação em ${post.companyName || 'sua empresa'}`;
 
   const notificationBody = persistent
     ? `${post.authorName} publicou um comunicado que precisa da sua confirmação de leitura.`
@@ -3277,7 +3301,7 @@ async function createPost(env, identity, body, ctx) {
   let community = null;
   let topic = null;
 
-  if (scope !== 'world') {
+  if (scope === 'company') {
     if (!companyId) throw httpError(400, 'Empresa obrigatória.');
     await requireCompanyMember(env, identity.uid, companyId);
     company = await fsGet(env, 'companies', companyId);
@@ -3286,8 +3310,9 @@ async function createPost(env, identity, body, ctx) {
   if (scope === 'community') {
     if (!communityId) throw httpError(400, 'Escolha a comunidade.');
     community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-    if (community.companyId !== companyId) throw httpError(400, 'Comunidade inválida.');
-    await requireCommunityMember(env, identity.uid, communityId);
+    if ((community.companyId || '') !== (companyId || '')) throw httpError(400, 'Comunidade inválida.');
+    await requireCommunityAccess(env, identity.uid, community);
+    if (community.companyId) company = await fsGet(env, 'companies', community.companyId);
     if (topicId) {
       topic = await fsGetRequired(env, 'communityTopics', topicId, 'Assunto não encontrado.');
       if (topic.communityId !== communityId) throw httpError(400, 'Assunto inválido para esta comunidade.');
@@ -4091,12 +4116,246 @@ async function searchPosts(env, identity, params) {
   return { posts: enrichPosts(posts, likedIds, readIds, pollVoteMap).slice(0, 30) };
 }
 
+function directConversationId(uidA, uidB) {
+  return [uidA, uidB].sort().join('__');
+}
+
+async function assertDirectMessageAllowed(env, senderUid, targetUid) {
+  if (!targetUid || senderUid === targetUid) throw httpError(400, 'Escolha outra pessoa para conversar.');
+  const target = await fsGetRequired(env, 'users', targetUid, 'Usuário não encontrado.');
+  const [myBlock, theirBlock] = await Promise.all([
+    fsGet(env, 'socialBlocks', `${senderUid}__${targetUid}`),
+    fsGet(env, 'socialBlocks', `${targetUid}__${senderUid}`)
+  ]);
+  if (myBlock || theirBlock) throw httpError(403, 'Não é possível trocar mensagens enquanto houver bloqueio.');
+  return target;
+}
+
+async function listMessageConversations(env, identity, params) {
+  const pageSize = Math.min(30, Math.max(10, Number(params.get('limit') || 20)));
+  const offset = Math.max(0, Number(params.get('offset') || 0));
+  const [asA, asB] = await Promise.all([
+    fsWhere(env, 'messageConversations', 'userA', identity.uid, 250).catch(() => []),
+    fsWhere(env, 'messageConversations', 'userB', identity.uid, 250).catch(() => [])
+  ]);
+  const all = [...asA, ...asB]
+    .filter((item, index, arr) => arr.findIndex(x => x.id === item.id) === index)
+    .sort((a,b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+
+  const slice = all.slice(offset, offset + pageSize);
+  const conversations = [];
+  for (const conversation of slice) {
+    const targetUid = conversation.userA === identity.uid ? conversation.userB : conversation.userA;
+    const user = await fsGet(env, 'users', targetUid);
+    conversations.push({
+      id: conversation.id,
+      targetUid,
+      displayName: user?.displayName || 'Usuário',
+      username: user?.username || '',
+      avatarMediaId: user?.avatarMediaId || '',
+      status: conversation.status || 'accepted',
+      requestedBy: conversation.requestedBy || '',
+      lastMessagePreview: conversation.lastMessagePreview || '',
+      lastMessageAt: conversation.lastMessageAt || conversation.updatedAt || '',
+      unreadCount: Number(conversation[`unread_${identity.uid}`] || 0)
+    });
+  }
+
+  return {
+    conversations,
+    offset,
+    nextOffset: offset + slice.length < all.length ? offset + slice.length : null
+  };
+}
+
+async function getDirectMessages(env, identity, targetUid, params) {
+  await assertDirectMessageAllowed(env, identity.uid, targetUid);
+  const conversationId = directConversationId(identity.uid, targetUid);
+  const conversation = await fsGet(env, 'messageConversations', conversationId);
+  if (!conversation) return { conversation: null, messages: [], nextBefore: '' };
+
+  const limit = Math.min(60, Math.max(10, Number(params.get('limit') || 30)));
+  const before = clean(params.get('before') || '', 80);
+  let rows = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 500).catch(() => []);
+  rows = rows.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  if (before) rows = rows.filter(item => new Date(item.createdAt || 0).getTime() < new Date(before).getTime());
+  const page = rows.slice(0, limit);
+  const messages = page.reverse();
+
+  if (Number(conversation[`unread_${identity.uid}`] || 0) > 0) {
+    await fsPut(env, 'messageConversations', conversationId, {
+      ...conversation,
+      [`unread_${identity.uid}`]: 0,
+      updatedAt: conversation.updatedAt || nowIso()
+    });
+  }
+
+  return {
+    conversation: {
+      id: conversationId,
+      status: conversation.status || 'accepted',
+      requestedBy: conversation.requestedBy || '',
+      targetUid
+    },
+    messages,
+    nextBefore: page.length === limit ? page[0]?.createdAt || '' : ''
+  };
+}
+
+async function acceptMessageRequest(env, identity, targetUid) {
+  const conversationId = directConversationId(identity.uid, targetUid);
+  const conversation = await fsGetRequired(env, 'messageConversations', conversationId, 'Solicitação de conversa não encontrada.');
+  if (conversation.status !== 'pending' || conversation.requestedBy === identity.uid) {
+    throw httpError(409, 'Esta solicitação não está aguardando sua aprovação.');
+  }
+  const updated = { ...conversation, status: 'accepted', acceptedAt: nowIso(), updatedAt: nowIso() };
+  await fsPut(env, 'messageConversations', conversationId, updated);
+  return { ok: true, status: 'accepted' };
+}
+
+async function rejectMessageRequest(env, identity, targetUid) {
+  const conversationId = directConversationId(identity.uid, targetUid);
+  const conversation = await fsGetRequired(env, 'messageConversations', conversationId, 'Solicitação de conversa não encontrada.');
+  if (conversation.status !== 'pending' || conversation.requestedBy === identity.uid) {
+    throw httpError(409, 'Esta solicitação não está aguardando sua decisão.');
+  }
+  await fsDelete(env, 'messageConversations', conversationId);
+  const messages = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 100).catch(() => []);
+  for (const message of messages) await fsDelete(env, 'directMessages', message.id);
+  return { ok: true, rejected: true };
+}
+
+async function sendDirectMessage(env, identity, targetUid, body, ctx) {
+  const target = await assertDirectMessageAllowed(env, identity.uid, targetUid);
+  const sender = await ensureUser(env, identity);
+  const conversationId = directConversationId(identity.uid, targetUid);
+  let conversation = await fsGet(env, 'messageConversations', conversationId);
+
+  const [followsTarget, targetFollows] = await Promise.all([
+    fsGet(env, 'socialFollows', `${identity.uid}__${targetUid}`),
+    fsGet(env, 'socialFollows', `${targetUid}__${identity.uid}`)
+  ]);
+
+  if (!conversation) {
+    conversation = {
+      id: conversationId,
+      userA: [identity.uid, targetUid].sort()[0],
+      userB: [identity.uid, targetUid].sort()[1],
+      status: followsTarget && targetFollows ? 'accepted' : 'pending',
+      requestedBy: identity.uid,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      [`unread_${identity.uid}`]: 0,
+      [`unread_${targetUid}`]: 0
+    };
+  } else if (conversation.status === 'pending' && conversation.requestedBy === identity.uid) {
+    const existingMessages = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 20).catch(() => []);
+    if (existingMessages.length) throw httpError(409, 'Aguarde a pessoa aceitar sua solicitação de conversa.');
+  }
+
+  const text = clean(body.text || '', 4000);
+  const postId = clean(body.postId || '', 150);
+  const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.slice(0, 4) : [];
+  if (!text && !postId && !attachmentIds.length) throw httpError(400, 'Escreva uma mensagem ou adicione um conteúdo.');
+
+  let sharedPost = null;
+  if (postId) {
+    const post = await fsGetRequired(env, 'posts', postId, 'Publicação compartilhada não encontrada.');
+    await requirePostAccess(env, identity.uid, post);
+    await requirePostAccess(env, targetUid, post);
+    sharedPost = {
+      id: post.id,
+      authorName: post.authorName || '',
+      text: clean(post.text || post.title || '', 220),
+      scope: post.scope,
+      companyId: post.companyId || ''
+    };
+  }
+
+  const attachments = [];
+  for (const mediaId of attachmentIds) {
+    const media = await fsGetRequired(env, 'media', clean(mediaId, 150), 'Arquivo não encontrado.');
+    if (media.ownerUid !== identity.uid || media.scope !== 'message' || media.targetUid !== targetUid) {
+      throw httpError(403, 'Arquivo inválido para esta conversa.');
+    }
+    attachments.push({ id: media.id, name: media.name, contentType: media.contentType, size: media.size });
+  }
+
+  const createdAt = nowIso();
+  const messageId = id();
+  const message = {
+    id: messageId,
+    conversationId,
+    senderUid: identity.uid,
+    recipientUid: targetUid,
+    text,
+    attachments,
+    sharedPost,
+    createdAt
+  };
+  await fsPut(env, 'directMessages', messageId, message);
+
+  const preview = text
+    ? clean(text.replace(/\s+/g, ' '), 110)
+    : sharedPost
+      ? 'Compartilhou uma publicação'
+      : attachments[0]?.contentType?.startsWith('audio/')
+        ? 'Enviou um áudio'
+        : attachments[0]?.contentType?.startsWith('video/')
+          ? 'Enviou um vídeo'
+          : 'Enviou uma foto';
+
+  conversation = {
+    ...conversation,
+    lastMessagePreview: preview,
+    lastMessageAt: createdAt,
+    lastSenderUid: identity.uid,
+    updatedAt: createdAt,
+    [`unread_${targetUid}`]: Number(conversation[`unread_${targetUid}`] || 0) + 1
+  };
+  await fsPut(env, 'messageConversations', conversationId, conversation);
+
+  const notificationId = `message_${messageId}_${targetUid}`;
+  const notification = {
+    recipientUid: targetUid,
+    type: conversation.status === 'pending' ? 'message_request' : 'direct_message',
+    title: conversation.status === 'pending'
+      ? `${sender.displayName || 'Alguém'} quer conversar com você`
+      : `Nova mensagem de ${sender.displayName || 'Alguém'}`,
+    body: preview,
+    data: {
+      targetView: 'messages',
+      conversationUid: identity.uid,
+      messageId
+    },
+    read: false,
+    persistent: false,
+    status: 'new',
+    createdAt
+  };
+  await fsPut(env, 'notifications', notificationId, notification);
+  deferPushes(ctx, [sendPushToUser(env, targetUid, {
+    title: notification.title,
+    body: preview,
+    notificationId,
+    type: notification.type,
+    targetView: 'messages',
+    url: `/?messages=1&conversation=${encodeURIComponent(identity.uid)}`
+  })]);
+
+  return { message, conversation: { id: conversationId, status: conversation.status, requestedBy: conversation.requestedBy } };
+}
+
 async function uploadMedia(request, env, identity, params) {
   const scope=params.get('scope');
-  if(!['world','company','community','avatar'].includes(scope))throw httpError(400,'Audiência inválida.');
-  const companyId=params.get('companyId')||'';const communityId=params.get('communityId')||'';
-  if(scope!=='world'&&scope!=='avatar')await requireCompanyMember(env,identity.uid,companyId);
-  if(scope==='community')await requireCommunityMember(env,identity.uid,communityId);
+  if(!['world','company','community','avatar','message'].includes(scope))throw httpError(400,'Audiência inválida.');
+  const companyId=params.get('companyId')||'';const communityId=params.get('communityId')||'';const targetUid=params.get('targetUid')||'';
+  if(scope==='company')await requireCompanyMember(env,identity.uid,companyId);
+  if(scope==='community'){
+    const community=await fsGetRequired(env,'communities',communityId,'Comunidade não encontrada.');
+    await requireCommunityAccess(env,identity.uid,community);
+  }
+  if(scope==='message')await assertDirectMessageAllowed(env,identity.uid,targetUid);
 
   const limit=scope==='avatar'?5*1024*1024:20*1024*1024;
   const length=Number(request.headers.get('content-length')||0);
@@ -4114,18 +4373,23 @@ async function uploadMedia(request, env, identity, params) {
     ? `users/${identity.uid}/avatar/${mediaId}-${safeName}`
     : scope==='world'
       ? `world/${identity.uid}/${mediaId}-${safeName}`
-      : scope==='company'
-        ? `companies/${companyId}/general/${identity.uid}/${mediaId}-${safeName}`
-        : `companies/${companyId}/communities/${communityId}/${identity.uid}/${mediaId}-${safeName}`;
+      : scope==='message'
+        ? `messages/${directConversationId(identity.uid,targetUid)}/${identity.uid}/${mediaId}-${safeName}`
+        : scope==='company'
+          ? `companies/${companyId}/general/${identity.uid}/${mediaId}-${safeName}`
+          : `communities/${communityId}/${identity.uid}/${mediaId}-${safeName}`;
 
-  await env.MEDIA.put(key,body,{httpMetadata:{contentType},customMetadata:{ownerUid:identity.uid,scope,companyId,communityId,mediaId}});
-  const media={id:mediaId,key,ownerUid:identity.uid,scope,companyId,communityId,name,contentType,size:body.byteLength,createdAt:nowIso()};
+  await env.MEDIA.put(key,body,{httpMetadata:{contentType},customMetadata:{ownerUid:identity.uid,scope,companyId,communityId,targetUid,mediaId}});
+  const media={id:mediaId,key,ownerUid:identity.uid,scope,companyId,communityId,targetUid,name,contentType,size:body.byteLength,createdAt:nowIso()};
   await fsPut(env,'media',mediaId,media);
   return {media};
 }
 async function getMedia(env, identity, mediaId) {
   const media=await fsGetRequired(env,'media',mediaId,'Arquivo não encontrado.');
   if(media.scope==='company')await requireCompanyMember(env,identity.uid,media.companyId);
+  else if(media.scope==='message'){
+    if(identity.uid!==media.ownerUid&&identity.uid!==media.targetUid)throw httpError(403,'Sem permissão para este arquivo.');
+  }
   else if(media.scope==='community'){
     const community=await fsGetRequired(env,'communities',media.communityId,'Comunidade não encontrada.');
     if(community.companyId!==media.companyId)throw httpError(403,'Comunidade inválida.');
