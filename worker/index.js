@@ -5653,7 +5653,45 @@ async function verifyFirebaseToken(token, projectId) {
 }
 async function getFirebaseJwks(){if(jwksCache.expires>Date.now()&&jwksCache.keys.length)return jwksCache.keys;const r=await fetch(FIREBASE_JWKS);if(!r.ok)throw httpError(503,'Serviço de autenticação indisponível.');const body=await r.json();const maxAge=Number((r.headers.get('cache-control')||'').match(/max-age=(\d+)/)?.[1]||3600);jwksCache={keys:body.keys||[],expires:Date.now()+maxAge*1000};return jwksCache.keys;}
 
-async function getGoogleAccessToken(env){if(googleTokenCache.token&&googleTokenCache.expires>Date.now()+60000)return googleTokenCache.token;if(!env.FIREBASE_SERVICE_ACCOUNT_EMAIL||!env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY)throw httpError(503,'Service Account do Firebase ainda não foi configurada no Worker.');const now=Math.floor(Date.now()/1000);const header=b64urlJson({alg:'RS256',typ:'JWT'});const claims=b64urlJson({iss:env.FIREBASE_SERVICE_ACCOUNT_EMAIL,scope:'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3600});const input=`${header}.${claims}`;const key=await importPrivateKey(env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY);const sig=await crypto.subtle.sign({name:'RSASSA-PKCS1-v1_5'},key,new TextEncoder().encode(input));const assertion=`${input}.${b64url(new Uint8Array(sig))}`;const body=new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion});const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});const data=await r.json();if(!r.ok)throw httpError(503,`Não foi possível autenticar a API do Firebase: ${data.error_description||data.error||'erro'}`);googleTokenCache={token:data.access_token,expires:Date.now()+Number(data.expires_in||3600)*1000};return data.access_token;}
+function firebaseServiceAccount(env){
+  let email=String(env.FIREBASE_SERVICE_ACCOUNT_EMAIL||'').trim();
+  let privateKey=String(env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY||'').trim();
+  for(const candidate of [privateKey,email]){
+    const value=String(candidate||'').trim();
+    if(!value.startsWith('{'))continue;
+    try{
+      const parsed=JSON.parse(value);
+      email=String(parsed.client_email||email||'').trim();
+      privateKey=String(parsed.private_key||privateKey||'').trim();
+      if(email&&privateKey.includes('BEGIN PRIVATE KEY'))break;
+    }catch{}
+  }
+  return {email,privateKey};
+}
+async function getGoogleAccessToken(env){
+  if(googleTokenCache.token&&googleTokenCache.expires>Date.now()+60000)return googleTokenCache.token;
+  const credentials=firebaseServiceAccount(env);
+  if(!credentials.email||!credentials.privateKey)throw httpError(503,'Service Account do Firebase incompleta no Worker.');
+  const now=Math.floor(Date.now()/1000);
+  const header=b64urlJson({alg:'RS256',typ:'JWT'});
+  const claims=b64urlJson({
+    iss:credentials.email,
+    scope:'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging',
+    aud:'https://oauth2.googleapis.com/token',
+    iat:now,exp:now+3600
+  });
+  const input=`${header}.${claims}`;
+  const key=await importPrivateKey(credentials.privateKey);
+  const sig=await crypto.subtle.sign({name:'RSASSA-PKCS1-v1_5'},key,new TextEncoder().encode(input));
+  const assertion=`${input}.${b64url(new Uint8Array(sig))}`;
+  const body=new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion});
+  const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok||!data.access_token)throw httpError(503,`Firebase Service Account recusada pelo Google: ${data.error_description||data.error||`HTTP ${r.status}`}`);
+  googleTokenCache={token:data.access_token,expires:Date.now()+Number(data.expires_in||3600)*1000};
+  return data.access_token;
+}
+
 async function importPrivateKey(pem){const clean=String(pem).replace(/\\n/g,'\n').replace(/-----BEGIN PRIVATE KEY-----/,'').replace(/-----END PRIVATE KEY-----/,'').replace(/\s/g,'');const bytes=Uint8Array.from(atob(clean),c=>c.charCodeAt(0));return crypto.subtle.importKey('pkcs8',bytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);}
 
 function fsBase(env){return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)`;}
