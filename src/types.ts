@@ -1,4 +1,4 @@
-export type View = "home" | "communities" | "search" | "jobs" | "admin" | "company-data" | "profile" | "notifications" | "companies" | "plans" | "superadmin";
+export type View = "home" | "communities" | "search" | "jobs" | "admin" | "company-data" | "profile" | "notifications" | "companies" | "plans" | "creator" | "superadmin";
 export type HomeTab = "for-you" | "communities" | "world" | "recent";
 
 export interface UserProfile {
@@ -8,6 +8,7 @@ export interface UserProfile {
   username?: string;
   bio?: string;
   avatarMediaId?: string;
+  creatorEnabled?: boolean;
 }
 
 export type CompanyPlan = "free" | "premium";
