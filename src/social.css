@@ -3,3 +3,67 @@
 .social-profile-feed .post-card{margin-left:0;margin-right:0}
 .social-follow-button{min-width:132px;justify-content:center}
 .social-stats span{font-size:12px;color:var(--muted);display:inline-flex;gap:4px}.social-stats span strong{color:var(--text)}
+
+/* Perfil público — ações proporcionais */
+.social-profile-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(118px,1fr));
+  gap:8px;
+  width:min(292px,100%);
+}
+.social-profile-actions .btn,
+.social-follow-button,
+.social-block-button{
+  min-width:0!important;
+  width:100%;
+  height:40px;
+  padding:0 14px!important;
+  border-radius:11px;
+  font-size:12px;
+  line-height:1;
+  white-space:nowrap;
+  justify-content:center;
+}
+.social-profile-actions .btn svg,
+.social-follow-button svg,
+.social-block-button svg{
+  width:16px;
+  height:16px;
+  flex:none;
+}
+@media(max-width:700px){
+  .social-profile-top{
+    align-items:flex-start;
+    gap:12px;
+  }
+  .social-profile-actions{
+    width:min(210px,calc(100vw - 118px));
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+  }
+  .social-profile-actions .btn,
+  .social-follow-button,
+  .social-block-button{
+    height:38px;
+    padding:0 10px!important;
+    font-size:11px;
+    border-radius:10px;
+  }
+  .social-profile-actions .btn svg,
+  .social-follow-button svg,
+  .social-block-button svg{
+    width:15px;
+    height:15px;
+  }
+}
+@media(max-width:390px){
+  .social-profile-actions{
+    width:min(196px,calc(100vw - 108px));
+  }
+  .social-profile-actions .btn,
+  .social-follow-button,
+  .social-block-button{
+    padding:0 8px!important;
+    font-size:10.5px;
+  }
+}
