@@ -156,7 +156,7 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'POST' && path === '/superadmin/ai-agents/publish') {
     requireSuperadmin(env, identity);
     await ensureUorquiOfficialCommunityImages(env);
-    const result = await publishDailyUorquiAiPosts(env, true);
+    const result = await publishDailyUorquiAiPosts(env, true, { force: url.searchParams.get('force') === '1' });
     return json({ ...result, ...(await getUorquiAiAgentStatus(env, identity)) });
   }
   if (method === 'GET' && path === '/creator/dashboard') {
@@ -5215,6 +5215,19 @@ const UORQUI_AI_COMMUNITIES = [
   { key:'viagens', name:'Viagens', agent:'Maya · Viagens', username:'maya_viagens_uorqui', specialty:'viagens, planejamento e cultura de destinos', description:'Destinos, planejamento, cultura e ideias para viajar melhor.' }
 ];
 
+const UORQUI_AI_NEWS_QUERIES = {
+  'tecnologia-ia': 'tecnologia inteligência artificial segurança digital Brasil',
+  games: 'games jogos videogames lançamento indústria',
+  motos: 'motos motociclismo motocicletas Brasil',
+  carros: 'carros automóveis indústria automotiva Brasil',
+  financas: 'finanças economia juros bancos Brasil',
+  carreira: 'carreira trabalho emprego mercado de trabalho Brasil',
+  esportes: 'futebol brasileiro Brasileirão Corinthians Santos Palmeiras Flamengo',
+  'filmes-series': 'cinema filmes séries streaming Brasil',
+  ciencia: 'ciência pesquisa descoberta espaço saúde tecnologia',
+  viagens: 'viagens turismo destinos aviação Brasil'
+};
+
 function aiSeedId(prefix,key){ return `uorqui_ai_${prefix}_${key.replace(/[^a-z0-9-]/g,'_')}`; }
 function brazilDateKey(date=new Date()){
   return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
@@ -5324,52 +5337,159 @@ async function ensureUorquiOfficialCommunityImages(env){
   }
 }
 
-async function generateUorquiAgentPost(env,item){
-  if(!env.AI) return '';
-  const prompt=[
+function decodeXmlText(value=''){
+  return String(value)
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1')
+    .replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+    .replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/\s+/g,' ').trim();
+}
+
+async function recentNewsForAgent(item){
+  const query=UORQUI_AI_NEWS_QUERIES[item.key]||item.specialty||item.name;
+  const rssUrl=`https://news.google.com/rss/search?q=${encodeURIComponent(query+' when:2d')}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+  try{
+    const response=await fetch(rssUrl,{headers:{'User-Agent':'Uorqui/1.0','Accept':'application/rss+xml,application/xml,text/xml'}});
+    if(!response.ok)return null;
+    const xml=await response.text();
+    const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0,8);
+    for(const match of items){
+      const raw=match[1];
+      const title=decodeXmlText(raw.match(/<title>([\s\S]*?)<\/title>/i)?.[1]||'');
+      const link=decodeXmlText(raw.match(/<link>([\s\S]*?)<\/link>/i)?.[1]||'');
+      const pubDate=decodeXmlText(raw.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]||'');
+      const source=decodeXmlText(raw.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1]||'');
+      const publishedAt=pubDate?new Date(pubDate).toISOString():'';
+      if(!title||!link)continue;
+      if(publishedAt && Date.now()-new Date(publishedAt).getTime()>3*24*60*60*1000)continue;
+      return {title,link,source:source||'Google Notícias',publishedAt};
+    }
+  }catch(error){
+    console.warn('Uorqui AI news lookup failed',item.key,error?.message||error);
+  }
+  return null;
+}
+
+function aiContentChoice(item,day,force=false){
+  const seed=[...String(item.key+day)].reduce((sum,ch)=>sum+ch.charCodeAt(0),0)+(force?Date.now()%17:0);
+  return {
+    preferNews: seed%100<68,
+    withImage: seed%10<4
+  };
+}
+
+async function generateUorquiAgentPost(env,item,news=null){
+  if(!env.AI)return '';
+  const factualBase=UORQUI_AI_FACT_SEEDS[item.key]||'';
+  const prompt=news?[
+    'Você escreve para uma rede social brasileira chamada Uorqui.',
+    `Comunidade: ${item.name}. Especialidade: ${item.specialty}.`,
+    'Você recebeu uma pauta recente obtida de um agregador de notícias.',
+    `MANCHETE: ${news.title}`,
+    `FONTE: ${news.source}`,
+    `PUBLICADA EM: ${news.publishedAt||'recentemente'}`,
+    'Crie uma publicação curta em português do Brasil, entre 280 e 650 caracteres.',
+    'NÃO invente detalhes além do que está explicitamente na manchete. Não crie placares, falas, números, causas ou consequências não informadas.',
+    'Apresente a pauta com atribuição clara à fonte, contextualize apenas o que for seguro inferir do próprio título e termine com uma pergunta para discussão.',
+    'Não use hashtags, markdown ou links no corpo. Retorne somente o texto.'
+  ].join('\n'):[
     'Você escreve para uma rede social brasileira chamada Uorqui.',
     `Tema da comunidade: ${item.name}. Especialidade: ${item.specialty}.`,
-    `FATO-BASE VERIFICADO: ${UORQUI_AI_FACT_SEEDS[item.key] || ''}`,
-    'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 350 e 700 caracteres.',
-    'Use o fato-base como núcleo da publicação. Não acrescente datas, números, pesquisas, fontes ou alegações factuais que não estejam no fato-base.',
-    'Use somente conhecimento estável, consolidado e verificável. Não escreva notícia de última hora, preço, cotação, placar, estatística temporal ou fato que dependa de informação atual.',
-    'Não invente estudos, números, fontes, experiências pessoais ou acontecimentos. Se não tiver segurança factual, escolha outro assunto.',
-    'Explique algo concreto e termine com uma pergunta natural para incentivar conversa.',
-    'Não diga que é humano. Não esconda que o perfil é um agente da Equipe Uorqui assistido por IA.',
-    'Não use título, hashtags, markdown ou links. Retorne somente o texto da publicação.'
+    `FATO-BASE VERIFICADO: ${factualBase}`,
+    'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 300 e 650 caracteres.',
+    'Use o fato-base como núcleo e não acrescente números, datas, pesquisas ou alegações factuais que não estejam no fato-base.',
+    'Não invente estudos, fontes, experiências pessoais ou acontecimentos.',
+    'Termine com uma pergunta natural. Não use hashtags, markdown ou links. Retorne somente o texto.'
   ].join('\n');
+
+  const models=['@cf/zai-org/glm-4.7-flash','@cf/meta/llama-3.1-8b-instruct-fast'];
+  for(const model of models){
+    try{
+      const input={
+        messages:[
+          {role:'system',content:'Priorize precisão factual. Quando houver uma pauta jornalística, não invente nada além da manchete e da fonte fornecidas.'},
+          {role:'user',content:prompt}
+        ],
+        temperature:0.25,
+        ...(model.includes('llama-3.1-8b-instruct-fast')?{max_tokens:360}:{max_completion_tokens:360})
+      };
+      const response=await env.AI.run(model,input);
+      const text=clean(response?.response||response?.result?.response||response?.choices?.[0]?.message?.content||response?.choices?.[0]?.text||'',1400);
+      if(text)return text;
+    }catch(error){
+      console.warn('Uorqui AI text model failed',item.key,model,error?.message||error);
+    }
+  }
+  return '';
+}
+
+async function generateUorquiPostImage(env,item,communityId,uid,postId,topic){
+  if(!env.AI||!env.MEDIA)return null;
   try{
-    const response=await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast',{messages:[
-      {role:'system',content:'Priorize precisão factual. Evite qualquer afirmação incerta ou temporal.'},
-      {role:'user',content:prompt}
-    ],max_tokens:320,temperature:0.2});
-    return clean(response?.response||response?.result?.response||'',1200);
+    const prompt=[
+      'Editorial illustration for a Brazilian social network post.',
+      `Topic: ${clean(topic,700)}`,
+      `Category: ${item.name}.`,
+      'Modern, tasteful, realistic editorial illustration, strong composition, social media friendly.',
+      'No text, no logos, no watermarks, no trademarks, no identifiable real people.',
+      'Do not create a fake documentary photograph of a real news event; make it clearly illustrative.'
+    ].join(' ');
+    const result=await env.AI.run('@cf/black-forest-labs/flux-1-schnell',{prompt,steps:4});
+    const raw=String(result?.image||'').replace(/^data:image\/\w+;base64,/,'');
+    if(!raw)return null;
+    const bytes=Uint8Array.from(atob(raw),ch=>ch.charCodeAt(0));
+    if(!bytes.byteLength)return null;
+    const mediaId=id();
+    const key=`communities/${communityId}/posts/${postId}/${mediaId}-ai.jpg`;
+    await env.MEDIA.put(key,bytes,{httpMetadata:{contentType:'image/jpeg'},customMetadata:{scope:'community',communityId,mediaId,generatedBy:'uorqui_ai'}});
+    const attachment={id:mediaId,name:`${item.key}-editorial-ai.jpg`,contentType:'image/jpeg',size:bytes.byteLength};
+    await fsPut(env,'media',mediaId,{
+      id:mediaId,key,ownerUid:uid,scope:'community',companyId:'',communityId,targetUid:'',
+      name:attachment.name,contentType:attachment.contentType,size:attachment.size,
+      generatedByAi:true,postId,createdAt:nowIso()
+    });
+    return attachment;
   }catch(error){
-    console.error('Uorqui AI agent generation failed',item.key,error);
-    return '';
+    console.warn('Uorqui AI post image failed',item.key,error?.message||error);
+    return null;
   }
 }
 
-async function publishDailyUorquiAiPosts(env, forceSeed=false){
-  await ensureUorquiAiSeeds(env, forceSeed);
+async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
+  await ensureUorquiAiSeeds(env,forceSeed);
   const day=brazilDateKey();
-  let published=0, skipped=0, failed=0;
+  const force=Boolean(options?.force);
+  let published=0,skipped=0,failed=0;
   const results=[];
-  for(const item of UORQUI_AI_COMMUNITIES){
+  let cursor=0;
+
+  const publishOne=async(item,index)=>{
     const uid=aiSeedId('agent',item.key);
     const communityId=aiSeedId('community',item.key);
-    const postId=aiSeedId('post',`${item.key}_${day}`);
-    if(await fsGet(env,'posts',postId)){
+    const postId=force
+      ? `uorqui_ai_post_${item.key}_manual_${day.replace(/-/g,'')}_${crypto.randomUUID().slice(0,10)}`
+      : aiSeedId('post',`${item.key}_${day}`);
+
+    if(!force&&await fsGet(env,'posts',postId)){
       skipped+=1;
       results.push({key:item.key,name:item.name,status:'already_published',postId});
-      continue;
+      return;
     }
 
-    const text=await generateUorquiAgentPost(env,item);
+    const choice=aiContentChoice(item,day,force);
+    const news=choice.preferNews?await recentNewsForAgent(item):null;
+    const text=await generateUorquiAgentPost(env,item,news);
     if(!text){
       failed+=1;
-      results.push({key:item.key,name:item.name,status:'failed',postId:''});
-      continue;
+      results.push({key:item.key,name:item.name,status:'failed',postId:'',error:'A IA não retornou texto.'});
+      return;
+    }
+
+    let attachments=[];
+    if(choice.withImage){
+      const attachment=await generateUorquiPostImage(env,item,communityId,uid,postId,news?.title||text);
+      if(attachment)attachments=[attachment];
     }
 
     const createdAt=nowIso();
@@ -5394,36 +5514,73 @@ async function publishDailyUorquiAiPosts(env, forceSeed=false){
       text,
       title:'',
       requiresReadReceipt:false,
-      attachments:[],
+      attachments,
       reactionCount:0,
       commentCount:0,
       aiGenerated:true,
       aiDisclosure:'Conteúdo assistido por IA pela Equipe Uorqui',
+      aiDay:day,
+      aiContentMode:news?'news':'evergreen',
+      aiImageGenerated:Boolean(attachments.length),
+      sourceName:news?.source||'',
+      sourceUrl:news?.link||'',
+      sourcePublishedAt:news?.publishedAt||'',
+      sourceHeadline:news?.title||'',
       createdAt,
       updatedAt:createdAt
     });
     published+=1;
-    results.push({key:item.key,name:item.name,status:'published',postId});
-  }
-  return {ok:true,day,published,skipped,failed,total:UORQUI_AI_COMMUNITIES.length,results};
+    results.push({key:item.key,name:item.name,status:'published',postId,mode:news?'news':'evergreen',withImage:Boolean(attachments.length),source:news?.source||''});
+  };
+
+  const runner=async()=>{
+    while(cursor<UORQUI_AI_COMMUNITIES.length){
+      const index=cursor++;
+      const item=UORQUI_AI_COMMUNITIES[index];
+      try{await publishOne(item,index);}
+      catch(error){
+        failed+=1;
+        results.push({key:item?.key||'',name:item?.name||'',status:'failed',postId:'',error:String(error?.message||error).slice(0,220)});
+      }
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(4,UORQUI_AI_COMMUNITIES.length)},()=>runner()));
+
+  return {ok:true,day,published,skipped,failed,total:UORQUI_AI_COMMUNITIES.length,results,forced:force};
 }
 
-async function getUorquiAiAgentStatus(env, identity){
-  requireSuperadmin(env, identity);
+async function getUorquiAiAgentStatus(env,identity){
+  requireSuperadmin(env,identity);
   const day=brazilDateKey();
   const agents=[];
-  let communitiesReady=0, postsToday=0;
+  let communitiesReady=0;
+
+  const [todayTagged,legacyAiPosts]=await Promise.all([
+    fsWhere(env,'posts','aiDay',day,500).catch(()=>[]),
+    fsWhere(env,'posts','authorAccountType','uorqui_agent',500).catch(()=>[])
+  ]);
+  const postMap=new Map();
+  for(const post of todayTagged)postMap.set(post.id,post);
+  for(const post of legacyAiPosts){
+    if(post?.createdAt&&brazilDateKey(new Date(post.createdAt))===day)postMap.set(post.id,post);
+  }
+  const postsTodayList=[...postMap.values()];
+  const postsByAuthor=new Map();
+  for(const post of postsTodayList){
+    const list=postsByAuthor.get(post.authorUid)||[];
+    list.push(post);
+    postsByAuthor.set(post.authorUid,list);
+  }
+
   for(const item of UORQUI_AI_COMMUNITIES){
     const uid=aiSeedId('agent',item.key);
     const communityId=aiSeedId('community',item.key);
-    const postId=aiSeedId('post',`${item.key}_${day}`);
-    const [user,community,post]=await Promise.all([
+    const [user,community]=await Promise.all([
       fsGet(env,'users',uid),
-      fsGet(env,'communities',communityId),
-      fsGet(env,'posts',postId)
+      fsGet(env,'communities',communityId)
     ]);
-    if(community?.officialUorqui===true) communitiesReady+=1;
-    if(post) postsToday+=1;
+    const agentPosts=(postsByAuthor.get(uid)||[]).sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+    if(community?.officialUorqui===true)communitiesReady+=1;
     agents.push({
       key:item.key,
       name:item.agent,
@@ -5432,16 +5589,20 @@ async function getUorquiAiAgentStatus(env, identity){
       agentReady:Boolean(user),
       communityReady:Boolean(community),
       official:Boolean(community?.officialUorqui),
-      publishedToday:Boolean(post),
-      postId:post?.id||''
+      publishedToday:agentPosts.length>0,
+      postsToday:agentPosts.length,
+      postId:agentPosts[0]?.id||''
     });
   }
+
   return {
     ok:true,
     day,
     totalAgents:UORQUI_AI_COMMUNITIES.length,
     communitiesReady,
-    postsToday,
+    postsToday:postsTodayList.length,
+    postsWithImageToday:postsTodayList.filter(post=>Array.isArray(post.attachments)&&post.attachments.length>0).length,
+    newsPostsToday:postsTodayList.filter(post=>post.aiContentMode==='news').length,
     agents
   };
 }
