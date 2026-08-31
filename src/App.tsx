@@ -4132,6 +4132,9 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   const [files,setFiles]=useState<File[]>([]);
   const [sharedPostId,setSharedPostId]=useState(() => sessionStorage.getItem("uorqui-message-post") || "");
   const [mediaUrls,setMediaUrls]=useState<Record<string,string>>({});
+  const [userQuery,setUserQuery]=useState("");
+  const [userResults,setUserResults]=useState<Array<{uid:string;displayName?:string;username?:string;avatarMediaId?:string;bio?:string}>>([]);
+  const [userSearchBusy,setUserSearchBusy]=useState(false);
 
   const loadConversations=async(offset=0)=>{
     try{
@@ -4158,9 +4161,48 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   useEffect(()=>{if(targetUid)void loadMessages(targetUid);},[targetUid]);
 
   useEffect(()=>{
+    const query=userQuery.trim();
+    if(query.length<2){
+      setUserResults([]);
+      setUserSearchBusy(false);
+      return;
+    }
+    let active=true;
+    const timer=window.setTimeout(()=>{
+      setUserSearchBusy(true);
+      api<{people:Array<{uid:string;displayName?:string;username?:string;avatarMediaId?:string;bio?:string}>}>(`/social/people?q=${encodeURIComponent(query)}`)
+        .then(result=>{if(active)setUserResults(result.people||[]);})
+        .catch(()=>{if(active)setUserResults([]);})
+        .finally(()=>{if(active)setUserSearchBusy(false);});
+    },250);
+    return()=>{active=false;window.clearTimeout(timer);};
+  },[userQuery]);
+
+  useEffect(()=>{
     const ids=[...new Set(messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)))];
     ids.forEach(id=>{if(!mediaUrls[id])mediaBlobUrl(id).then(url=>setMediaUrls(c=>({...c,[id]:url}))).catch(()=>{});});
   },[messages]);
+
+  const openDirectUser=(person:{uid:string;displayName?:string;username?:string;avatarMediaId?:string})=>{
+    if(!person.uid)return;
+    setConversations(current=>{
+      if(current.some(item=>item.targetUid===person.uid))return current;
+      return [{
+        id:`new_${person.uid}`,
+        targetUid:person.uid,
+        displayName:person.displayName||"Usuário",
+        username:person.username||"",
+        avatarMediaId:person.avatarMediaId||"",
+        status:"accepted",
+        lastMessagePreview:"Nova conversa",
+        unreadCount:0
+      },...current];
+    });
+    setTargetUid(person.uid);
+    setUserQuery("");
+    setUserResults([]);
+    sessionStorage.setItem("uorqui-message-target",person.uid);
+  };
 
   const sendMessage=async(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
@@ -4197,7 +4239,26 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   return <section className="page-section messages-page">
     <div className="messages-layout">
       <aside className={`messages-list ${targetUid?"conversation-open":""}`}>
-        <div className="messages-list-head"><div><h2>Mensagens</h2><p>Conversas privadas</p></div></div>
+        <div className="messages-list-head">
+          <div><h2>Mensagens</h2><p>Conversas privadas</p></div>
+          <label className="message-user-search">
+            <Search size={16}/>
+            <input value={userQuery} onChange={e=>setUserQuery(e.target.value)} placeholder="Buscar usuário" aria-label="Buscar usuário para mensagem"/>
+          </label>
+          {userQuery.trim().length>=2&&(
+            <div className="message-user-results">
+              {userSearchBusy&&<div className="message-user-search-status">Buscando…</div>}
+              {!userSearchBusy&&userResults.map(person=>(
+                <button type="button" key={person.uid} className="message-user-result" onClick={()=>openDirectUser(person)}>
+                  <Avatar name={person.displayName||person.username||"Usuário"} mediaId={person.avatarMediaId} size={36}/>
+                  <span><strong>{person.displayName||"Usuário"}</strong>{person.username&&<small>@{person.username.replace(/^@/,"")}</small>}</span>
+                  <MessageSquareText size={16}/>
+                </button>
+              ))}
+              {!userSearchBusy&&!userResults.length&&<div className="message-user-search-status">Nenhum usuário encontrado.</div>}
+            </div>
+          )}
+        </div>
         {conversations.map(item=><button key={item.id} className={`message-contact ${targetUid===item.targetUid?"active":""}`} onClick={()=>setTargetUid(item.targetUid)}>
           <Avatar name={item.displayName} mediaId={item.avatarMediaId} size={42}/>
           <span className="message-contact-copy"><strong>{item.displayName}</strong><small>{item.lastMessagePreview||"Inicie uma conversa"}</small></span>
