@@ -1,6 +1,4 @@
-import core, { RealtimeHub } from './product-v123-navigation.js';
-
-export { RealtimeHub };
+import core from './product-v123-navigation.js';
 
 const FIREBASE_JWKS = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 let jwksCache = { expires: 0, keys: [] };
