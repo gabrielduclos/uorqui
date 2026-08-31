@@ -1121,3 +1121,12 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 
 .community-card-open{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;width:100%;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer}
 .community-join-card-button{margin:10px 0 0 50px}
+
+.community-topics{margin:0 0 10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+.community-topics-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.community-topics-head strong{font-size:12px}.community-topic-tabs{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+.community-topic-tabs::-webkit-scrollbar{display:none}
+.community-topic-tabs button{border:1px solid var(--line);background:#fafafa;border-radius:999px;padding:7px 11px;font-size:10px;white-space:nowrap;color:#62656c}
+.community-topic-tabs button.active{background:#111;color:#fff;border-color:#111}
+.community-topic-publish{margin-top:10px}
+.topbar{transition:transform .11s linear,opacity .11s linear}
