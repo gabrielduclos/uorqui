@@ -4440,7 +4440,12 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
   onDone: (post: Post) => Promise<void> | void;
   showToast: (m: string) => void;
 }) {
-  const [scope, setScope] = useState<"company" | "community" | "world">(initialScope || "company");
+  const hasCompanyAccess = data.companies.length > 0;
+  const defaultScope: "company" | "community" | "world" =
+    initialScope === "company" && !hasCompanyAccess
+      ? (initialCommunityId ? "community" : "world")
+      : initialScope || (hasCompanyAccess ? "company" : initialCommunityId ? "community" : "world");
+  const [scope, setScope] = useState<"company" | "community" | "world">(defaultScope);
   const [type, setType] = useState<"post" | "question" | "announcement" | "poll" | "event">("post");
   const [communityId, setCommunityId] = useState(initialCommunityId || data.communities[0]?.id || "");
   const [topicId, setTopicId] = useState(initialTopicId || "");
@@ -4449,7 +4454,10 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
   const [files, setFiles] = useState<File[]>([]);
   const [pollOptions, setPollOptions] = useState(["", ""]);
 
-  useEffect(() => { if (type === "announcement") setScope("company"); }, [type]);
+  useEffect(() => {
+    if (type === "announcement" && hasCompanyAccess) setScope("company");
+    if (type === "announcement" && !hasCompanyAccess) setType("post");
+  }, [type, hasCompanyAccess]);
 
   useEffect(() => {
     if (scope !== "community" || !communityId) {
@@ -4490,8 +4498,12 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
       const attachmentIds: string[] = [];
       for (const file of files.slice(0, 5)) {
         const qs = new URLSearchParams({ scope, name: file.name });
-        if (scope !== "world") qs.set("companyId", data.selectedCompanyId);
-        if (scope === "community") qs.set("communityId", communityId);
+        if (scope === "company" && data.selectedCompanyId) qs.set("companyId", data.selectedCompanyId);
+        if (scope === "community") {
+          const targetCompanyId = data.communityMap[communityId]?.companyId || "";
+          if (targetCompanyId) qs.set("companyId", targetCompanyId);
+          qs.set("communityId", communityId);
+        }
         const uploaded = await api<{ media: { id: string } }>(`/media/upload?${qs}`, {
           method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": file.name }, body: file
         });
@@ -4502,7 +4514,11 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
         method: "POST",
         body: JSON.stringify({
           scope, type, text, title,
-          companyId: scope === "world" ? "" : data.selectedCompanyId,
+          companyId: scope === "company"
+            ? data.selectedCompanyId
+            : scope === "community"
+              ? (data.communityMap[communityId]?.companyId || "")
+              : "",
           communityId: scope === "community" ? communityId : "",
           topicId: scope === "community" ? topicId : "",
           requiresReadReceipt: type === "announcement" && fd.get("receipt") === "on",
@@ -4527,7 +4543,9 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
     <Modal title="Criar publicação" onClose={onClose} wide>
       <form className="composer-form" onSubmit={submit}>
         <div className="audience-row">
-          <button type="button" className={scope === "company" ? "selected" : ""} onClick={() => setScope("company")} disabled={type === "announcement"}><Building2 size={17} /> Empresa</button>
+          {hasCompanyAccess && (
+            <button type="button" className={scope === "company" ? "selected" : ""} onClick={() => setScope("company")} disabled={type === "announcement"}><Building2 size={17} /> Empresa</button>
+          )}
           <button type="button" className={scope === "community" ? "selected" : ""} onClick={() => setScope("community")} disabled={type === "announcement" || !data.communities.length}><Users size={17} /> Comunidade</button>
           <button type="button" className={scope === "world" ? "selected" : ""} onClick={() => setScope("world")} disabled={type === "announcement"}><Globe2 size={17} /> Mundo</button>
         </div>
@@ -4542,7 +4560,7 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
           <button type="button" className={type === "question" ? "selected" : ""} onClick={() => setType("question")}><FileQuestion size={16} /> Pergunta</button>
           <button type="button" className={type === "poll" ? "selected" : ""} onClick={() => setType("poll")}><BarChart3 size={16} /> Enquete</button>
           <button type="button" className={type === "event" ? "selected" : ""} onClick={() => setType("event")}><CalendarDays size={16} /> Evento</button>
-          {data.canAdmin && <button type="button" className={type === "announcement" ? "selected" : ""} onClick={() => setType("announcement")}><Megaphone size={16} /> Comunicado</button>}
+          {data.canAdmin && hasCompanyAccess && <button type="button" className={type === "announcement" ? "selected" : ""} onClick={() => setType("announcement")}><Megaphone size={16} /> Comunicado</button>}
         </div>
 
         {(type === "announcement" || type === "event") && <label><span>{type === "event" ? "Nome do evento" : "Título"}</span><input name="title" required maxLength={180} placeholder={type === "event" ? "Ex.: Reunião mensal" : "Título do comunicado"} /></label>}
