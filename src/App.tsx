@@ -87,6 +87,8 @@ export default function App() {
   const [manageCommunityMembersId, setManageCommunityMembersId] = useState("");
   const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string }>({});
   const [headerSearch, setHeaderSearch] = useState("");
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
   const [searchSeed, setSearchSeed] = useState("");
   const [sharedPost, setSharedPost] = useState<Post | null>(null);
   const [sharedPostLoading, setSharedPostLoading] = useState(false);
@@ -97,6 +99,27 @@ export default function App() {
   const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [, setAuthRevision] = useState(0);
   const pwaInstall = usePwaInstall();
+
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+    let ticking = false;
+    const update = () => {
+      const current = Math.max(0, window.scrollY);
+      const previous = lastScrollYRef.current;
+      if (current <= 8 || current < previous) setHeaderHidden(false);
+      else if (current > previous + 2) setHeaderHidden(true);
+      lastScrollYRef.current = current;
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(update);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
     setUser(next);
@@ -738,7 +761,7 @@ export default function App() {
         </aside>
 
         <main className="main">
-          <header className="topbar">
+          <header className={`topbar ${headerHidden ? "scroll-hidden" : ""}`}>
             <div className="topbar-line">
               <div className="topbar-brand">
                 <button className="mobile-logo" onClick={() => navigate("home")}><img src="/assets/uorqui-wordmark.png" alt="Uorqui" /></button>
@@ -804,32 +827,7 @@ export default function App() {
           {renderPage()}
         </main>
 
-        <aside className="rightbar">
-          <button className="global-search" onClick={() => navigate("search")}><Search size={18} /><span>Buscar pessoas, comunidades e posts</span></button>
-          <section className="side-card">
-            <strong>{companyName}</strong>
-            <small>{data.role === "owner" ? "Proprietário" : data.role === "admin" ? "Administrador" : "Colaborador"}</small>
-          </section>
-          {!!data.company && (
-            <button className="side-card side-plan-card" onClick={() => openPlans("manual")}>
-              <span className={`plan-pill ${data.company.effectivePlan === "premium" ? "premium" : "free"}`}>
-                {data.company.effectivePlan === "premium" ? <><Crown size={12} /> Premium</> : "Free"}
-              </span>
-              <strong>Plano da empresa</strong>
-              <small>{data.company.effectivePlan === "premium" ? "Premium ativo" : "Ver Free e Premium"}</small>
-            </button>
-          )}
-          <section className="side-card">
-            <strong>Suas comunidades</strong>
-            {data.communities.slice(0, 5).map((c) => (
-              <button className="mini-community" key={c.id} onClick={() => openCommunity(c.id)}>
-                <span>{c.name.slice(0, 2).toUpperCase()}</span><div><b>{c.name}</b><small>{c.description || "Comunidade privada"}</small></div>
-              </button>
-            ))}
-            {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
-          </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.20</strong><small>Comunidades e conversas sem ruído.</small></section>
-        </aside>
+
       </div>
 
       <nav className="mobile-nav">
@@ -1329,49 +1327,8 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
   };
 
   return (
-    <div className="social-home">
-      <section className="social-home-hero">
-        <div>
-          <span className="social-home-kicker">Uorqui</span>
-          <h2>Sua rede de comunidades.</h2>
-          <p>Descubra pessoas, acompanhe comunidades e participe de conversas sem transformar tudo em mais um grupo de mensagens.</p>
-        </div>
-        <button className="btn secondary social-people-cta" onClick={onOpenPeople}><Users size={17} /> Encontrar pessoas</button>
-      </section>
-
-      {!!data.communities.length && (
-        <section className="social-community-strip">
-          <div className="social-section-title">
-            <div><strong>Suas comunidades</strong><small>Entre direto nas conversas que você acompanha.</small></div>
-            <button className="text-button" onClick={() => setTab("communities")}>Ver publicações</button>
-          </div>
-          <div className="social-community-cards">
-            {data.communities.slice(0, 8).map((community) => (
-              <button key={community.id} className="social-community-card" onClick={() => onOpenCommunity(community.id)}>
-                <span className="social-community-avatar">{community.name.slice(0, 2).toUpperCase()}</span>
-                <strong>{community.name}</strong>
-                <small>{community.description || (community.visibility === "public" ? "Comunidade pública" : "Comunidade")}</small>
-                {!!community.memberCount && <em>{community.memberCount} {community.memberCount === 1 ? "membro" : "membros"}</em>}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="quick-compose social-quick-compose">
-        <Avatar name={data.me.displayName || data.me.email} mediaId={data.me.avatarMediaId} />
-        <button onClick={onCompose}>O que você quer compartilhar com a rede?</button>
-      </section>
-
-      <section className="feed social-feed">
-        {!data.communities.length && tab === "communities" && (
-          <div className="social-community-empty">
-            <Users size={30} />
-            <strong>Suas comunidades vão aparecer aqui</strong>
-            <p>Você pode continuar usando o Mundo e encontrar pessoas mesmo sem estar ligado a uma empresa.</p>
-            <button className="btn secondary" onClick={onOpenPeople}>Encontrar pessoas</button>
-          </div>
-        )}
+    <div className="social-home social-home-clean">
+      <section className="feed social-feed social-feed-clean">
         {posts.map((post) => (
           <PostCard
             key={post.id}
@@ -1388,14 +1345,7 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
             showToast={showToast}
           />
         ))}
-        {!posts.length && tab !== "communities" && (
-          <Empty
-            title="A rede está quieta por enquanto"
-            text={tab === "world"
-              ? "Seja a primeira pessoa a publicar algo no Mundo."
-              : "Publicações das suas comunidades e do Mundo aparecerão aqui."}
-          />
-        )}
+        {!posts.length && <Empty title="Nada por aqui ainda" text="Novas publicações aparecerão aqui conforme a rede se movimentar." />}
       </section>
     </div>
   );
@@ -3769,6 +3719,7 @@ function NotificationsPage({
   const [pushBusy, setPushBusy] = useState(false);
   const [acceptingInviteId, setAcceptingInviteId] = useState("");
   const [deletingNotificationId, setDeletingNotificationId] = useState("");
+  const [joinRequestBusy, setJoinRequestBusy] = useState("");
 
   const accept = async (notification: NotificationItem) => {
     const inviteId = notification.data?.inviteId;
@@ -3789,6 +3740,24 @@ function NotificationsPage({
       showToast(errorMessage(err));
     } finally {
       setAcceptingInviteId("");
+    }
+  };
+
+  const respondJoinRequest = async (notification: NotificationItem, decision: "accept" | "reject") => {
+    const requestId = notification.data?.requestId || "";
+    if (!requestId || joinRequestBusy) return;
+    setJoinRequestBusy(requestId);
+    try {
+      await api(`/community-join-requests/${encodeURIComponent(requestId)}/respond`, {
+        method: "POST",
+        body: JSON.stringify({ decision })
+      });
+      showToast(decision === "accept" ? "Participação aprovada." : "Solicitação recusada.");
+      await refresh();
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setJoinRequestBusy("");
     }
   };
 
@@ -3895,7 +3864,8 @@ function NotificationsPage({
       <div className="notifications-page-list">
         {data.notifications.map((item, index) => {
           const pendingInvite = item.status === "pending" && ["company_invite", "community_invite"].includes(item.type);
-          const canDelete = !(item.persistent && !item.read) && !pendingInvite;
+          const pendingJoinRequest = item.status === "pending" && item.type === "community_join_request";
+          const canDelete = !(item.persistent && !item.read) && !pendingInvite && !pendingJoinRequest;
           return (
           <article
             className={`notification-page-item ${item.read ? "" : "unread"} ${item.persistent && !item.read ? "persistent" : ""}`}
@@ -3933,6 +3903,26 @@ function NotificationsPage({
                   <Check size={16} />
                   {acceptingInviteId === item.data?.inviteId ? "Aceitando…" : "Aceitar"}
                 </button>
+              )}
+
+              {pendingJoinRequest && (
+                <div className="notification-request-actions">
+                  <button
+                    className="btn small"
+                    disabled={!!joinRequestBusy}
+                    onClick={(event) => { event.stopPropagation(); void respondJoinRequest(item, "accept"); }}
+                  >
+                    <Check size={16} />
+                    {joinRequestBusy === item.data?.requestId ? "Respondendo…" : "Aceitar"}
+                  </button>
+                  <button
+                    className="btn secondary small"
+                    disabled={!!joinRequestBusy}
+                    onClick={(event) => { event.stopPropagation(); void respondJoinRequest(item, "reject"); }}
+                  >
+                    <X size={16} /> Recusar
+                  </button>
+                </div>
               )}
 
               {!!item.data?.postId && (
