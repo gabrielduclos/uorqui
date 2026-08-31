@@ -678,7 +678,7 @@ export default function App() {
   };
 
   const renderPage = () => {
-    if (data.isSuperadmin && (view === "superadmin" || (!data.companies.length && view !== "profile"))) {
+    if (data.isSuperadmin && view === "superadmin") {
       return <SuperadminPage showToast={showToast} onProfile={() => navigate("profile")} />;
     }
     if (sharedPostLoading) return <div className="page-section"><div className="loading-line">Abrindo publicação…</div></div>;
@@ -808,6 +808,7 @@ export default function App() {
       refresh={() => refresh()}
       showToast={showToast}
       onOpenSuperadmin={() => navigate("superadmin")}
+      onOpenCommunities={() => navigate("communities")}
       pwaInstalled={pwaInstall.installed}
       pwaMode={pwaInstall.mode}
       pwaInstalling={pwaInstall.installing}
@@ -3701,13 +3702,14 @@ function CompaniesPage({
 }
 
 function ProfilePage({
-  data, refresh, showToast, onOpenSuperadmin,
+  data, refresh, showToast, onOpenSuperadmin, onOpenCommunities,
   pwaInstalled, pwaMode, pwaInstalling, onInstallPwa
 }: {
   data: BootstrapData;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onOpenSuperadmin: () => void;
+  onOpenCommunities: () => void;
   pwaInstalled: boolean;
   pwaMode: "installed" | "prompt" | "ios" | "manual";
   pwaInstalling: boolean;
@@ -3941,6 +3943,18 @@ function ProfilePage({
           </form>
         </section>
       </div>
+
+      <section className="panel-card profile-community-cta">
+        <div className="profile-community-cta-icon"><Users size={20} /></div>
+        <div className="profile-community-cta-copy">
+          <strong>Crie sua comunidade</strong>
+          <p className="muted">Abra um espaço sobre um assunto que você gosta e convide outras pessoas para participar.</p>
+        </div>
+        <button className="btn small" onClick={onOpenCommunities}>
+          <Plus size={16} /> Criar comunidade
+        </button>
+      </section>
+
       <section className={`panel-card profile-install-card ${pwaInstalled ? "installed" : ""}`}>
         <div className="profile-install-icon">
           {pwaInstalled ? <Check size={21} /> : <Download size={21} />}
