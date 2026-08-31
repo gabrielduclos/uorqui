@@ -5114,12 +5114,31 @@ async function ensureUorquiAiSeeds(env){
       });
     }
     const existingCommunity=await fsGet(env,'communities',communityId);
-    if(!existingCommunity){
-      await fsPut(env,'communities',communityId,{
-        id:communityId,companyId:'',name:item.name,description:item.description,
-        visibility:'public',isDefault:false,createdBy:uid,
-        seededByUorqui:true,aiCurated:true,createdAt,updatedAt:createdAt
-      });
+    const officialCommunity={
+      ...(existingCommunity||{}),
+      id:communityId,
+      companyId:'',
+      name:item.name,
+      description:item.description,
+      visibility:'public',
+      isDefault:false,
+      createdBy:existingCommunity?.createdBy||uid,
+      seededByUorqui:true,
+      aiCurated:true,
+      officialUorqui:true,
+      officialLabel:'Oficial Uorqui',
+      officialSince:existingCommunity?.officialSince||createdAt,
+      updatedAt:createdAt,
+      createdAt:existingCommunity?.createdAt||createdAt
+    };
+    if(
+      !existingCommunity ||
+      existingCommunity.officialUorqui!==true ||
+      existingCommunity.officialLabel!=='Oficial Uorqui' ||
+      existingCommunity.seededByUorqui!==true ||
+      existingCommunity.aiCurated!==true
+    ){
+      await fsPut(env,'communities',communityId,officialCommunity);
     }
     const memberId=`${communityId}_${uid}`;
     if(!(await fsGet(env,'communityMembers',memberId))){
@@ -5180,6 +5199,8 @@ async function publishDailyUorquiAiPosts(env){
       communityId,
       communityName:item.name,
       communityVisibility:'public',
+      communityOfficialUorqui:true,
+      communityOfficialLabel:'Oficial Uorqui',
       topicId:'',
       topicName:'',
       type:'post',
