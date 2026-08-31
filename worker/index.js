@@ -1454,7 +1454,11 @@ async function requestCompanyDeletion(env, identity, companyId, body, ctx) {
   }
 
   const approvers = await deletionApproversForCompany(env, companyId);
-  return createDeletionRequest(env, identity, 'company', company, approvers, ctx);
+  const pendingSecurityChanges = await fsWhere(env, 'adminSecurityChanges', 'companyId', companyId, 100).catch(() => []);
+  for (const change of pendingSecurityChanges) {
+    if (change.status === 'pending' && change.targetUid) approvers.push(change.targetUid);
+  }
+  return createDeletionRequest(env, identity, 'company', company, [...new Set(approvers)], ctx);
 }
 
 async function requestCommunityDeletion(env, identity, communityId, ctx) {
@@ -1672,14 +1676,35 @@ async function updateCompanyMemberRole(env, identity, companyId, targetUid, body
   const actor = await requireCompanyAdmin(env, identity.uid, companyId);
   if (actor.role !== 'owner') throw httpError(403, 'Somente o proprietário pode alterar níveis de acesso.');
 
-  const target = await fsGetRequired(env, 'companyMembers', `${companyId}_${targetUid}`, 'Colaborador não encontrado.');
+  const [company, target] = await Promise.all([
+    fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.'),
+    fsGetRequired(env, 'companyMembers', `${companyId}_${targetUid}`, 'Colaborador não encontrado.')
+  ]);
   if (target.status !== 'active') throw httpError(400, 'Este colaborador não está ativo.');
   if (target.role === 'owner') throw httpError(400, 'O nível do proprietário não pode ser alterado.');
 
   const role = body.role === 'admin' ? 'admin' : body.role === 'member' ? 'member' : null;
   if (!role) throw httpError(400, 'Escolha Administrador ou Usuário.');
+  if (role === target.role) return { member: target, unchanged: true };
 
-  const updated = { ...target, role, updatedAt: nowIso() };
+  if (target.role === 'admin' && role === 'member' && isEstablishedAdmin(target)) {
+    const change = await createAdminSecurityChange(env, identity.uid, company, target, 'demote', 'member');
+    return {
+      pending: true,
+      securityDelay: true,
+      executeAfter: change.executeAfter,
+      message: 'Este administrador possui mais de 7 dias de função. O rebaixamento foi agendado e só ocorrerá após 24 horas corridas.'
+    };
+  }
+
+  const updatedAt = nowIso();
+  const updated = {
+    ...target,
+    role,
+    adminSince: role === 'admin' ? updatedAt : '',
+    roleUpdatedAt: updatedAt,
+    updatedAt
+  };
   await fsPut(env, 'companyMembers', target.id || `${companyId}_${targetUid}`, updated);
 
   await fsPut(env, 'notifications', `role_${companyId}_${targetUid}_${Date.now()}`, {
@@ -1690,7 +1715,7 @@ async function updateCompanyMemberRole(env, identity, companyId, targetUid, body
     data: { companyId },
     read: false,
     status: 'new',
-    createdAt: nowIso()
+    createdAt: updatedAt
   });
 
   return { member: updated };
@@ -1714,49 +1739,22 @@ async function removeCompanyMember(env, identity, companyId, targetUid, ctx) {
     throw httpError(403, 'Somente o proprietário pode remover outro administrador.');
   }
 
-  await fsDelete(env, 'companyMembers', `${companyId}_${targetUid}`);
-
-  const targetEmail = normalizeEmail(target.email || '');
-  const companyInvites = await fsWhere(env, 'invites', 'companyId', companyId, 250);
-  const relatedInvites = companyInvites.filter(invite =>
-    invite.targetUid === targetUid ||
-    (targetEmail && normalizeEmail(invite.email || '') === targetEmail)
-  );
-  if (relatedInvites.length) {
-    const cleanup = [];
-    for (const invite of relatedInvites) {
-      cleanup.push({ collection: 'invites', id: invite.id });
-      const recipientUids = new Set([targetUid, invite.targetUid].filter(Boolean));
-      for (const recipientUid of recipientUids) {
-        cleanup.push({ collection: 'notifications', id: `invite_${invite.id}_${recipientUid}` });
-      }
-    }
-    await fsBatchDelete(env, cleanup);
+  if (target.role === 'admin' && isEstablishedAdmin(target)) {
+    const change = await createAdminSecurityChange(env, identity.uid, company, target, 'remove');
+    return {
+      pending: true,
+      securityDelay: true,
+      executeAfter: change.executeAfter,
+      message: 'Este administrador possui mais de 7 dias de função. A remoção foi agendada e só ocorrerá após 24 horas corridas.'
+    };
   }
 
-  const notificationId = `company_removed_${companyId}_${targetUid}_${Date.now()}`;
-  const notification = {
-    recipientUid: targetUid,
-    type: 'company_member_removed',
-    title: `Você foi removido de ${company.name}`,
-    body: 'Um administrador removeu seu acesso à empresa e às comunidades vinculadas.',
-    data: { companyId, targetView: 'notifications' },
-    read: false,
-    status: 'new',
-    createdAt: nowIso()
-  };
-  await fsPut(env, 'notifications', notificationId, notification);
-
-  const cleanupTask = cleanupCompanyAccessForUser(env, companyId, targetUid)
-    .catch(error => console.error('Falha ao limpar comunidades do colaborador removido:', error));
-  if (ctx?.waitUntil) ctx.waitUntil(cleanupTask);
-  else await cleanupTask;
+  await executeCompanyMemberRemoval(env, company, target);
 
   deferPushes(ctx, [sendPushToUser(env, targetUid, {
-    title: notification.title,
-    body: notification.body,
-    notificationId,
-    type: notification.type,
+    title: `Você foi removido de ${company.name}`,
+    body: 'Seu acesso à empresa e aos espaços vinculados foi removido.',
+    type: 'company_member_removed',
     companyId,
     targetView: 'notifications',
     url: '/?notifications=1'
@@ -4264,6 +4262,209 @@ async function sendPostFollowUpReminders(env, now) {
   }
 }
 
+const ESTABLISHED_ADMIN_MS = 7 * DAY_MS;
+const ADMIN_SECURITY_DELAY_MS = 24 * 60 * 60 * 1000;
+
+function adminEstablishedAt(member) {
+  const value = member?.adminSince || member?.roleUpdatedAt || member?.joinedAt || member?.createdAt || '';
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isEstablishedAdmin(member, now = Date.now()) {
+  return Boolean(
+    member?.role === 'admin' &&
+    adminEstablishedAt(member) &&
+    now - adminEstablishedAt(member) >= ESTABLISHED_ADMIN_MS
+  );
+}
+
+async function createAdminSecurityChange(env, actorUid, company, target, action, nextRole = '') {
+  const existing = await fsWhere(env, 'adminSecurityChanges', 'targetUid', target.uid, 50).catch(() => []);
+  const pending = existing.find(item =>
+    item.companyId === company.id &&
+    item.status === 'pending' &&
+    item.action === action
+  );
+  if (pending) return pending;
+
+  const requestedAt = nowIso();
+  const executeAfter = new Date(Date.now() + ADMIN_SECURITY_DELAY_MS).toISOString();
+  const change = {
+    id: id(),
+    companyId: company.id,
+    companyName: company.name || 'Empresa',
+    targetUid: target.uid,
+    targetName: target.displayName || target.email || 'Administrador',
+    requestedBy: actorUid,
+    action,
+    nextRole,
+    status: 'pending',
+    requestedAt,
+    executeAfter,
+    createdAt: requestedAt,
+    updatedAt: requestedAt
+  };
+  await fsPut(env, 'adminSecurityChanges', change.id, change);
+
+  const adminMembers = await fsWhere(env, 'companyMembers', 'companyId', company.id, 500).catch(() => []);
+  const recipients = new Set(
+    adminMembers
+      .filter(member => member.status === 'active' && ['owner', 'admin'].includes(member.role))
+      .map(member => member.uid)
+      .filter(Boolean)
+  );
+  recipients.add(target.uid);
+
+  for (const uid of recipients) {
+    await fsPut(env, 'notifications', `admin_security_${change.id}_${uid}`, {
+      recipientUid: uid,
+      type: 'admin_security_delay',
+      title: action === 'remove'
+        ? `Remoção de administrador agendada`
+        : `Alteração de administrador agendada`,
+      body: `${change.targetName} é administrador há mais de 7 dias. A alteração só poderá ser executada após 24 horas corridas.`,
+      data: {
+        companyId: company.id,
+        targetUid: target.uid,
+        securityChangeId: change.id,
+        executeAfter,
+        targetView: 'notifications'
+      },
+      read: false,
+      status: 'new',
+      createdAt: requestedAt
+    });
+  }
+
+  return change;
+}
+
+async function cancelPendingDeletionRequestsForCompany(env, companyId, reason = '') {
+  const requests = await fsWhere(env, 'deletionRequests', 'companyId', companyId, 100).catch(() => []);
+  for (const request of requests) {
+    if (request.status !== 'pending') continue;
+    await fsPut(env, 'deletionRequests', request.id, {
+      ...request,
+      status: 'canceled',
+      canceledAt: nowIso(),
+      cancelReason: reason || 'Mudança na composição de administradores.',
+      updatedAt: nowIso()
+    });
+  }
+}
+
+async function executeCompanyMemberRemoval(env, company, target) {
+  const companyId = company.id;
+  const targetUid = target.uid;
+
+  await fsDelete(env, 'companyMembers', `${companyId}_${targetUid}`);
+
+  const targetEmail = normalizeEmail(target.email || '');
+  const companyInvites = await fsWhere(env, 'invites', 'companyId', companyId, 250);
+  const relatedInvites = companyInvites.filter(invite =>
+    invite.targetUid === targetUid ||
+    (targetEmail && normalizeEmail(invite.email || '') === targetEmail)
+  );
+  if (relatedInvites.length) {
+    const cleanup = [];
+    for (const invite of relatedInvites) {
+      cleanup.push({ collection: 'invites', id: invite.id });
+      const recipientUids = new Set([targetUid, invite.targetUid].filter(Boolean));
+      for (const recipientUid of recipientUids) {
+        cleanup.push({ collection: 'notifications', id: `invite_${invite.id}_${recipientUid}` });
+      }
+    }
+    await fsBatchDelete(env, cleanup);
+  }
+
+  await cleanupCompanyAccessForUser(env, companyId, targetUid);
+
+  await fsPut(env, 'notifications', `company_removed_${companyId}_${targetUid}_${Date.now()}`, {
+    recipientUid: targetUid,
+    type: 'company_member_removed',
+    title: `Você foi removido de ${company.name}`,
+    body: 'Seu acesso à empresa e aos espaços vinculados foi removido.',
+    data: { companyId, targetView: 'notifications' },
+    read: false,
+    status: 'new',
+    createdAt: nowIso()
+  });
+}
+
+async function executeAdminSecurityChanges(env) {
+  const pending = await fsWhere(env, 'adminSecurityChanges', 'status', 'pending', 100).catch(() => []);
+  const now = Date.now();
+
+  for (const change of pending) {
+    const due = new Date(change.executeAfter || 0).getTime();
+    if (!Number.isFinite(due) || due > now) continue;
+
+    const [company, target] = await Promise.all([
+      fsGet(env, 'companies', change.companyId),
+      fsGet(env, 'companyMembers', `${change.companyId}_${change.targetUid}`)
+    ]);
+
+    if (!company || !target || target.status !== 'active') {
+      await fsPut(env, 'adminSecurityChanges', change.id, {
+        ...change,
+        status: 'canceled',
+        canceledAt: nowIso(),
+        cancelReason: 'Empresa ou administrador não está mais ativo.',
+        updatedAt: nowIso()
+      });
+      continue;
+    }
+
+    // A proteção só executa a ação agendada se o alvo ainda for administrador.
+    if (target.role !== 'admin') {
+      await fsPut(env, 'adminSecurityChanges', change.id, {
+        ...change,
+        status: 'canceled',
+        canceledAt: nowIso(),
+        cancelReason: 'O usuário não é mais administrador.',
+        updatedAt: nowIso()
+      });
+      continue;
+    }
+
+    if (change.action === 'demote') {
+      await fsPut(env, 'companyMembers', target.id || `${change.companyId}_${change.targetUid}`, {
+        ...target,
+        role: 'member',
+        roleUpdatedAt: nowIso(),
+        adminSince: '',
+        updatedAt: nowIso()
+      });
+      await fsPut(env, 'notifications', `role_delayed_${change.companyId}_${change.targetUid}_${Date.now()}`, {
+        recipientUid: change.targetUid,
+        type: 'role_changed',
+        title: 'Seu nível de acesso foi alterado',
+        body: 'Após a janela de segurança de 24 horas, seu nível agora é Usuário.',
+        data: { companyId: change.companyId },
+        read: false,
+        status: 'new',
+        createdAt: nowIso()
+      });
+    } else if (change.action === 'remove') {
+      await executeCompanyMemberRemoval(env, company, target);
+    }
+
+    await cancelPendingDeletionRequestsForCompany(
+      env,
+      change.companyId,
+      'A composição de administradores mudou após uma janela de segurança.'
+    );
+
+    await fsPut(env, 'adminSecurityChanges', change.id, {
+      ...change,
+      status: 'completed',
+      completedAt: nowIso(),
+      updatedAt: nowIso()
+    });
+  }
+}
+
 async function runScheduled(env) {
   const now = Date.now();
   const pending = await fsWhere(env, 'invites', 'status', 'pending', 20);
@@ -4298,6 +4499,7 @@ async function runScheduled(env) {
   }
 
   await sendPostFollowUpReminders(env, now);
+  await executeAdminSecurityChanges(env);
 }
 
 async function requireAuth(request, env) {
