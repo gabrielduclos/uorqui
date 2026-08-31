@@ -78,6 +78,12 @@ async function bootstrapWithOfficialCommunities(request, env, ctx, url) {
       if (!joinedIds.has(community.id)) merged.set(community.id, community);
       payload.communityMap = payload.communityMap || {};
       payload.communityMap[community.id] = community;
+
+      if (community.alreadyMember === true && !joinedIds.has(community.id)) {
+        payload.communities = [...(payload.communities || []), community]
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+        joinedIds.add(community.id);
+      }
     }
 
     payload.allCompanyCommunities = [...merged.values()];
@@ -252,27 +258,50 @@ async function generateAgentPost(env, agent) {
   const prompt = [
     'Você escreve para uma rede social brasileira chamada Uorqui.',
     `Tema da comunidade: ${agent.communityName}. Especialidade: ${specialty}.`,
-    'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 350 e 700 caracteres.',
     `FATO-BASE VERIFICADO: ${factSeed}`,
-    'Escreva a publicação EXCLUSIVAMENTE a partir do fato-base fornecido. Você pode explicar contexto e consequência direta, mas não acrescente números, datas, pesquisas ou alegações que não estejam no fato-base.',
-    'Use somente conhecimento estável, consolidado e verificável.',
-    'Não escreva notícia de última hora, preço, cotação, placar, estatística temporal ou fato que dependa de informação atual.',
+    'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 250 e 600 caracteres.',
+    'Escreva a publicação EXCLUSIVAMENTE a partir do fato-base fornecido.',
+    'Você pode explicar contexto e consequência direta, mas não acrescente números, datas, pesquisas, fontes ou alegações que não estejam no fato-base.',
+    'Não escreva notícia de última hora, preço, cotação, placar ou estatística temporal.',
     'Não invente estudos, números, fontes, experiências pessoais ou acontecimentos.',
-    'Explique algo concreto e termine com uma pergunta natural para incentivar conversa.',
-    'Não diga que é humano e não esconda que o perfil é assistido por IA.',
+    'Termine com uma pergunta natural para incentivar conversa.',
+    'Não diga que é humano. O perfil é um agente da Equipe Uorqui assistido por IA.',
     'Não use título, hashtags, markdown ou links. Retorne somente o texto da publicação.'
   ].join('\n');
 
-  const response = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
-    messages: [
-      { role: 'system', content: 'Priorize precisão factual. Evite qualquer afirmação incerta ou temporal.' },
-      { role: 'user', content: prompt }
-    ],
-    max_tokens: 320,
-    temperature: 0.2
-  });
+  const models = [
+    '@cf/zai-org/glm-4.7-flash',
+    '@cf/meta/llama-3.1-8b-instruct-fast'
+  ];
+  const errors = [];
 
-  return clean(response?.response || response?.result?.response || '', 1200);
+  for (const model of models) {
+    try {
+      const response = await env.AI.run(model, {
+        messages: [
+          { role: 'system', content: 'Priorize precisão factual. Não invente informações além do fato-base fornecido.' },
+          { role: 'user', content: prompt }
+        ],
+        max_completion_tokens: 320,
+        temperature: 0.2
+      });
+
+      const text = clean(
+        response?.response ||
+        response?.result?.response ||
+        response?.choices?.[0]?.message?.content ||
+        response?.choices?.[0]?.text ||
+        '',
+        1200
+      );
+      if (text) return text;
+      errors.push(`${model}: resposta vazia`);
+    } catch (error) {
+      errors.push(`${model}: ${String(error?.message || error).slice(0, 140)}`);
+    }
+  }
+
+  throw httpError(502, `Workers AI não gerou texto. ${errors.join(' | ')}`);
 }
 
 function aiPostId(key, day) {
