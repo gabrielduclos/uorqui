@@ -290,14 +290,12 @@ export default function App() {
     const params = new URLSearchParams(location.search);
     const adminRequested = params.get("admin") === "1";
     const notificationsRequested = params.get("notifications") === "1";
-    const jobsRequested = params.get("jobs") === "1";
     const communityId = params.get("community") || "";
-    if (!adminRequested && !notificationsRequested && !jobsRequested && !communityId) return;
+    if (!adminRequested && !notificationsRequested && !communityId) return;
 
     const companyId = params.get("company") || "";
     params.delete("admin");
     params.delete("notifications");
-    params.delete("jobs");
     params.delete("community");
     params.delete("company");
     const query = params.toString();
@@ -312,10 +310,6 @@ export default function App() {
 
       if (adminRequested) {
         setView("admin");
-        return;
-      }
-      if (jobsRequested) {
-        setView("jobs");
         return;
       }
       if (communityId) {
@@ -427,32 +421,12 @@ export default function App() {
   if (!user) return <AuthScreen />;
   if (loading && !data.me.uid) return <Boot />;
   if (fatal) return <ErrorScreen message={fatal} onRetry={() => refresh()} onLogout={() => unregisterPushBeforeLogout()} />;
-  if (!data.companies.length && !data.isSuperadmin) return (
-    <Onboarding
-      data={data}
-      refresh={() => refresh()}
-      showToast={showToast}
-      onAccepted={async (companyId) => {
-        if (companyId) localStorage.setItem("uorqui-company", companyId);
-        await refresh(companyId || "");
-        setView("home");
-      }}
-      onCreated={async (companyId) => {
-        localStorage.setItem("uorqui-company", companyId);
-        await refresh(companyId);
-        setPlanOfferReason({
-          kind: "company_created",
-          message: "Sua empresa foi criada no plano Free. Você pode continuar grátis ou ativar o Premium agora."
-        });
-        setView("plans");
-      }}
-    />
-  );
+  // O Uorqui social não exige mais empresa para entrar.
 
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Início", communities: "Comunidades", search: "Buscar", jobs: "Vagas", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
+    home: "Rede", communities: "Comunidades", search: "Buscar", jobs: "Rede", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
   };
 
   const navigate = (next: View) => {
@@ -600,7 +574,14 @@ export default function App() {
         tab={homeTab}
         setTab={setHomeTab}
         refresh={() => refresh()}
-        onCompose={() => openComposer()}
+        onCompose={() => openComposer({ scope: "world" })}
+        onOpenCommunity={openCommunity}
+        onOpenPeople={() => {
+          const params = new URLSearchParams(location.search);
+          params.set("people", "1");
+          history.pushState({}, "", `${location.pathname}?${params.toString()}`);
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }}
         showToast={showToast}
       />
     );
@@ -621,11 +602,20 @@ export default function App() {
       />
     );
     if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} />;
-    if (view === "jobs") return <JobsPage
+    if (view === "jobs") return <HomePage
       data={data}
-      realtimeRevision={realtimeRevision}
+      tab={homeTab}
+      setTab={setHomeTab}
+      refresh={() => refresh()}
+      onCompose={() => openComposer({ scope: "world" })}
+      onOpenCommunity={openCommunity}
+      onOpenPeople={() => {
+        const params = new URLSearchParams(location.search);
+        params.set("people", "1");
+        history.pushState({}, "", `${location.pathname}?${params.toString()}`);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }}
       showToast={showToast}
-      onUpgradeRequired={(message) => openPlans("limit", message)}
     />;
     if (view === "admin") return <AdminPage
       data={data}
@@ -653,13 +643,9 @@ export default function App() {
       onNotificationRead={markNotificationReadLocal}
       onNotificationDeleted={deleteNotificationLocal}
       onOpenAdmin={(companyId) => changeCompany(companyId, "admin")}
-      onOpenJobs={async (companyId) => {
-        if (companyId && companyId !== selectedCompanyId) {
-          localStorage.setItem("uorqui-company", companyId);
-          setSelectedCompanyId(companyId);
-          await refresh(companyId, true);
-        }
-        setView("jobs");
+      onOpenJobs={async () => {
+        setHomeTab("for-you");
+        setView("home");
       }}
       onOpenCommunity={async (companyId, communityId) => {
         if (companyId && companyId !== selectedCompanyId) await changeCompany(companyId, "communities");
@@ -730,14 +716,11 @@ export default function App() {
           )}
 
           <nav className="side-nav">
-            {!!data.companies.length && <>
-              <NavButton active={view === "home"} icon={<Home />} label="Início" onClick={() => navigate("home")} />
-              <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
-              <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
-              <NavButton active={view === "jobs"} icon={<BriefcaseBusiness />} label="Vagas" onClick={() => navigate("jobs")} />
-              {data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
-              <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
-            </>}
+            <NavButton active={view === "home" || view === "jobs"} icon={<Home />} label="Rede" onClick={() => navigate("home")} />
+            <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
+            <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
+            {!!data.companies.length && data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
+            {!!data.companies.length && <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />}
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
             <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
           </nav>
@@ -811,7 +794,7 @@ export default function App() {
             {view === "home" && (
               <div className="tabs">
                 {([
-                  ["for-you", "Para você"], ["recent", "Recentes"], ["announcement", "Comunicados"], ["world", "Mundo"]
+                  ["for-you", "Para você"], ["communities", "Comunidades"], ["world", "Mundo"], ["recent", "Recentes"]
                 ] as const).map(([id, label]) => (
                   <button key={id} className={homeTab === id ? "active" : ""} onClick={() => setHomeTab(id)}>{label}</button>
                 ))}
@@ -822,7 +805,7 @@ export default function App() {
         </main>
 
         <aside className="rightbar">
-          <button className="global-search" onClick={() => navigate("search")}><Search size={18} /><span>Buscar conversas e soluções</span></button>
+          <button className="global-search" onClick={() => navigate("search")}><Search size={18} /><span>Buscar pessoas, comunidades e posts</span></button>
           <section className="side-card">
             <strong>{companyName}</strong>
             <small>{data.role === "owner" ? "Proprietário" : data.role === "admin" ? "Administrador" : "Colaborador"}</small>
@@ -845,19 +828,17 @@ export default function App() {
             ))}
             {!data.communities.length && <small>Você ainda não participa de comunidades.</small>}
           </section>
-          <section className="side-card compact"><strong>Uorqui 1.2.20</strong><small>Conversas de trabalho que não se perdem.</small></section>
+          <section className="side-card compact"><strong>Uorqui 1.2.20</strong><small>Comunidades e conversas sem ruído.</small></section>
         </aside>
       </div>
 
-      {!!data.companies.length && (
-        <nav className="mobile-nav">
-          <MobileNav active={view === "home" && homeTab !== "world"} icon={<Home />} label="Início" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
-          <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
-          <button className="mobile-create" onClick={() => setComposerOpen(true)} aria-label="Publicar"><Plus size={26} /></button>
-          <MobileNav active={view === "jobs"} icon={<BriefcaseBusiness />} label="Vagas" onClick={() => navigate("jobs")} />
-          <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
-        </nav>
-      )}
+      <nav className="mobile-nav">
+        <MobileNav active={view === "home" || view === "jobs"} icon={<Home />} label="Rede" onClick={() => { setHomeTab("for-you"); navigate("home"); }} />
+        <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
+        <button className="mobile-create" onClick={() => openComposer({ scope: "world" })} aria-label="Publicar"><Plus size={26} /></button>
+        <MobileNav active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
+        <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
+      </nav>
 
       {user && data.me.uid && pushPermissionPromptOpen && currentPushState() === "default" && (
         <Modal title="Ativar notificações" onClose={postponePushPermission}>
@@ -1270,20 +1251,39 @@ function MobileNav({ icon, label, active, badge, onClick }: { icon: ReactNode; l
   return <button className={active ? "active" : ""} onClick={onClick}>{icon}<small>{label}</small>{!!badge && <b className="mobile-badge">{badge}</b>}</button>;
 }
 
-function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
-  data: BootstrapData; tab: HomeTab; setTab: (tab: HomeTab) => void; refresh: () => Promise<void> | void;
-  onCompose: () => void; showToast: (m: string) => void;
+function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOpenPeople, showToast }: {
+  data: BootstrapData;
+  tab: HomeTab;
+  setTab: (tab: HomeTab) => void;
+  refresh: () => Promise<void> | void;
+  onCompose: () => void;
+  onOpenCommunity: (communityId: string) => void;
+  onOpenPeople: () => void;
+  showToast: (m: string) => void;
 }) {
   const [hiddenPostIds, setHiddenPostIds] = useState<Set<string>>(() => new Set());
   const [postOverrides, setPostOverrides] = useState<Record<string, Post>>({});
+
+  const communityPosts = useMemo(
+    () => data.posts.filter((post) => post.scope === "community"),
+    [data.posts]
+  );
+
   const posts = useMemo(() => {
+    const mergeUnique = (items: Post[]) => Array.from(
+      new Map(items.map((post) => [post.id, post])).values()
+    ).sort((a, b) => +new Date(b.createdAt || 0) - +new Date(a.createdAt || 0));
+
     let source: Post[];
-    if (tab === "world") source = data.worldPosts;
-    else if (tab === "announcement") source = data.posts.filter((p) => p.type === "announcement");
-    else if (tab === "recent") source = [...data.posts].sort((a, b) => +new Date(b.createdAt || 0) - +new Date(a.createdAt || 0));
-    else source = data.posts;
-    return source.filter((post) => !hiddenPostIds.has(post.id)).map((post) => postOverrides[post.id] || post);
-  }, [data, tab, hiddenPostIds, postOverrides]);
+    if (tab === "communities") source = communityPosts;
+    else if (tab === "world") source = data.worldPosts;
+    else if (tab === "recent") source = mergeUnique([...data.worldPosts, ...data.posts]);
+    else source = mergeUnique([...communityPosts, ...data.worldPosts]);
+
+    return source
+      .filter((post) => !hiddenPostIds.has(post.id))
+      .map((post) => postOverrides[post.id] || post);
+  }, [communityPosts, data.posts, data.worldPosts, tab, hiddenPostIds, postOverrides]);
 
   const like = async (post: Post) => {
     try {
@@ -1295,9 +1295,15 @@ function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
       throw err;
     }
   };
+
   const read = async (post: Post) => {
-    try { await api(`/posts/${post.id}/read`, { method: "POST" }); showToast("Leitura confirmada."); await refresh(); }
-    catch (err) { showToast(errorMessage(err)); }
+    try {
+      await api(`/posts/${post.id}/read`, { method: "POST" });
+      showToast("Leitura confirmada.");
+      await refresh();
+    } catch (err) {
+      showToast(errorMessage(err));
+    }
   };
 
   const remove = async (post: Post) => {
@@ -1307,11 +1313,8 @@ function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
       : "Excluir sua publicação? Esta ação não pode ser desfeita.";
     if (!confirm(message)) return;
 
-    if (adminDeletingAnother) {
-      setPostOverrides((current) => ({ ...current, [post.id]: optimisticTombstone(post) }));
-    } else {
-      setHiddenPostIds((current) => new Set(current).add(post.id));
-    }
+    if (adminDeletingAnother) setPostOverrides((current) => ({ ...current, [post.id]: optimisticTombstone(post) }));
+    else setHiddenPostIds((current) => new Set(current).add(post.id));
 
     try {
       const result = await api<{ tombstone?: boolean; post?: Post }>(`/posts/${post.id}`, { method: "DELETE" });
@@ -1326,29 +1329,75 @@ function HomePage({ data, tab, setTab, refresh, onCompose, showToast }: {
   };
 
   return (
-    <>
-      <section className="quick-compose">
+    <div className="social-home">
+      <section className="social-home-hero">
+        <div>
+          <span className="social-home-kicker">Uorqui</span>
+          <h2>Sua rede de comunidades.</h2>
+          <p>Descubra pessoas, acompanhe comunidades e participe de conversas sem transformar tudo em mais um grupo de mensagens.</p>
+        </div>
+        <button className="btn secondary social-people-cta" onClick={onOpenPeople}><Users size={17} /> Encontrar pessoas</button>
+      </section>
+
+      {!!data.communities.length && (
+        <section className="social-community-strip">
+          <div className="social-section-title">
+            <div><strong>Suas comunidades</strong><small>Entre direto nas conversas que você acompanha.</small></div>
+            <button className="text-button" onClick={() => setTab("communities")}>Ver publicações</button>
+          </div>
+          <div className="social-community-cards">
+            {data.communities.slice(0, 8).map((community) => (
+              <button key={community.id} className="social-community-card" onClick={() => onOpenCommunity(community.id)}>
+                <span className="social-community-avatar">{community.name.slice(0, 2).toUpperCase()}</span>
+                <strong>{community.name}</strong>
+                <small>{community.description || (community.visibility === "public" ? "Comunidade pública" : "Comunidade")}</small>
+                {!!community.memberCount && <em>{community.memberCount} {community.memberCount === 1 ? "membro" : "membros"}</em>}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="quick-compose social-quick-compose">
         <Avatar name={data.me.displayName || data.me.email} mediaId={data.me.avatarMediaId} />
-        <button onClick={onCompose}>Compartilhe algo com sua empresa ou comunidade…</button>
+        <button onClick={onCompose}>O que você quer compartilhar com a rede?</button>
       </section>
-      <section className="feed">
-        {posts.map((post) => <PostCard
-          key={post.id}
-          post={post}
-          companyName={data.company?.name}
-          community={data.communityMap[post.communityId || ""]}
-          onLike={like}
-          onRead={read}
-          canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
-          onDelete={remove}
-          currentUid={data.me.uid}
-          canAdmin={data.canAdmin}
-          onChanged={refresh}
-          showToast={showToast}
-        />)}
-        {!posts.length && <Empty title="Nada por aqui ainda" text={tab === "world" ? "Ainda não há publicações públicas." : "Quando sua empresa ou suas comunidades publicarem, aparecerá aqui."} />}
+
+      <section className="feed social-feed">
+        {!data.communities.length && tab === "communities" && (
+          <div className="social-community-empty">
+            <Users size={30} />
+            <strong>Suas comunidades vão aparecer aqui</strong>
+            <p>Você pode continuar usando o Mundo e encontrar pessoas mesmo sem estar ligado a uma empresa.</p>
+            <button className="btn secondary" onClick={onOpenPeople}>Encontrar pessoas</button>
+          </div>
+        )}
+        {posts.map((post) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            companyName={data.company?.name}
+            community={data.communityMap[post.communityId || ""]}
+            onLike={like}
+            onRead={read}
+            canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
+            onDelete={remove}
+            currentUid={data.me.uid}
+            canAdmin={data.canAdmin}
+            onChanged={refresh}
+            showToast={showToast}
+          />
+        ))}
+        {!posts.length && tab !== "communities" && (
+          <Empty
+            title="A rede está quieta por enquanto"
+            text={tab === "world"
+              ? "Seja a primeira pessoa a publicar algo no Mundo."
+              : "Publicações das suas comunidades e do Mundo aparecerão aqui."}
+          />
+        )}
       </section>
-    </>
+    </div>
   );
 }
 
