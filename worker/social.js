@@ -50,6 +50,14 @@ async function routeSocial(request, env, identity, url) {
     return json(await getPublicProfile(env, identity, decodeURIComponent(profileMatch[1])));
   }
 
+  const blockMatch = path.match(/^\/profiles\/([^/]+)\/block$/);
+  if (blockMatch && method === 'POST') {
+    return json(await blockUser(env, identity, decodeURIComponent(blockMatch[1])));
+  }
+  if (blockMatch && method === 'DELETE') {
+    return json(await unblockUser(env, identity, decodeURIComponent(blockMatch[1])));
+  }
+
   const followMatch = path.match(/^\/profiles\/([^/]+)\/follow$/);
   if (followMatch && method === 'POST') {
     return json(await followUser(env, identity, decodeURIComponent(followMatch[1])));
@@ -157,18 +165,24 @@ async function hydrateSocialPosts(env, identity, rows, limit = 60) {
 }
 
 async function getSocialFeed(env, identity) {
-  const [follows, allPosts] = await Promise.all([
+  const [follows, allPosts, myBlocks, blockedBy] = await Promise.all([
     queryCollection(env, 'socialFollows', 'followerUid', identity.uid, 500).catch(() => []),
-    listAllPosts(env, 300)
+    listAllPosts(env, 300),
+    queryCollection(env, 'socialBlocks', 'blockerUid', identity.uid, 500).catch(() => []),
+    queryCollection(env, 'socialBlocks', 'targetUid', identity.uid, 500).catch(() => [])
   ]);
-  const followedUids = [...new Set(follows.map(item => item.targetUid).filter(Boolean))];
+  const blockedUids = new Set([
+    ...myBlocks.map(item => item.targetUid),
+    ...blockedBy.map(item => item.blockerUid)
+  ].filter(Boolean));
+  const followedUids = [...new Set(follows.map(item => item.targetUid).filter(uid => uid && !blockedUids.has(uid)))];
   const followedSet = new Set(followedUids);
 
   const followedRows = followedUids.length
     ? allPosts.filter(post => followedSet.has(post.authorUid))
     : [];
 
-  const recommendedRows = allPosts.filter(post => !followedSet.has(post.authorUid));
+  const recommendedRows = allPosts.filter(post => !followedSet.has(post.authorUid) && !blockedUids.has(post.authorUid));
   const followedPosts = await hydrateSocialPosts(env, identity, followedRows, 80);
   const recommendedPosts = await hydrateSocialPosts(env, identity, recommendedRows, 45);
 
@@ -202,11 +216,19 @@ async function getSocialFeed(env, identity) {
 
 
 async function listPeople(env, identity, query) {
-  const response = await fsRequest(env, '/documents/users?pageSize=80');
+  const [response, myBlocks, blockedBy] = await Promise.all([
+    fsRequest(env, '/documents/users?pageSize=80'),
+    queryCollection(env, 'socialBlocks', 'blockerUid', identity.uid, 500).catch(() => []),
+    queryCollection(env, 'socialBlocks', 'targetUid', identity.uid, 500).catch(() => [])
+  ]);
+  const blockedUids = new Set([
+    ...myBlocks.map(item => item.targetUid),
+    ...blockedBy.map(item => item.blockerUid)
+  ].filter(Boolean));
   const term = clean(query, 80).toLowerCase();
   const users = (response?.documents || [])
     .map(fromDoc)
-    .filter((user) => user.uid !== identity.uid)
+    .filter((user) => user.uid !== identity.uid && !blockedUids.has(user.uid || user.id))
     .filter((user) => {
       if (!term) return true;
       return [user.displayName, user.username, user.bio]
@@ -226,22 +248,29 @@ async function getPublicProfile(env, identity, targetUid) {
   const user = await fsGet(env, 'users', targetUid);
   if (!user) throw httpError(404, 'Perfil não encontrado.');
 
-  const [followingRows, followerRows, allPosts, following] = await Promise.all([
+  const isMe = targetUid === identity.uid;
+  const [followingRows, followerRows, allPosts, following, myBlock, theirBlock] = await Promise.all([
     queryCollection(env, 'socialFollows', 'followerUid', targetUid, 500).catch(() => []),
     queryCollection(env, 'socialFollows', 'targetUid', targetUid, 500).catch(() => []),
     listAllPosts(env, 300),
-    targetUid === identity.uid ? null : fsGet(env, 'socialFollows', followId(identity.uid, targetUid))
+    isMe ? null : fsGet(env, 'socialFollows', followId(identity.uid, targetUid)),
+    isMe ? null : fsGet(env, 'socialBlocks', blockId(identity.uid, targetUid)),
+    isMe ? null : fsGet(env, 'socialBlocks', blockId(targetUid, identity.uid))
   ]);
 
-  const authored = allPosts.filter(post => post.authorUid === targetUid);
+  const blocked = Boolean(myBlock);
+  const blockedBy = Boolean(theirBlock);
+  const authored = (!blocked && !blockedBy) ? allPosts.filter(post => post.authorUid === targetUid) : [];
   const posts = await hydrateSocialPosts(env, identity, authored, 60);
 
   return {
     profile: publicUser(user),
     followerCount: followerRows.length,
     followingCount: followingRows.length,
-    isFollowing: Boolean(following),
-    isMe: targetUid === identity.uid,
+    isFollowing: !blocked && !blockedBy && Boolean(following),
+    isBlocked: blocked,
+    isBlockedBy: blockedBy,
+    isMe,
     posts
   };
 }
@@ -250,6 +279,11 @@ async function followUser(env, identity, targetUid) {
   if (!targetUid || targetUid === identity.uid) throw httpError(400, 'Você não pode seguir a si mesmo.');
   const target = await fsGet(env, 'users', targetUid);
   if (!target) throw httpError(404, 'Perfil não encontrado.');
+  const [myBlock, theirBlock] = await Promise.all([
+    fsGet(env, 'socialBlocks', blockId(identity.uid, targetUid)),
+    fsGet(env, 'socialBlocks', blockId(targetUid, identity.uid))
+  ]);
+  if (myBlock || theirBlock) throw httpError(403, 'Não é possível seguir este usuário enquanto houver bloqueio.');
   const id = followId(identity.uid, targetUid);
   await fsPut(env, 'socialFollows', id, {
     id,
@@ -267,6 +301,37 @@ async function unfollowUser(env, identity, targetUid) {
   const followers = await queryCollection(env, 'socialFollows', 'targetUid', targetUid, 500);
   return { following: false, followerCount: followers.length };
 }
+async function blockUser(env, identity, targetUid) {
+  if (!targetUid || targetUid === identity.uid) throw httpError(400, 'Você não pode bloquear a si mesmo.');
+  const target = await fsGet(env, 'users', targetUid);
+  if (!target) throw httpError(404, 'Perfil não encontrado.');
+
+  const id = blockId(identity.uid, targetUid);
+  await fsPut(env, 'socialBlocks', id, {
+    id,
+    blockerUid: identity.uid,
+    targetUid,
+    createdAt: new Date().toISOString()
+  });
+
+  await Promise.allSettled([
+    fsDelete(env, 'socialFollows', followId(identity.uid, targetUid)),
+    fsDelete(env, 'socialFollows', followId(targetUid, identity.uid))
+  ]);
+
+  return { blocked: true };
+}
+
+async function unblockUser(env, identity, targetUid) {
+  if (!targetUid || targetUid === identity.uid) throw httpError(400, 'Ação inválida.');
+  await fsDelete(env, 'socialBlocks', blockId(identity.uid, targetUid));
+  return { blocked: false };
+}
+
+function blockId(blockerUid, targetUid) {
+  return `${blockerUid}__${targetUid}`;
+}
+
 
 function publicUser(user) {
   return {
