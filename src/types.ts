@@ -1,5 +1,5 @@
 export type View = "home" | "communities" | "search" | "jobs" | "admin" | "company-data" | "profile" | "notifications" | "companies" | "plans" | "superadmin";
-export type HomeTab = "for-you" | "recent" | "announcement" | "world";
+export type HomeTab = "for-you" | "communities" | "world" | "recent";
 
 export interface UserProfile {
   uid: string;
