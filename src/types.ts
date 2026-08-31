@@ -64,6 +64,7 @@ export interface Community {
   visibility?: "public" | "private";
   memberCount?: number;
   verifiedCompany?: boolean;
+  createdBy?: string;
 }
 
 export interface CommunityTopic {
