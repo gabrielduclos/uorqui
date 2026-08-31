@@ -160,6 +160,7 @@ async function publishOfficialAgentsFast(request, env, ctx, url) {
   const status = authorization.status || {};
   const agents = Array.isArray(status.agents) ? status.agents : [];
   const day = status.day || brazilDateKey();
+  const manualRunId = Date.now().toString(36);
   if (!agents.length) throw httpError(409, 'Nenhum agente oficial foi encontrado. Use “Garantir comunidades” e tente novamente.');
 
   let published = 0;
@@ -169,13 +170,7 @@ async function publishOfficialAgentsFast(request, env, ctx, url) {
   let cursor = 0;
 
   const publishOne = async (agent) => {
-    const postId = aiPostId(agent.key, day);
-    if (agent.publishedToday || await fsGet(env, 'posts', postId)) {
-      skipped += 1;
-      results.push({ key: agent.key, name: agent.communityName, status: 'already_published', postId });
-      return;
-    }
-
+    const postId = `uorqui_ai_post_${agent.key}_manual_${manualRunId}_${crypto.randomUUID().slice(0,8)}`;
     const text = await generateAgentPost(env, agent);
     if (!text) {
       failed += 1;
@@ -277,14 +272,15 @@ async function generateAgentPost(env, agent) {
 
   for (const model of models) {
     try {
-      const response = await env.AI.run(model, {
+      const input = {
         messages: [
           { role: 'system', content: 'Priorize precisão factual. Não invente informações além do fato-base fornecido.' },
           { role: 'user', content: prompt }
         ],
-        max_completion_tokens: 320,
-        temperature: 0.2
-      });
+        temperature: 0.2,
+        ...(model.includes('llama-3.1-8b-instruct-fast') ? { max_tokens: 320 } : { max_completion_tokens: 320 })
+      };
+      const response = await env.AI.run(model, input);
 
       const text = clean(
         response?.response ||
