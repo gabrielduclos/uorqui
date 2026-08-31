@@ -2712,10 +2712,15 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
 
   const changeRole = async (uid: string, role: "admin" | "member") => {
     try {
-      await api(`/companies/${data.selectedCompanyId}/members/${uid}`, {
+      const result = await api<{ pending?: boolean; executeAfter?: string; message?: string }>(`/companies/${data.selectedCompanyId}/members/${uid}`, {
         method: "PATCH", body: JSON.stringify({ role })
       });
-      showToast(role === "admin" ? "Usuário agora é Administrador." : "Nível alterado para Usuário.");
+      if (result.pending) {
+        const when = result.executeAfter ? new Date(result.executeAfter).toLocaleString("pt-BR") : "após 24 horas";
+        showToast(`Alteração protegida: será efetivada ${when}.`);
+      } else {
+        showToast(role === "admin" ? "Usuário agora é Administrador." : "Nível alterado para Usuário.");
+      }
       await refresh();
     } catch (err) { showToast(errorMessage(err)); }
   };
@@ -2725,10 +2730,15 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
     if (!confirm(`Remover ${name} da empresa e de todas as comunidades?`)) return;
     setMemberActionBusy(member.uid);
     try {
-      await api(`/companies/${data.selectedCompanyId}/members/${encodeURIComponent(member.uid)}`, {
+      const result = await api<{ pending?: boolean; executeAfter?: string; message?: string }>(`/companies/${data.selectedCompanyId}/members/${encodeURIComponent(member.uid)}`, {
         method: "DELETE"
       });
-      showToast("Colaborador removido da empresa.");
+      if (result.pending) {
+        const when = result.executeAfter ? new Date(result.executeAfter).toLocaleString("pt-BR") : "após 24 horas";
+        showToast(`Remoção protegida: será efetivada ${when}.`);
+      } else {
+        showToast("Colaborador removido da empresa.");
+      }
       await Promise.all([refresh(), loadSentInvites()]);
     } catch (err) {
       showToast(errorMessage(err));
@@ -2780,7 +2790,7 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
   return (
     <section className="page-section">
       <div className="page-heading admin-page-heading">
-        <div><h2>Administrar</h2><p>Escolha a empresa e gerencie colaboradores e comunidades públicas ou privadas.</p></div>
+        <div><h2>Administrar</h2><p>Escolha a empresa e gerencie colaboradores e comunidades. Administradores com mais de 7 dias possuem janela de segurança de 24 horas para rebaixamento ou remoção.</p></div>
         <label className="admin-company-picker">
           <span>Empresa</span>
           <select value={data.selectedCompanyId} onChange={(event) => onCompanyChange(event.target.value)}>
