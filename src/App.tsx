@@ -97,18 +97,47 @@ type PlanOfferReason =
   | { kind: "manual"; message?: string }
   | null;
 
+const LAST_VIEW_KEY = "uorqui-last-view-v1";
+const LAST_HOME_TAB_KEY = "uorqui-last-home-tab-v1";
+const LAST_COMMUNITY_KEY = "uorqui-last-community-v1";
+const LAST_SCROLL_KEY = "uorqui-last-scroll-v1";
+
+function storedView(): View {
+  try {
+    const value = sessionStorage.getItem(LAST_VIEW_KEY) as View | null;
+    const allowed: View[] = ["home","communities","search","profile","messages","notifications","plans","superadmin"];
+    return value && allowed.includes(value) ? value : "home";
+  } catch {
+    return "home";
+  }
+}
+
+function storedHomeTab(): HomeTab {
+  try {
+    const value = sessionStorage.getItem(LAST_HOME_TAB_KEY) as HomeTab | null;
+    return value && ["for-you","communities","world","recent"].includes(value) ? value : "for-you";
+  } catch {
+    return "for-you";
+  }
+}
+
+function storedCommunityId() {
+  try { return sessionStorage.getItem(LAST_COMMUNITY_KEY) || ""; }
+  catch { return ""; }
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [data, setData] = useState<BootstrapData>(emptyData);
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState("");
-  const [view, setView] = useState<View>("home");
-  const [homeTab, setHomeTab] = useState<HomeTab>("for-you");
+  const [view, setView] = useState<View>(() => storedView());
+  const [homeTab, setHomeTab] = useState<HomeTab>(() => storedHomeTab());
   const [composerOpen, setComposerOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [selectedCommunityId, setSelectedCommunityId] = useState("");
+  const [selectedCommunityId, setSelectedCommunityId] = useState(() => storedCommunityId());
   const [manageCommunityMembersId, setManageCommunityMembersId] = useState("");
   const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string; topicId?: string }>({});
   const [headerSearch, setHeaderSearch] = useState("");
@@ -125,6 +154,40 @@ export default function App() {
   const [lastCreatedPost, setLastCreatedPost] = useState<Post | null>(null);
   const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [, setAuthRevision] = useState(0);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(LAST_VIEW_KEY, view);
+      sessionStorage.setItem(LAST_HOME_TAB_KEY, homeTab);
+      if (selectedCommunityId) sessionStorage.setItem(LAST_COMMUNITY_KEY, selectedCommunityId);
+      else sessionStorage.removeItem(LAST_COMMUNITY_KEY);
+    } catch {}
+  }, [view, homeTab, selectedCommunityId]);
+
+  useEffect(() => {
+    const saveScroll = () => {
+      try {
+        sessionStorage.setItem(LAST_SCROLL_KEY, String(Math.max(0, window.scrollY || 0)));
+      } catch {}
+    };
+    window.addEventListener("scroll", saveScroll, { passive: true });
+    window.addEventListener("pagehide", saveScroll);
+    return () => {
+      window.removeEventListener("scroll", saveScroll);
+      window.removeEventListener("pagehide", saveScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authReady || !user || loading) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const y = Number(sessionStorage.getItem(LAST_SCROLL_KEY) || "0");
+        if (Number.isFinite(y) && y > 0) window.scrollTo({ top: y, behavior: "auto" });
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [authReady, user?.uid, loading]);
 
   useEffect(() => {
     const scroller = document.scrollingElement || document.documentElement;
@@ -236,7 +299,8 @@ export default function App() {
 
   const refresh = async (companyId = selectedCompanyId, silent = false) => {
     if (!auth.currentUser) return;
-    if (!silent) {
+    const firstLoad = !data.me.uid;
+    if (!silent && firstLoad) {
       setLoading(true);
       setFatal("");
     }
@@ -278,7 +342,7 @@ export default function App() {
     } catch (error) {
       if (!silent) setFatal(errorMessage(error));
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && firstLoad) setLoading(false);
     }
   };
 
