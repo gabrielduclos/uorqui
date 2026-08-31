@@ -228,6 +228,9 @@ async function routeApi(request, env, identity, url, ctx) {
     const companyId = decodeURIComponent(path.split('/')[2]);
     return json(await createCommunity(env, identity, companyId, await readJson(request)), 201);
   }
+  if (method === 'POST' && path === '/communities') {
+    return json(await createSocialCommunity(env, identity, await readJson(request)), 201);
+  }
   if (method === 'POST' && /^\/communities\/[^/]+\/invites$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await createCommunityInvite(env, identity, communityId, await readJson(request), ctx), 201);
@@ -2233,6 +2236,40 @@ function communityView(community) {
   return { ...community, visibility: normalizedCommunityVisibility(community?.visibility) };
 }
 
+async function createSocialCommunity(env, identity, body) {
+  await ensureUser(env, identity);
+  const name = clean(body.name, 90);
+  const description = clean(body.description || '', 280);
+  const visibility = normalizedCommunityVisibility(body.visibility);
+  if (!name) throw httpError(400, 'Informe o nome da comunidade.');
+
+  const communityId = id();
+  const createdAt = nowIso();
+  const community = {
+    id: communityId,
+    companyId: '',
+    name,
+    description,
+    visibility,
+    isDefault: false,
+    createdBy: identity.uid,
+    createdAt,
+    updatedAt: createdAt
+  };
+  const membership = {
+    id: `${communityId}_${identity.uid}`,
+    companyId: '',
+    communityId,
+    uid: identity.uid,
+    role: 'owner',
+    joinedAt: createdAt,
+    addedBy: identity.uid
+  };
+  await fsPut(env, 'communities', communityId, community);
+  await fsPut(env, 'communityMembers', membership.id, membership);
+  return { community: communityView(community) };
+}
+
 async function createCommunity(env, identity, companyId, body) {
   await requireCompanyAdmin(env, identity.uid, companyId);
   await assertCommunityCapacity(env, companyId);
@@ -2247,7 +2284,11 @@ async function createCommunity(env, identity, companyId, body) {
 
 async function updateCommunityVisibility(env, identity, communityId, body) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-  await requireCompanyAdmin(env, identity.uid, community.companyId);
+  if (community.companyId) {
+    await requireCompanyAdmin(env, identity.uid, community.companyId);
+  } else if (!(await canManageCommunityStructure(env, identity, community))) {
+    throw httpError(403, 'Somente o dono ou moderadores podem alterar esta comunidade.');
+  }
 
   if (body.visibility !== 'public' && body.visibility !== 'private') {
     throw httpError(400, 'Escolha se a comunidade é pública ou privada.');
@@ -2264,6 +2305,12 @@ async function updateCommunityVisibility(env, identity, communityId, body) {
 }
 
 async function requireCommunityAccess(env, uid, community) {
+  if (!community.companyId) {
+    if (publicCommunity(community)) return { uid, role: 'member', social: true };
+    const membership = await requireCommunityMember(env, uid, community.id);
+    return membership;
+  }
+
   const companyMember = await requireCompanyMember(env, uid, community.companyId);
   if (companyMember.role === 'owner' || companyMember.role === 'admin') return companyMember;
   if (publicCommunity(community)) return companyMember;
@@ -2454,25 +2501,41 @@ async function respondCommunityJoinRequest(env, identity, requestId, body, ctx) 
 
 async function getCommunityMembers(env, identity, communityId) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-  const companyMember = await requireCompanyMember(env, identity.uid, community.companyId);
-  if (companyMember.role !== 'owner' && companyMember.role !== 'admin') {
-    await requireCommunityMember(env, identity.uid, community.id);
+
+  if (community.companyId) {
+    const companyMember = await requireCompanyMember(env, identity.uid, community.companyId);
+    if (companyMember.role !== 'owner' && companyMember.role !== 'admin') {
+      await requireCommunityMember(env, identity.uid, community.id);
+    }
+  } else {
+    if (!publicCommunity(community)) await requireCommunityMember(env, identity.uid, community.id);
   }
 
   const docs = await fsWhere(env, 'communityMembers', 'communityId', communityId, 250);
   const members = [];
   for (const membership of docs) {
     const user = await fsGet(env, 'users', membership.uid);
-    const companyMember = await fsGet(env, 'companyMembers', `${community.companyId}_${membership.uid}`);
-    if (!companyMember || companyMember.status !== 'active') continue;
-    members.push({
-      uid: membership.uid,
-      displayName: user?.displayName || companyMember.displayName || '',
-      email: user?.email || companyMember.email || '',
-      avatarMediaId: user?.avatarMediaId || '',
-      companyRole: companyMember.role || 'member',
-      communityRole: membership.role || 'member'
-    });
+    if (community.companyId) {
+      const companyMember = await fsGet(env, 'companyMembers', `${community.companyId}_${membership.uid}`);
+      if (!companyMember || companyMember.status !== 'active') continue;
+      members.push({
+        uid: membership.uid,
+        displayName: user?.displayName || companyMember.displayName || '',
+        email: user?.email || companyMember.email || '',
+        avatarMediaId: user?.avatarMediaId || '',
+        companyRole: companyMember.role || 'member',
+        communityRole: membership.role || 'member'
+      });
+    } else {
+      members.push({
+        uid: membership.uid,
+        displayName: user?.displayName || '',
+        email: user?.email || '',
+        avatarMediaId: user?.avatarMediaId || '',
+        companyRole: '',
+        communityRole: membership.role || 'member'
+      });
+    }
   }
   members.sort((a,b) => (a.displayName || a.email).localeCompare(b.displayName || b.email, 'pt-BR'));
   return { community: { ...communityView(community), memberCount: members.length }, members, count: members.length };
