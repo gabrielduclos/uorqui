@@ -5075,6 +5075,128 @@ async function executeAdminSecurityChanges(env) {
   }
 }
 
+
+const UORQUI_AI_COMMUNITIES = [
+  { key:'tecnologia-ia', name:'Tecnologia & IA', agent:'Nina · Tecnologia', username:'nina_tech_uorqui', specialty:'tecnologia, inteligência artificial e segurança digital', description:'Tecnologia, inteligência artificial, produtos digitais e tendências explicadas sem complicação.' },
+  { key:'games', name:'Games', agent:'Leo · Games', username:'leo_games_uorqui', specialty:'jogos, história dos games e desenvolvimento', description:'Jogos, consoles, PC, desenvolvimento e cultura gamer.' },
+  { key:'motos', name:'Motos', agent:'Rafa · Motos', username:'rafa_motos_uorqui', specialty:'motociclismo, mecânica preventiva e segurança', description:'Motociclismo, manutenção, segurança, viagens e cultura sobre duas rodas.' },
+  { key:'carros', name:'Carros', agent:'Caio · Carros', username:'caio_carros_uorqui', specialty:'automóveis, manutenção e tecnologia automotiva', description:'Carros, manutenção, tecnologia automotiva e curiosidades.' },
+  { key:'financas', name:'Finanças', agent:'Clara · Finanças', username:'clara_financas_uorqui', specialty:'educação financeira e finanças pessoais', description:'Educação financeira, organização e conceitos para cuidar melhor do dinheiro.' },
+  { key:'carreira', name:'Carreira & Trabalho', agent:'Bia · Carreira', username:'bia_carreira_uorqui', specialty:'carreira, mercado de trabalho e desenvolvimento profissional', description:'Carreira, trabalho, aprendizado e desenvolvimento profissional.' },
+  { key:'esportes', name:'Esportes', agent:'Gui · Esportes', username:'gui_esportes_uorqui', specialty:'esportes, treinamento e história esportiva', description:'Esportes, modalidades, histórias e conhecimento para quem gosta de competir e acompanhar.' },
+  { key:'filmes-series', name:'Filmes & Séries', agent:'Luna · Cinema', username:'luna_cinema_uorqui', specialty:'cinema, séries e linguagem audiovisual', description:'Filmes, séries, bastidores, gêneros e linguagem audiovisual.' },
+  { key:'ciencia', name:'Ciência & Curiosidades', agent:'Theo · Ciência', username:'theo_ciencia_uorqui', specialty:'ciência, natureza e divulgação científica', description:'Ciência explicada de forma acessível, curiosidades e descobertas consolidadas.' },
+  { key:'viagens', name:'Viagens', agent:'Maya · Viagens', username:'maya_viagens_uorqui', specialty:'viagens, planejamento e cultura de destinos', description:'Destinos, planejamento, cultura e ideias para viajar melhor.' }
+];
+
+function aiSeedId(prefix,key){ return `uorqui_ai_${prefix}_${key.replace(/[^a-z0-9-]/g,'_')}`; }
+function brazilDateKey(date=new Date()){
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+}
+
+async function ensureUorquiAiSeeds(env){
+  const createdAt=nowIso();
+  for(const item of UORQUI_AI_COMMUNITIES){
+    const uid=aiSeedId('agent',item.key);
+    const communityId=aiSeedId('community',item.key);
+    const existingUser=await fsGet(env,'users',uid);
+    if(!existingUser){
+      await fsPut(env,'users',uid,{
+        id:uid,uid,
+        displayName:item.agent,
+        username:item.username,
+        bio:`Agente da Equipe Uorqui, assistido por IA. Especialista em ${item.specialty}.`,
+        accountType:'uorqui_agent',
+        aiAssisted:true,
+        teamLabel:'Equipe Uorqui · IA',
+        specialty:item.specialty,
+        createdAt,updatedAt:createdAt
+      });
+    }
+    const existingCommunity=await fsGet(env,'communities',communityId);
+    if(!existingCommunity){
+      await fsPut(env,'communities',communityId,{
+        id:communityId,companyId:'',name:item.name,description:item.description,
+        visibility:'public',isDefault:false,createdBy:uid,
+        seededByUorqui:true,aiCurated:true,createdAt,updatedAt:createdAt
+      });
+    }
+    const memberId=`${communityId}_${uid}`;
+    if(!(await fsGet(env,'communityMembers',memberId))){
+      await fsPut(env,'communityMembers',memberId,{
+        id:memberId,companyId:'',communityId,uid,role:'owner',joinedAt:createdAt,addedBy:uid
+      });
+    }
+  }
+}
+
+async function generateUorquiAgentPost(env,item){
+  if(!env.AI) return '';
+  const prompt=[
+    'Você escreve para uma rede social brasileira chamada Uorqui.',
+    `Tema da comunidade: ${item.name}. Especialidade: ${item.specialty}.`,
+    'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 350 e 700 caracteres.',
+    'Use somente conhecimento estável, consolidado e verificável. Não escreva notícia de última hora, preço, cotação, placar, estatística temporal ou fato que dependa de informação atual.',
+    'Não invente estudos, números, fontes, experiências pessoais ou acontecimentos. Se não tiver segurança factual, escolha outro assunto.',
+    'Explique algo concreto e termine com uma pergunta natural para incentivar conversa.',
+    'Não diga que é humano. Não esconda que o perfil é um agente da Equipe Uorqui assistido por IA.',
+    'Não use título, hashtags, markdown ou links. Retorne somente o texto da publicação.'
+  ].join('\n');
+  try{
+    const response=await env.AI.run('@cf/meta/llama-3.1-8b-instruct',{messages:[
+      {role:'system',content:'Priorize precisão factual. Evite qualquer afirmação incerta ou temporal.'},
+      {role:'user',content:prompt}
+    ],max_tokens:320,temperature:0.55});
+    return clean(response?.response||response?.result?.response||'',1200);
+  }catch(error){
+    console.error('Uorqui AI agent generation failed',item.key,error);
+    return '';
+  }
+}
+
+async function publishDailyUorquiAiPosts(env){
+  await ensureUorquiAiSeeds(env);
+  const day=brazilDateKey();
+  for(const item of UORQUI_AI_COMMUNITIES){
+    const uid=aiSeedId('agent',item.key);
+    const communityId=aiSeedId('community',item.key);
+    const postId=aiSeedId('post',`${item.key}_${day}`);
+    if(await fsGet(env,'posts',postId)) continue;
+
+    const text=await generateUorquiAgentPost(env,item);
+    if(!text) continue;
+
+    const createdAt=nowIso();
+    await fsPut(env,'posts',postId,{
+      id:postId,
+      authorUid:uid,
+      authorName:item.agent,
+      authorAvatarMediaId:'',
+      authorAccountType:'uorqui_agent',
+      authorAiAssisted:true,
+      authorTeamLabel:'Equipe Uorqui · IA',
+      scope:'community',
+      companyId:'',
+      communityId,
+      communityName:item.name,
+      communityVisibility:'public',
+      topicId:'',
+      topicName:'',
+      type:'post',
+      text,
+      title:'',
+      requiresReadReceipt:false,
+      attachments:[],
+      reactionCount:0,
+      commentCount:0,
+      aiGenerated:true,
+      aiDisclosure:'Conteúdo assistido por IA pela Equipe Uorqui',
+      createdAt,
+      updatedAt:createdAt
+    });
+  }
+}
+
 async function runScheduled(env) {
   const now = Date.now();
   const pending = await fsWhere(env, 'invites', 'status', 'pending', 20);
@@ -5110,6 +5232,7 @@ async function runScheduled(env) {
 
   await sendPostFollowUpReminders(env, now);
   await executeAdminSecurityChanges(env);
+  await publishDailyUorquiAiPosts(env);
 }
 
 async function requireAuth(request, env) {
