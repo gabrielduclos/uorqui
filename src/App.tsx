@@ -93,6 +93,7 @@ export default function App() {
   const [searchSeed, setSearchSeed] = useState("");
   const [sharedPost, setSharedPost] = useState<Post | null>(null);
   const [sharedPostLoading, setSharedPostLoading] = useState(false);
+  const sharedPostReturnScrollRef = useRef(0);
   const [pushPermissionPromptOpen, setPushPermissionPromptOpen] = useState(false);
   const [pushPermissionBusy, setPushPermissionBusy] = useState(false);
   const [planOfferReason, setPlanOfferReason] = useState<PlanOfferReason>(null);
@@ -590,12 +591,12 @@ export default function App() {
     }));
   };
 
-  const openPostFromNotification = async (notification: NotificationItem) => {
-    const postId = notification.data?.postId || "";
-    const companyId = notification.data?.companyId || "";
+  const openPostThread = async (postId: string, companyId = "", commentId = "") => {
     if (!postId) return;
 
     try {
+      sharedPostReturnScrollRef.current = window.scrollY;
+
       if (companyId && companyId !== selectedCompanyId) {
         localStorage.setItem("uorqui-company", companyId);
         setSelectedCompanyId(companyId);
@@ -604,17 +605,13 @@ export default function App() {
 
       const params = new URLSearchParams(location.search);
       params.set("post", postId);
+      params.set("comments", "1");
       if (companyId) params.set("company", companyId);
-      const commentId = notification.data?.commentId || "";
-      const shouldOpenComments = notification.data?.openComments === "true"
-        || Boolean(commentId)
-        || notification.type === "comment"
-        || notification.type === "comment_like";
-      if (shouldOpenComments) params.set("comments", "1");
-      else params.delete("comments");
+      else params.delete("company");
       if (commentId) params.set("comment", commentId);
       else params.delete("comment");
-      history.replaceState({}, "", `${location.pathname}?${params.toString()}`);
+
+      history.pushState({}, "", `${location.pathname}?${params.toString()}`);
 
       setSharedPostLoading(true);
       const result = await api<{ post: Post }>(`/posts/${encodeURIComponent(postId)}`);
@@ -623,6 +620,7 @@ export default function App() {
         new Promise<void>((resolve) => window.setTimeout(resolve, 180))
       ]);
       setSharedPost(result.post);
+      window.scrollTo({ top: 0, behavior: "auto" });
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -630,15 +628,43 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const handleOpenPostThread = (event: Event) => {
+      const detail = (event as CustomEvent<{ postId?: string; companyId?: string; commentId?: string }>).detail || {};
+      if (!detail.postId) return;
+      void openPostThread(detail.postId, detail.companyId || "", detail.commentId || "");
+    };
+
+    window.addEventListener("uorqui:open-post-thread", handleOpenPostThread);
+    return () => window.removeEventListener("uorqui:open-post-thread", handleOpenPostThread);
+  }, [selectedCompanyId]);
+
+  const openPostFromNotification = async (notification: NotificationItem) => {
+    const postId = notification.data?.postId || "";
+    const companyId = notification.data?.companyId || "";
+    const commentId = notification.data?.commentId || "";
+    if (!postId) return;
+    await openPostThread(postId, companyId, commentId);
+  };
+
   const closeSharedPost = () => {
     setSharedPost(null);
-    const params = new URLSearchParams(location.search);
-    params.delete("post");
-    params.delete("company");
-    params.delete("comments");
-    params.delete("comment");
-    const query = params.toString();
-    history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+
+    if (history.length > 1) {
+      history.back();
+    } else {
+      const params = new URLSearchParams(location.search);
+      params.delete("post");
+      params.delete("company");
+      params.delete("comments");
+      params.delete("comment");
+      const query = params.toString();
+      history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+    }
+
+    window.setTimeout(() => {
+      window.scrollTo({ top: sharedPostReturnScrollRef.current, behavior: "auto" });
+    }, 0);
   };
 
   const reloadSharedPost = async () => {
@@ -1523,7 +1549,7 @@ function SharedPostPage({
         onDelete={remove}
         currentUid={data.me.uid}
         canAdmin={data.canAdmin}
-        initialCommentsOpen={new URLSearchParams(location.search).get("comments") === "1"}
+        initialCommentsOpen
         initialCommentId={new URLSearchParams(location.search).get("comment") || ""}
         onChanged={reload}
         showToast={showToast}
