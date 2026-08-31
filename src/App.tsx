@@ -151,6 +151,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedCommunityId, setSelectedCommunityId] = useState(() => storedCommunityId());
+  const [externalCommunity, setExternalCommunity] = useState<Community | null>(null);
   const [manageCommunityMembersId, setManageCommunityMembersId] = useState("");
   const [composerTarget, setComposerTarget] = useState<{ scope?: "company" | "community" | "world"; communityId?: string; topicId?: string }>({});
   const [headerSearch, setHeaderSearch] = useState("");
@@ -674,9 +675,22 @@ export default function App() {
     setComposerOpen(true);
   };
 
-  const openCommunity = (communityId: string) => {
+  const openCommunity = async (communityId: string) => {
+    if (!communityId) return;
     setSelectedCommunityId(communityId);
     setView("communities");
+    const known = data.allCompanyCommunities.find(item => item.id === communityId)
+      || data.communities.find(item => item.id === communityId);
+    if (known) {
+      setExternalCommunity(null);
+      return;
+    }
+    try {
+      const result = await api<{ community: Community; posts: Post[] }>(`/communities/${encodeURIComponent(communityId)}/posts`);
+      setExternalCommunity(result.community);
+    } catch (error) {
+      showToast(errorMessage(error));
+    }
   };
 
   const openWorld = () => {
@@ -753,6 +767,15 @@ export default function App() {
       setSharedPostLoading(false);
     }
   };
+
+  useEffect(() => {
+    const handleOpenCommunity = (event: Event) => {
+      const detail = (event as CustomEvent<{ communityId?: string }>).detail || {};
+      if (detail.communityId) void openCommunity(detail.communityId);
+    };
+    window.addEventListener("uorqui:open-community", handleOpenCommunity);
+    return () => window.removeEventListener("uorqui:open-community", handleOpenCommunity);
+  }, [data.communities, data.allCompanyCommunities]);
 
   useEffect(() => {
     const handleOpenPostThread = (event: Event) => {
@@ -849,7 +872,8 @@ export default function App() {
         realtimeRevision={realtimeRevision}
         lastCreatedPost={lastCreatedPost}
         selectedCommunityId={selectedCommunityId}
-        onSelectCommunity={setSelectedCommunityId}
+        externalCommunity={externalCommunity}
+        onSelectCommunity={(communityId) => { setExternalCommunity(null); setSelectedCommunityId(communityId); }}
         onBack={() => setSelectedCommunityId("")}
         openMembersRequested={manageCommunityMembersId === selectedCommunityId}
         onMembersOpened={() => setManageCommunityMembersId("")}
@@ -1640,6 +1664,7 @@ function CommunitiesPage({
   realtimeRevision: number;
   lastCreatedPost: Post | null;
   selectedCommunityId: string;
+  externalCommunity: Community | null;
   onSelectCommunity: (id: string) => void;
   onBack: () => void;
   openMembersRequested: boolean;
@@ -1666,7 +1691,8 @@ function CommunitiesPage({
   const [topicBusy, setTopicBusy] = useState(false);
   const [communityImageBusy,setCommunityImageBusy]=useState(false);
   const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
-    || data.communities.find((community) => community.id === selectedCommunityId);
+    || data.communities.find((community) => community.id === selectedCommunityId)
+    || (externalCommunity?.id === selectedCommunityId ? externalCommunity : undefined);
 
   const joinedCommunityIds = useMemo(() => new Set(data.communities.map((community) => community.id)), [data.communities]);
   const isJoinedCommunity = (communityId: string) => joinedCommunityIds.has(communityId);
@@ -1766,7 +1792,8 @@ function CommunitiesPage({
     const cached = data.posts.filter(post => post.scope === "community" && post.communityId === selectedCommunityId);
     setCommunityPosts(cached);
     const targetCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
-      || data.communities.find((community) => community.id === selectedCommunityId);
+      || data.communities.find((community) => community.id === selectedCommunityId)
+      || (externalCommunity?.id === selectedCommunityId ? externalCommunity : undefined);
     const joined = data.communities.some((community) => community.id === selectedCommunityId);
     const canRead = joined || communityVisibility(targetCommunity) === "public";
     setDetailLoading(canRead && cached.length === 0);
@@ -1781,7 +1808,8 @@ function CommunitiesPage({
     if (!selectedCommunityId) return;
     const joined = data.communities.some((community) => community.id === selectedCommunityId);
     const targetCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
-      || data.communities.find((community) => community.id === selectedCommunityId);
+      || data.communities.find((community) => community.id === selectedCommunityId)
+      || (externalCommunity?.id === selectedCommunityId ? externalCommunity : undefined);
     if (joined || communityVisibility(targetCommunity) === "public") void loadCommunityPosts(selectedCommunityId);
   }, [selectedTopicId]);
 
@@ -2155,6 +2183,15 @@ function CommunitiesPage({
     );
   }
 
+  if (selectedCommunityId && !selectedCommunity) {
+    return (
+      <section className="page-section">
+        <button className="back-button" onClick={() => onSelectCommunity("")}><ArrowLeft size={18}/> Comunidades</button>
+        <div className="loading-line">Abrindo comunidade…</div>
+      </section>
+    );
+  }
+
   const listedCommunities = data.allCompanyCommunities.length ? data.allCompanyCommunities : data.communities;
 
   return (
@@ -2354,11 +2391,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
           <div className="discover-community-row">
             {communities.slice(0, 10).map((community) => (
               <button className={`discover-community-card ${community.officialUorqui ? "official" : ""}`} key={community.id} onClick={() => {
-                const params = new URLSearchParams(location.search);
-                params.set("community", community.id);
-                if (community.companyId) params.set("company", community.companyId);
-                history.pushState({}, "", `${location.pathname}?${params.toString()}`);
-                window.dispatchEvent(new PopStateEvent("popstate"));
+                window.dispatchEvent(new CustomEvent("uorqui:open-community", { detail: { communityId: community.id } }));
               }}>
                 <CommunityImage community={community} />
                 <div className="discover-community-name"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={10}/> Oficial</span>}</div>
