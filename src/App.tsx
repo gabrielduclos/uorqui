@@ -720,12 +720,12 @@ export default function App() {
             <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
             <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
             {!!data.companies.length && data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
-            {!!data.companies.length && <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />}
+            <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
             <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
           </nav>
 
-          {!!data.companies.length && <button className="btn publish-main" onClick={() => openComposer()}><Plus size={19} /> Publicar</button>}
+          <button className="btn publish-main" onClick={() => openComposer({ scope: "world" })}><Plus size={19} /> Publicar</button>
 
           <div className="sidebar-user">
             <Avatar name={data.me.displayName || data.me.email} mediaId={data.me.avatarMediaId} />
@@ -2985,8 +2985,12 @@ function PlansPage({
   const load = async () => {
     setLoadingPlans(true);
     try {
-      const result = await api<{ companies: CompanySummary[] }>("/companies/summary");
-      setCompanies(result.companies);
+      if (data.companies.length) {
+        const result = await api<{ companies: CompanySummary[] }>("/companies/summary");
+        setCompanies(result.companies || []);
+      } else {
+        setCompanies([]);
+      }
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -2994,35 +2998,18 @@ function PlansPage({
     }
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.selectedCompanyId, data.companies.length]);
+  useEffect(() => { void load(); }, [data.selectedCompanyId, data.companies.length]);
 
-  const company =
-    companies.find(item => item.id === data.selectedCompanyId) ||
-    companies[0] ||
-    null;
-
-  const premium = company?.effectivePlan === "premium";
+  const company = companies.find(item => item.id === data.selectedCompanyId) || companies[0] || null;
+  const companyActive = company?.effectivePlan === "premium";
   const owner = company?.role === "owner";
   const pending = company?.billingStatus === "pending";
-  const price = company?.premiumMonthlyPrice || 49.9;
 
-  const currency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL"
-    }).format(value);
-
-  const upgrade = async () => {
+  const upgradeCompany = async () => {
     if (!company || billingBusy || !owner) return;
     setBillingBusy(true);
     try {
-      const result = await api<{ url: string }>(
-        `/companies/${company.id}/billing/checkout`,
-        { method: "POST" }
-      );
+      const result = await api<{ url: string }>(`/companies/${company.id}/billing/checkout`, { method: "POST" });
       window.location.href = result.url;
     } catch (error) {
       showToast(errorMessage(error));
@@ -3030,168 +3017,73 @@ function PlansPage({
     }
   };
 
-  const offerTitle =
-    reason?.kind === "company_created"
-      ? "Sua empresa já está pronta"
-      : reason?.kind === "limit"
-        ? "Sua empresa chegou ao limite do Free"
-        : "";
-
   return (
     <section className="page-section plans-page">
       <div className="page-heading plans-heading">
         <div>
-          <h2>Planos</h2>
-          <p>O plano pertence à empresa. Sua mesma conta pode ter empresas Free e Premium.</p>
+          <h2>Uorqui</h2>
+          <p>A rede e as comunidades são abertas. O Uorqui ganha quando um criador ganha ou quando uma comunidade vira empresa.</p>
         </div>
-
-        {data.companies.length > 1 && (
-          <label className="plans-company-picker">
-            <span>Empresa</span>
-            <select
-              value={data.selectedCompanyId}
-              onChange={(event) => onCompanyChange(event.target.value)}
-            >
-              {data.companies.map(item => (
-                <option value={item.id} key={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </label>
-        )}
       </div>
 
-      {offerTitle && company && (
-        <section className={`plan-offer-banner ${reason?.kind === "limit" ? "limit" : ""}`}>
-          <div className="plan-offer-icon"><Crown size={21} /></div>
-          <div>
-            <strong>{offerTitle}</strong>
-            <p>
-              {reason?.message ||
-                (reason?.kind === "company_created"
-                  ? "Você pode usar o Uorqui Free normalmente e ativar o Premium quando quiser."
-                  : "Ative o Premium para continuar expandindo esta empresa.")}
-            </p>
-          </div>
-        </section>
-      )}
+      {reason?.message && <section className="plan-offer-banner"><div className="plan-offer-icon"><Crown size={21}/></div><div><strong>Recurso adicional</strong><p>{reason.message}</p></div></section>}
+      {loadingPlans && <div className="loading-line">Carregando…</div>}
 
-      {loadingPlans && <div className="loading-line">Carregando planos…</div>}
-
-      {!loadingPlans && company && (
+      {!loadingPlans && (
         <>
-          <section className="plans-company-summary">
-            <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
-            <div>
-              <strong>{company.name}</strong>
-              <small>
-                {company.memberCount || 0} membros · {company.communityCount || 0} comunidades
-              </small>
-            </div>
-            <span className={`plan-pill ${premium ? "premium" : "free"}`}>
-              {premium ? <><Crown size={12} /> Premium</> : "Free"}
-            </span>
-          </section>
-
           <div className="plans-grid">
-            <article className={`plan-card ${!premium ? "current" : ""}`}>
-              <div className="plan-card-head">
-                <div>
-                  <span className="plan-eyebrow">Para começar</span>
-                  <h3>Free</h3>
-                </div>
-                <strong className="plan-price">R$ 0<small>/mês</small></strong>
-              </div>
-
-              <p className="plan-description">
-                A empresa usa todas as funcionalidades essenciais do Uorqui dentro dos limites do plano.
-              </p>
-
+            <article className="plan-card current">
+              <div className="plan-card-head"><div><span className="plan-eyebrow">Rede aberta</span><h3>Uorqui</h3></div><strong className="plan-price">R$ 0<small>/mês</small></strong></div>
+              <p className="plan-description">Para participar, publicar e construir comunidades sem limitar o crescimento da rede.</p>
               <ul className="plan-features">
-                <li><Check size={16} /> Até 5 pessoas na empresa</li>
-                <li><Check size={16} /> Até 2 comunidades</li>
-                <li><Check size={16} /> Até 3 vagas ativas</li>
-                <li><Check size={16} /> Posts, perguntas e conclusões</li>
-                <li><Check size={16} /> Enquetes e eventos</li>
-                <li><Check size={16} /> Comunicados com confirmação de leitura</li>
-                <li><Check size={16} /> Busca, notificações push e Mundo</li>
+                <li><Check size={16}/> Perfil público, seguidores e feed aberto</li>
+                <li><Check size={16}/> Criar e participar de comunidades</li>
+                <li><Check size={16}/> Membros ilimitados nas comunidades</li>
+                <li><Check size={16}/> Posts, respostas, enquetes e eventos</li>
+                <li><Check size={16}/> Busca e notificações</li>
               </ul>
-
-              {!premium
-                ? <button className="btn secondary plan-current-button" disabled>Plano atual</button>
-                : <span className="plan-secondary-note">Disponível se o Premium for encerrado.</span>}
+              <button className="btn secondary plan-current-button" disabled>Disponível para todos</button>
             </article>
 
-            <article className={`plan-card premium-card ${premium ? "current" : ""}`}>
-              <div className="premium-ribbon">Uorqui para empresas</div>
-              <div className="plan-card-head">
-                <div>
-                  <span className="plan-eyebrow"><Crown size={13} /> Crescimento</span>
-                  <h3>Premium</h3>
-                </div>
-                <strong className="plan-price">{currency(price)}<small>/mês por empresa</small></strong>
-              </div>
-
-              <p className="plan-description">
-                Tudo do Free, sem os limites de pessoas, comunidades e vagas.
-              </p>
-
+            <article className="plan-card premium-card">
+              <div className="premium-ribbon">Monetização</div>
+              <div className="plan-card-head"><div><span className="plan-eyebrow"><Crown size={13}/> Para criadores</span><h3>Criador</h3></div><strong className="plan-price">R$ 0<small>/mês</small></strong></div>
+              <p className="plan-description">Transforme uma comunidade de sua autoria em uma comunidade de Criador e ofereça conteúdo exclusivo por assinatura.</p>
               <ul className="plan-features">
-                <li><Check size={16} /> Mais de 5 pessoas</li>
-                <li><Check size={16} /> Mais de 2 comunidades</li>
-                <li><Check size={16} /> Mais de 3 vagas ativas</li>
-                <li><Check size={16} /> Todas as funcionalidades do Free</li>
-                <li><Check size={16} /> Plano independente das outras empresas da sua conta</li>
-                <li><Check size={16} /> Pagamento mensal via Pix ou cartão</li>
+                <li><Check size={16}/> Você define o preço mensal</li>
+                <li><Check size={16}/> Conteúdo público para descoberta</li>
+                <li><Check size={16}/> Posts exclusivos para assinantes</li>
+                <li><Check size={16}/> Sem mensalidade fixa do Uorqui</li>
+                <li><Check size={16}/> Comissão inicial da plataforma: 25%</li>
               </ul>
+              <span className="plan-secondary-note">O Uorqui só recebe comissão quando sua comunidade gera receita.</span>
+            </article>
 
-              {premium ? (
-                <div className="premium-active-box">
-                  <Crown size={18} />
-                  <div>
-                    <strong>Premium ativo</strong>
-                    <small>
-                      {company.premiumSource === "manual" && company.manualPremiumUntil
-                        ? `Cortesia até ${new Date(company.manualPremiumUntil).toLocaleDateString("pt-BR")}.`
-                        : company.premiumUntil
-                          ? `Acesso confirmado até ${new Date(company.premiumUntil).toLocaleDateString("pt-BR")}.`
-                          : "Assinatura ativa."}
-                    </small>
-                  </div>
-                </div>
-              ) : owner ? (
+            <article className={`plan-card ${companyActive ? "current" : ""}`}>
+              <div className="plan-card-head"><div><span className="plan-eyebrow"><Building2 size={13}/> Comunidade oficial</span><h3>Empresa</h3></div><strong className="plan-price">R$ 99,90<small>/mês</small></strong></div>
+              <p className="plan-description">Converta uma comunidade em empresa verificada. A assinatura fica vinculada àquela comunidade e ao CNPJ cadastrado.</p>
+              <ul className="plan-features">
+                <li><Check size={16}/> Selo de empresa verificada</li>
+                <li><Check size={16}/> CNPJ único e endereço fiscal</li>
+                <li><Check size={16}/> Setores como subcomunidades</li>
+                <li><Check size={16}/> RH, Engenharia, Financeiro e outros setores</li>
+                <li><Check size={16}/> Membros ilimitados</li>
+              </ul>
+              {companyActive ? (
+                <div className="premium-active-box"><Crown size={18}/><div><strong>Empresa ativa</strong><small>Esta comunidade está no plano Empresa.</small></div></div>
+              ) : company && owner ? (
                 <>
-                  <button
-                    className="btn plan-upgrade-button"
-                    disabled={!company.billingReady || billingBusy}
-                    onClick={upgrade}
-                  >
-                    <CreditCard size={17} />
-                    {billingBusy
-                      ? "Abrindo checkout…"
-                      : pending
-                        ? "Continuar pagamento"
-                        : "Ativar Premium"}
+                  <button className="btn plan-upgrade-button" disabled={!company.billingReady || billingBusy} onClick={upgradeCompany}>
+                    <CreditCard size={17}/>{billingBusy ? "Abrindo checkout…" : pending ? "Continuar pagamento" : "Ativar Empresa · R$ 99,90"}
                   </button>
-                  <small className="plan-checkout-note">
-                    Pix ou cartão. O Premium só é ativado após a confirmação do pagamento.
-                  </small>
-                  {!company.billingReady && (
-                    <div className="billing-warning">
-                      A cobrança ainda não está habilitada para esta instalação do Uorqui.
-                    </div>
-                  )}
+                  {!company.billingReady && <div className="billing-warning">A cobrança ainda não está habilitada nesta instalação.</div>}
                 </>
               ) : (
-                <div className="plan-owner-note">
-                  O Premium é contratado pelo proprietário desta empresa.
-                </div>
+                <span className="plan-secondary-note">A conversão é iniciada pelo dono de uma comunidade e exige CNPJ e endereço fiscal.</span>
               )}
             </article>
           </div>
-
-          <p className="plans-footnote">
-            O Free não é um teste: ele pode ser usado sem prazo. O Premium entra quando a empresa precisa crescer além dos limites do Free.
-          </p>
+          <p className="plans-footnote">Comunidades comuns não têm limite de membros. Criador é gratuito e monetizado por comissão. Empresa custa R$ 99,90 por mês por comunidade convertida.</p>
         </>
       )}
     </section>
