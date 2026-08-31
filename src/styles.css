@@ -27,7 +27,7 @@ img{max-width:100%}
 .boot img{width:190px;height:auto;display:block}
 .center-card{min-height:100dvh;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
 .center-card img{width:160px;margin-bottom:10px}.center-card p{max-width:520px;color:var(--muted)}.center-card>div{display:flex;gap:8px}
-.app-shell{display:grid;grid-template-columns:240px minmax(0,680px) 340px;max-width:1280px;margin:0 auto;min-height:100dvh;background:var(--surface)}
+.app-shell{display:grid;grid-template-columns:240px minmax(0,720px);max-width:960px;margin:0 auto;min-height:100dvh;background:var(--surface)}
 .sidebar{position:sticky;top:0;height:100dvh;padding:25px 18px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:#fff}
 .brand-button{border:0;background:transparent;padding:0 10px;margin-bottom:24px;text-align:left}
 .brand-button img{width:174px;display:block}
@@ -43,7 +43,7 @@ img{max-width:100%}
 .sidebar-user{margin-top:auto;border-top:1px solid var(--line);padding-top:16px;display:flex;align-items:center;gap:9px}
 .sidebar-user>div:nth-child(2){flex:1}.sidebar-user strong{font-size:12px}.sidebar-user small{font-size:10px;color:var(--muted);margin-top:2px}
 .main{min-height:100dvh;background:var(--bg);border-right:1px solid var(--line)}
-.topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);transition:transform .18s ease,opacity .18s ease;will-change:transform}.topbar.scroll-hidden{transform:translateY(-100%);opacity:.98}
 .topbar-line{height:68px;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
 .topbar-brand{display:flex;align-items:center;gap:12px;min-width:0}.topbar h1{font-size:21px;margin:0;letter-spacing:-.6px}
 .mobile-logo{display:none;border:0;background:transparent;padding:0}.mobile-logo img{display:block;width:80px;height:31px;object-fit:contain;object-position:left}
@@ -1114,3 +1114,7 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 }
 
 .social-stats button{border:0;background:transparent;padding:0;color:inherit;font:inherit;cursor:pointer}.social-stats button:hover{text-decoration:underline}
+
+.social-home-clean{gap:0}.social-feed-clean{padding-top:8px}
+.notification-request-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
+@media(max-width:760px){.topbar{transition-duration:.14s}.social-feed-clean{padding-top:4px}}
