@@ -5,7 +5,6 @@ export { RealtimeHub };
 const FREE_MEMBER_LIMIT = null;
 const PREMIUM_MEMBER_LIMIT = null;
 const PREMIUM_MONTHLY_PRICE = 99.90;
-const ENTERPRISE_EXTRA_USER_PRICE = 19.90;
 const PRODUCT_VERSION = '1.3.0-social';
 
 let googleTokenCache = { expires: 0, token: '' };
@@ -19,16 +18,6 @@ export default {
       if (method === 'GET' && /^\/api\/companies\/[^/]+\/billing\/tier$/.test(url.pathname)) {
         const companyId = decodeURIComponent(url.pathname.split('/')[3] || '');
         return await getPlanTierResponse(request, env, ctx, companyId);
-      }
-
-      if (method === 'POST' && /^\/api\/companies\/[^/]+\/billing\/enterprise$/.test(url.pathname)) {
-        const companyId = decodeURIComponent(url.pathname.split('/')[3] || '');
-        return await activateEnterprise(request, env, ctx, companyId);
-      }
-
-      if (method === 'POST' && /^\/api\/companies\/[^/]+\/billing\/enterprise\/cancel$/.test(url.pathname)) {
-        const companyId = decodeURIComponent(url.pathname.split('/')[3] || '');
-        return await deactivateEnterprise(request, env, ctx, companyId);
       }
 
 
@@ -70,50 +59,6 @@ export default {
         });
       }
 
-      if (method === 'GET' && url.pathname === '/api/jobs') {
-        return await rewriteJsonResponse(response, async payload => {
-          if (Array.isArray(payload.jobs)) payload.jobs = payload.jobs.filter(job => job.audience !== 'world');
-          return payload;
-        });
-      }
-
-      if (method === 'GET' && url.pathname === '/api/search') {
-        return await rewriteJsonResponse(response, async payload => {
-          for (const key of ['posts', 'results', 'items']) {
-            if (Array.isArray(payload[key])) payload[key] = payload[key].filter(item => item?.scope !== 'world');
-          }
-          return payload;
-        });
-      }
-
-      if (method === 'GET' && /^\/api\/posts\/[^/]+$/.test(url.pathname)) {
-        const clone = response.clone();
-        const payload = await clone.json().catch(() => null);
-        if (payload?.post?.scope === 'world') {
-          return json({ error: 'Esta publicação do Mundo está temporariamente indisponível.' }, 404);
-        }
-      }
-
-      if (method === 'POST' && url.pathname === '/api/invites/accept') {
-        const clone = response.clone();
-        const payload = await clone.json().catch(() => ({}));
-        if (payload?.companyId) defer(ctx, syncEnterpriseBilling(env, payload.companyId));
-      }
-
-      const memberDeleteMatch = method === 'DELETE'
-        ? url.pathname.match(/^\/api\/companies\/([^/]+)\/members\/[^/]+$/)
-        : null;
-      if (memberDeleteMatch) {
-        defer(ctx, syncEnterpriseBilling(env, decodeURIComponent(memberDeleteMatch[1])));
-      }
-
-      const leaveMatch = method === 'POST'
-        ? url.pathname.match(/^\/api\/companies\/([^/]+)\/leave$/)
-        : null;
-      if (leaveMatch) {
-        defer(ctx, syncEnterpriseBilling(env, decodeURIComponent(leaveMatch[1])));
-      }
-
       return response;
     } catch (error) {
       console.error('Uorqui v1.2.21 gate:', error);
@@ -123,7 +68,6 @@ export default {
 
   async scheduled(controller, env, ctx) {
     if (typeof core.scheduled === 'function') await core.scheduled(controller, env, ctx);
-    defer(ctx, syncAllEnterpriseBilling(env));
   }
 };
 
@@ -143,88 +87,6 @@ async function getPlanTierResponse(request, env, ctx, companyId) {
     billingReady: Boolean(env.ASAAS_API_KEY && env.ASAAS_WEBHOOK_TOKEN),
     productVersion: PRODUCT_VERSION
   });
-}
-
-async function activateEnterprise(request, env, ctx, companyId) {
-  const bootstrapResponse = await coreBootstrap(request, env, ctx, companyId);
-  if (!bootstrapResponse.ok) return bootstrapResponse;
-  const bootstrap = await bootstrapResponse.json();
-  if (bootstrap.selectedCompanyId !== companyId || !bootstrap.company) {
-    return json({ error: 'Empresa não encontrada para sua conta.' }, 404);
-  }
-  if (bootstrap.role !== 'owner') {
-    return json({ error: 'Somente o proprietário pode ativar o Enterprise.' }, 403);
-  }
-
-  const company = await fsGet(env, 'companies', companyId);
-  if (!company) return json({ error: 'Empresa não encontrada.' }, 404);
-  if (!hasPremiumAccess(company) || company.billingStatus !== 'active') {
-    return json({ error: 'Ative uma assinatura Premium paga antes de migrar para o Enterprise.' }, 409);
-  }
-  if (!company.billingSubscriptionId) {
-    return json({ error: 'A assinatura ainda não foi vinculada ao Asaas. Aguarde a confirmação do pagamento.' }, 409);
-  }
-
-  const activeUsers = await activeMemberCount(env, companyId);
-  const monthlyPrice = enterprisePrice(activeUsers);
-  await updateAsaasSubscriptionValue(env, company.billingSubscriptionId, monthlyPrice);
-
-  const now = new Date().toISOString();
-  await fsPut(env, 'companies', companyId, {
-    ...company,
-    billingTier: 'enterprise',
-    enterpriseActivatedAt: company.enterpriseActivatedAt || now,
-    enterpriseActivatedBy: company.enterpriseActivatedBy || bootstrap.me?.uid || '',
-    enterpriseActiveUsers: activeUsers,
-    enterpriseMonthlyPrice: monthlyPrice,
-    enterpriseSyncedAt: now,
-    updatedAt: now
-  });
-
-  return json({
-    ok: true,
-    tier: 'enterprise',
-    activeUsers,
-    monthlyPrice,
-    basePrice: PREMIUM_MONTHLY_PRICE,
-    includedUsers: null,
-    extraUserPrice: ENTERPRISE_EXTRA_USER_PRICE
-  });
-}
-
-async function deactivateEnterprise(request, env, ctx, companyId) {
-  const bootstrapResponse = await coreBootstrap(request, env, ctx, companyId);
-  if (!bootstrapResponse.ok) return bootstrapResponse;
-  const bootstrap = await bootstrapResponse.json();
-  if (bootstrap.selectedCompanyId !== companyId || !bootstrap.company) {
-    return json({ error: 'Empresa não encontrada para sua conta.' }, 404);
-  }
-  if (bootstrap.role !== 'owner') {
-    return json({ error: 'Somente o proprietário pode alterar o plano.' }, 403);
-  }
-
-  const company = await fsGet(env, 'companies', companyId);
-  if (!company) return json({ error: 'Empresa não encontrada.' }, 404);
-  const activeUsers = await activeMemberCount(env, companyId);
-  if (activeUsers > PREMIUM_MEMBER_LIMIT) {
-    return json({ error: `Remova usuários até ficar com no máximo ${PREMIUM_MEMBER_LIMIT} ativos antes de voltar ao Premium.` }, 409);
-  }
-
-  if (company.billingSubscriptionId && company.billingStatus === 'active') {
-    await updateAsaasSubscriptionValue(env, company.billingSubscriptionId, PREMIUM_MONTHLY_PRICE);
-  }
-
-  const now = new Date().toISOString();
-  await fsPut(env, 'companies', companyId, {
-    ...company,
-    billingTier: 'premium',
-    enterpriseActiveUsers: 0,
-    enterpriseMonthlyPrice: 0,
-    enterpriseSyncedAt: now,
-    updatedAt: now
-  });
-
-  return json({ ok: true, tier: 'premium', monthlyPrice: PREMIUM_MONTHLY_PRICE });
 }
 
 async function canManageCompany(request, env, ctx, companyId) {
@@ -255,11 +117,7 @@ async function planSnapshot(env, companyId, knownMemberCount) {
     ? Number(knownMemberCount)
     : await activeMemberCount(env, companyId);
   const tier = company ? tierForCompany(company) : 'free';
-  const monthlyPrice = tier === 'enterprise'
-    ? enterprisePrice(activeUsers)
-    : tier === 'premium'
-      ? PREMIUM_MONTHLY_PRICE
-      : 0;
+  const monthlyPrice = tier === 'premium' ? PREMIUM_MONTHLY_PRICE : 0;
 
   return {
     tier,
@@ -268,7 +126,6 @@ async function planSnapshot(env, companyId, knownMemberCount) {
     basePrice: PREMIUM_MONTHLY_PRICE,
     premiumPrice: PREMIUM_MONTHLY_PRICE,
     includedUsers: PREMIUM_MEMBER_LIMIT,
-    extraUserPrice: ENTERPRISE_EXTRA_USER_PRICE,
     monthlyPrice,
     billingStatus: company?.billingStatus || 'inactive',
     billingSubscriptionId: company?.billingSubscriptionId || ''
@@ -280,16 +137,12 @@ function decorateCompany(company, plan) {
   company.limits = { ...(company.limits || {}), members: plan.memberLimit };
   company.premiumMonthlyPrice = PREMIUM_MONTHLY_PRICE;
   company.billingTier = plan.tier;
-  company.enterpriseExtraUserPrice = ENTERPRISE_EXTRA_USER_PRICE;
-  company.enterpriseIncludedUsers = null;
-  company.enterpriseMonthlyPrice = plan.tier === 'enterprise' ? plan.monthlyPrice : 0;
   company.memberCount = Number.isFinite(company.memberCount) ? company.memberCount : plan.activeUsers;
   return company;
 }
 
 function tierForCompany(company) {
-  if (!hasPremiumAccess(company)) return 'free';
-  return company.billingTier === 'enterprise' ? 'enterprise' : 'premium';
+  return hasPremiumAccess(company) ? 'premium' : 'free';
 }
 
 function hasPremiumAccess(company) {
@@ -300,47 +153,6 @@ function hasPremiumAccess(company) {
   const premiumUntil = new Date(company.premiumUntil || 0).getTime();
   if (Number.isFinite(premiumUntil) && premiumUntil > Date.now()) return true;
   return company.billingStatus === 'active' && !company.premiumUntil;
-}
-
-function enterprisePrice(activeUsers) {
-  const extras = Math.max(0, Number(activeUsers || 0) - PREMIUM_MEMBER_LIMIT);
-  return Number((PREMIUM_MONTHLY_PRICE + extras * ENTERPRISE_EXTRA_USER_PRICE).toFixed(2));
-}
-
-async function syncEnterpriseBilling(env, companyId) {
-  const company = await fsGet(env, 'companies', companyId);
-  if (!company || company.billingTier !== 'enterprise' || !hasPremiumAccess(company)) return;
-
-  const activeUsers = await activeMemberCount(env, companyId);
-  const monthlyPrice = enterprisePrice(activeUsers);
-  const sameSnapshot = Number(company.enterpriseActiveUsers || 0) === activeUsers &&
-    Number(company.enterpriseMonthlyPrice || 0) === monthlyPrice;
-
-  if (!sameSnapshot && company.billingSubscriptionId && company.billingStatus === 'active' && env.ASAAS_API_KEY) {
-    await updateAsaasSubscriptionValue(env, company.billingSubscriptionId, monthlyPrice);
-  }
-
-  if (!sameSnapshot || !company.enterpriseSyncedAt) {
-    const now = new Date().toISOString();
-    await fsPut(env, 'companies', companyId, {
-      ...company,
-      enterpriseActiveUsers: activeUsers,
-      enterpriseMonthlyPrice: monthlyPrice,
-      enterpriseSyncedAt: now,
-      updatedAt: now
-    });
-  }
-}
-
-async function syncAllEnterpriseBilling(env) {
-  const companies = await fsWhere(env, 'companies', 'billingTier', 'enterprise', 500).catch(() => []);
-  for (const company of companies) {
-    try {
-      await syncEnterpriseBilling(env, company.id);
-    } catch (error) {
-      console.warn('Enterprise billing sync:', company.id, error?.message || error);
-    }
-  }
 }
 
 async function activeMemberCount(env, companyId) {
