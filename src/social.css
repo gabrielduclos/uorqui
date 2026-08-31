@@ -125,3 +125,58 @@
   .social-profile-actions{max-width:205px!important;gap:5px!important}
   .social-profile-actions .btn{padding:0 7px!important;font-size:10.5px!important}
 }
+
+/* Perfil público mobile — ações sem overflow */
+@media(max-width:700px){
+  .social-profile-top{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr)!important;
+    align-items:start!important;
+    gap:10px!important;
+  }
+  .social-profile-actions{
+    width:100%!important;
+    max-width:none!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    gap:6px!important;
+    justify-content:stretch!important;
+    align-items:stretch!important;
+  }
+  .social-profile-actions .btn{
+    min-width:0!important;
+    width:100%!important;
+    max-width:none!important;
+    height:34px!important;
+    padding:0 7px!important;
+    font-size:10px!important;
+    line-height:1!important;
+    border-radius:9px!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  .social-profile-actions .btn svg{
+    width:14px!important;
+    height:14px!important;
+  }
+  .social-block-button{
+    grid-column:1 / -1!important;
+  }
+}
+
+@media(max-width:390px){
+  .social-profile-top .avatar{
+    width:68px!important;
+    height:68px!important;
+    font-size:24px!important;
+  }
+  .social-profile-actions{
+    gap:5px!important;
+  }
+  .social-profile-actions .btn{
+    height:32px!important;
+    padding:0 6px!important;
+    font-size:9.5px!important;
+  }
+}
