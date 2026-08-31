@@ -144,6 +144,19 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'GET' && path === '/superadmin/overview') {
     return json(await getSuperadminOverview(env, identity));
   }
+  if (method === 'GET' && path === '/superadmin/ai-agents/status') {
+    return json(await getUorquiAiAgentStatus(env, identity));
+  }
+  if (method === 'POST' && path === '/superadmin/ai-agents/seed') {
+    requireSuperadmin(env, identity);
+    await ensureUorquiAiSeeds(env, true);
+    return json(await getUorquiAiAgentStatus(env, identity));
+  }
+  if (method === 'POST' && path === '/superadmin/ai-agents/publish') {
+    requireSuperadmin(env, identity);
+    const result = await publishDailyUorquiAiPosts(env, true);
+    return json({ ...result, ...(await getUorquiAiAgentStatus(env, identity)) });
+  }
   if (method === 'GET' && path === '/creator/dashboard') {
     return json(await getCreatorDashboard(env, identity));
   }
@@ -3992,6 +4005,7 @@ async function votePoll(env, identity, postId, body, ctx) {
 }
 
 async function discoverContent(env, identity) {
+  await ensureUorquiAiSeeds(env);
   const [postResponse, communityResponse, worldJobs, follows, memberships, reactions] = await Promise.all([
     fsListCollection(env, 'posts', 300),
     fsListCollection(env, 'communities', 180),
@@ -4037,8 +4051,11 @@ async function discoverContent(env, identity) {
       verifiedCompany: false
     }))
     .sort((a,b) => {
+      if (Boolean(a.officialUorqui) !== Boolean(b.officialUorqui)) return a.officialUorqui ? -1 : 1;
       if (a.alreadyMember !== b.alreadyMember) return a.alreadyMember ? 1 : -1;
-      return Number(b.memberCount || 0) - Number(a.memberCount || 0);
+      const memberDiff = Number(b.memberCount || 0) - Number(a.memberCount || 0);
+      if (memberDiff) return memberDiff;
+      return String(a.name||'').localeCompare(String(b.name||''),'pt-BR');
     })
     .slice(0, 20);
 
@@ -5094,7 +5111,12 @@ function brazilDateKey(date=new Date()){
   return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
 }
 
-async function ensureUorquiAiSeeds(env){
+async function ensureUorquiAiSeeds(env, force=false){
+  const seedStateId='uorqui_ai_seed_v1';
+  if(!force){
+    const state=await fsGet(env,'systemConfig',seedStateId);
+    if(state?.ready===true&&Number(state.communityCount||0)===UORQUI_AI_COMMUNITIES.length) return;
+  }
   const createdAt=nowIso();
   for(const item of UORQUI_AI_COMMUNITIES){
     const uid=aiSeedId('agent',item.key);
@@ -5147,6 +5169,13 @@ async function ensureUorquiAiSeeds(env){
       });
     }
   }
+  await fsPut(env,'systemConfig',seedStateId,{
+    id:seedStateId,
+    ready:true,
+    communityCount:UORQUI_AI_COMMUNITIES.length,
+    version:1,
+    updatedAt:createdAt
+  });
 }
 
 async function generateUorquiAgentPost(env,item){
@@ -5173,17 +5202,27 @@ async function generateUorquiAgentPost(env,item){
   }
 }
 
-async function publishDailyUorquiAiPosts(env){
-  await ensureUorquiAiSeeds(env);
+async function publishDailyUorquiAiPosts(env, forceSeed=false){
+  await ensureUorquiAiSeeds(env, forceSeed);
   const day=brazilDateKey();
+  let published=0, skipped=0, failed=0;
+  const results=[];
   for(const item of UORQUI_AI_COMMUNITIES){
     const uid=aiSeedId('agent',item.key);
     const communityId=aiSeedId('community',item.key);
     const postId=aiSeedId('post',`${item.key}_${day}`);
-    if(await fsGet(env,'posts',postId)) continue;
+    if(await fsGet(env,'posts',postId)){
+      skipped+=1;
+      results.push({key:item.key,name:item.name,status:'already_published',postId});
+      continue;
+    }
 
     const text=await generateUorquiAgentPost(env,item);
-    if(!text) continue;
+    if(!text){
+      failed+=1;
+      results.push({key:item.key,name:item.name,status:'failed',postId:''});
+      continue;
+    }
 
     const createdAt=nowIso();
     await fsPut(env,'posts',postId,{
@@ -5215,7 +5254,48 @@ async function publishDailyUorquiAiPosts(env){
       createdAt,
       updatedAt:createdAt
     });
+    published+=1;
+    results.push({key:item.key,name:item.name,status:'published',postId});
   }
+  return {ok:true,day,published,skipped,failed,total:UORQUI_AI_COMMUNITIES.length,results};
+}
+
+async function getUorquiAiAgentStatus(env, identity){
+  requireSuperadmin(env, identity);
+  const day=brazilDateKey();
+  const agents=[];
+  let communitiesReady=0, postsToday=0;
+  for(const item of UORQUI_AI_COMMUNITIES){
+    const uid=aiSeedId('agent',item.key);
+    const communityId=aiSeedId('community',item.key);
+    const postId=aiSeedId('post',`${item.key}_${day}`);
+    const [user,community,post]=await Promise.all([
+      fsGet(env,'users',uid),
+      fsGet(env,'communities',communityId),
+      fsGet(env,'posts',postId)
+    ]);
+    if(community?.officialUorqui===true) communitiesReady+=1;
+    if(post) postsToday+=1;
+    agents.push({
+      key:item.key,
+      name:item.agent,
+      communityId,
+      communityName:item.name,
+      agentReady:Boolean(user),
+      communityReady:Boolean(community),
+      official:Boolean(community?.officialUorqui),
+      publishedToday:Boolean(post),
+      postId:post?.id||''
+    });
+  }
+  return {
+    ok:true,
+    day,
+    totalAgents:UORQUI_AI_COMMUNITIES.length,
+    communitiesReady,
+    postsToday,
+    agents
+  };
 }
 
 async function runScheduled(env) {
