@@ -827,10 +827,9 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
 
   notifications = notifications.sort(byCreatedDesc).slice(0, 60);
 
-  let allCompanyCommunities = communities;
+  let allCompanyCommunities = companyCommunities.sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
   let members = [];
   if (selectedCompanyId && canAdmin) {
-    allCompanyCommunities = companyCommunities.sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
     const companyMemberDocs = (await fsWhere(env, 'companyMembers', 'companyId', selectedCompanyId, 100)).filter(m => m.status === 'active');
     members = companyMemberDocs.slice(0, 100).map(m => ({ uid:m.uid, role:m.role, displayName:m.displayName||'', email:m.email||'' }));
   }
