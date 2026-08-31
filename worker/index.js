@@ -5365,6 +5365,30 @@ function decodeXmlText(value=''){
     .replace(/\s+/g,' ').trim();
 }
 
+async function extractArticlePreview(news){
+  const base={...news,imageUrl:'',canonicalUrl:news.link||''};
+  try{
+    const response=await fetch(news.link,{redirect:'follow',headers:{'User-Agent':'Mozilla/5.0 (compatible; UorquiBot/1.0)','Accept':'text/html,application/xhtml+xml'}});
+    if(!response.ok)return base;
+    const finalUrl=response.url||news.link;
+    const type=response.headers.get('content-type')||'';
+    if(!type.includes('text/html'))return {...base,canonicalUrl:finalUrl};
+    const html=(await response.text()).slice(0,600000);
+    const findMeta=(key)=>{
+      const tags=html.match(/<meta\s+[^>]*>/gi)||[];
+      for(const tag of tags){
+        const name=(tag.match(/(?:property|name)=["']([^"']+)["']/i)||[])[1]||'';
+        if(name.toLowerCase()!==key.toLowerCase())continue;
+        return decodeXmlText((tag.match(/content=["']([^"']+)["']/i)||[])[1]||'');
+      }
+      return '';
+    };
+    const imageUrl=findMeta('og:image')||findMeta('twitter:image')||'';
+    const siteName=findMeta('og:site_name')||news.source||'';
+    const canonical=(html.match(/<link\s+[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["'][^>]*>/i)||[])[1]||finalUrl;
+    return {...base,source:siteName||base.source,canonicalUrl:canonical,imageUrl:/^https?:\/\//i.test(imageUrl)?imageUrl:''};
+  }catch{return base;}
+}
 async function recentNewsForAgent(item){
   const query=UORQUI_AI_NEWS_QUERIES[item.key]||item.specialty||item.name;
   const rssUrl=`https://news.google.com/rss/search?q=${encodeURIComponent(query+' when:2d')}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
@@ -5382,7 +5406,7 @@ async function recentNewsForAgent(item){
       const publishedAt=pubDate?new Date(pubDate).toISOString():'';
       if(!title||!link)continue;
       if(publishedAt && Date.now()-new Date(publishedAt).getTime()>3*24*60*60*1000)continue;
-      return {title,link,source:source||'Google Notícias',publishedAt};
+      return await extractArticlePreview({title,link,source:source||'Google Notícias',publishedAt});
     }
   }catch(error){
     console.warn('Uorqui AI news lookup failed',item.key,error?.message||error);
@@ -5476,19 +5500,20 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
     }
 
     const choice=aiContentChoice(item,day,force);
-    const news=choice.preferNews?await recentNewsForAgent(item):null;
+    const news=await recentNewsForAgent(item);
+    if(!news){
+      failed+=1;
+      results.push({key:item.key,name:item.name,status:'failed',postId:'',error:'Nenhuma notícia recente encontrada para esta comunidade.'});
+      return;
+    }
     const text=await generateUorquiAgentPost(env,item,news);
     if(!text){
       failed+=1;
-      results.push({key:item.key,name:item.name,status:'failed',postId:'',error:'A IA não retornou texto.'});
+      results.push({key:item.key,name:item.name,status:'failed',postId:'',error:'A IA não retornou texto para a notícia encontrada.'});
       return;
     }
 
-    let attachments=[];
-    if(choice.withImage){
-      const attachment=await generateUorquiPostImage(env,item,communityId,uid,postId,news?.title||text);
-      if(attachment)attachments=[attachment];
-    }
+    const attachments=[];
 
     const createdAt=nowIso();
     await fsPut(env,'posts',postId,{
@@ -5518,17 +5543,18 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
       aiGenerated:true,
       aiDisclosure:'Conteúdo assistido por IA pela Equipe Uorqui',
       aiDay:day,
-      aiContentMode:news?'news':'evergreen',
-      aiImageGenerated:Boolean(attachments.length),
-      sourceName:news?.source||'',
-      sourceUrl:news?.link||'',
-      sourcePublishedAt:news?.publishedAt||'',
-      sourceHeadline:news?.title||'',
+      aiContentMode:'news',
+      aiImageGenerated:false,
+      sourceName:news.source||'',
+      sourceUrl:news.canonicalUrl||news.link||'',
+      sourceImageUrl:choice.withSourceImage?(news.imageUrl||''):'',
+      sourcePublishedAt:news.publishedAt||'',
+      sourceHeadline:news.title||'',
       createdAt,
       updatedAt:createdAt
     });
     published+=1;
-    results.push({key:item.key,name:item.name,status:'published',postId,mode:news?'news':'evergreen',withImage:Boolean(attachments.length),source:news?.source||''});
+    results.push({key:item.key,name:item.name,status:'published',postId,mode:'news',withImage:Boolean(choice.withSourceImage&&news.imageUrl),source:news.source||''});
   };
 
   const runner=async()=>{
@@ -5603,8 +5629,9 @@ async function getUorquiAiAgentStatus(env,identity){
     totalAgents:UORQUI_AI_COMMUNITIES.length,
     communitiesReady,
     postsToday:postsTodayList.length,
-    postsWithImageToday:postsTodayList.filter(post=>Array.isArray(post.attachments)&&post.attachments.length>0).length,
+    postsWithImageToday:postsTodayList.filter(post=>Boolean(post.sourceImageUrl)||(Array.isArray(post.attachments)&&post.attachments.length>0)).length,
     newsPostsToday:postsTodayList.filter(post=>post.aiContentMode==='news').length,
+    recentPosts:postsTodayList.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)).slice(0,30).map(post=>({id:post.id,authorName:post.authorName||'',communityName:post.communityName||'',text:clean(post.text||'',180),sourceName:post.sourceName||'',createdAt:post.createdAt||''})),
     agents
   };
 }
