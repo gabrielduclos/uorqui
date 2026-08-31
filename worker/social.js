@@ -16,7 +16,7 @@ export default {
 
     try {
       const identity = await requireAuth(request, env);
-      const response = await routeSocial(request, env, identity, url);
+      const response = await routeSocial(request, env, identity, url, ctx);
       const headers = new Headers(response.headers);
       headers.set('X-Uorqui-Version', PRODUCT_VERSION);
       return new Response(response.body, {
@@ -34,7 +34,7 @@ export default {
   }
 };
 
-async function routeSocial(request, env, identity, url) {
+async function routeSocial(request, env, identity, url, ctx) {
   const path = url.pathname.slice('/api/social'.length);
   const method = request.method.toUpperCase();
 
@@ -60,7 +60,7 @@ async function routeSocial(request, env, identity, url) {
 
   const followMatch = path.match(/^\/profiles\/([^/]+)\/follow$/);
   if (followMatch && method === 'POST') {
-    return json(await followUser(env, identity, decodeURIComponent(followMatch[1])));
+    return json(await followUser(env, identity, decodeURIComponent(followMatch[1]), ctx));
   }
   if (followMatch && method === 'DELETE') {
     return json(await unfollowUser(env, identity, decodeURIComponent(followMatch[1])));
@@ -275,7 +275,7 @@ async function getPublicProfile(env, identity, targetUid) {
   };
 }
 
-async function followUser(env, identity, targetUid) {
+async function followUser(env, identity, targetUid, ctx) {
   if (!targetUid || targetUid === identity.uid) throw httpError(400, 'Você não pode seguir a si mesmo.');
   const target = await fsGet(env, 'users', targetUid);
   if (!target) throw httpError(404, 'Perfil não encontrado.');
@@ -292,6 +292,28 @@ async function followUser(env, identity, targetUid) {
     createdAt: new Date().toISOString()
   });
   const followers = await queryCollection(env, 'socialFollows', 'targetUid', targetUid, 500);
+  const follower = await fsGet(env, 'users', identity.uid);
+  const notificationId = `new_follower_${identity.uid}_${targetUid}_${Date.now()}`;
+  const notification = {
+    recipientUid: targetUid,
+    type: 'new_follower',
+    title: `${follower?.displayName || identity.name || 'Alguém'} começou a seguir você`,
+    body: follower?.username ? `@${String(follower.username).replace(/^@/,'')}` : 'Veja o perfil do seu novo seguidor.',
+    data: { targetView: 'profile', profileUid: identity.uid },
+    read: false,
+    persistent: false,
+    status: 'new',
+    createdAt: new Date().toISOString()
+  };
+  await fsPut(env, 'notifications', notificationId, notification);
+  const pushTask = sendSocialPush(env, targetUid, {
+    title: notification.title,
+    body: notification.body,
+    type: 'new_follower',
+    notificationId,
+    url: `/?profile=${encodeURIComponent(identity.uid)}`
+  });
+  if (ctx?.waitUntil) ctx.waitUntil(pushTask); else await pushTask;
   return { following: true, followerCount: followers.length };
 }
 
@@ -345,6 +367,33 @@ function publicUser(user) {
 
 function followId(followerUid, targetUid) {
   return `${followerUid}__${targetUid}`;
+}
+
+async function sendSocialPush(env, uid, payload) {
+  if (!uid || !env.FIREBASE_PROJECT_ID) return;
+  const subscriptions = (await queryCollection(env, 'pushSubscriptions', 'uid', uid, 20).catch(() => []))
+    .filter(item => item.enabled !== false && item.token);
+  if (!subscriptions.length) return;
+
+  const accessToken = await getGoogleAccessToken(env).catch(() => '');
+  if (!accessToken) return;
+  const endpoint = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/messages:send`;
+
+  await Promise.allSettled(subscriptions.map(subscription => fetch(endpoint, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        token: subscription.token,
+        notification: { title: clean(payload.title || 'Uorqui',160), body: clean(payload.body || '',240) },
+        data: {
+          type: String(payload.type || ''),
+          notificationId: String(payload.notificationId || ''),
+          url: String(payload.url || '/')
+        }
+      }
+    })
+  })));
 }
 
 async function queryCollection(env, collectionId, fieldPath, value, limit = 100) {
