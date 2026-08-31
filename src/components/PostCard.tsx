@@ -687,6 +687,7 @@ export function PostCard({
               <span className="action-label">respostas</span>
             </button>
             <button onClick={share} aria-label="Compartilhar publicação"><Share2 size={18} /><span className="action-label">compartilhar</span></button>
+            <button onClick={() => window.dispatchEvent(new CustomEvent("uorqui:open-messages", { detail: { postId: post.id } }))} aria-label="Enviar por mensagem"><Send size={18} /><span className="action-label">enviar</span></button>
             {canResolve && (
               <button
                 className={`resolve-action ${resolved ? "resolved" : ""}`}
