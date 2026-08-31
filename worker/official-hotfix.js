@@ -313,27 +313,60 @@ function brazilDateKey(date = new Date()) {
   }).format(date);
 }
 
+function firebaseServiceAccount(env) {
+  let email = String(env.FIREBASE_SERVICE_ACCOUNT_EMAIL || '').trim();
+  let privateKey = String(env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '').trim();
+
+  // Aceita também o JSON completo da Service Account caso ele tenha sido
+  // colado em um dos secrets do Cloudflare.
+  for (const candidate of [privateKey, email]) {
+    const value = String(candidate || '').trim();
+    if (!value.startsWith('{')) continue;
+    try {
+      const parsed = JSON.parse(value);
+      email = String(parsed.client_email || email || '').trim();
+      privateKey = String(parsed.private_key || privateKey || '').trim();
+      if (email && privateKey && privateKey.includes('BEGIN PRIVATE KEY')) break;
+    } catch {}
+  }
+
+  return { email, privateKey };
+}
+
 async function getGoogleAccessToken(env) {
   if (googleTokenCache.token && googleTokenCache.expires > Date.now() + 60000) return googleTokenCache.token;
-  if (!env.FIREBASE_SERVICE_ACCOUNT_EMAIL || !env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY) {
-    throw httpError(503, 'Service Account do Firebase não configurada no Worker.');
+
+  const credentials = firebaseServiceAccount(env);
+  if (!credentials.email || !credentials.privateKey) {
+    throw httpError(503, 'Service Account do Firebase incompleta no Worker.');
   }
 
   const now = Math.floor(Date.now() / 1000);
   const header = b64urlJson({ alg: 'RS256', typ: 'JWT' });
   const claims = b64urlJson({
-    iss: env.FIREBASE_SERVICE_ACCOUNT_EMAIL,
+    iss: credentials.email,
     scope: 'https://www.googleapis.com/auth/datastore',
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600
   });
   const input = `${header}.${claims}`;
-  const key = await importPrivateKey(env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY);
-  const signature = await crypto.subtle.sign({ name: 'RSASSA-PKCS1-v1_5' }, key, new TextEncoder().encode(input));
+
+  let key;
+  try {
+    key = await importPrivateKey(credentials.privateKey);
+  } catch (error) {
+    throw httpError(503, `Chave privada da Service Account inválida: ${String(error?.message || error).slice(0,180)}`);
+  }
+
+  const signature = await crypto.subtle.sign(
+    { name: 'RSASSA-PKCS1-v1_5' },
+    key,
+    new TextEncoder().encode(input)
+  );
   const assertion = `${input}.${b64url(new Uint8Array(signature))}`;
   const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth2:grant-type:jwt-bearer',
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
     assertion
   });
 
@@ -342,8 +375,13 @@ async function getGoogleAccessToken(env) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body
   });
-  const data = await response.json();
-  if (!response.ok || !data.access_token) throw httpError(503, 'Não foi possível autenticar no Firebase.');
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data.access_token) {
+    const reason = data.error_description || data.error || `HTTP ${response.status}`;
+    throw httpError(503, `Firebase Service Account recusada pelo Google: ${reason}`);
+  }
+
   googleTokenCache = {
     token: data.access_token,
     expires: Date.now() + Number(data.expires_in || 3600) * 1000
