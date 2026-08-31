@@ -236,6 +236,17 @@ export function PostCard({
   };
 
   const toggleComments = () => {
+    if (!initialCommentsOpen) {
+      window.dispatchEvent(new CustomEvent("uorqui:open-post-thread", {
+        detail: {
+          postId: post.id,
+          companyId: post.companyId || "",
+          commentId: ""
+        }
+      }));
+      return;
+    }
+
     const next = !commentsOpen;
     setCommentsOpen(next);
     if (next && !commentsLoaded) void loadComments();
