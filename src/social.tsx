@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Search, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Search, UserCheck, UserPlus, Users } from "lucide-react";
 import { api } from "./lib/api";
 import { Avatar } from "./components/Avatar";
 import { PostCard } from "./components/PostCard";
@@ -37,6 +37,17 @@ function pushRoute(next: { people?: boolean; profileUid?: string }) {
   history.pushState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
+
+function closeSocialToFeed() {
+  const params = new URLSearchParams(location.search);
+  params.delete("people");
+  params.delete("profile");
+  const query = params.toString();
+  history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  window.dispatchEvent(new CustomEvent("uorqui:go-feed"));
+}
+
 
 export function SocialLayer() {
   const [route, setRoute] = useState(currentRoute);
@@ -100,8 +111,8 @@ export function SocialLayer() {
     <div className="social-overlay">
       <div className="social-shell">
         {route.profileUid
-          ? <PublicProfile uid={route.profileUid} onBack={() => pushRoute({ people: true })} />
-          : <PeopleDirectory onOpen={(uid) => pushRoute({ profileUid: uid })} onClose={() => history.back()} />}
+          ? <PublicProfile uid={route.profileUid} onBack={closeSocialToFeed} />
+          : <PeopleDirectory onOpen={(uid) => pushRoute({ profileUid: uid })} onClose={closeSocialToFeed} />}
       </div>
     </div>
   );
@@ -191,8 +202,9 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
         method: nextFollowing ? "POST" : "DELETE"
       });
       setData((current) => current ? { ...current, isFollowing: result.following, followerCount: result.followerCount } : current);
-    } catch {
+    } catch (err) {
       setData(previous);
+      setError(err instanceof Error ? err.message : "Não foi possível atualizar esta conexão.");
     } finally {
       setFollowBusy(false);
     }
@@ -218,14 +230,14 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
             }}>Editar perfil</button>
           ) : (
             <button className={`btn social-follow-button ${data.isFollowing ? "secondary" : ""}`} disabled={followBusy} onClick={toggleFollow}>
-              <UserPlus size={17} /> {data.isFollowing ? "Seguindo" : "Seguir"}
+              {data.isFollowing ? <UserCheck size={17} /> : <UserPlus size={17} />} {data.isFollowing ? "Deixar de seguir" : "Seguir"}
             </button>
           )}
         </div>
         <h2>{data.profile.displayName || "Usuário"}</h2>
         {data.profile.username && <span className="social-username">@{data.profile.username.replace(/^@/, "")}</span>}
         {data.profile.bio && <p className="social-bio">{data.profile.bio}</p>}
-        <div className="social-stats"><button onClick={onBack}><strong>{data.followingCount}</strong> seguindo</button><button onClick={onBack}><strong>{data.followerCount}</strong> seguidores</button></div>
+        <div className="social-stats"><span><strong>{data.followingCount}</strong> seguindo</span><span><strong>{data.followerCount}</strong> seguidores</span></div>
       </div>
 
       <div className="social-profile-feed">
@@ -234,7 +246,7 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
           <PostCard
             key={post.id}
             post={post}
-            currentUid={data.isMe ? uid : undefined}
+            currentUid={uid}
             onLike={async (target) => api<LikeResult>(`/posts/${target.id}/reaction`, { method: "POST" })}
             onRead={async (target) => { await api(`/posts/${target.id}/read`, { method: "POST" }); }}
             onChanged={load}
