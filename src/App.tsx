@@ -563,12 +563,6 @@ export default function App() {
     history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
   }, [user, data.me.uid, data.companies.length, data.isSuperadmin, loading]);
 
-  if (!authReady) return <Boot />;
-  if (!user) return <AuthScreen />;
-  if (loading && !data.me.uid) return <Boot />;
-  if (fatal) return <ErrorScreen message={fatal} onRetry={() => refresh()} onLogout={() => unregisterPushBeforeLogout()} />;
-  // O Uorqui social não exige mais empresa para entrar.
-
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
@@ -685,6 +679,14 @@ export default function App() {
     window.addEventListener("uorqui:open-post-thread", handleOpenPostThread);
     return () => window.removeEventListener("uorqui:open-post-thread", handleOpenPostThread);
   }, [selectedCompanyId]);
+
+  // Todos os Hooks precisam ser executados antes de qualquer retorno condicional.
+  // Isso evita React #310 na transição login -> aplicação.
+  if (!authReady) return <Boot />;
+  if (!user) return <AuthScreen />;
+  if (loading && !data.me.uid) return <Boot />;
+  if (fatal) return <ErrorScreen message={fatal} onRetry={() => refresh()} onLogout={() => unregisterPushBeforeLogout()} />;
+  // O Uorqui social não exige mais empresa para entrar.
 
   const openPostFromNotification = async (notification: NotificationItem) => {
     const postId = notification.data?.postId || "";
