@@ -4,7 +4,7 @@ import {
   ArrowLeft, BarChart3, Bell, BriefcaseBusiness, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
   Compass, Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Plus, Search, Send, Settings, Share2,
-  ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, X
+  ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, Wallet, X
 } from "lucide-react";
 import {
   createUserWithEmailAndPassword, deleteUser as deleteFirebaseUser, EmailAuthProvider, onAuthStateChanged,
@@ -188,6 +188,12 @@ export default function App() {
     };
     window.addEventListener("uorqui:go-feed", goFeed);
     return () => window.removeEventListener("uorqui:go-feed", goFeed);
+  }, []);
+
+  useEffect(() => {
+    const openCreator = () => setView("creator");
+    window.addEventListener("uorqui:open-creator", openCreator);
+    return () => window.removeEventListener("uorqui:open-creator", openCreator);
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
@@ -525,7 +531,7 @@ export default function App() {
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Rede", communities: "Comunidades", search: "Descobrir", jobs: "Rede", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
+    home: "Rede", communities: "Comunidades", search: "Descobrir", jobs: "Rede", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", creator: "Criador", superadmin: "Superadmin"
   };
 
   const navigate = (next: View) => {
@@ -796,6 +802,10 @@ export default function App() {
       onOpenPlans={() => openPlans("manual")}
       showToast={showToast}
     />;
+    if (view === "creator") return <CreatorDashboardPage
+      refresh={() => refresh()}
+      showToast={showToast}
+    />;
     if (view === "plans") return <PlansPage
       data={data}
       reason={planOfferReason}
@@ -840,6 +850,7 @@ export default function App() {
             <NavButton active={view === "search"} icon={<Compass />} label="Descobrir" onClick={() => navigate("search")} />
             {!!data.companies.length && data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
             <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
+            {data.me.creatorEnabled && <NavButton active={view === "creator"} icon={<Wallet />} label="Criador" onClick={() => navigate("creator")} />}
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
             <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
           </nav>
@@ -3022,6 +3033,26 @@ type SuperadminMetrics = {
   comments30d: number;
   estimatedMonthlyRecurringRevenue: number;
   premiumMonthlyPrice: number;
+  totalCreators: number;
+  activeCreatorCommunities: number;
+  activeCreatorSubscriptions: number;
+  creatorGrossRevenue: number;
+  creatorPlatformRevenue: number;
+  creatorNetRevenue: number;
+  creatorPaidOut: number;
+  creatorPendingPayout: number;
+  creatorPlatformFeePercent: number;
+};
+
+type SuperadminCreator = {
+  uid: string;
+  displayName: string;
+  email?: string;
+  activeSubscribers: number;
+  grossRevenue: number;
+  platformRevenue: number;
+  communityCount: number;
+  createdAt?: string;
 };
 
 type SuperadminCompany = {
@@ -3048,6 +3079,7 @@ function SuperadminPage({
 }) {
   const [metrics, setMetrics] = useState<SuperadminMetrics | null>(null);
   const [companies, setCompanies] = useState<SuperadminCompany[]>([]);
+  const [creators, setCreators] = useState<SuperadminCreator[]>([]);
   const [query, setQuery] = useState("");
   const [loadingSuperadmin, setLoadingSuperadmin] = useState(true);
   const [busyCompany, setBusyCompany] = useState("");
@@ -3059,9 +3091,11 @@ function SuperadminPage({
       const result = await api<{
         metrics: SuperadminMetrics;
         companies: SuperadminCompany[];
+        creators: SuperadminCreator[];
       }>("/superadmin/overview");
       setMetrics(result.metrics);
       setCompanies(result.companies);
+      setCreators(result.creators || []);
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -3141,8 +3175,8 @@ function SuperadminPage({
       <div className="page-heading superadmin-heading">
         <div>
           <span className="superadmin-kicker"><ShieldCheck size={15} /> Uorqui Superadmin</span>
-          <h2>Métricas e planos</h2>
-          <p>Visão operacional do produto. O Superadmin não recebe acesso ao conteúdo privado das empresas.</p>
+          <h2>Métricas e monetização</h2>
+          <p>Visão de rede, empresas e economia de Criadores. O Superadmin não recebe acesso ao conteúdo privado.</p>
         </div>
         <div className="superadmin-head-actions">
           {onProfile && <button className="btn secondary small" onClick={onProfile}>Perfil</button>}
@@ -3180,6 +3214,18 @@ function SuperadminPage({
               <small>Somente empresas Premium pagas</small>
             </article>
             <article className="superadmin-metric">
+              <UserRound size={19} />
+              <span>Criadores</span>
+              <strong>{metrics.totalCreators}</strong>
+              <small>{metrics.activeCreatorCommunities} comunidades monetizadas</small>
+            </article>
+            <article className="superadmin-metric">
+              <Wallet size={19} />
+              <span>Comissão Criadores</span>
+              <strong>{money(metrics.creatorPlatformRevenue)}</strong>
+              <small>{metrics.creatorPlatformFeePercent}% sobre receitas registradas</small>
+            </article>
+            <article className="superadmin-metric">
               <MessageSquareText size={19} />
               <span>Publicações</span>
               <strong>{metrics.totalPosts}</strong>
@@ -3197,10 +3243,39 @@ function SuperadminPage({
             <span><strong>{metrics.freeCompanies}</strong> empresas Free</span>
             <span><strong>{metrics.totalComments}</strong> comentários</span>
             <span><strong>{metrics.comments30d}</strong> comentários em 30 dias</span>
-            <span><strong>{money(metrics.premiumMonthlyPrice)}</strong> preço mensal atual</span>
+            <span><strong>{money(metrics.premiumMonthlyPrice)}</strong> Empresa/mês</span>
+            <span><strong>{metrics.activeCreatorSubscriptions}</strong> assinaturas de Criadores ativas</span>
+            <span><strong>{money(metrics.creatorGrossRevenue)}</strong> volume bruto de Criadores</span>
+            <span><strong>{money(metrics.creatorPendingPayout)}</strong> saldo a repassar</span>
           </div>
         </>
       )}
+
+      <section className="panel-card superadmin-creators-panel">
+        <div className="superadmin-company-toolbar">
+          <div>
+            <h3>Criadores</h3>
+            <small>{creators.length} ativos · comissão padrão de {metrics?.creatorPlatformFeePercent || 25}%</small>
+          </div>
+        </div>
+        <div className="superadmin-creator-list">
+          {creators.map((creator) => (
+            <article className="superadmin-creator-row" key={creator.uid}>
+              <Avatar name={creator.displayName || creator.email || "Criador"} size={38} />
+              <div className="superadmin-company-main">
+                <strong>{creator.displayName || "Criador"}</strong>
+                <small>{creator.email || "Sem e-mail"} · {creator.communityCount} comunidade(s) de Criador</small>
+              </div>
+              <div className="superadmin-creator-numbers">
+                <span><strong>{creator.activeSubscribers}</strong><small>assinantes</small></span>
+                <span><strong>{money(creator.grossRevenue)}</strong><small>bruto</small></span>
+                <span><strong>{money(creator.platformRevenue)}</strong><small>Uorqui</small></span>
+              </div>
+            </article>
+          ))}
+          {!loadingSuperadmin && !creators.length && <p className="muted superadmin-empty">Nenhum Criador ativado ainda.</p>}
+        </div>
+      </section>
 
       <section className="panel-card superadmin-companies-panel">
         <div className="superadmin-company-toolbar">
@@ -3324,6 +3399,204 @@ type CompanySummary = {
   communities: Array<{ id: string; name: string; description?: string; memberCount?: number }>;
 };
 
+type CreatorDashboardData = {
+  creator: { enabled: boolean; platformFeePercent: number; createdAt?: string };
+  metrics: {
+    activeSubscribers: number;
+    totalSubscriptions: number;
+    grossRevenue: number;
+    platformFees: number;
+    netRevenue: number;
+    pendingBalance: number;
+    totalPaidOut: number;
+    activeCommunities: number;
+  };
+  communities: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    visibility?: "public" | "private";
+    creatorEnabled?: boolean;
+    monthlyPrice?: number;
+    activeSubscribers?: number;
+  }>;
+  subscriptions: Array<{
+    id: string;
+    communityId?: string;
+    subscriberName?: string;
+    status?: string;
+    monthlyPrice?: number;
+    createdAt?: string;
+    currentPeriodEnd?: string;
+  }>;
+  payouts: Array<{
+    id: string;
+    amount: number;
+    status?: string;
+    requestedAt?: string;
+    paidAt?: string;
+  }>;
+};
+
+function CreatorDashboardPage({ refresh, showToast }: {
+  refresh: () => Promise<void>;
+  showToast: (message: string) => void;
+}) {
+  const [dashboard, setDashboard] = useState<CreatorDashboardData | null>(null);
+  const [loadingCreator, setLoadingCreator] = useState(true);
+  const [busyCommunity, setBusyCommunity] = useState("");
+
+  const money = (value = 0) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+
+  const load = async () => {
+    setLoadingCreator(true);
+    try {
+      const result = await api<CreatorDashboardData>("/creator/dashboard");
+      setDashboard(result);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setLoadingCreator(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const activateCreator = async () => {
+    try {
+      await api("/creator/activate", { method: "POST" });
+      showToast("Modo Criador ativado.");
+      await Promise.all([load(), refresh()]);
+    } catch (error) {
+      showToast(errorMessage(error));
+    }
+  };
+
+  const activateCommunity = async (communityId: string, currentPrice = 0) => {
+    if (busyCommunity) return;
+    const suggested = currentPrice > 0 ? currentPrice.toFixed(2).replace(".", ",") : "19,90";
+    const answer = prompt("Qual será o valor mensal da assinatura desta comunidade?", suggested);
+    if (answer === null) return;
+    const monthlyPrice = Number(answer.replace(",", "."));
+    if (!Number.isFinite(monthlyPrice)) {
+      showToast("Informe um valor mensal válido.");
+      return;
+    }
+
+    setBusyCommunity(communityId);
+    try {
+      await api(`/creator/communities/${communityId}/activate`, {
+        method: "POST",
+        body: JSON.stringify({ monthlyPrice })
+      });
+      showToast("Comunidade de Criador configurada.");
+      await Promise.all([load(), refresh()]);
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setBusyCommunity("");
+    }
+  };
+
+  if (loadingCreator && !dashboard) return <section className="page-section"><div className="loading-line">Carregando painel do Criador…</div></section>;
+
+  if (!dashboard?.creator.enabled) {
+    return (
+      <section className="page-section creator-page">
+        <div className="page-heading">
+          <div><h2>Painel do Criador</h2><p>Monetize comunidades próprias por assinatura, sem mensalidade fixa.</p></div>
+        </div>
+        <section className="panel-card creator-activation-card">
+          <Crown size={28} />
+          <div>
+            <strong>Ative o modo Criador gratuitamente</strong>
+            <p>Você define o preço da assinatura. O Uorqui fica com {dashboard?.creator.platformFeePercent || 25}% do valor processado e o restante forma seu saldo para repasse.</p>
+          </div>
+          <button className="btn" onClick={activateCreator}>Ativar Criador</button>
+        </section>
+      </section>
+    );
+  }
+
+  const metrics = dashboard.metrics;
+  return (
+    <section className="page-section creator-page">
+      <div className="page-heading creator-heading">
+        <div>
+          <span className="creator-kicker"><Crown size={14}/> Uorqui Criador</span>
+          <h2>Receitas e assinaturas</h2>
+          <p>Acompanhe suas comunidades monetizadas, assinantes e repasses.</p>
+        </div>
+        <span className="creator-fee-pill">{dashboard.creator.platformFeePercent}% Uorqui</span>
+      </div>
+
+      <div className="creator-metrics">
+        <article><Users size={18}/><span>Assinantes ativos</span><strong>{metrics.activeSubscribers}</strong></article>
+        <article><BarChart3 size={18}/><span>Receita bruta</span><strong>{money(metrics.grossRevenue)}</strong></article>
+        <article><Wallet size={18}/><span>Seu saldo</span><strong>{money(metrics.pendingBalance)}</strong></article>
+        <article><Crown size={18}/><span>Comissão Uorqui</span><strong>{money(metrics.platformFees)}</strong></article>
+        <article><Check size={18}/><span>Já repassado</span><strong>{money(metrics.totalPaidOut)}</strong></article>
+        <article><Users size={18}/><span>Comunidades ativas</span><strong>{metrics.activeCommunities}</strong></article>
+      </div>
+
+      <section className="panel-card creator-communities-panel">
+        <div className="creator-panel-head">
+          <div><h3>Suas comunidades</h3><small>Escolha quais comunidades próprias terão assinatura mensal.</small></div>
+        </div>
+        <div className="creator-community-list">
+          {dashboard.communities.map((community) => (
+            <article className="creator-community-row" key={community.id}>
+              <div className="community-avatar">{community.name.slice(0,2).toUpperCase()}</div>
+              <div className="ellipsis">
+                <strong>{community.name}</strong>
+                <small>{community.activeSubscribers || 0} assinantes ativos · {community.visibility === "private" ? "Privada" : "Aberta"}</small>
+              </div>
+              <div className="creator-community-actions">
+                {community.creatorEnabled && <span className="creator-price">{money(community.monthlyPrice || 0)}/mês</span>}
+                <button className="btn secondary small" disabled={busyCommunity === community.id} onClick={() => void activateCommunity(community.id, community.monthlyPrice || 0)}>
+                  {busyCommunity === community.id ? "Salvando…" : community.creatorEnabled ? "Alterar preço" : "Monetizar"}
+                </button>
+              </div>
+            </article>
+          ))}
+          {!dashboard.communities.length && <p className="muted">Crie uma comunidade própria para começar a monetizar.</p>}
+        </div>
+      </section>
+
+      <section className="creator-two-column">
+        <section className="panel-card">
+          <div className="creator-panel-head"><div><h3>Assinaturas</h3><small>Assinantes e situação da recorrência.</small></div></div>
+          <div className="creator-simple-list">
+            {dashboard.subscriptions.map((subscription) => (
+              <div key={subscription.id}>
+                <div><strong>{subscription.subscriberName || "Assinante"}</strong><small>{subscription.status || "—"}</small></div>
+                <strong>{money(subscription.monthlyPrice || 0)}</strong>
+              </div>
+            ))}
+            {!dashboard.subscriptions.length && <p className="muted">Nenhuma assinatura registrada ainda.</p>}
+          </div>
+        </section>
+
+        <section className="panel-card">
+          <div className="creator-panel-head"><div><h3>Repasses</h3><small>Histórico dos valores enviados para você.</small></div></div>
+          <div className="creator-simple-list">
+            {dashboard.payouts.map((payout) => (
+              <div key={payout.id}>
+                <div><strong>{money(payout.amount)}</strong><small>{payout.status || "—"}</small></div>
+                <small>{payout.paidAt ? new Date(payout.paidAt).toLocaleDateString("pt-BR") : payout.requestedAt ? new Date(payout.requestedAt).toLocaleDateString("pt-BR") : "—"}</small>
+              </div>
+            ))}
+            {!dashboard.payouts.length && <p className="muted">Nenhum repasse registrado ainda.</p>}
+          </div>
+        </section>
+      </section>
+
+      <p className="creator-finance-note">Os valores deste painel são calculados apenas sobre transações efetivamente registradas como pagas. Taxas externas do meio de pagamento podem ser tratadas separadamente quando o checkout de assinantes for conectado.</p>
+    </section>
+  );
+}
+
 function PlansPage({
   data,
   reason,
@@ -3340,6 +3613,7 @@ function PlansPage({
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [billingBusy, setBillingBusy] = useState(false);
+  const [creatorBusy, setCreatorBusy] = useState(false);
 
   const load = async () => {
     setLoadingPlans(true);
@@ -3373,6 +3647,20 @@ function PlansPage({
     } catch (error) {
       showToast(errorMessage(error));
       setBillingBusy(false);
+    }
+  };
+
+  const activateCreator = async () => {
+    if (creatorBusy) return;
+    setCreatorBusy(true);
+    try {
+      await api("/creator/activate", { method: "POST" });
+      showToast("Modo Criador ativado gratuitamente.");
+      await refresh();
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setCreatorBusy(false);
     }
   };
 
@@ -3416,6 +3704,9 @@ function PlansPage({
                 <li><Check size={16}/> Comissão inicial da plataforma: 25%</li>
               </ul>
               <span className="plan-secondary-note">O Uorqui só recebe comissão quando sua comunidade gera receita.</span>
+              <button className="btn plan-upgrade-button" disabled={creatorBusy} onClick={activateCreator}>
+                <Crown size={17}/> {data.me.creatorEnabled ? "Criador já ativado" : creatorBusy ? "Ativando…" : "Ativar Criador grátis"}
+              </button>
             </article>
 
             <article className={`plan-card ${companyActive ? "current" : ""}`}>
@@ -3943,6 +4234,17 @@ function ProfilePage({
           </form>
         </section>
       </div>
+
+      <section className="panel-card profile-creator-card">
+        <div className="profile-community-cta-icon"><Crown size={20} /></div>
+        <div className="profile-community-cta-copy">
+          <strong>{data.me.creatorEnabled ? "Painel do Criador" : "Torne-se Criador"}</strong>
+          <p className="muted">{data.me.creatorEnabled ? "Acompanhe assinaturas, receita e repasses das suas comunidades." : "Ative gratuitamente e monetize uma comunidade própria por assinatura."}</p>
+        </div>
+        <button className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("uorqui:open-creator"))}>
+          {data.me.creatorEnabled ? "Abrir painel" : "Conhecer"}
+        </button>
+      </section>
 
       <section className="panel-card profile-community-cta">
         <div className="profile-community-cta-icon"><Users size={20} /></div>
