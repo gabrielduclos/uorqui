@@ -1130,3 +1130,9 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .community-topic-tabs button.active{background:#111;color:#fff;border-color:#111}
 .community-topic-publish{margin-top:10px}
 .topbar{transition:transform .11s linear,opacity .11s linear}
+
+.discover-page{padding-top:14px}.discover-section{margin-top:18px}.discover-section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}.discover-section-head strong{font-size:13px}
+.discover-community-row{display:grid;grid-auto-flow:column;grid-auto-columns:150px;gap:9px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}.discover-community-row::-webkit-scrollbar{display:none}
+.discover-community-card{min-height:125px;border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:6px}.discover-community-card strong{font-size:11px}.discover-community-card small{font-size:9px;color:var(--muted);line-height:1.35}
+.discover-jobs{display:grid;grid-template-columns:1fr;gap:9px}.discover-feed{padding-left:0;padding-right:0}.jobs-embedded{margin-top:18px;padding:16px;background:#fff;border:1px solid var(--line);border-radius:16px}.jobs-embedded .page-heading{margin-top:0}.company-jobs-panel{margin-top:16px}
+@media(max-width:700px){.discover-page{padding:10px}.discover-community-row{grid-auto-columns:140px}.jobs-embedded{padding:12px;margin:12px 0}}
