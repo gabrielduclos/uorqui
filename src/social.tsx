@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Search, UserCheck, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Ban, Search, UserCheck, UserPlus, Users } from "lucide-react";
 import { api } from "./lib/api";
 import { Avatar } from "./components/Avatar";
 import { PostCard } from "./components/PostCard";
@@ -13,6 +13,8 @@ type ProfileResponse = {
   followerCount: number;
   followingCount: number;
   isFollowing: boolean;
+  isBlocked?: boolean;
+  isBlockedBy?: boolean;
   isMe: boolean;
   posts: Post[];
 };
@@ -172,6 +174,7 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [followBusy, setFollowBusy] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -210,6 +213,30 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
     }
   };
 
+  const toggleBlock = async () => {
+    if (!data || data.isMe || blockBusy) return;
+    const blocking = !data.isBlocked;
+    if (blocking && !confirm(`Bloquear ${data.profile.displayName || "este usuário"}? Vocês deixarão de se seguir e o conteúdo dele não aparecerá para você.`)) return;
+
+    setBlockBusy(true);
+    try {
+      const result = await api<{ blocked: boolean }>(`/social/profiles/${encodeURIComponent(uid)}/block`, {
+        method: blocking ? "POST" : "DELETE"
+      });
+      setData((current) => current ? {
+        ...current,
+        isBlocked: result.blocked,
+        isFollowing: result.blocked ? false : current.isFollowing,
+        posts: result.blocked ? [] : current.posts
+      } : current);
+      if (!result.blocked) await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível atualizar o bloqueio.");
+    } finally {
+      setBlockBusy(false);
+    }
+  };
+
   if (loading) return <section className="social-page"><div className="social-empty">Carregando perfil…</div></section>;
   if (!data || error) return <section className="social-page"><header className="social-page-head"><button className="social-icon-button" onClick={onBack}><ArrowLeft size={21} /></button><h1>Perfil</h1></header><div className="social-empty">{error || "Perfil não encontrado."}</div></section>;
 
@@ -229,9 +256,18 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
               window.setTimeout(() => document.querySelector<HTMLButtonElement>('.side-nav button:last-child')?.click(), 0);
             }}>Editar perfil</button>
           ) : (
-            <button className={`btn social-follow-button ${data.isFollowing ? "secondary" : ""}`} disabled={followBusy} onClick={toggleFollow}>
-              {data.isFollowing ? <UserCheck size={17} /> : <UserPlus size={17} />} {data.isFollowing ? "Deixar de seguir" : "Seguir"}
-            </button>
+            <div className="social-profile-actions">
+              {!data.isBlocked && !data.isBlockedBy && (
+                <button className={`btn social-follow-button ${data.isFollowing ? "secondary" : ""}`} disabled={followBusy} onClick={toggleFollow}>
+                  {data.isFollowing ? <UserCheck size={17} /> : <UserPlus size={17} />} {data.isFollowing ? "Deixar de seguir" : "Seguir"}
+                </button>
+              )}
+              {!data.isBlockedBy && (
+                <button className={`btn secondary social-block-button ${data.isBlocked ? "blocked" : ""}`} disabled={blockBusy} onClick={toggleBlock}>
+                  <Ban size={16} /> {data.isBlocked ? "Desbloquear" : "Bloquear"}
+                </button>
+              )}
+            </div>
           )}
         </div>
         <h2>{data.profile.displayName || "Usuário"}</h2>
@@ -242,7 +278,9 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
 
       <div className="social-profile-feed">
         <h3>Publicações</h3>
-        {data.posts.length === 0 ? <div className="social-empty">Ainda não há publicações públicas.</div> : data.posts.map((post) => (
+        {data.isBlocked ? <div className="social-empty">Você bloqueou este usuário.</div>
+          : data.isBlockedBy ? <div className="social-empty">Este perfil não está disponível para você.</div>
+          : data.posts.length === 0 ? <div className="social-empty">Ainda não há publicações visíveis para você.</div> : data.posts.map((post) => (
           <PostCard
             key={post.id}
             post={post}
