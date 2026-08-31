@@ -4820,11 +4820,6 @@ async function fsCommit(env,operations){
   });
   await fsRequest(env,'/documents:commit',{method:'POST',body:JSON.stringify({writes})});
 }
-async function fsListCollection(env, collection, pageSize = 200) {
-  const response = await fsRequest(env, `/documents/${collection}?pageSize=${pageSize}`);
-  return (response?.documents || []).map(fromDoc);
-}
-
 async function fsWhere(env,collection,field,value,limit=100){const body={structuredQuery:{from:[{collectionId:collection}],where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:toValue(value)}},limit}};const rows=await fsRequest(env,'/documents:runQuery',{method:'POST',body:JSON.stringify(body)});return (Array.isArray(rows)?rows:[]).filter(x=>x.document).map(x=>fromDoc(x.document));}
 
 async function fsListCollection(env, collection, maxItems = 5000) {
