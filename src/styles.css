@@ -1467,3 +1467,23 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   .message-audio-preview>span{display:none}
   .message-audio-preview audio{height:30px}
 }
+
+/* Identificação transparente dos agentes editoriais do Uorqui */
+.uorqui-ai-badge{
+  display:inline-flex;
+  align-items:center;
+  margin-left:6px;
+  padding:2px 6px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  font-size:8px;
+  line-height:1.2;
+  font-weight:700;
+  letter-spacing:.01em;
+  vertical-align:middle;
+  background:#f7f7f8;
+  color:#555;
+}
+@media(max-width:520px){
+  .uorqui-ai-badge{font-size:7.5px;padding:2px 5px;margin-left:4px}
+}
