@@ -325,6 +325,7 @@ async function routeApi(request, env, identity, url, ctx) {
     return json(await votePoll(env, identity, postId, await readJson(request), ctx));
   }
   if (method === 'GET' && path === '/search') return json(await searchPosts(env, identity, url.searchParams));
+  if (method === 'GET' && path === '/discover') return json(await discoverContent(env, identity));
   if (method === 'POST' && path === '/media/upload') return json(await uploadMedia(request, env, identity, url.searchParams), 201);
   if (method === 'GET' && /^\/media\/[^/]+$/.test(path)) {
     const mediaId = decodeURIComponent(path.split('/')[2]);
@@ -2272,7 +2273,9 @@ async function createJob(env, identity, body, ctx) {
     fsGetRequired(env, 'companies', companyId, 'Empresa não encontrada.'),
     ensureUser(env, identity)
   ]);
-  await assertJobCapacity(env, company);
+  if (!hasPremiumAccess(company)) {
+    throw httpError(403, 'A publicação de vagas é um recurso da comunidade convertida em Empresa.');
+  }
 
   const title = clean(body.title, 140);
   const description = clean(body.description, 5000);
@@ -3354,6 +3357,66 @@ async function votePoll(env, identity, postId, body, ctx) {
   deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'poll_voted'));
 
   return { ok: true, optionId, pollOptions: options, pollTotalVotes: total };
+}
+
+async function discoverContent(env, identity) {
+  const [worldPostsRaw, publicCommunities, worldJobs, follows, memberships, reactions] = await Promise.all([
+    fsWhere(env, 'posts', 'scope', 'world', 120),
+    fsWhere(env, 'communities', 'visibility', 'public', 120),
+    fsWhere(env, 'jobs', 'audience', 'world', 120),
+    fsWhere(env, 'socialFollows', 'followerUid', identity.uid, 250).catch(() => []),
+    fsWhere(env, 'communityMembers', 'uid', identity.uid, 250).catch(() => []),
+    fsWhere(env, 'reactions', 'uid', identity.uid, 250).catch(() => [])
+  ]);
+
+  const followedUids = new Set(follows.map(item => item.followingUid).filter(Boolean));
+  const joinedCommunityIds = new Set(memberships.map(item => item.communityId).filter(Boolean));
+  const likedPostIds = new Set(reactions.map(item => item.postId).filter(Boolean));
+
+  const scorePost = post => {
+    const ageHours = Math.max(0, (Date.now() - new Date(post.createdAt || 0).getTime()) / 3600000);
+    const freshness = Math.max(0, 72 - ageHours) / 12;
+    const social = Number(post.reactionCount || 0) * 1.5 + Number(post.commentCount || 0) * 2;
+    const followBoost = followedUids.has(post.authorUid) ? 18 : 0;
+    const likedBoost = likedPostIds.has(post.id) ? -4 : 0;
+    return freshness + social + followBoost + likedBoost;
+  };
+
+  const posts = [...worldPostsRaw]
+    .filter(post => !post.deletedByAdmin)
+    .sort((a,b) => scorePost(b) - scorePost(a))
+    .slice(0, 30);
+
+  const communities = publicCommunities
+    .filter(community => community.archived !== true && community.status !== 'inactive')
+    .map(community => ({
+      ...communityView(community),
+      alreadyMember: joinedCommunityIds.has(community.id),
+      verifiedCompany: Boolean(community.companyId)
+    }))
+    .sort((a,b) => {
+      if (a.alreadyMember !== b.alreadyMember) return a.alreadyMember ? 1 : -1;
+      return Number(b.memberCount || 0) - Number(a.memberCount || 0);
+    })
+    .slice(0, 18);
+
+  const jobs = worldJobs
+    .filter(job => job.status !== 'closed')
+    .sort(byCreatedDesc)
+    .slice(0, 20)
+    .map(jobView);
+
+  const likedIds = new Set(reactions.map(item => item.postId));
+  const receipts = await fsWhere(env, 'readReceipts', 'uid', identity.uid, 200).catch(() => []);
+  const readIds = new Set(receipts.map(item => item.postId));
+  const pollVotes = await fsWhere(env, 'pollVotes', 'uid', identity.uid, 200).catch(() => []);
+  const pollVoteMap = new Map(pollVotes.map(vote => [vote.postId, vote.optionId]));
+
+  return {
+    posts: enrichPosts(posts, likedIds, readIds, pollVoteMap),
+    communities,
+    jobs
+  };
 }
 
 async function searchPosts(env, identity, params) {
