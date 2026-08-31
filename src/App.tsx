@@ -3177,6 +3177,7 @@ type SuperadminAiAgent = {
   communityReady: boolean;
   official: boolean;
   publishedToday: boolean;
+  postsToday?: number;
   postId?: string;
 };
 
@@ -3185,6 +3186,8 @@ type SuperadminAiStatus = {
   totalAgents: number;
   communitiesReady: number;
   postsToday: number;
+  postsWithImageToday?: number;
+  newsPostsToday?: number;
   agents: SuperadminAiAgent[];
 };
 
@@ -3364,11 +3367,11 @@ function SuperadminPage({
           <div>
             <span className="superadmin-kicker"><Crown size={14}/> Equipe Uorqui · IA</span>
             <h3>Comunidades oficiais e publicações</h3>
-            <p className="muted">Uma publicação por comunidade por dia. O disparo manual respeita a trava diária e não cria duplicados.</p>
+            <p className="muted">Os agentes misturam pautas recentes e conteúdo factual. O cron evita duplicação diária; o disparo manual cria uma nova rodada.</p>
           </div>
           <div className="superadmin-ai-summary">
-            <strong>{aiStatus ? `${aiStatus.postsToday}/${aiStatus.totalAgents}` : "—"}</strong>
-            <span>publicadas hoje</span>
+            <strong>{aiStatus ? aiStatus.postsToday : "—"}</strong>
+            <span>publicações hoje{aiStatus ? ` · ${aiStatus.newsPostsToday || 0} notícias · ${aiStatus.postsWithImageToday || 0} com imagem` : ""}</span>
           </div>
         </div>
 
@@ -3392,7 +3395,7 @@ function SuperadminPage({
                   <small>{agent.name}</small>
                 </div>
                 <span className={agent.official ? "ok" : "warn"}>{agent.official ? "Oficial" : "Pendente"}</span>
-                <span className={agent.publishedToday ? "ok" : "neutral"}>{agent.publishedToday ? "Publicado hoje" : "Ainda não publicado"}</span>
+                <span className={agent.publishedToday ? "ok" : "neutral"}>{agent.publishedToday ? `${agent.postsToday || 1} hoje` : "Ainda não publicado"}</span>
               </div>
             ))}
           </div>
