@@ -640,6 +640,13 @@ export function PostCard({
               </>
             )}
 
+            {post.sourceUrl && post.sourceName && (
+              <a className="ai-news-source" href={post.sourceUrl} target="_blank" rel="noopener noreferrer">
+                <span>Fonte: {post.sourceName}</span>
+                <small>{post.sourcePublishedAt ? "notícia recente" : "fonte da pauta"}</small>
+              </a>
+            )}
+
             {post.type === "announcement" && post.requiresReadReceipt && post.authorUid !== currentUid && (
               <div className={`read-confirmation-box ${post.hasRead ? "confirmed" : ""}`}>
                 <div>
