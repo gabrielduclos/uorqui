@@ -41,6 +41,7 @@
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
     "ASAAS_ENV": "sandbox",
     "PREMIUM_MONTHLY_PRICE_BRL": "99.90",
+    "CREATOR_PLATFORM_FEE_PERCENT": "25",
     "ENTERPRISE_EXTRA_USER_PRICE_BRL": "19.90"
   },
   "secrets": {
