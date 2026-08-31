@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import {
   ArrowLeft, BarChart3, Bell, BriefcaseBusiness, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
-  Compass, Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Plus, Search, Send, Settings, Share2,
+  Compass, Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Mic, Plus, Search, Send, Settings, Share2, Video,
   ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, X
 } from "lucide-react";
 import {
@@ -12,7 +12,7 @@ import {
   signInWithEmailAndPassword, updatePassword, updateProfile, type User
 } from "firebase/auth";
 import { auth } from "./lib/firebase";
-import { ApiError, api, cacheMediaBlobUrl, prefetchPostMedia } from "./lib/api";
+import { ApiError, api, cacheMediaBlobUrl, mediaBlobUrl, prefetchPostMedia } from "./lib/api";
 import { connectRealtime } from "./lib/realtime";
 import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
 import { usePwaInstall } from "./lib/pwa";
@@ -214,6 +214,17 @@ export default function App() {
     };
     window.addEventListener("uorqui:go-feed", goFeed);
     return () => window.removeEventListener("uorqui:go-feed", goFeed);
+  }, []);
+
+  useEffect(() => {
+    const openMessages = (event: Event) => {
+      const detail = (event as CustomEvent<{ targetUid?: string; postId?: string }>).detail || {};
+      if (detail.targetUid) sessionStorage.setItem("uorqui-message-target", detail.targetUid);
+      if (detail.postId) sessionStorage.setItem("uorqui-message-post", detail.postId);
+      setView("messages");
+    };
+    window.addEventListener("uorqui:open-messages", openMessages);
+    return () => window.removeEventListener("uorqui:open-messages", openMessages);
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, (next) => {
@@ -566,7 +577,7 @@ export default function App() {
   const unread = data.notifications.filter((n) => !n.read).length;
   const companyName = data.company?.name || "Uorqui";
   const pageTitle: Record<View, string> = {
-    home: "Rede", communities: "Comunidades", search: "Descobrir", jobs: "Rede", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
+    home: "Rede", communities: "Comunidades", search: "Descobrir", jobs: "Rede", admin: "Administrar", "company-data": "Dados da empresa", profile: "Perfil", messages: "Mensagens", notifications: "Notificações", companies: "Empresas", plans: "Planos", superadmin: "Superadmin"
   };
 
   const navigate = (next: View) => {
@@ -825,6 +836,10 @@ export default function App() {
         setSelectedCommunityId(communityId);
         setView("communities");
       }}
+      onOpenMessages={(uid) => {
+        if (uid) sessionStorage.setItem("uorqui-message-target", uid);
+        setView("messages");
+      }}
     />;
     if (view === "companies") return <CompaniesPage
       data={data}
@@ -845,6 +860,7 @@ export default function App() {
       onOpenPlans={() => openPlans("manual")}
       showToast={showToast}
     />;
+    if (view === "messages") return <MessagesPage me={data.me} showToast={showToast} />;
     if (view === "plans") return <PlansPage
       data={data}
       reason={planOfferReason}
@@ -887,6 +903,7 @@ export default function App() {
             <NavButton active={view === "home" || view === "jobs"} icon={<Home />} label="Rede" onClick={() => navigate("home")} />
             <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
             <NavButton active={view === "search"} icon={<Compass />} label="Descobrir" onClick={() => navigate("search")} />
+            <NavButton active={view === "messages"} icon={<MessageSquareText />} label="Mensagens" onClick={() => navigate("messages")} />
             {!!data.companies.length && data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
             <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
@@ -947,6 +964,9 @@ export default function App() {
                   <Bell size={21} />
                   {unread > 0 && <span className="count-badge">{unread > 99 ? "99+" : unread}</span>}
                 </button>
+                <button className={`icon-btn header-profile-button ${view === "profile" ? "active" : ""}`} onClick={() => navigate("profile")} aria-label="Perfil">
+                  <UserRound size={21} />
+                </button>
                 {data.canAdmin && (
                   <button className={`icon-btn header-admin-button ${view === "admin" || view === "company-data" ? "active" : ""}`} onClick={() => navigate("admin")} aria-label="Administrar empresa">
                     <Settings size={21} />
@@ -981,7 +1001,7 @@ export default function App() {
         <MobileNav active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
         <button className="mobile-create" onClick={() => openComposer({ scope: "world" })} aria-label="Publicar"><Plus size={26} /></button>
         <MobileNav active={view === "search"} icon={<Compass />} label="Descobrir" onClick={() => { setSearchSeed(""); navigate("search"); }} />
-        <MobileNav active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
+        <MobileNav active={view === "messages"} icon={<MessageSquareText />} label="Mensagens" onClick={() => navigate("messages")} />
       </nav>
 
       {user && data.me.uid && pushPermissionPromptOpen && currentPushState() === "default" && (
@@ -4091,9 +4111,146 @@ function ProfilePage({
   );
 }
 
+type MessageConversation = {
+  id: string; targetUid: string; displayName: string; username?: string; avatarMediaId?: string;
+  status: "pending" | "accepted"; requestedBy?: string; lastMessagePreview?: string; lastMessageAt?: string; unreadCount?: number;
+};
+type DirectMessage = {
+  id: string; senderUid: string; recipientUid: string; text?: string; createdAt?: string;
+  attachments?: Array<{id:string;name?:string;contentType?:string;size?:number}>;
+  sharedPost?: {id:string;authorName?:string;text?:string;scope?:string;companyId?:string} | null;
+};
+
+function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string}; showToast: (m:string)=>void }) {
+  const [conversations,setConversations]=useState<MessageConversation[]>([]);
+  const [nextOffset,setNextOffset]=useState<number|null>(null);
+  const [targetUid,setTargetUid]=useState(() => sessionStorage.getItem("uorqui-message-target") || "");
+  const [messages,setMessages]=useState<DirectMessage[]>([]);
+  const [conversation,setConversation]=useState<{status?:string;requestedBy?:string}|null>(null);
+  const [nextBefore,setNextBefore]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [files,setFiles]=useState<File[]>([]);
+  const [sharedPostId,setSharedPostId]=useState(() => sessionStorage.getItem("uorqui-message-post") || "");
+  const [mediaUrls,setMediaUrls]=useState<Record<string,string>>({});
+
+  const loadConversations=async(offset=0)=>{
+    try{
+      const result=await api<{conversations:MessageConversation[];nextOffset:number|null}>(`/messages?offset=${offset}&limit=20`);
+      setConversations(current=>offset?[...current,...result.conversations]:result.conversations);
+      setNextOffset(result.nextOffset);
+      if(!targetUid && result.conversations[0]?.targetUid) setTargetUid(result.conversations[0].targetUid);
+    }catch(error){showToast(errorMessage(error));}
+  };
+
+  const loadMessages=async(uid=targetUid,before="")=>{
+    if(!uid)return;
+    try{
+      const qs=before?`?before=${encodeURIComponent(before)}&limit=30`:"?limit=30";
+      const result=await api<{conversation:any;messages:DirectMessage[];nextBefore:string}>(`/messages/${encodeURIComponent(uid)}${qs}`);
+      setConversation(result.conversation);
+      setMessages(current=>before?[...result.messages,...current]:result.messages);
+      setNextBefore(result.nextBefore||"");
+      sessionStorage.setItem("uorqui-message-target",uid);
+    }catch(error){showToast(errorMessage(error));}
+  };
+
+  useEffect(()=>{void loadConversations();},[]);
+  useEffect(()=>{if(targetUid)void loadMessages(targetUid);},[targetUid]);
+
+  useEffect(()=>{
+    const ids=[...new Set(messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)))];
+    ids.forEach(id=>{if(!mediaUrls[id])mediaBlobUrl(id).then(url=>setMediaUrls(c=>({...c,[id]:url}))).catch(()=>{});});
+  },[messages]);
+
+  const sendMessage=async(event:FormEvent<HTMLFormElement>)=>{
+    event.preventDefault();
+    if(!targetUid||busy)return;
+    const fd=new FormData(event.currentTarget);
+    const text=String(fd.get("message")||"").trim();
+    setBusy(true);
+    try{
+      const attachmentIds:string[]=[];
+      for(const file of files.slice(0,4)){
+        if(file.size>20*1024*1024)throw new Error("Cada arquivo pode ter no máximo 20 MB.");
+        const qs=new URLSearchParams({scope:"message",targetUid,name:file.name});
+        const uploaded=await api<{media:{id:string}}>(`/media/upload?${qs}`,{method:"POST",headers:{"Content-Type":file.type||"application/octet-stream","X-File-Name":file.name},body:file});
+        attachmentIds.push(uploaded.media.id);
+      }
+      await api(`/messages/${encodeURIComponent(targetUid)}`,{method:"POST",body:JSON.stringify({text,attachmentIds,postId:sharedPostId})});
+      setFiles([]);setSharedPostId("");sessionStorage.removeItem("uorqui-message-post");
+      event.currentTarget.reset();
+      await Promise.all([loadMessages(targetUid),loadConversations()]);
+    }catch(error){showToast(errorMessage(error));}finally{setBusy(false);}
+  };
+
+  const decideRequest=async(accept:boolean)=>{
+    if(!targetUid)return;
+    try{
+      await api(`/messages/${encodeURIComponent(targetUid)}/${accept?"accept":"request"}`,{method:accept?"POST":"DELETE"});
+      if(!accept){setTargetUid("");setMessages([]);setConversation(null);}
+      await loadConversations();
+      if(accept)await loadMessages(targetUid);
+    }catch(error){showToast(errorMessage(error));}
+  };
+
+  const target=conversations.find(c=>c.targetUid===targetUid);
+  return <section className="page-section messages-page">
+    <div className="messages-layout">
+      <aside className={`messages-list ${targetUid?"conversation-open":""}`}>
+        <div className="messages-list-head"><div><h2>Mensagens</h2><p>Conversas privadas</p></div></div>
+        {conversations.map(item=><button key={item.id} className={`message-contact ${targetUid===item.targetUid?"active":""}`} onClick={()=>setTargetUid(item.targetUid)}>
+          <Avatar name={item.displayName} mediaId={item.avatarMediaId} size={42}/>
+          <span className="message-contact-copy"><strong>{item.displayName}</strong><small>{item.lastMessagePreview||"Inicie uma conversa"}</small></span>
+          {!!item.unreadCount&&<b className="message-unread">{item.unreadCount>99?"99+":item.unreadCount}</b>}
+        </button>)}
+        {nextOffset!==null&&<button className="text-button messages-more" onClick={()=>void loadConversations(nextOffset)}>Carregar mais</button>}
+        {!conversations.length&&<div className="messages-empty">Suas conversas aparecerão aqui. Você pode iniciar uma conversa pelo perfil de outra pessoa.</div>}
+      </aside>
+
+      <section className={`message-thread ${targetUid?"open":""}`}>
+        {!targetUid?<div className="messages-empty thread-empty"><MessageSquareText size={30}/><strong>Escolha uma conversa</strong></div>:<>
+          <header className="message-thread-head">
+            <button className="icon-btn message-mobile-back" onClick={()=>setTargetUid("")}><ArrowLeft size={19}/></button>
+            <Avatar name={target?.displayName||"Usuário"} mediaId={target?.avatarMediaId} size={38}/>
+            <div><strong>{target?.displayName||"Conversa"}</strong>{target?.username&&<small>@{target.username.replace(/^@/,"")}</small>}</div>
+          </header>
+          {conversation?.status==="pending"&&conversation.requestedBy!==me.uid&&<div className="message-request-banner"><span>Esta pessoa quer iniciar uma conversa com você.</span><div><button className="btn small" onClick={()=>void decideRequest(true)}>Aceitar</button><button className="btn small secondary" onClick={()=>void decideRequest(false)}>Ignorar</button></div></div>}
+          <div className="message-scroll">
+            {nextBefore&&<button className="text-button messages-more" onClick={()=>void loadMessages(targetUid,nextBefore)}>Mensagens anteriores</button>}
+            {messages.map(message=><article key={message.id} className={`message-bubble-row ${message.senderUid===me.uid?"mine":""}`}>
+              <div className="message-bubble">
+                {message.text&&<p>{message.text}</p>}
+                {message.sharedPost&&<button className="message-shared-post" onClick={()=>window.dispatchEvent(new CustomEvent("uorqui:open-post-thread",{detail:{postId:message.sharedPost?.id,companyId:message.sharedPost?.companyId||""}}))}><Share2 size={15}/><span><strong>Publicação de {message.sharedPost.authorName||"usuário"}</strong><small>{message.sharedPost.text||"Abrir publicação"}</small></span></button>}
+                {(message.attachments||[]).map(att=>{
+                  const url=mediaUrls[att.id]||"";
+                  if(String(att.contentType||"").startsWith("image/"))return url?<img key={att.id} className="message-media-image" src={url} alt={att.name||"Foto"}/>:null;
+                  if(String(att.contentType||"").startsWith("video/"))return url?<video key={att.id} className="message-media-video" src={url} controls playsInline/>:null;
+                  if(String(att.contentType||"").startsWith("audio/"))return url?<audio key={att.id} src={url} controls/>:null;
+                  return url?<a key={att.id} href={url} download={att.name||"arquivo"}>{att.name||"Arquivo"}</a>:null;
+                })}
+                <time>{message.createdAt?new Date(message.createdAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):""}</time>
+              </div>
+            </article>)}
+          </div>
+          <form className="message-composer" onSubmit={sendMessage}>
+            {sharedPostId&&<div className="message-pending-share"><Share2 size={14}/><span>Publicação pronta para enviar</span><button type="button" onClick={()=>{setSharedPostId("");sessionStorage.removeItem("uorqui-message-post");}}><X size={14}/></button></div>}
+            {!!files.length&&<div className="message-file-preview">{files.map(file=><span key={file.name}>{file.name}</span>)}</div>}
+            <div className="message-compose-line">
+              <label className="icon-btn message-attach" title="Foto, áudio ou vídeo"><Camera size={18}/><input hidden type="file" accept="image/*,audio/*,video/*" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,4))}/></label>
+              <textarea name="message" rows={1} maxLength={4000} placeholder="Mensagem…" disabled={conversation?.status==="pending"&&conversation.requestedBy===me.uid}/>
+              <button className="icon-btn message-send" disabled={busy||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)}><Send size={19}/></button>
+            </div>
+            <small className="message-media-hint"><Mic size={12}/> áudio · <Video size={12}/> vídeo · fotos, até 20 MB por arquivo</small>
+          </form>
+        </>}
+      </section>
+    </div>
+  </section>;
+}
+
 function NotificationsPage({
   data, refresh, showToast, onOpenPost, onNotificationRead, onNotificationDeleted,
-  onOpenAdmin, onOpenJobs, onOpenCommunity
+  onOpenAdmin, onOpenJobs, onOpenCommunity, onOpenMessages
 }: {
   data: BootstrapData;
   refresh: () => Promise<void>;
@@ -4104,6 +4261,7 @@ function NotificationsPage({
   onOpenAdmin: (companyId: string) => Promise<void>;
   onOpenJobs: (companyId: string) => Promise<void>;
   onOpenCommunity: (companyId: string, communityId: string) => Promise<void>;
+  onOpenMessages: (uid: string) => void;
 }) {
   const [pushState, setPushState] = useState<PushState>(() => currentPushState());
   const [pushBusy, setPushBusy] = useState(false);
@@ -4218,8 +4376,21 @@ function NotificationsPage({
       return;
     }
 
-    if (notification.data?.targetView === "community" && notification.data.companyId && notification.data.communityId) {
-      await onOpenCommunity(notification.data.companyId, notification.data.communityId);
+    if (notification.data?.targetView === "community" && notification.data.communityId) {
+      await onOpenCommunity(notification.data.companyId || "", notification.data.communityId);
+      return;
+    }
+
+    if (notification.data?.targetView === "messages") {
+      onOpenMessages(notification.data.conversationUid || "");
+      return;
+    }
+
+    if (notification.data?.targetView === "profile" && notification.data.profileUid) {
+      const params = new URLSearchParams(location.search);
+      params.set("profile", notification.data.profileUid);
+      history.pushState({}, "", `${location.pathname}?${params.toString()}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
       return;
     }
 
