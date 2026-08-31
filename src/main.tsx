@@ -1,4 +1,4 @@
-import { Component, StrictMode, type ErrorInfo, type ReactNode } from "react";
+import { Component, StrictMode, useState, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { SocialLayer } from "./social";
@@ -59,11 +59,54 @@ window.addEventListener("unhandledrejection", (event) => {
   console.error("Uorqui unhandled rejection", event.reason);
 });
 
+const COOKIE_CONSENT_KEY = "uorqui-cookie-consent-v1";
+
+type CookieConsentChoice = "all" | "necessary";
+
+function CookieConsentBanner() {
+  const [choice, setChoice] = useState<CookieConsentChoice | null>(() => {
+    try {
+      const saved = localStorage.getItem(COOKIE_CONSENT_KEY);
+      return saved === "all" || saved === "necessary" ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+
+  if (choice) return null;
+
+  const save = (next: CookieConsentChoice) => {
+    try {
+      localStorage.setItem(COOKIE_CONSENT_KEY, next);
+      localStorage.setItem("uorqui-cookie-consent-at", new Date().toISOString());
+    } catch {}
+    window.dispatchEvent(new CustomEvent("uorqui:cookie-consent", { detail: { choice: next } }));
+    setChoice(next);
+  };
+
+  return (
+    <aside className="cookie-consent" role="dialog" aria-live="polite" aria-label="Preferências de privacidade">
+      <div className="cookie-consent-copy">
+        <strong>Privacidade no Uorqui</strong>
+        <p>
+          Usamos cookies e tecnologias semelhantes necessárias para login, segurança e funcionamento da rede.
+          Com sua autorização, também poderemos usar recursos opcionais para melhorar a experiência.
+        </p>
+      </div>
+      <div className="cookie-consent-actions">
+        <button className="btn secondary" onClick={() => save("necessary")}>Somente necessários</button>
+        <button className="btn" onClick={() => save("all")}>Aceitar todos</button>
+      </div>
+    </aside>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <RuntimeErrorBoundary>
     <StrictMode>
       <App />
       <SocialLayer />
+      <CookieConsentBanner />
     </StrictMode>
   </RuntimeErrorBoundary>
 );
