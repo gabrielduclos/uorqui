@@ -3552,8 +3552,15 @@ async function deletePost(env, identity, postId, ctx) {
   const access = await requirePostAccess(env, identity.uid, post);
 
   const isAuthor = post.authorUid === identity.uid;
+  const isSuperadminAiPost = isSuperadmin(env, identity) && post.authorAccountType === 'uorqui_agent';
   const adminMembership = !isAuthor && access && ['owner', 'admin'].includes(access.role) ? access : null;
-  if (!isAuthor && !adminMembership) throw httpError(403, 'Você não pode excluir esta publicação.');
+  if (!isAuthor && !adminMembership && !isSuperadminAiPost) throw httpError(403, 'Você não pode excluir esta publicação.');
+
+  if (isSuperadminAiPost) {
+    await deletePostCascade(env, post);
+    deferRealtime(ctx, broadcastRealtimeForPost(env, post, 'post_deleted'));
+    return { ok: true, tombstone: false, superadmin: true };
+  }
 
   if (!isAuthor && adminMembership) {
     const deletedAt = nowIso();
@@ -5384,58 +5391,37 @@ async function recentNewsForAgent(item){
 }
 
 function aiContentChoice(item,day,force=false){
-  const seed=[...String(item.key+day)].reduce((sum,ch)=>sum+ch.charCodeAt(0),0)+(force?Date.now()%17:0);
-  return {
-    preferNews: seed%100<68,
-    withImage: seed%10<4
-  };
+  const seed=[...String(item.key+day)].reduce((sum,ch)=>sum+ch.charCodeAt(0),0)+(force?Date.now()%31:0);
+  return { withSourceImage: seed%10<6 };
 }
-
-async function generateUorquiAgentPost(env,item,news=null){
-  if(!env.AI)return '';
-  const factualBase=UORQUI_AI_FACT_SEEDS[item.key]||'';
-  const prompt=news?[
+async function generateUorquiAgentPost(env,item,news){
+  if(!env.AI||!news)return '';
+  const prompt=[
     'Você escreve para uma rede social brasileira chamada Uorqui.',
     `Comunidade: ${item.name}. Especialidade: ${item.specialty}.`,
-    'Você recebeu uma pauta recente obtida de um agregador de notícias.',
+    'Use SOMENTE a notícia recente fornecida abaixo como pauta factual.',
     `MANCHETE: ${news.title}`,
     `FONTE: ${news.source}`,
     `PUBLICADA EM: ${news.publishedAt||'recentemente'}`,
     'Crie uma publicação curta em português do Brasil, entre 280 e 650 caracteres.',
-    'NÃO invente detalhes além do que está explicitamente na manchete. Não crie placares, falas, números, causas ou consequências não informadas.',
-    'Apresente a pauta com atribuição clara à fonte, contextualize apenas o que for seguro inferir do próprio título e termine com uma pergunta para discussão.',
+    'Não invente detalhes além do que está explicitamente na manchete.',
+    'Atribua claramente a informação à fonte e termine com uma pergunta natural para discussão.',
     'Não use hashtags, markdown ou links no corpo. Retorne somente o texto.'
-  ].join('\n'):[
-    'Você escreve para uma rede social brasileira chamada Uorqui.',
-    `Tema da comunidade: ${item.name}. Especialidade: ${item.specialty}.`,
-    `FATO-BASE VERIFICADO: ${factualBase}`,
-    'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 300 e 650 caracteres.',
-    'Use o fato-base como núcleo e não acrescente números, datas, pesquisas ou alegações factuais que não estejam no fato-base.',
-    'Não invente estudos, fontes, experiências pessoais ou acontecimentos.',
-    'Termine com uma pergunta natural. Não use hashtags, markdown ou links. Retorne somente o texto.'
   ].join('\n');
-
   const models=['@cf/zai-org/glm-4.7-flash','@cf/meta/llama-3.1-8b-instruct-fast'];
   for(const model of models){
     try{
-      const input={
-        messages:[
-          {role:'system',content:'Priorize precisão factual. Quando houver uma pauta jornalística, não invente nada além da manchete e da fonte fornecidas.'},
-          {role:'user',content:prompt}
-        ],
-        temperature:0.25,
-        ...(model.includes('llama-3.1-8b-instruct-fast')?{max_tokens:360}:{max_completion_tokens:360})
-      };
+      const input={messages:[
+        {role:'system',content:'Você é um editor factual. Nunca invente informação jornalística além da manchete e da fonte fornecidas.'},
+        {role:'user',content:prompt}
+      ],temperature:0.18,...(model.includes('llama-3.1-8b-instruct-fast')?{max_tokens:360}:{max_completion_tokens:360})};
       const response=await env.AI.run(model,input);
       const text=clean(response?.response||response?.result?.response||response?.choices?.[0]?.message?.content||response?.choices?.[0]?.text||'',1400);
       if(text)return text;
-    }catch(error){
-      console.warn('Uorqui AI text model failed',item.key,model,error?.message||error);
-    }
+    }catch(error){console.warn('Uorqui AI text model failed',item.key,model,error?.message||error);}
   }
   return '';
 }
-
 async function generateUorquiPostImage(env,item,communityId,uid,postId,topic){
   if(!env.AI||!env.MEDIA)return null;
   try{
