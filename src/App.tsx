@@ -2765,9 +2765,16 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
   };
 
   const removeCommunity = async (community: Community) => {
-    if (!confirm(`Excluir a comunidade "${community.name}"?`)) return;
-    try { await api(`/communities/${community.id}`, { method: "DELETE" }); showToast("Comunidade excluída."); await refresh(); }
-    catch (err) { showToast(errorMessage(err)); }
+    if (!confirm(`Solicitar a exclusão da comunidade "${community.name}"? Todo o conteúdo será apagado somente depois que todos os administradores aprovarem.`)) return;
+    try {
+      const result = await api<{ pending?: boolean; requiredApprovals?: number }>(`/communities/${community.id}`, { method: "DELETE" });
+      showToast(result.pending
+        ? `Solicitação enviada. ${result.requiredApprovals || 0} administrador(es) precisam aprovar.`
+        : "Solicitação registrada.");
+      await refresh();
+    } catch (err) {
+      showToast(errorMessage(err));
+    }
   };
 
   return (
@@ -3844,15 +3851,14 @@ function ProfilePage({
     setCompanyError("");
     const confirmation = String(new FormData(event.currentTarget).get("confirmation") || "");
     try {
-      await api(`/companies/${deleteCompany.id}`, {
+      const result = await api<{ pending?: boolean; requestId?: string; requiredApprovals?: number }>(`/companies/${deleteCompany.id}`, {
         method: "DELETE",
         body: JSON.stringify({ confirmation })
       });
-      if (localStorage.getItem("uorqui-company") === deleteCompany.id) {
-        localStorage.removeItem("uorqui-company");
-      }
       setDeleteCompany(null);
-      showToast("Empresa excluída.");
+      showToast(result.pending
+        ? `Solicitação criada. ${result.requiredApprovals || 0} administrador(es) precisam aprovar na central de notificações.`
+        : "Solicitação registrada.");
       await refresh();
     } catch (err) { setCompanyError(errorMessage(err)); }
   };
@@ -3982,7 +3988,7 @@ function ProfilePage({
         <div className="profile-companies-head">
           <div>
             <strong>Empresas</strong>
-            <p className="muted">Sua conta pode participar de várias empresas. Somente o proprietário pode excluir uma empresa.</p>
+            <p className="muted">Sua conta pode participar de várias empresas. A exclusão é solicitada pelo proprietário e só é executada após aprovação de todos os administradores.</p>
           </div>
           <button className="btn small" onClick={() => { setCompanyError(""); setCreateCompanyOpen(true); }}>
             <Plus size={16} /> Criar empresa
@@ -4038,15 +4044,15 @@ function ProfilePage({
         <Modal title="Excluir empresa" onClose={() => setDeleteCompany(null)}>
           <form className="stack-form" onSubmit={confirmDeleteCompany}>
             <div className="danger-notice">
-              <strong>Esta ação é permanente.</strong>
-              <p>Comunidades, publicações, comentários, membros, convites e arquivos desta empresa serão removidos.</p>
+              <strong>A exclusão exige aprovação coletiva.</strong>
+              <p>Depois da solicitação, todos os administradores da empresa precisarão aprovar pela central de notificações. Só então comunidades, setores, publicações, comentários, membros, convites, vagas e arquivos serão removidos automaticamente.</p>
             </div>
             <label>
               <span>Digite <strong>{deleteCompany.name}</strong> para confirmar</span>
               <input name="confirmation" required autoComplete="off" />
             </label>
             {companyError && <div className="form-error">{companyError}</div>}
-            <button className="btn danger-confirm">Excluir empresa definitivamente</button>
+            <button className="btn danger-confirm">Solicitar exclusão da empresa</button>
           </form>
         </Modal>
       )}
@@ -4099,6 +4105,7 @@ function NotificationsPage({
   const [acceptingInviteId, setAcceptingInviteId] = useState("");
   const [deletingNotificationId, setDeletingNotificationId] = useState("");
   const [joinRequestBusy, setJoinRequestBusy] = useState("");
+  const [deletionApprovalBusy, setDeletionApprovalBusy] = useState("");
 
   const accept = async (notification: NotificationItem) => {
     const inviteId = notification.data?.inviteId;
@@ -4137,6 +4144,28 @@ function NotificationsPage({
       showToast(errorMessage(error));
     } finally {
       setJoinRequestBusy("");
+    }
+  };
+
+  const approveDeletion = async (notification: NotificationItem) => {
+    const requestId = notification.data?.deletionRequestId || "";
+    if (!requestId || deletionApprovalBusy) return;
+    if (!confirm("Aprovar esta exclusão? Quando todos os administradores aprovarem, todo o conteúdo vinculado será apagado automaticamente.")) return;
+
+    setDeletionApprovalBusy(requestId);
+    try {
+      const result = await api<{ deleted?: boolean; approvals?: number; requiredApprovals?: number }>(
+        `/deletion-requests/${encodeURIComponent(requestId)}/approve`,
+        { method: "POST" }
+      );
+      showToast(result.deleted
+        ? "Todas as aprovações foram concluídas. A exclusão foi executada."
+        : `Aprovação registrada (${result.approvals || 0}/${result.requiredApprovals || 0}).`);
+      await refresh();
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setDeletionApprovalBusy("");
     }
   };
 
@@ -4244,7 +4273,8 @@ function NotificationsPage({
         {data.notifications.map((item, index) => {
           const pendingInvite = item.status === "pending" && ["company_invite", "community_invite"].includes(item.type);
           const pendingJoinRequest = item.status === "pending" && item.type === "community_join_request";
-          const canDelete = !(item.persistent && !item.read) && !pendingInvite && !pendingJoinRequest;
+          const pendingDeletionApproval = item.status === "pending" && item.type === "deletion_approval_required";
+          const canDelete = !(item.persistent && !item.read) && !pendingInvite && !pendingJoinRequest && !pendingDeletionApproval;
           return (
           <article
             className={`notification-page-item ${item.read ? "" : "unread"} ${item.persistent && !item.read ? "persistent" : ""}`}
@@ -4252,7 +4282,9 @@ function NotificationsPage({
             onClick={() => openNotification(item)}
           >
             <div className="notification-icon">
-              {item.type.includes("community") || item.type.includes("invite") || ["company_member_joined", "company_member_removed"].includes(item.type)
+              {item.type === "deletion_approval_required" || item.type === "deletion_completed"
+                ? <Trash2 size={19} />
+                : item.type.includes("community") || item.type.includes("invite") || ["company_member_joined", "company_member_removed"].includes(item.type)
                 ? <Users size={19} />
                 : item.type === "job_posted"
                   ? <BriefcaseBusiness size={19} />
@@ -4300,6 +4332,19 @@ function NotificationsPage({
                     onClick={(event) => { event.stopPropagation(); void respondJoinRequest(item, "reject"); }}
                   >
                     <X size={16} /> Recusar
+                  </button>
+                </div>
+              )}
+
+              {pendingDeletionApproval && (
+                <div className="notification-request-actions deletion-approval-actions">
+                  <button
+                    className="btn danger small"
+                    disabled={!!deletionApprovalBusy}
+                    onClick={(event) => { event.stopPropagation(); void approveDeletion(item); }}
+                  >
+                    <Check size={16} />
+                    {deletionApprovalBusy === item.data?.deletionRequestId ? "Aprovando…" : "Aprovar exclusão"}
                   </button>
                 </div>
               )}
