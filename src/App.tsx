@@ -882,23 +882,12 @@ export default function App() {
             <img src="/assets/uorqui-wordmark.png" alt="Uorqui" />
           </button>
 
-          {!!data.companies.length && (
-            <label className="company-picker">
-              <span className="company-mark">{companyName.slice(0, 2).toUpperCase()}</span>
-              <select value={selectedCompanyId} onChange={(e) => changeCompany(e.target.value)}>
-                {data.companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-              </select>
-              <ChevronDown size={16} />
-            </label>
-          )}
-
           <nav className="side-nav">
             <NavButton active={view === "home" || view === "jobs"} icon={<Home />} label="Rede" onClick={() => navigate("home")} />
             <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
             <NavButton active={view === "search"} icon={<Compass />} label="Descobrir" onClick={() => navigate("search")} />
             <NavButton active={view === "messages"} icon={<MessageSquareText />} label="Mensagens" onClick={() => navigate("messages")} />
-            {!!data.companies.length && data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
-            <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
+            <NavButton active={view === "plans"} icon={<Crown />} label="Criadores" onClick={() => openPlans("manual")} />
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
             <NavButton active={view === "profile"} icon={<UserRound />} label="Perfil" onClick={() => navigate("profile")} />
           </nav>
@@ -960,16 +949,9 @@ export default function App() {
                 <button className={`icon-btn header-profile-button ${view === "profile" ? "active" : ""}`} onClick={() => navigate("profile")} aria-label="Perfil">
                   <UserRound size={21} />
                 </button>
-                {data.canAdmin && (
-                  <button className={`icon-btn header-admin-button ${view === "admin" || view === "company-data" ? "active" : ""}`} onClick={() => navigate("admin")} aria-label="Administrar empresa">
-                    <Settings size={21} />
-                  </button>
-                )}
-                {!!data.company && (
-                  <button className={`icon-btn mobile-plan-button ${view === "plans" ? "active" : ""}`} onClick={() => openPlans("manual")} aria-label="Planos">
-                    <Crown size={21} />
-                  </button>
-                )}
+                <button className={`icon-btn mobile-plan-button ${view === "plans" ? "active" : ""}`} onClick={() => openPlans("manual")} aria-label="Criadores">
+                  <Crown size={21} />
+                </button>
               </div>
             </div>
             {view === "home" && (
@@ -1094,13 +1076,13 @@ function AuthScreen() {
     <div className="auth-layout">
       <section className="auth-brand">
         <img src="/assets/uorqui-logo-login.png" alt="Uorqui" />
-        <h1>Conversas de trabalho que não se perdem.</h1>
-        <p>Comunidades privadas, comunicados e conhecimento organizado para sua empresa.</p>
+        <h1>Encontre pessoas. Crie comunidades.</h1>
+        <p>Uma rede social aberta para conversar, compartilhar interesses e construir comunidades.</p>
       </section>
       <section className="auth-card">
         <img className="auth-mobile-logo" src="/assets/uorqui-logo-light.png" alt="Uorqui" />
         <h2>{mode === "login" ? "Entrar" : "Criar sua conta"}</h2>
-        <p>{mode === "login" ? "Acesse suas empresas e comunidades." : "Sua conta Uorqui pertence a você."}</p>
+        <p>{mode === "login" ? "Acesse sua rede e suas comunidades." : "Crie sua conta e encontre sua comunidade."}</p>
         <form onSubmit={submit}>
           {mode === "register" && <label><span>Nome</span><input name="displayName" required autoComplete="name" /></label>}
           <label><span>E-mail</span><input name="email" type="email" required autoComplete="email" /></label>
@@ -3361,115 +3343,65 @@ function PlansPage({
   refresh: () => Promise<void>;
   showToast: (message: string) => void;
 }) {
-  const [companies, setCompanies] = useState<CompanySummary[]>([]);
-  const [loadingPlans, setLoadingPlans] = useState(true);
-  const [billingBusy, setBillingBusy] = useState(false);
-
-  const load = async () => {
-    setLoadingPlans(true);
-    try {
-      if (data.companies.length) {
-        const result = await api<{ companies: CompanySummary[] }>("/companies/summary");
-        setCompanies(result.companies || []);
-      } else {
-        setCompanies([]);
-      }
-    } catch (error) {
-      showToast(errorMessage(error));
-    } finally {
-      setLoadingPlans(false);
-    }
-  };
-
-  useEffect(() => { void load(); }, [data.selectedCompanyId, data.companies.length]);
-
-  const company = companies.find(item => item.id === data.selectedCompanyId) || companies[0] || null;
-  const companyActive = company?.effectivePlan === "premium";
-  const owner = company?.role === "owner";
-  const pending = company?.billingStatus === "pending";
-
-  const upgradeCompany = async () => {
-    if (!company || billingBusy || !owner) return;
-    setBillingBusy(true);
-    try {
-      const result = await api<{ url: string }>(`/companies/${company.id}/billing/checkout`, { method: "POST" });
-      window.location.href = result.url;
-    } catch (error) {
-      showToast(errorMessage(error));
-      setBillingBusy(false);
-    }
-  };
-
   return (
-    <section className="page-section plans-page">
+    <section className="page-section plans-page creator-focus-page">
       <div className="page-heading plans-heading">
         <div>
-          <h2>Uorqui</h2>
-          <p>A rede e as comunidades são abertas. O Uorqui ganha quando um criador ganha ou quando uma comunidade vira empresa.</p>
+          <h2>Criadores</h2>
+          <p>Crie uma comunidade, construa seu público e transforme seu conteúdo em uma fonte de receita.</p>
         </div>
       </div>
 
-      {reason?.message && <section className="plan-offer-banner"><div className="plan-offer-icon"><Crown size={21}/></div><div><strong>Recurso adicional</strong><p>{reason.message}</p></div></section>}
-      {loadingPlans && <div className="loading-line">Carregando…</div>}
-
-      {!loadingPlans && (
-        <>
-          <div className="plans-grid">
-            <article className="plan-card current">
-              <div className="plan-card-head"><div><span className="plan-eyebrow">Rede aberta</span><h3>Uorqui</h3></div><strong className="plan-price">R$ 0<small>/mês</small></strong></div>
-              <p className="plan-description">Para participar, publicar e construir comunidades sem limitar o crescimento da rede.</p>
-              <ul className="plan-features">
-                <li><Check size={16}/> Perfil público, seguidores e feed aberto</li>
-                <li><Check size={16}/> Criar e participar de comunidades</li>
-                <li><Check size={16}/> Membros ilimitados nas comunidades</li>
-                <li><Check size={16}/> Posts, respostas, enquetes e eventos</li>
-                <li><Check size={16}/> Busca e notificações</li>
-              </ul>
-              <button className="btn secondary plan-current-button" disabled>Disponível para todos</button>
-            </article>
-
-            <article className="plan-card premium-card">
-              <div className="premium-ribbon">Monetização</div>
-              <div className="plan-card-head"><div><span className="plan-eyebrow"><Crown size={13}/> Para criadores</span><h3>Criador</h3></div><strong className="plan-price">R$ 0<small>/mês</small></strong></div>
-              <p className="plan-description">Transforme uma comunidade de sua autoria em uma comunidade de Criador e ofereça conteúdo exclusivo por assinatura.</p>
-              <ul className="plan-features">
-                <li><Check size={16}/> Você define o preço mensal</li>
-                <li><Check size={16}/> Conteúdo público para descoberta</li>
-                <li><Check size={16}/> Posts exclusivos para assinantes</li>
-                <li><Check size={16}/> Sem mensalidade fixa do Uorqui</li>
-                <li><Check size={16}/> Comissão inicial da plataforma: 25%</li>
-              </ul>
-              <span className="plan-secondary-note">O Uorqui só recebe comissão quando sua comunidade gera receita.</span>
-            </article>
-
-            <article className={`plan-card ${companyActive ? "current" : ""}`}>
-              <div className="plan-card-head"><div><span className="plan-eyebrow"><Building2 size={13}/> Comunidade oficial</span><h3>Empresa</h3></div><strong className="plan-price">R$ 99,90<small>/mês</small></strong></div>
-              <p className="plan-description">Converta uma comunidade em empresa verificada. A assinatura fica vinculada àquela comunidade e ao CNPJ cadastrado.</p>
-              <ul className="plan-features">
-                <li><Check size={16}/> Selo de empresa verificada</li>
-                <li><Check size={16}/> CNPJ único e endereço fiscal</li>
-                <li><Check size={16}/> Criação de setores dentro da comunidade</li>
-                <li><Check size={16}/> RH, Engenharia, Financeiro e outros setores</li>
-                <li><Check size={16}/> Entrada somente por convite da empresa</li>
-                <li><Check size={16}/> Membros ilimitados</li>
-              </ul>
-              {companyActive ? (
-                <div className="premium-active-box"><Crown size={18}/><div><strong>Empresa ativa</strong><small>Esta comunidade está no plano Empresa.</small></div></div>
-              ) : company && owner ? (
-                <>
-                  <button className="btn plan-upgrade-button" disabled={!company.billingReady || billingBusy} onClick={upgradeCompany}>
-                    <CreditCard size={17}/>{billingBusy ? "Abrindo checkout…" : pending ? "Continuar pagamento" : "Ativar Empresa · R$ 99,90"}
-                  </button>
-                  {!company.billingReady && <div className="billing-warning">A cobrança ainda não está habilitada nesta instalação.</div>}
-                </>
-              ) : (
-                <span className="plan-secondary-note">A conversão é iniciada pelo dono de uma comunidade e exige CNPJ e endereço fiscal.</span>
-              )}
-            </article>
-          </div>
-          <p className="plans-footnote">Comunidades comuns não têm limite de membros. Criador é gratuito e monetizado por comissão. Empresa custa R$ 99,90 por mês por comunidade convertida.</p>
-        </>
+      {reason?.message && !/empresa|cnpj|setor/i.test(reason.message) && (
+        <section className="plan-offer-banner">
+          <div className="plan-offer-icon"><Crown size={21}/></div>
+          <div><strong>Para criadores</strong><p>{reason.message}</p></div>
+        </section>
       )}
+
+      <div className="plans-grid creator-plans-grid">
+        <article className="plan-card current">
+          <div className="plan-card-head">
+            <div><span className="plan-eyebrow">Rede aberta</span><h3>Comunidades</h3></div>
+            <strong className="plan-price">R$ 0<small>/mês</small></strong>
+          </div>
+          <p className="plan-description">Participe da rede, publique e crie comunidades sem limitar o crescimento do seu público.</p>
+          <ul className="plan-features">
+            <li><Check size={16}/> Perfil público, seguidores e feed aberto</li>
+            <li><Check size={16}/> Criar e participar de comunidades</li>
+            <li><Check size={16}/> Membros ilimitados</li>
+            <li><Check size={16}/> Posts, respostas, enquetes e eventos</li>
+            <li><Check size={16}/> Descoberta, mensagens e notificações</li>
+          </ul>
+          <button className="btn secondary plan-current-button" disabled>Disponível para todos</button>
+        </article>
+
+        <article className="plan-card premium-card">
+          <div className="premium-ribbon">Monetização</div>
+          <div className="plan-card-head">
+            <div><span className="plan-eyebrow"><Crown size={13}/> Para criadores</span><h3>Criador</h3></div>
+            <strong className="plan-price">R$ 0<small>/mês</small></strong>
+          </div>
+          <p className="plan-description">Transforme uma comunidade de sua autoria em uma comunidade de Criador e ofereça publicações exclusivas por assinatura.</p>
+          <ul className="plan-features">
+            <li><Check size={16}/> Você define o preço da assinatura</li>
+            <li><Check size={16}/> Conteúdo aberto para atrair novos seguidores</li>
+            <li><Check size={16}/> Publicações exclusivas para assinantes</li>
+            <li><Check size={16}/> Painel de assinaturas e recebimentos</li>
+            <li><Check size={16}/> Sem mensalidade fixa</li>
+            <li><Check size={16}/> Comissão inicial do Uorqui: 25%</li>
+          </ul>
+          <span className="plan-secondary-note">Você pode começar sem pagar nada. O Uorqui só recebe quando sua comunidade gera receita.</span>
+        </article>
+      </div>
+
+      <section className="panel-card creator-growth-note">
+        <Crown size={20}/>
+        <div>
+          <strong>Seu público continua sendo seu público</strong>
+          <p className="muted">Use sua comunidade aberta para ser descoberto, traga seus seguidores e escolha quais publicações serão exclusivas para assinantes.</p>
+        </div>
+      </section>
     </section>
   );
 }
@@ -3937,7 +3869,7 @@ function ProfilePage({
             </div>
             <div><h2>{data.me.displayName || "Usuário"}</h2><p>{data.me.email}</p><span className="private-pill">{auth.currentUser?.emailVerified ? "E-mail verificado" : "E-mail não verificado"}</span></div>
           </div>
-          <p className="muted">Sua conta Uorqui pertence a você, mesmo quando você troca de empresa.</p>
+          <p className="muted">Seu perfil acompanha você por toda a rede e pelas comunidades das quais participa.</p>
           {photoError && <div className="form-error">{photoError}</div>}
           {!auth.currentUser?.emailVerified && (
             <div className="profile-verification-actions">
@@ -3987,7 +3919,7 @@ function ProfilePage({
         <section className="panel-card superadmin-profile-card">
           <div>
             <strong>Superadmin Uorqui</strong>
-            <p className="muted">Métricas globais, empresas e concessão manual de Premium.</p>
+            <p className="muted">Métricas globais da rede, comunidades, criadores e monetização.</p>
           </div>
           <button className="btn small" onClick={onOpenSuperadmin}><ShieldCheck size={16} /> Abrir Superadmin</button>
         </section>
