@@ -3243,7 +3243,11 @@ function SuperadminPage({
       ]);
       setMetrics(result.metrics);
       setCompanies(result.companies);
-      setAiStatus(agentStatus);
+      setAiStatus({
+        ...agentStatus,
+        agents: Array.isArray(agentStatus?.agents) ? agentStatus.agents : [],
+        recentPosts: Array.isArray(agentStatus?.recentPosts) ? agentStatus.recentPosts : []
+      });
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -3412,7 +3416,7 @@ function SuperadminPage({
           <div className="loading-line superadmin-ai-loading">Carregando agentes…</div>
         ) : (
           <div className="superadmin-ai-grid">
-            {aiStatus.agents.map(agent => (
+            {(Array.isArray(aiStatus.agents) ? aiStatus.agents : []).map(agent => (
               <div className="superadmin-ai-row" key={agent.key}>
                 <div>
                   <strong>{agent.communityName}</strong>
@@ -3428,7 +3432,7 @@ function SuperadminPage({
         {!!aiStatus?.recentPosts?.length && (
           <div className="superadmin-ai-recent">
             <strong>Publicações de hoje</strong>
-            {aiStatus.recentPosts.map(post => (
+            {(Array.isArray(aiStatus.recentPosts) ? aiStatus.recentPosts : []).map(post => (
               <div className="superadmin-ai-post-row" key={post.id}>
                 <div>
                   <b>{post.communityName || "Comunidade"}</b>
