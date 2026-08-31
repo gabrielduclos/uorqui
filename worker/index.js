@@ -3374,7 +3374,7 @@ async function createPost(env, identity, body, ctx) {
     if (m.ownerUid !== identity.uid) throw httpError(403, 'Anexo inválido.');
     if (
       m.scope !== scope ||
-      ((scope !== 'world') && m.companyId !== companyId) ||
+      ((scope !== 'world' && scope !== 'message') && (m.companyId || '') !== (companyId || '')) ||
       (scope === 'community' && m.communityId !== communityId)
     ) {
       throw httpError(400, 'O anexo foi enviado para outra audiência.');
