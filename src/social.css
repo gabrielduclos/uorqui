@@ -67,3 +67,47 @@
     font-size:10.5px;
   }
 }
+
+/* Perfil público — botões compactos sem corte de texto */
+.social-profile-actions{
+  display:flex!important;
+  width:auto!important;
+  max-width:none!important;
+  gap:8px!important;
+  flex-wrap:nowrap!important;
+}
+.social-profile-actions .btn,
+.social-follow-button,
+.social-block-button{
+  width:auto!important;
+  min-width:max-content!important;
+  height:38px!important;
+  padding:0 12px!important;
+  font-size:12px!important;
+  line-height:1!important;
+  flex:0 0 auto!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+@media(max-width:700px){
+  .social-profile-actions{
+    width:auto!important;
+    max-width:none!important;
+    gap:6px!important;
+  }
+  .social-profile-actions .btn,
+  .social-follow-button,
+  .social-block-button{
+    height:36px!important;
+    padding:0 9px!important;
+    font-size:11px!important;
+  }
+}
+@media(max-width:390px){
+  .social-profile-actions .btn,
+  .social-follow-button,
+  .social-block-button{
+    padding:0 7px!important;
+    font-size:10.5px!important;
+  }
+}
