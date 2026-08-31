@@ -3188,6 +3188,14 @@ type SuperadminAiStatus = {
   postsToday: number;
   postsWithImageToday?: number;
   newsPostsToday?: number;
+  recentPosts?: Array<{
+    id: string;
+    authorName?: string;
+    communityName?: string;
+    text?: string;
+    sourceName?: string;
+    createdAt?: string;
+  }>;
   agents: SuperadminAiAgent[];
 };
 
@@ -3221,6 +3229,7 @@ function SuperadminPage({
   const [daysByCompany, setDaysByCompany] = useState<Record<string, string>>({});
   const [aiStatus, setAiStatus] = useState<SuperadminAiStatus | null>(null);
   const [aiBusy, setAiBusy] = useState<"" | "seed" | "publish">("");
+  const [aiDeleteBusy, setAiDeleteBusy] = useState("");
 
   const load = async () => {
     setLoadingSuperadmin(true);
@@ -3303,6 +3312,21 @@ function SuperadminPage({
       showToast(errorMessage(error));
     } finally {
       setAiBusy("");
+    }
+  };
+
+  const deleteAiPost = async (postId: string) => {
+    if (aiDeleteBusy || !postId) return;
+    if (!confirm("Apagar esta publicação do agente de IA? Esta ação é permanente.")) return;
+    setAiDeleteBusy(postId);
+    try {
+      await api(`/posts/${encodeURIComponent(postId)}`, { method: "DELETE" });
+      showToast("Publicação do agente apagada.");
+      await load();
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setAiDeleteBusy("");
     }
   };
 
@@ -3396,6 +3420,24 @@ function SuperadminPage({
                 </div>
                 <span className={agent.official ? "ok" : "warn"}>{agent.official ? "Oficial" : "Pendente"}</span>
                 <span className={agent.publishedToday ? "ok" : "neutral"}>{agent.publishedToday ? `${agent.postsToday || 1} hoje` : "Ainda não publicado"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!!aiStatus?.recentPosts?.length && (
+          <div className="superadmin-ai-recent">
+            <strong>Publicações de hoje</strong>
+            {aiStatus.recentPosts.map(post => (
+              <div className="superadmin-ai-post-row" key={post.id}>
+                <div>
+                  <b>{post.communityName || "Comunidade"}</b>
+                  <small>{post.authorName || "Agente IA"}{post.sourceName ? ` · ${post.sourceName}` : ""}</small>
+                  <p>{post.text || "Publicação sem texto."}</p>
+                </div>
+                <button className="btn danger small" disabled={aiDeleteBusy === post.id} onClick={() => void deleteAiPost(post.id)}>
+                  {aiDeleteBusy === post.id ? "Apagando…" : "Apagar"}
+                </button>
               </div>
             ))}
           </div>
