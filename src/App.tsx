@@ -1530,7 +1530,7 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
                 <button key={community.id} onClick={() => onOpenCommunity(community.id)}>
                   <span>{community.name.slice(0,2).toUpperCase()}</span>
                   <strong>{community.name}</strong>
-                  <small>{community.description || "Comunidade aberta"}</small>
+                  <small>{community.officialUorqui ? "Oficial Uorqui · " : ""}{community.description || "Comunidade aberta"}</small>
                 </button>
               ))}
             </div>
@@ -2015,8 +2015,8 @@ function CommunitiesPage({
           <div className="community-detail-title">
             <div className="community-avatar large">{selectedCommunity.name.slice(0, 2).toUpperCase()}</div>
             <div>
-              <h2>{selectedCommunity.name}</h2>
-              <p>{selectedCommunity.description || (communityVisibility(selectedCommunity) === "public" ? "Comunidade pública da empresa." : "Comunidade privada da empresa.")}</p>
+              <div className="community-detail-name-line"><h2>{selectedCommunity.name}</h2>{selectedCommunity.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {selectedCommunity.officialLabel || "Oficial Uorqui"}</span>}</div>
+              <p>{selectedCommunity.description || (communityVisibility(selectedCommunity) === "public" ? "Comunidade pública." : "Comunidade privada.")}</p>
               <span className={`community-visibility-badge ${communityVisibility(selectedCommunity)}`}>
                 {communityVisibility(selectedCommunity) === "public" ? <Globe2 size={13} /> : <ShieldCheck size={13} />}
                 {communityVisibility(selectedCommunity) === "public" ? "Pública na empresa" : "Privada"}
@@ -2122,7 +2122,7 @@ function CommunitiesPage({
               <button className="community-card-open" onClick={() => onSelectCommunity(community.id)}>
                 <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
                 <div>
-                  <strong>{community.name}</strong>
+                  <div className="community-name-line"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {community.officialLabel || "Oficial Uorqui"}</span>}</div>
                   <p>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública." : "Comunidade privada.")}</p>
                   <div className="community-card-meta">
                     <small className={`community-visibility-badge ${communityVisibility(community)}`}>
@@ -2311,7 +2311,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
               }}>
                 <span className="community-avatar">{community.name.slice(0,2).toUpperCase()}</span>
                 <strong>{community.name}</strong>
-                <small>{community.verifiedCompany ? "Empresa verificada" : community.description || "Comunidade pública"}</small>
+                <small>{community.officialUorqui ? "Oficial Uorqui · " : ""}{community.verifiedCompany ? "Empresa verificada" : community.description || "Comunidade pública"}</small>
               </button>
             ))}
           </div>
