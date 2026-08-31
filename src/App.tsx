@@ -4,7 +4,7 @@ import {
   ArrowLeft, BarChart3, Bell, BriefcaseBusiness, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
   Compass, Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Mic, Plus, Search, Send, Settings, Share2, Video,
-  ShieldCheck, Trash2, UserMinus, UserPlus, UserRound, Users, X
+  ShieldCheck, Square, Trash2, UserMinus, UserPlus, UserRound, Users, X
 } from "lucide-react";
 import {
   createUserWithEmailAndPassword, deleteUser as deleteFirebaseUser, EmailAuthProvider, onAuthStateChanged,
@@ -3994,10 +3994,13 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   const [userResults,setUserResults]=useState<Array<{uid:string;displayName?:string;username?:string;avatarMediaId?:string;bio?:string}>>([]);
   const [userSearchBusy,setUserSearchBusy]=useState(false);
   const [recordingAudio,setRecordingAudio]=useState(false);
+  const [recordedAudio,setRecordedAudio]=useState<File|null>(null);
+  const [recordedAudioUrl,setRecordedAudioUrl]=useState("");
+  const [audioDuration,setAudioDuration]=useState(0);
   const mediaRecorderRef=useRef<MediaRecorder|null>(null);
   const mediaStreamRef=useRef<MediaStream|null>(null);
   const audioChunksRef=useRef<Blob[]>([]);
-  const audioPointerHeldRef=useRef(false);
+  const audioStartedAtRef=useRef(0);
   const audioSendingRef=useRef(false);
 
   const loadConversations=async(offset=0)=>{
@@ -4041,6 +4044,8 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
     },250);
     return()=>{active=false;window.clearTimeout(timer);};
   },[userQuery]);
+
+  useEffect(()=>()=>{ if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl); },[recordedAudioUrl]);
 
   useEffect(()=>{
     const ids=[...new Set(messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)))];
@@ -4104,35 +4109,30 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
     mediaStreamRef.current=null;
   };
 
-  const finishAudioRecording=()=>{
-    audioPointerHeldRef.current=false;
-    const recorder=mediaRecorderRef.current;
-    if(recorder&&recorder.state!=="inactive"){
-      recorder.stop();
-    }else{
-      stopAudioTracks();
-      setRecordingAudio(false);
-    }
+  const clearRecordedAudio=()=>{
+    if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    setRecordedAudioUrl("");
+    setRecordedAudio(null);
+    setAudioDuration(0);
   };
 
-  const startAudioRecording=async(event:React.PointerEvent<HTMLButtonElement>)=>{
-    event.preventDefault();
-    if(!targetUid||busy||audioSendingRef.current)return;
+  const stopAudioRecording=()=>{
+    const recorder=mediaRecorderRef.current;
+    if(recorder&&recorder.state!=="inactive") recorder.stop();
+  };
+
+  const startAudioRecording=async()=>{
+    if(!targetUid||busy||audioSendingRef.current||recordingAudio)return;
     if(conversation?.status==="pending"&&conversation.requestedBy===me.uid)return;
     if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined"){
       showToast("Este navegador não oferece gravação de áudio.");
       return;
     }
 
-    audioPointerHeldRef.current=true;
-    try{
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-      if(!audioPointerHeldRef.current){
-        stream.getTracks().forEach(track=>track.stop());
-        return;
-      }
+    clearRecordedAudio();
 
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
       mediaStreamRef.current=stream;
       audioChunksRef.current=[];
 
@@ -4147,46 +4147,68 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
       mediaRecorderRef.current=recorder;
 
       recorder.ondataavailable=(chunk)=>{
-        if(chunk.data&&chunk.data.size>0)audioChunksRef.current.push(chunk.data);
+        if(chunk.data&&chunk.data.size>0) audioChunksRef.current.push(chunk.data);
       };
+
       recorder.onerror=()=>{
         setRecordingAudio(false);
         stopAudioTracks();
+        mediaRecorderRef.current=null;
         showToast("Não foi possível gravar o áudio.");
       };
-      recorder.onstop=async()=>{
+
+      recorder.onstop=()=>{
         setRecordingAudio(false);
         stopAudioTracks();
         mediaRecorderRef.current=null;
+
         const chunks=audioChunksRef.current.splice(0);
         if(!chunks.length)return;
+
         const blob=new Blob(chunks,{type:recorder.mimeType||chunks[0]?.type||"audio/webm"});
-        if(blob.size<500)return;
+        if(blob.size<500){
+          showToast("A gravação ficou muito curta.");
+          return;
+        }
         if(blob.size>20*1024*1024){
           showToast("O áudio ultrapassou o limite de 20 MB.");
           return;
         }
-        audioSendingRef.current=true;
-        try{
-          const result=await sendMessagePayload({payloadFiles:[recordedAudioFile(blob)]});
-          if(result)await appendSentMessage(result);
-        }catch(error){
-          showToast(errorMessage(error));
-        }finally{
-          audioSendingRef.current=false;
-        }
+
+        const file=recordedAudioFile(blob);
+        const url=URL.createObjectURL(file);
+        setRecordedAudio(file);
+        setRecordedAudioUrl(url);
+        setAudioDuration(Math.max(1,Math.round((Date.now()-audioStartedAtRef.current)/1000)));
       };
 
+      audioStartedAtRef.current=Date.now();
       recorder.start(250);
       setRecordingAudio(true);
     }catch(error){
-      audioPointerHeldRef.current=false;
       stopAudioTracks();
+      mediaRecorderRef.current=null;
       setRecordingAudio(false);
       const denied=error instanceof DOMException&&["NotAllowedError","SecurityError"].includes(error.name);
       showToast(denied
         ?"Autorize o acesso ao microfone para gravar mensagens de áudio."
-        : "Não foi possível acessar o microfone.");
+        :"Não foi possível acessar o microfone.");
+    }
+  };
+
+  const sendRecordedAudio=async()=>{
+    if(!recordedAudio||audioSendingRef.current)return;
+    audioSendingRef.current=true;
+    try{
+      const result=await sendMessagePayload({payloadFiles:[recordedAudio]});
+      if(result){
+        clearRecordedAudio();
+        await appendSentMessage(result);
+      }
+    }catch(error){
+      showToast(errorMessage(error));
+    }finally{
+      audioSendingRef.current=false;
     }
   };
 
@@ -4287,23 +4309,36 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
                 <button
                   type="button"
                   className={`message-media-action message-audio-record ${recordingAudio?"recording":""}`}
-                  title="Segure para gravar áudio"
-                  aria-label={recordingAudio?"Gravando áudio. Solte para enviar.":"Segure para gravar áudio"}
-                  onPointerDown={startAudioRecording}
-                  onPointerUp={finishAudioRecording}
-                  onPointerCancel={finishAudioRecording}
-                  onLostPointerCapture={()=>recordingAudio&&finishAudioRecording()}
-                  onContextMenu={event=>event.preventDefault()}
+                  title={recordingAudio?"Gravando áudio":"Gravar áudio"}
+                  aria-label={recordingAudio?"Gravando áudio":"Gravar áudio"}
+                  onClick={()=>void startAudioRecording()}
+                  disabled={recordingAudio||Boolean(recordedAudio)}
                 >
                   <Mic size={23}/>
                   {recordingAudio&&<span className="message-recording-dot"/>}
                 </button>
               </div>
               <div className="message-text-wrap">
-                <textarea name="message" rows={1} maxLength={4000} placeholder={recordingAudio?"Gravando… solte para enviar":"Mensagem…"} disabled={recordingAudio||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)}/>
-                {recordingAudio&&<span className="message-recording-label">Gravando áudio</span>}
+                {recordedAudio ? (
+                  <div className="message-audio-preview">
+                    <audio src={recordedAudioUrl} controls preload="metadata"/>
+                    <span>{audioDuration}s</span>
+                    <button type="button" className="message-audio-cancel" onClick={clearRecordedAudio} aria-label="Cancelar áudio"><X size={17}/></button>
+                  </div>
+                ) : (
+                  <>
+                    <textarea name="message" rows={1} maxLength={4000} placeholder={recordingAudio?"Gravando áudio…":"Mensagem…"} disabled={recordingAudio||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)}/>
+                    {recordingAudio&&<span className="message-recording-label">Gravando áudio…</span>}
+                  </>
+                )}
               </div>
-              <button className="icon-btn message-send" disabled={busy||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)} aria-label="Enviar mensagem"><Send size={21}/></button>
+              {recordingAudio ? (
+                <button type="button" className="icon-btn message-stop-recording" onClick={stopAudioRecording} aria-label="Parar gravação"><Square size={17}/></button>
+              ) : recordedAudio ? (
+                <button type="button" className="icon-btn message-send" onClick={()=>void sendRecordedAudio()} disabled={audioSendingRef.current} aria-label="Enviar áudio"><Send size={21}/></button>
+              ) : (
+                <button className="icon-btn message-send" disabled={busy||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)} aria-label="Enviar mensagem"><Send size={21}/></button>
+              )}
             </div>
           </form>
         </>}
