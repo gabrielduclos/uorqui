@@ -68,21 +68,6 @@ createRoot(document.getElementById("root")!).render(
   </RuntimeErrorBoundary>
 );
 
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" })
-      .then((registration) => registration.update())
-      .catch(() => {});
-
-    let reloadingForServiceWorker = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloadingForServiceWorker) return;
-      reloadingForServiceWorker = true;
-      window.location.reload();
-    });
-  });
-}
-
 function syncVisibleVersion() {
   document.querySelectorAll<HTMLElement>(".side-card.compact strong").forEach((element) => {
     const next = `Uorqui ${PRODUCT_VERSION}`;
