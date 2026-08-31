@@ -1791,7 +1791,10 @@ function CommunitiesPage({
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     try {
-      const result = await api<{ community: Community }>(`/companies/${data.selectedCompanyId}/communities`, {
+      const endpoint = data.selectedCompanyId && data.canAdmin
+        ? `/companies/${data.selectedCompanyId}/communities`
+        : "/communities";
+      const result = await api<{ community: Community }>(endpoint, {
         method: "POST", body: JSON.stringify({
           name: fd.get("name"),
           description: fd.get("description"),
@@ -2089,8 +2092,8 @@ function CommunitiesPage({
   return (
     <section className="page-section">
       <div className="page-heading">
-        <div><h2>{data.canAdmin ? "Comunidades da empresa" : "Suas comunidades"}</h2><p>Entre em uma comunidade para acompanhar seus membros e as conversas daquele grupo.</p></div>
-        {data.canAdmin && <button className="btn small" onClick={() => setCreateOpen(true)}><Plus size={17} /> Criar comunidade</button>}
+        <div><h2>Comunidades</h2><p>Crie uma comunidade ou participe de espaços sobre os assuntos que interessam a você.</p></div>
+        <button className="btn small" onClick={() => setCreateOpen(true)}><Plus size={17} /> Criar comunidade</button>
       </div>
       <div className="community-grid">
         {listedCommunities.map((community) => {
@@ -2142,9 +2145,9 @@ function CommunitiesPage({
           <label><span>Descrição</span><textarea name="description" maxLength={280} rows={3} placeholder="Que assuntos ficam aqui?" /></label>
           <label>
             <span>Visibilidade</span>
-            <select name="visibility" defaultValue="private">
-              <option value="private">Privada — somente participantes e administradores</option>
-              <option value="public">Pública — pesquisável por toda a empresa</option>
+            <select name="visibility" defaultValue="public">
+              <option value="public">Aberta — qualquer pessoa pode encontrar e participar</option>
+              <option value="private">Privada — entrada mediante aprovação</option>
             </select>
           </label>
           <button className="btn">Criar comunidade</button>
