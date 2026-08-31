@@ -155,9 +155,21 @@ async function routeApi(request, env, identity, url, ctx) {
   }
   if (method === 'POST' && path === '/superadmin/ai-agents/publish') {
     requireSuperadmin(env, identity);
-    await ensureUorquiOfficialCommunityImages(env);
-    const result = await publishDailyUorquiAiPosts(env, true, { force: url.searchParams.get('force') === '1' });
-    return json({ ...result, ...(await getUorquiAiAgentStatus(env, identity)) });
+    try {
+      const result = await publishDailyUorquiAiPosts(env, false, { force: url.searchParams.get('force') === '1' });
+      let status = null;
+      try {
+        status = await getUorquiAiAgentStatus(env, identity);
+      } catch (statusError) {
+        console.warn('AI publish status refresh failed:', statusError?.message || statusError);
+      }
+      return json({ ...result, ...(status || {}), statusRefreshFailed: !status });
+    } catch (error) {
+      console.error('AI manual publish failed:', error);
+      return json({
+        error: `Falha ao publicar agentes: ${String(error?.message || error).slice(0, 500)}`
+      }, error?.status || 500);
+    }
   }
   if (method === 'GET' && path === '/creator/dashboard') {
     return json(await getCreatorDashboard(env, identity));
@@ -5562,7 +5574,11 @@ async function getUorquiAiAgentStatus(env,identity){
   const postMap=new Map();
   for(const post of todayTagged)postMap.set(post.id,post);
   for(const post of legacyAiPosts){
-    if(post?.createdAt&&brazilDateKey(new Date(post.createdAt))===day)postMap.set(post.id,post);
+    if(!post?.createdAt) continue;
+    try {
+      const created = new Date(post.createdAt);
+      if(Number.isFinite(created.getTime()) && brazilDateKey(created)===day) postMap.set(post.id,post);
+    } catch {}
   }
   const postsTodayList=[...postMap.values()];
   const postsByAuthor=new Map();
