@@ -4,7 +4,7 @@ import {
   ArrowLeft, BarChart3, Bell, BriefcaseBusiness, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
   Compass, Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Mic, Plus, Search, Send, Settings, Share2, Video,
-  ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, X
+  ShieldCheck, Trash2, UserMinus, UserPlus, UserRound, Users, X
 } from "lucide-react";
 import {
   createUserWithEmailAndPassword, deleteUser as deleteFirebaseUser, EmailAuthProvider, onAuthStateChanged,
@@ -15,7 +15,6 @@ import { auth } from "./lib/firebase";
 import { ApiError, api, cacheMediaBlobUrl, mediaBlobUrl, prefetchPostMedia } from "./lib/api";
 import { connectRealtime } from "./lib/realtime";
 import { currentPushState, enablePushNotifications, setupForegroundPush, syncPushRegistration, unregisterPushBeforeLogout, type PushState } from "./lib/push";
-import { usePwaInstall } from "./lib/pwa";
 import type {
   BootstrapData, Community, CommunityMember, CommunityTopic, Company, HomeTab, JobOpening, NotificationItem, Post, View
 } from "./types";
@@ -126,7 +125,6 @@ export default function App() {
   const [lastCreatedPost, setLastCreatedPost] = useState<Post | null>(null);
   const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [, setAuthRevision] = useState(0);
-  const pwaInstall = usePwaInstall();
 
   useEffect(() => {
     const scroller = document.scrollingElement || document.documentElement;
@@ -595,7 +593,6 @@ export default function App() {
   };
 
   const openComposer = (target: { scope?: "company" | "community" | "world"; communityId?: string; topicId?: string } = {}) => {
-    pwaInstall.noteInteraction();
     setComposerTarget(target);
     setComposerOpen(true);
   };
@@ -874,10 +871,6 @@ export default function App() {
       showToast={showToast}
       onOpenSuperadmin={() => navigate("superadmin")}
       onOpenCommunities={() => navigate("communities")}
-      pwaInstalled={pwaInstall.installed}
-      pwaMode={pwaInstall.mode}
-      pwaInstalling={pwaInstall.installing}
-      onInstallPwa={() => pwaInstall.install()}
     />;
   };
 
@@ -1024,47 +1017,6 @@ export default function App() {
                 {pushPermissionBusy ? "Ativando…" : "Ativar notificações"}
               </button>
             </div>
-          </div>
-        </Modal>
-      )}
-
-      {user && data.me.uid && pwaInstall.bannerVisible && !pwaInstall.installed && (
-        <aside className="pwa-install-banner" role="status">
-          <div className="pwa-install-icon"><img src="/assets/uorqui-icon-192-v1215.png" alt="" /></div>
-          <div className="pwa-install-copy">
-            <strong>Instale o Uorqui</strong>
-            <span>Abra mais rápido e use como um app no celular.</span>
-          </div>
-          <button className="btn small" onClick={() => pwaInstall.install()} disabled={pwaInstall.installing}>
-            <Download size={15} /> {pwaInstall.installing ? "Abrindo…" : "Instalar"}
-          </button>
-          <button className="icon-btn pwa-install-close" onClick={pwaInstall.dismissBanner} aria-label="Agora não">
-            <X size={18} />
-          </button>
-        </aside>
-      )}
-
-      {pwaInstall.instructionsOpen && (
-        <Modal title="Instalar Uorqui" onClose={pwaInstall.closeInstructions}>
-          <div className="pwa-install-instructions">
-            <div className="pwa-install-instruction-icon"><Smartphone size={30} /></div>
-            {pwaInstall.isIOS ? (
-              <>
-                <h3>Adicionar à Tela de Início</h3>
-                <p>No Safari, toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.</p>
-                <ol>
-                  <li>Abra o menu <strong>Compartilhar</strong> do Safari.</li>
-                  <li>Role as opções e escolha <strong>Adicionar à Tela de Início</strong>.</li>
-                  <li>Confirme em <strong>Adicionar</strong>.</li>
-                </ol>
-              </>
-            ) : (
-              <>
-                <h3>Instalar pelo navegador</h3>
-                <p>Se o botão automático não estiver disponível, abra o menu do navegador e procure por <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>.</p>
-              </>
-            )}
-            <button className="btn" onClick={pwaInstall.closeInstructions}>Entendi</button>
           </div>
         </Modal>
       )}
@@ -3774,18 +3726,13 @@ function CompaniesPage({
 }
 
 function ProfilePage({
-  data, refresh, showToast, onOpenSuperadmin, onOpenCommunities,
-  pwaInstalled, pwaMode, pwaInstalling, onInstallPwa
+  data, refresh, showToast, onOpenSuperadmin, onOpenCommunities
 }: {
   data: BootstrapData;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onOpenSuperadmin: () => void;
   onOpenCommunities: () => void;
-  pwaInstalled: boolean;
-  pwaMode: "installed" | "prompt" | "ios" | "manual";
-  pwaInstalling: boolean;
-  onInstallPwa: () => Promise<unknown>;
 }) {
   const [photoError, setPhotoError] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -4027,27 +3974,6 @@ function ProfilePage({
         </button>
       </section>
 
-      <section className={`panel-card profile-install-card ${pwaInstalled ? "installed" : ""}`}>
-        <div className="profile-install-icon">
-          {pwaInstalled ? <Check size={21} /> : <Download size={21} />}
-        </div>
-        <div className="profile-install-copy">
-          <strong>{pwaInstalled ? "Uorqui instalado" : "Instalar Uorqui"}</strong>
-          <p className="muted">
-            {pwaInstalled
-              ? "Você está usando o Uorqui como aplicativo."
-              : pwaMode === "ios"
-                ? "Adicione o Uorqui à Tela de Início para abrir como um app."
-                : "Tenha um ícone próprio, tela cheia e acesso mais rápido ao Uorqui."}
-          </p>
-        </div>
-        {!pwaInstalled && (
-          <button className="btn small" disabled={pwaInstalling} onClick={() => onInstallPwa()}>
-            <Download size={15} />
-            {pwaInstalling ? "Abrindo…" : pwaMode === "ios" ? "Como instalar" : "Instalar"}
-          </button>
-        )}
-      </section>
       {avatarEditorFile && (
         <AvatarCropModal
           file={avatarEditorFile}
