@@ -808,13 +808,6 @@ export default function App() {
       refresh={() => refresh()}
       showToast={showToast}
       onOpenSuperadmin={() => navigate("superadmin")}
-      onCompanyCreated={async (companyId) => {
-        setPlanOfferReason({
-          kind: "company_created",
-          message: "Sua nova empresa começou no Free. Veja a diferença para o Premium."
-        });
-        await changeCompany(companyId, "plans");
-      }}
       pwaInstalled={pwaInstall.installed}
       pwaMode={pwaInstall.mode}
       pwaInstalling={pwaInstall.installing}
@@ -2118,6 +2111,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
   const [posts, setPosts] = useState<Post[]>([]);
   const [communities, setCommunities] = useState<(Community & { alreadyMember?: boolean })[]>([]);
   const [jobs, setJobs] = useState<JobOpening[]>([]);
+  const [people, setPeople] = useState<Array<{ uid: string; displayName?: string; username?: string; bio?: string; avatarMediaId?: string; isFollowing?: boolean }>>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
   const [discoverLoading, setDiscoverLoading] = useState(true);
@@ -2130,6 +2124,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
       setPosts(result.posts || []);
       setCommunities(result.communities || []);
       setJobs(result.jobs || []);
+      setPeople([]);
       void prefetchPostMedia(result.posts || [], 12);
     } catch (error) {
       showToast(errorMessage(error));
@@ -2152,13 +2147,17 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
     setSearching(true);
     try {
       const qs = new URLSearchParams({ q: normalized });
-      const result = await api<{ posts: Post[] }>(`/search?${qs}`);
+      const [postResult, peopleResult] = await Promise.all([
+        api<{ posts: Post[] }>(`/search?${qs}`),
+        api<{ people: Array<{ uid: string; displayName?: string; username?: string; bio?: string; avatarMediaId?: string; isFollowing?: boolean }> }>(`/social/people?${qs}`)
+      ]);
       if (requestId !== searchRequestId.current) return;
-      setPosts(result.posts || []);
+      setPosts(postResult.posts || []);
+      setPeople(peopleResult.people || []);
       setCommunities([]);
       setJobs([]);
       setSearched(true);
-      void prefetchPostMedia(result.posts || [], 12);
+      void prefetchPostMedia(postResult.posts || [], 12);
     } catch (err) {
       if (requestId === searchRequestId.current) showToast(errorMessage(err));
     } finally {
@@ -2204,10 +2203,19 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
     }
   };
 
+  const openPerson = (uid: string) => {
+    if (!uid) return;
+    const params = new URLSearchParams(location.search);
+    params.delete("people");
+    params.set("profile", uid);
+    history.pushState({}, "", `${location.pathname}?${params.toString()}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
   return (
     <section className="page-section discover-page">
       <div className="page-heading">
-        <div><h2>Descobrir</h2><p>Publicações, comunidades e oportunidades que podem interessar a você.</p></div>
+        <div><h2>Descobrir</h2><p>Pessoas, publicações, comunidades e oportunidades que podem interessar a você.</p></div>
       </div>
 
       <form className="large-search" onSubmit={(event) => { event.preventDefault(); void runSearch(query); }}>
@@ -2265,6 +2273,25 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
         </section>
       )}
 
+      {searched && !!people.length && (
+        <section className="discover-section discover-people-section">
+          <div className="discover-section-head"><strong>Pessoas</strong></div>
+          <div className="discover-people-list">
+            {people.map((person) => (
+              <button className="discover-person-row" key={person.uid} onClick={() => openPerson(person.uid)}>
+                <Avatar name={person.displayName || person.username || "Usuário"} mediaId={person.avatarMediaId} size={44} />
+                <div className="ellipsis">
+                  <strong>{person.displayName || person.username || "Usuário"}</strong>
+                  {person.username && <small>@{person.username}</small>}
+                  {person.bio && <p>{person.bio}</p>}
+                </div>
+                <ChevronRight size={17} />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="discover-section">
         {!searched && <div className="discover-section-head"><strong>Publicações para você</strong></div>}
         <div className="feed search-results discover-feed">
@@ -2282,7 +2309,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
             onChanged={refresh}
             showToast={showToast}
           />)}
-          {searched && !posts.length && <Empty title="Nenhum resultado" text="Tente outras palavras." />}
+          {searched && !posts.length && !people.length && <Empty title="Nenhum resultado" text="Tente buscar por nome, usuário ou palavras da publicação." />}
           {!searched && !discoverLoading && !posts.length && <Empty title="Ainda há pouco para descobrir" text="Conforme a rede crescer, novas recomendações aparecerão aqui." />}
         </div>
       </section>
@@ -3674,14 +3701,13 @@ function CompaniesPage({
 }
 
 function ProfilePage({
-  data, refresh, showToast, onOpenSuperadmin, onCompanyCreated,
+  data, refresh, showToast, onOpenSuperadmin,
   pwaInstalled, pwaMode, pwaInstalling, onInstallPwa
 }: {
   data: BootstrapData;
   refresh: () => Promise<void>;
   showToast: (m: string) => void;
   onOpenSuperadmin: () => void;
-  onCompanyCreated: (companyId: string) => Promise<void>;
   pwaInstalled: boolean;
   pwaMode: "installed" | "prompt" | "ios" | "manual";
   pwaInstalling: boolean;
@@ -3695,9 +3721,6 @@ function ProfilePage({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [passwordError, setPasswordError] = useState("");
-  const [companyError, setCompanyError] = useState("");
-  const [createCompanyOpen, setCreateCompanyOpen] = useState(false);
-  const [deleteCompany, setDeleteCompany] = useState<{ id: string; name: string } | null>(null);
   const [verificationBusy, setVerificationBusy] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
@@ -3837,42 +3860,6 @@ function ProfilePage({
     }
   };
 
-  const createCompany = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setCompanyError("");
-    const form = event.currentTarget;
-    const payload = companyRegistrationPayload(form);
-    if (!payload.name) return;
-    try {
-      const result = await api<{ company: { id: string } }>("/companies", {
-        method: "POST",
-        body: JSON.stringify(payload)
-      });
-      form.reset();
-      setCreateCompanyOpen(false);
-      showToast("Empresa criada.");
-      await onCompanyCreated(result.company.id);
-    } catch (err) { setCompanyError(errorMessage(err)); }
-  };
-
-  const confirmDeleteCompany = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!deleteCompany) return;
-    setCompanyError("");
-    const confirmation = String(new FormData(event.currentTarget).get("confirmation") || "");
-    try {
-      const result = await api<{ pending?: boolean; requestId?: string; requiredApprovals?: number }>(`/companies/${deleteCompany.id}`, {
-        method: "DELETE",
-        body: JSON.stringify({ confirmation })
-      });
-      setDeleteCompany(null);
-      showToast(result.pending
-        ? `Solicitação criada. ${result.requiredApprovals || 0} administrador(es) precisam aprovar na central de notificações.`
-        : "Solicitação registrada.");
-      await refresh();
-    } catch (err) { setCompanyError(errorMessage(err)); }
-  };
-
   return (
     <section className="page-section">
       {photoBusy && (
@@ -3994,36 +3981,6 @@ function ProfilePage({
         </section>
       )}
 
-      <section className="panel-card profile-companies-card">
-        <div className="profile-companies-head">
-          <div>
-            <strong>Empresas</strong>
-            <p className="muted">Sua conta pode participar de várias empresas. A exclusão é solicitada pelo proprietário e só é executada após aprovação de todos os administradores.</p>
-          </div>
-          <button className="btn small" onClick={() => { setCompanyError(""); setCreateCompanyOpen(true); }}>
-            <Plus size={16} /> Criar empresa
-          </button>
-        </div>
-
-        <div className="profile-company-list">
-          {data.companies.map((company) => (
-            <div className="profile-company-row" key={company.id}>
-              <div className="company-profile-mark">{company.name.slice(0, 2).toUpperCase()}</div>
-              <div className="ellipsis">
-                <strong>{company.name}</strong>
-                <small>{company.role === "owner" ? "Proprietário" : company.role === "admin" ? "Administrador" : "Usuário"}</small>
-              </div>
-              {company.role === "owner" && (
-                <button className="btn danger small" onClick={() => { setCompanyError(""); setDeleteCompany({ id: company.id, name: company.name }); }}>
-                  Excluir
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {companyError && <div className="form-error">{companyError}</div>}
-      </section>
-
       <section className="panel-card session-card"><div><strong>Sessão</strong><p className="muted">Encerrar o acesso neste dispositivo.</p></div><button className="btn secondary" onClick={() => unregisterPushBeforeLogout()}><LogOut size={17} /> Sair da conta</button></section>
 
       <section className="panel-card delete-account-card">
@@ -4039,40 +3996,12 @@ function ProfilePage({
         </button>
       </section>
 
-      {createCompanyOpen && (
-        <Modal title="Criar empresa" onClose={() => setCreateCompanyOpen(false)}>
-          <form className="stack-form" onSubmit={createCompany}>
-            <CompanyRegistrationFields />
-            <p className="muted modal-help">Você será o proprietário e poderá convidar administradores e usuários depois.</p>
-            {companyError && <div className="form-error">{companyError}</div>}
-            <button className="btn">Criar empresa</button>
-          </form>
-        </Modal>
-      )}
-
-      {deleteCompany && (
-        <Modal title="Excluir empresa" onClose={() => setDeleteCompany(null)}>
-          <form className="stack-form" onSubmit={confirmDeleteCompany}>
-            <div className="danger-notice">
-              <strong>A exclusão exige aprovação coletiva.</strong>
-              <p>Depois da solicitação, todos os administradores da empresa precisarão aprovar pela central de notificações. Só então comunidades, setores, publicações, comentários, membros, convites, vagas e arquivos serão removidos automaticamente.</p>
-            </div>
-            <label>
-              <span>Digite <strong>{deleteCompany.name}</strong> para confirmar</span>
-              <input name="confirmation" required autoComplete="off" />
-            </label>
-            {companyError && <div className="form-error">{companyError}</div>}
-            <button className="btn danger-confirm">Solicitar exclusão da empresa</button>
-          </form>
-        </Modal>
-      )}
-
       {deleteAccountOpen && (
         <Modal title="Apagar minha conta" onClose={() => !deleteAccountBusy && setDeleteAccountOpen(false)}>
           <form className="stack-form" onSubmit={deleteAccount}>
             <div className="danger-notice">
               <strong>Esta ação é permanente.</strong>
-              <p>Se você ainda for proprietário de uma empresa, transfira a propriedade ou exclua a empresa antes. Seus textos permanecerão anonimizados para não quebrar as conversas.</p>
+              <p>Seus textos permanecerão anonimizados quando necessário para não quebrar conversas existentes.</p>
             </div>
             <label>
               <span>Senha atual</span>
