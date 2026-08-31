@@ -4441,10 +4441,13 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
   showToast: (m: string) => void;
 }) {
   const hasCompanyAccess = data.companies.length > 0;
+  const hasCommunityAccess = data.communities.length > 0;
   const defaultScope: "company" | "community" | "world" =
-    initialScope === "company" && !hasCompanyAccess
-      ? (initialCommunityId ? "community" : "world")
-      : initialScope || (hasCompanyAccess ? "company" : initialCommunityId ? "community" : "world");
+    initialScope === "company" && hasCompanyAccess
+      ? "company"
+      : initialScope === "community" && hasCommunityAccess
+        ? "community"
+        : "world";
   const [scope, setScope] = useState<"company" | "community" | "world">(defaultScope);
   const [type, setType] = useState<"post" | "question" | "announcement" | "poll" | "event">("post");
   const [communityId, setCommunityId] = useState(initialCommunityId || data.communities[0]?.id || "");
@@ -4543,11 +4546,13 @@ function Composer({ data, initialScope, initialCommunityId, initialTopicId, onCl
     <Modal title="Criar publicação" onClose={onClose} wide>
       <form className="composer-form" onSubmit={submit}>
         <div className="audience-row">
+          <button type="button" className={scope === "world" ? "selected" : ""} onClick={() => setScope("world")} disabled={type === "announcement"}><Globe2 size={17} /> Mundo</button>
+          {hasCommunityAccess && (
+            <button type="button" className={scope === "community" ? "selected" : ""} onClick={() => setScope("community")} disabled={type === "announcement"}><Users size={17} /> Comunidade</button>
+          )}
           {hasCompanyAccess && (
             <button type="button" className={scope === "company" ? "selected" : ""} onClick={() => setScope("company")} disabled={type === "announcement"}><Building2 size={17} /> Empresa</button>
           )}
-          <button type="button" className={scope === "community" ? "selected" : ""} onClick={() => setScope("community")} disabled={type === "announcement" || !data.communities.length}><Users size={17} /> Comunidade</button>
-          <button type="button" className={scope === "world" ? "selected" : ""} onClick={() => setScope("world")} disabled={type === "announcement"}><Globe2 size={17} /> Mundo</button>
         </div>
 
         {scope === "community" && <>
