@@ -1579,3 +1579,20 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
     width:max-content!important;
   }
 }
+
+/* Mensagens — bolha clicável e detalhes */
+.message-bubble-button{
+  display:block;
+  width:auto;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  appearance:none;
+}
+.message-bubble-button:focus-visible{outline:2px solid #111;outline-offset:2px}
+.message-cancelled-copy{font-style:italic;opacity:.62}
+.message-details-panel{display:grid;gap:12px}
+.message-details-panel>div{display:flex;justify-content:space-between;gap:18px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:10px}
+.message-details-panel>div span{font-size:11px;color:var(--muted)}
+.message-details-panel>div strong{font-size:11px;text-align:right}
+.message-details-panel .danger-confirm{margin-top:4px}
