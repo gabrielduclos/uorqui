@@ -2,6 +2,19 @@ import core, { RealtimeHub } from './social.js';
 
 export { RealtimeHub };
 
+const AI_FACT_SEEDS = {
+  'tecnologia-ia': 'O protocolo HTTPS usa TLS para criptografar a comunicação entre cliente e servidor, protegendo dados em trânsito contra leitura e alteração por terceiros.',
+  games: 'Pong, lançado comercialmente pela Atari em 1972, é um dos jogos mais importantes da popularização inicial dos arcades.',
+  motos: 'A pressão correta dos pneus de uma motocicleta deve seguir a recomendação do fabricante e normalmente é verificada com os pneus frios.',
+  carros: 'O sistema ABS evita o travamento das rodas durante frenagens fortes ao modular a pressão de frenagem, ajudando o motorista a manter capacidade direcional.',
+  financas: 'Juros compostos calculam juros sobre o capital inicial e também sobre os juros acumulados dos períodos anteriores.',
+  carreira: 'A prática deliberada envolve treino focado em habilidades específicas, feedback e correção de erros, em vez de apenas repetir uma tarefa de forma automática.',
+  esportes: 'A distância oficial da maratona é 42,195 quilômetros.',
+  'filmes-series': 'O cinema sonoro comercial se consolidou no fim da década de 1920; The Jazz Singer, de 1927, é um marco histórico dessa transição.',
+  ciencia: 'A luz no vácuo viaja a aproximadamente 299.792 quilômetros por segundo.',
+  viagens: 'O fuso horário é definido a partir da rotação da Terra e da divisão convencional do globo em zonas de tempo, com ajustes políticos feitos por cada país.'
+};
+
 const AI_SPECIALTIES = {
   'tecnologia-ia': 'tecnologia, inteligência artificial e segurança digital',
   games: 'jogos, história dos games e desenvolvimento',
@@ -235,10 +248,13 @@ async function publishOfficialAgentsFast(request, env, ctx, url) {
 async function generateAgentPost(env, agent) {
   if (!env.AI) throw httpError(503, 'O binding do Workers AI não está disponível.');
   const specialty = AI_SPECIALTIES[agent.key] || `conteúdo relacionado a ${agent.communityName || 'esta comunidade'}`;
+  const factSeed = AI_FACT_SEEDS[agent.key] || 'Escolha apenas um fato científico, histórico ou técnico amplamente estabelecido e que não dependa de informação atual.';
   const prompt = [
     'Você escreve para uma rede social brasileira chamada Uorqui.',
     `Tema da comunidade: ${agent.communityName}. Especialidade: ${specialty}.`,
     'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 350 e 700 caracteres.',
+    `FATO-BASE VERIFICADO: ${factSeed}`,
+    'Escreva a publicação EXCLUSIVAMENTE a partir do fato-base fornecido. Você pode explicar contexto e consequência direta, mas não acrescente números, datas, pesquisas ou alegações que não estejam no fato-base.',
     'Use somente conhecimento estável, consolidado e verificável.',
     'Não escreva notícia de última hora, preço, cotação, placar, estatística temporal ou fato que dependa de informação atual.',
     'Não invente estudos, números, fontes, experiências pessoais ou acontecimentos.',
@@ -247,13 +263,13 @@ async function generateAgentPost(env, agent) {
     'Não use título, hashtags, markdown ou links. Retorne somente o texto da publicação.'
   ].join('\n');
 
-  const response = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+  const response = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
     messages: [
       { role: 'system', content: 'Priorize precisão factual. Evite qualquer afirmação incerta ou temporal.' },
       { role: 'user', content: prompt }
     ],
     max_tokens: 320,
-    temperature: 0.55
+    temperature: 0.2
   });
 
   return clean(response?.response || response?.result?.response || '', 1200);
