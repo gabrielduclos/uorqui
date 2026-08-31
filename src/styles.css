@@ -1193,3 +1193,8 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   }
   .topbar-spacer{display:block;width:100%;pointer-events:none}
 }
+
+.discover-people-list{display:flex;flex-direction:column;gap:8px}
+.discover-person-row{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:13px;padding:10px;text-align:left;color:inherit;cursor:pointer}
+.discover-person-row:hover{background:#fafafa}
+.discover-person-row strong{font-size:12px}.discover-person-row small{display:block;font-size:10px;color:var(--muted);margin-top:1px}.discover-person-row p{font-size:10px;color:var(--muted);margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
