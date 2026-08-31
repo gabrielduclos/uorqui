@@ -1438,8 +1438,32 @@ function CommunitiesPage({
   const [memberSearch, setMemberSearch] = useState("");
   const [memberAction, setMemberAction] = useState<{ uid: string; kind: "add" | "remove" } | null>(null);
   const [membersPage, setMembersPage] = useState(false);
+  const [joinBusyId, setJoinBusyId] = useState("");
+  const [joinStatusByCommunity, setJoinStatusByCommunity] = useState<Record<string, string>>({});
   const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
+
+  const joinedCommunityIds = useMemo(() => new Set(data.communities.map((community) => community.id)), [data.communities]);
+  const isJoinedCommunity = (communityId: string) => joinedCommunityIds.has(communityId);
+
+  const joinCommunity = async (community: Community) => {
+    if (joinBusyId) return;
+    setJoinBusyId(community.id);
+    try {
+      const result = await api<{ status: string }>(`/communities/${encodeURIComponent(community.id)}/join`, { method: "POST" });
+      setJoinStatusByCommunity((current) => ({ ...current, [community.id]: result.status }));
+      if (result.status === "joined") {
+        showToast(`Você entrou em ${community.name}.`);
+        await refresh();
+      } else {
+        showToast("Solicitação enviada ao dono e aos administradores.");
+      }
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setJoinBusyId("");
+    }
+  };
 
   const loadCommunityPosts = async (communityId: string) => {
     try {
@@ -1484,8 +1508,12 @@ function CommunitiesPage({
     // another request plus the member list.
     const cached = data.posts.filter(post => post.scope === "community" && post.communityId === selectedCommunityId);
     setCommunityPosts(cached);
-    setDetailLoading(cached.length === 0);
-    void loadCommunityPosts(selectedCommunityId);
+    const targetCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
+      || data.communities.find((community) => community.id === selectedCommunityId);
+    const joined = data.communities.some((community) => community.id === selectedCommunityId);
+    const canRead = joined || communityVisibility(targetCommunity) === "public";
+    setDetailLoading(canRead && cached.length === 0);
+    if (canRead) void loadCommunityPosts(selectedCommunityId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunityId, data.selectedCompanyId]);
 
@@ -1739,11 +1767,36 @@ function CommunitiesPage({
             </div>
           </div>
           <div className="community-detail-actions">
-            <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+            {isJoinedCommunity(selectedCommunity.id) ? (
+              <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+            ) : (
+              <button
+                className="btn"
+                disabled={joinBusyId === selectedCommunity.id || joinStatusByCommunity[selectedCommunity.id] === "pending"}
+                onClick={() => void joinCommunity(selectedCommunity)}
+              >
+                <UserPlus size={17} />
+                {joinBusyId === selectedCommunity.id
+                  ? "Enviando…"
+                  : joinStatusByCommunity[selectedCommunity.id] === "pending"
+                    ? "Solicitação enviada"
+                    : communityVisibility(selectedCommunity) === "public"
+                      ? "Participar"
+                      : "Solicitar participação"}
+              </button>
+            )}
           </div>
         </div>
 
         <div className="feed community-feed">
+          {!isJoinedCommunity(selectedCommunity.id) && communityVisibility(selectedCommunity) === "private" ? (
+            <div className="social-community-empty">
+              <ShieldCheck size={30} />
+              <strong>Comunidade privada</strong>
+              <p>As publicações ficam disponíveis depois que sua solicitação for aprovada.</p>
+            </div>
+          ) : (
+            <>
           {detailLoading && !communityPosts.length && <div className="loading-line">Carregando publicações…</div>}
           {communityPosts.map((post) => (
             <PostCard
@@ -1762,12 +1815,14 @@ function CommunitiesPage({
             />
           ))}
           {!detailLoading && !communityPosts.length && <Empty title="Nenhuma publicação ainda" text="Comece uma conversa nesta comunidade." />}
+            </>
+          )}
         </div>
       </section>
     );
   }
 
-  const listedCommunities = data.canAdmin ? data.allCompanyCommunities : data.communities;
+  const listedCommunities = data.allCompanyCommunities.length ? data.allCompanyCommunities : data.communities;
 
   return (
     <section className="page-section">
@@ -1776,23 +1831,38 @@ function CommunitiesPage({
         {data.canAdmin && <button className="btn small" onClick={() => setCreateOpen(true)}><Plus size={17} /> Criar comunidade</button>}
       </div>
       <div className="community-grid">
-        {listedCommunities.map((community) => (
-          <button className="community-card community-link" key={community.id} onClick={() => onSelectCommunity(community.id)}>
-            <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
-            <div>
-              <strong>{community.name}</strong>
-              <p>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública da empresa." : "Comunidade privada da empresa.")}</p>
-              <div className="community-card-meta">
-                <small className={`community-visibility-badge ${communityVisibility(community)}`}>
-                  {communityVisibility(community) === "public" ? <Globe2 size={12} /> : <ShieldCheck size={12} />}
-                  {communityVisibility(community) === "public" ? "Pública" : "Privada"}
-                </small>
-                <small className="community-member-count">{community.memberCount || 0} {(community.memberCount || 0) === 1 ? "membro" : "membros"}</small>
-              </div>
-            </div>
-            <ChevronRight className="community-chevron" size={18} />
-          </button>
-        ))}
+        {listedCommunities.map((community) => {
+          const joined = isJoinedCommunity(community.id);
+          const pending = joinStatusByCommunity[community.id] === "pending";
+          return (
+            <article className="community-card community-link" key={community.id}>
+              <button className="community-card-open" onClick={() => onSelectCommunity(community.id)}>
+                <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
+                <div>
+                  <strong>{community.name}</strong>
+                  <p>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública." : "Comunidade privada.")}</p>
+                  <div className="community-card-meta">
+                    <small className={`community-visibility-badge ${communityVisibility(community)}`}>
+                      {communityVisibility(community) === "public" ? <Globe2 size={12} /> : <ShieldCheck size={12} />}
+                      {communityVisibility(community) === "public" ? "Pública" : "Privada"}
+                    </small>
+                    <small className="community-member-count">{community.memberCount || 0} {(community.memberCount || 0) === 1 ? "membro" : "membros"}</small>
+                  </div>
+                </div>
+                <ChevronRight className="community-chevron" size={18} />
+              </button>
+              {!joined && (
+                <button
+                  className="btn secondary small community-join-card-button"
+                  disabled={joinBusyId === community.id || pending}
+                  onClick={() => void joinCommunity(community)}
+                >
+                  {pending ? "Solicitação enviada" : communityVisibility(community) === "public" ? "Participar" : "Solicitar participação"}
+                </button>
+              )}
+            </article>
+          );
+        })}
       </div>
       {!listedCommunities.length && <Empty title={data.canAdmin ? "Crie a primeira comunidade" : "Você ainda não está em comunidades"} text={data.canAdmin ? "Crie apenas os grupos que sua empresa realmente precisa." : "Quando você for adicionado a uma comunidade, ela aparecerá aqui."} />}
       {createOpen && <Modal title="Criar comunidade" onClose={() => setCreateOpen(false)}>
