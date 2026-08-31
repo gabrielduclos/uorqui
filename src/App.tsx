@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import {
   ArrowLeft, BarChart3, Bell, BriefcaseBusiness, Building2, CalendarDays, Camera, Check, ChevronDown,
   ChevronRight, CirclePlus, CreditCard, Crown, Download, FileQuestion, Globe2, Home,
-  Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Plus, Search, Send, Settings,
+  Compass, Images, KeyRound, LogOut, Mail, MapPin, Megaphone, MessageSquareText, Plus, Search, Send, Settings, Share2,
   ShieldCheck, Smartphone, Trash2, UserMinus, UserPlus, UserRound, Users, X
 } from "lucide-react";
 import {
