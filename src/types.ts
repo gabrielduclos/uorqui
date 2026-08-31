@@ -68,6 +68,8 @@ export interface Community {
   officialLabel?: string;
   seededByUorqui?: boolean;
   aiCurated?: boolean;
+  avatarMediaId?: string;
+  avatarGeneratedByAi?: boolean;
   createdBy?: string;
 }
 
