@@ -1603,28 +1603,28 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 }
 .message-details-popover{
   position:fixed;
-  width:min(260px,calc(100vw - 24px));z-index:80;
-  background:#fff;color:#17181b;border:1px solid var(--line);
-  border-radius:15px 15px 15px 5px;padding:12px 13px;
-  box-shadow:0 12px 35px rgba(0,0,0,.18);
+  width:min(230px,calc(100vw - 24px));z-index:80;
+  background:#3f4246;color:#f7f7f7;border:1px solid rgba(255,255,255,.08);
+  border-radius:12px 12px 12px 5px;padding:9px 11px;
+  box-shadow:0 8px 22px rgba(0,0,0,.20);
 }
 .message-details-popover.mine{
-  background:#17181b;color:#fff;border-color:#17181b;
-  border-radius:15px 15px 5px 15px;
+  background:#3f4246;color:#f7f7f7;border-color:rgba(255,255,255,.08);
+  border-radius:12px 12px 5px 12px;
 }
 .message-details-close{
-  position:absolute;top:6px;right:6px;width:24px;height:24px;
+  position:absolute;top:4px;right:4px;width:22px;height:22px;
   display:grid;place-items:center;border:0;border-radius:50%;
   background:transparent;color:inherit;opacity:.6;
 }
 .message-details-line{
   display:flex;justify-content:space-between;gap:18px;
-  font-size:10px;padding:4px 20px 4px 0;
+  font-size:10px;padding:3px 18px 3px 0;
 }
 .message-details-line span{opacity:.58}
 .message-details-line strong{font-size:10px}
 .message-unsend-link{
-  width:100%;margin-top:7px;padding-top:8px;border:0;border-top:1px solid rgba(127,127,127,.28);
+  width:100%;margin-top:5px;padding-top:7px;border:0;border-top:1px solid rgba(127,127,127,.28);
   background:transparent;color:#e5484d;text-align:left;font-weight:700;font-size:10px;
 }
 .message-unsend-link:disabled{opacity:.5}
