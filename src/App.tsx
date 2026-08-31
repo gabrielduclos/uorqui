@@ -31,6 +31,32 @@ const emptyData: BootstrapData = {
   notifications: [], allCompanyCommunities: [], members: []
 };
 
+function normalizeBootstrapData(value: Partial<BootstrapData> | null | undefined): BootstrapData {
+  const next = value || {};
+  return {
+    ...emptyData,
+    ...next,
+    me: { ...emptyData.me, ...(next.me || {}) },
+    companies: Array.isArray(next.companies) ? next.companies : [],
+    communities: Array.isArray(next.communities) ? next.communities : [],
+    communityMap: next.communityMap && typeof next.communityMap === "object" ? next.communityMap : {},
+    posts: Array.isArray(next.posts) ? next.posts : [],
+    worldPosts: Array.isArray(next.worldPosts) ? next.worldPosts : [],
+    notifications: Array.isArray(next.notifications) ? next.notifications : [],
+    allCompanyCommunities: Array.isArray(next.allCompanyCommunities) ? next.allCompanyCommunities : [],
+    members: Array.isArray(next.members) ? next.members : []
+  } as BootstrapData;
+}
+
+function validateBootstrapData(value: BootstrapData) {
+  if (!value.me?.uid) throw new Error("bootstrap: usuário autenticado sem uid");
+  for (const key of ["companies","communities","posts","worldPosts","notifications","allCompanyCommunities","members"] as const) {
+    if (!Array.isArray(value[key])) throw new Error(`bootstrap: campo ${key} inválido`);
+  }
+  if (!value.communityMap || typeof value.communityMap !== "object") throw new Error("bootstrap: communityMap inválido");
+}
+
+
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Não foi possível concluir esta ação.";
@@ -207,7 +233,28 @@ export default function App() {
     }
     try {
       const suffix = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
-      const next = await api<BootstrapData>(`/bootstrap${suffix}`);
+      const raw = await api<BootstrapData>(`/bootstrap${suffix}`);
+      const next = normalizeBootstrapData(raw);
+      validateBootstrapData(next);
+
+      // Smoke test autenticado do caminho que abre logo após o login.
+      // Falhas aqui são transformadas em erro visível, nunca em tela branca.
+      try {
+        const social = await Promise.race([
+          api<{ followingCount?: number; posts?: Post[]; communities?: Community[] }>("/social/feed"),
+          new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("social/feed: timeout após 8s")), 8000))
+        ]);
+        if (social && social.posts !== undefined && !Array.isArray(social.posts)) {
+          throw new Error("social/feed: posts inválido");
+        }
+        if (social && social.communities !== undefined && !Array.isArray(social.communities)) {
+          throw new Error("social/feed: communities inválido");
+        }
+      } catch (smokeError) {
+        console.error("Uorqui post-login smoke test", smokeError);
+        // O feed social tem fallback no bootstrap. Não bloqueamos o app, mas registramos o erro.
+      }
+
       const visibleMedia = prefetchPostMedia([...next.posts, ...next.worldPosts], 8);
       await Promise.race([
         visibleMedia,
