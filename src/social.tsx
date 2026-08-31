@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { ArrowLeft, Ban, Search, UserCheck, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Ban, MessageSquareText, Search, UserCheck, UserPlus, Users } from "lucide-react";
 import { api } from "./lib/api";
 import { auth } from "./lib/firebase";
 import { Avatar } from "./components/Avatar";
@@ -260,6 +260,17 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
     }
   };
 
+  const openMessage = () => {
+    if (!data || data.isMe || data.isBlocked || data.isBlockedBy) return;
+    const params = new URLSearchParams(location.search);
+    params.delete("profile");
+    params.delete("people");
+    const query = params.toString();
+    history.replaceState({}, "", `${location.pathname}${query ? `?${query}` : ""}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.dispatchEvent(new CustomEvent("uorqui:open-messages", { detail: { targetUid: uid } }));
+  };
+
   if (loading) return <section className="social-page"><div className="social-empty">Carregando perfil…</div></section>;
   if (!data || error) return <section className="social-page"><header className="social-page-head"><button className="social-icon-button" onClick={onBack}><ArrowLeft size={21} /></button><h1>Perfil</h1></header><div className="social-empty">{error || "Perfil não encontrado."}</div></section>;
 
@@ -281,9 +292,14 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
           ) : (
             <div className="social-profile-actions">
               {!data.isBlocked && !data.isBlockedBy && (
-                <button className={`btn social-follow-button ${data.isFollowing ? "secondary" : ""}`} disabled={followBusy} onClick={toggleFollow}>
-                  {data.isFollowing ? <UserCheck size={17} /> : <UserPlus size={17} />} {data.isFollowing ? "Deixar de seguir" : "Seguir"}
-                </button>
+                <>
+                  <button className={`btn social-follow-button ${data.isFollowing ? "secondary" : ""}`} disabled={followBusy} onClick={toggleFollow}>
+                    {data.isFollowing ? <UserCheck size={17} /> : <UserPlus size={17} />} {data.isFollowing ? "Deixar de seguir" : "Seguir"}
+                  </button>
+                  <button className="btn secondary social-message-button" onClick={openMessage}>
+                    <MessageSquareText size={16} /> Mensagem
+                  </button>
+                </>
               )}
               {!data.isBlockedBy && (
                 <button className={`btn secondary social-block-button ${data.isBlocked ? "blocked" : ""}`} disabled={blockBusy} onClick={toggleBlock}>
