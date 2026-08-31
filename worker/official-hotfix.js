@@ -157,93 +157,12 @@ async function publishOfficialAgentsFast(request, env, ctx, url) {
   const authorization = await authorizeSuperadmin(request, env, ctx, url);
   if (authorization.response) return authorization.response;
 
-  const status = authorization.status || {};
-  const agents = Array.isArray(status.agents) ? status.agents : [];
-  const day = status.day || brazilDateKey();
-  const manualRunId = Date.now().toString(36);
-  if (!agents.length) throw httpError(409, 'Nenhum agente oficial foi encontrado. Use “Garantir comunidades” e tente novamente.');
-
-  let published = 0;
-  let skipped = 0;
-  let failed = 0;
-  const results = [];
-  let cursor = 0;
-
-  const publishOne = async (agent) => {
-    const postId = `uorqui_ai_post_${agent.key}_manual_${manualRunId}_${crypto.randomUUID().slice(0,8)}`;
-    const text = await generateAgentPost(env, agent);
-    if (!text) {
-      failed += 1;
-      results.push({ key: agent.key, name: agent.communityName, status: 'failed', postId: '' });
-      return;
-    }
-
-    const createdAt = new Date().toISOString();
-    await fsPut(env, 'posts', postId, {
-      id: postId,
-      authorUid: `uorqui_ai_agent_${agent.key}`,
-      authorName: agent.name || 'Equipe Uorqui · IA',
-      authorAvatarMediaId: '',
-      authorAccountType: 'uorqui_agent',
-      authorAiAssisted: true,
-      authorTeamLabel: 'Equipe Uorqui · IA',
-      scope: 'community',
-      companyId: '',
-      communityId: agent.communityId,
-      communityName: agent.communityName || 'Comunidade Uorqui',
-      communityVisibility: 'public',
-      topicId: '',
-      topicName: '',
-      type: 'post',
-      text,
-      title: '',
-      requiresReadReceipt: false,
-      attachments: [],
-      reactionCount: 0,
-      commentCount: 0,
-      aiGenerated: true,
-      aiDisclosure: 'Conteúdo assistido por IA pela Equipe Uorqui',
-      createdAt,
-      updatedAt: createdAt
-    });
-
-    published += 1;
-    results.push({ key: agent.key, name: agent.communityName, status: 'published', postId });
-  };
-
-  const runner = async () => {
-    while (cursor < agents.length) {
-      const index = cursor++;
-      try {
-        await publishOne(agents[index]);
-      } catch (error) {
-        failed += 1;
-        results.push({
-          key: agents[index]?.key || '',
-          name: agents[index]?.communityName || '',
-          status: 'failed',
-          postId: '',
-          error: String(error?.message || error).slice(0, 180)
-        });
-      }
-    }
-  };
-
-  await Promise.all(Array.from({ length: Math.min(3, agents.length) }, () => runner()));
-
-  const refreshed = await authorizeSuperadmin(request, env, ctx, url);
-  const freshStatus = refreshed.response ? status : refreshed.status;
-
-  return json({
-    ok: true,
-    day,
-    published,
-    skipped,
-    failed,
-    total: agents.length,
-    results,
-    ...(freshStatus || status)
-  });
+  const target = new URL('/api/superadmin/ai-agents/publish', url.origin);
+  target.searchParams.set('force', '1');
+  return core.fetch(new Request(target, {
+    method: 'POST',
+    headers: request.headers
+  }), env, ctx);
 }
 
 async function generateAgentPost(env, agent) {
