@@ -2,11 +2,11 @@ import core, { RealtimeHub } from './mentions.js';
 
 export { RealtimeHub };
 
-const FREE_MEMBER_LIMIT = 4;
-const PREMIUM_MEMBER_LIMIT = 10;
+const FREE_MEMBER_LIMIT = null;
+const PREMIUM_MEMBER_LIMIT = null;
 const PREMIUM_MONTHLY_PRICE = 99.90;
 const ENTERPRISE_EXTRA_USER_PRICE = 19.90;
-const PRODUCT_VERSION = '1.2.21';
+const PRODUCT_VERSION = '1.3.0-social';
 
 let googleTokenCache = { expires: 0, token: '' };
 
@@ -31,61 +31,12 @@ export default {
         return await deactivateEnterprise(request, env, ctx, companyId);
       }
 
-      if (method === 'POST' && url.pathname === '/api/posts') {
-        const body = await request.clone().json().catch(() => ({}));
-        if (body?.scope === 'world') {
-          return json({ error: 'O Mundo está temporariamente desativado. Publique na empresa ou em uma comunidade.' }, 400);
-        }
-      }
-
-      if (method === 'POST' && url.pathname === '/api/jobs') {
-        const body = await request.clone().json().catch(() => ({}));
-        if (body?.audience === 'world') {
-          return json({ error: 'As vagas públicas estão temporariamente desativadas. Publique a vaga para a empresa.' }, 400);
-        }
-      }
-
-      const inviteCreateMatch = method === 'POST'
-        ? url.pathname.match(/^\/api\/companies\/([^/]+)\/invites$/)
-        : null;
-      if (inviteCreateMatch) {
-        const companyId = decodeURIComponent(inviteCreateMatch[1]);
-        const allowed = await canManageCompany(request, env, ctx, companyId);
-        if (allowed) await enforceMemberCapacity(env, companyId);
-      }
-
-      const inviteResendMatch = method === 'POST'
-        ? url.pathname.match(/^\/api\/companies\/([^/]+)\/invites\/([^/]+)\/resend$/)
-        : null;
-      if (inviteResendMatch) {
-        const companyId = decodeURIComponent(inviteResendMatch[1]);
-        const inviteId = decodeURIComponent(inviteResendMatch[2]);
-        const allowed = await canManageCompany(request, env, ctx, companyId);
-        if (allowed) {
-          const invite = await fsGet(env, 'invites', inviteId);
-          if (!invite || invite.status !== 'pending' || isExpired(invite.expiresAt)) {
-            await enforceMemberCapacity(env, companyId, inviteId);
-          }
-        }
-      }
-
-      if (method === 'POST' && url.pathname === '/api/invites/accept') {
-        const body = await request.clone().json().catch(() => ({}));
-        const token = String(body?.token || '').trim();
-        if (token) {
-          const hash = await sha256(token);
-          const matches = await fsWhere(env, 'invites', 'tokenHash', hash, 5).catch(() => []);
-          const invite = matches.find(item => item.type === 'company' && item.status === 'pending' && !isExpired(item.expiresAt));
-          if (invite?.companyId) await enforceMemberCapacity(env, invite.companyId, invite.id);
-        }
-      }
 
       const response = await core.fetch(request, env, ctx);
       if (!response.ok) return response;
 
       if (method === 'GET' && url.pathname === '/api/bootstrap') {
         return await rewriteJsonResponse(response, async payload => {
-          payload.worldPosts = [];
           payload.productVersion = PRODUCT_VERSION;
           if (payload.selectedCompanyId) {
             const plan = await planSnapshot(env, payload.selectedCompanyId);
@@ -236,7 +187,7 @@ async function activateEnterprise(request, env, ctx, companyId) {
     activeUsers,
     monthlyPrice,
     basePrice: PREMIUM_MONTHLY_PRICE,
-    includedUsers: PREMIUM_MEMBER_LIMIT,
+    includedUsers: null,
     extraUserPrice: ENTERPRISE_EXTRA_USER_PRICE
   });
 }
@@ -293,36 +244,9 @@ async function coreBootstrap(request, env, ctx, companyId) {
   }), env, ctx);
 }
 
-async function enforceMemberCapacity(env, companyId, excludeInviteId = '') {
-  const company = await fsGet(env, 'companies', companyId);
-  if (!company) return;
-
-  const tier = tierForCompany(company);
-  const limit = tier === 'enterprise'
-    ? null
-    : tier === 'premium'
-      ? PREMIUM_MEMBER_LIMIT
-      : FREE_MEMBER_LIMIT;
-  if (limit === null) return;
-
-  const [activeUsers, invites] = await Promise.all([
-    activeMemberCount(env, companyId),
-    fsWhere(env, 'invites', 'companyId', companyId, 250)
-  ]);
-
-  const pendingInvites = invites.filter(invite =>
-    invite.id !== excludeInviteId &&
-    invite.type === 'company' &&
-    invite.status === 'pending' &&
-    !isExpired(invite.expiresAt)
-  ).length;
-
-  if (activeUsers + pendingInvites >= limit) {
-    if (tier === 'premium') {
-      throw httpError(402, `O Premium permite até ${PREMIUM_MEMBER_LIMIT} usuários ativos. Ative o Enterprise para adicionar mais pessoas por R$ 19,90 por usuário adicional.`);
-    }
-    throw httpError(402, `O plano Free permite até ${FREE_MEMBER_LIMIT} usuários ativos. Ative o Premium por R$ 99,90/mês para liberar até ${PREMIUM_MEMBER_LIMIT} usuários.`);
-  }
+async function enforceMemberCapacity() {
+  // Comunidades e empresas não têm limite artificial de membros.
+  return;
 }
 
 async function planSnapshot(env, companyId, knownMemberCount) {
@@ -340,7 +264,7 @@ async function planSnapshot(env, companyId, knownMemberCount) {
   return {
     tier,
     activeUsers,
-    memberLimit: tier === 'enterprise' ? null : tier === 'premium' ? PREMIUM_MEMBER_LIMIT : FREE_MEMBER_LIMIT,
+    memberLimit: null,
     basePrice: PREMIUM_MONTHLY_PRICE,
     premiumPrice: PREMIUM_MONTHLY_PRICE,
     includedUsers: PREMIUM_MEMBER_LIMIT,
@@ -357,7 +281,7 @@ function decorateCompany(company, plan) {
   company.premiumMonthlyPrice = PREMIUM_MONTHLY_PRICE;
   company.billingTier = plan.tier;
   company.enterpriseExtraUserPrice = ENTERPRISE_EXTRA_USER_PRICE;
-  company.enterpriseIncludedUsers = PREMIUM_MEMBER_LIMIT;
+  company.enterpriseIncludedUsers = null;
   company.enterpriseMonthlyPrice = plan.tier === 'enterprise' ? plan.monthlyPrice : 0;
   company.memberCount = Number.isFinite(company.memberCount) ? company.memberCount : plan.activeUsers;
   return company;
