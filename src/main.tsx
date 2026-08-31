@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { Component, StrictMode, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { SocialLayer } from "./social";
@@ -20,13 +20,52 @@ import "./pull-refresh-v123";
 import "./reply-to-reply-v123";
 import "./login-logo-v123";
 
-const PRODUCT_VERSION = "1.3.3-runtime-fix";
+const PRODUCT_VERSION = "1.3.4-runtime-diagnostics";
+
+class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Uorqui runtime error", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ maxWidth: 720, margin: "48px auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
+          <h1 style={{ fontSize: 22, marginBottom: 10 }}>Erro ao abrir o Uorqui</h1>
+          <p style={{ marginBottom: 12 }}>A aplicação encontrou um erro de execução após o login.</p>
+          <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", padding: 12, background: "#f5f5f5", borderRadius: 8 }}>
+            {this.state.error.name}: {this.state.error.message}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 12, padding: "10px 14px" }}>
+            Recarregar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+window.addEventListener("error", (event) => {
+  console.error("Uorqui window error", event.error || event.message);
+});
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Uorqui unhandled rejection", event.reason);
+});
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-    <SocialLayer />
-  </StrictMode>
+  <RuntimeErrorBoundary>
+    <StrictMode>
+      <App />
+      <SocialLayer />
+    </StrictMode>
+  </RuntimeErrorBoundary>
 );
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
