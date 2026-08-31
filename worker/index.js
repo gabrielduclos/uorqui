@@ -5122,6 +5122,19 @@ async function executeAdminSecurityChanges(env) {
 }
 
 
+const UORQUI_AI_FACT_SEEDS = {
+  'tecnologia-ia': 'O protocolo HTTPS usa TLS para criptografar a comunicação entre cliente e servidor, protegendo dados em trânsito.',
+  games: 'Pong, lançado comercialmente pela Atari em 1972, é um marco da popularização inicial dos arcades.',
+  motos: 'A pressão dos pneus deve seguir a recomendação do fabricante e normalmente é verificada com os pneus frios.',
+  carros: 'O ABS evita o travamento das rodas em frenagens fortes ao modular a pressão de frenagem, ajudando a manter capacidade direcional.',
+  financas: 'Juros compostos incidem sobre o capital inicial e também sobre os juros acumulados dos períodos anteriores.',
+  carreira: 'Prática deliberada envolve treino focado em habilidades específicas, feedback e correção de erros.',
+  esportes: 'A distância oficial da maratona é 42,195 quilômetros.',
+  'filmes-series': 'The Jazz Singer, de 1927, é um marco histórico da transição do cinema mudo para o cinema sonoro comercial.',
+  ciencia: 'A velocidade da luz no vácuo é exatamente 299.792.458 metros por segundo.',
+  viagens: 'Fusos horários são convenções baseadas na rotação da Terra, com limites e ajustes definidos politicamente pelos países.'
+};
+
 const UORQUI_AI_COMMUNITIES = [
   { key:'tecnologia-ia', name:'Tecnologia & IA', agent:'Nina · Tecnologia', username:'nina_tech_uorqui', specialty:'tecnologia, inteligência artificial e segurança digital', description:'Tecnologia, inteligência artificial, produtos digitais e tendências explicadas sem complicação.' },
   { key:'games', name:'Games', agent:'Leo · Games', username:'leo_games_uorqui', specialty:'jogos, história dos games e desenvolvimento', description:'Jogos, consoles, PC, desenvolvimento e cultura gamer.' },
@@ -5249,7 +5262,9 @@ async function generateUorquiAgentPost(env,item){
   const prompt=[
     'Você escreve para uma rede social brasileira chamada Uorqui.',
     `Tema da comunidade: ${item.name}. Especialidade: ${item.specialty}.`,
+    `FATO-BASE VERIFICADO: ${UORQUI_AI_FACT_SEEDS[item.key] || ''}`,
     'Crie UMA publicação curta, útil e convidativa, em português do Brasil, entre 350 e 700 caracteres.',
+    'Use o fato-base como núcleo da publicação. Não acrescente datas, números, pesquisas, fontes ou alegações factuais que não estejam no fato-base.',
     'Use somente conhecimento estável, consolidado e verificável. Não escreva notícia de última hora, preço, cotação, placar, estatística temporal ou fato que dependa de informação atual.',
     'Não invente estudos, números, fontes, experiências pessoais ou acontecimentos. Se não tiver segurança factual, escolha outro assunto.',
     'Explique algo concreto e termine com uma pergunta natural para incentivar conversa.',
@@ -5257,10 +5272,10 @@ async function generateUorquiAgentPost(env,item){
     'Não use título, hashtags, markdown ou links. Retorne somente o texto da publicação.'
   ].join('\n');
   try{
-    const response=await env.AI.run('@cf/meta/llama-3.1-8b-instruct',{messages:[
+    const response=await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast',{messages:[
       {role:'system',content:'Priorize precisão factual. Evite qualquer afirmação incerta ou temporal.'},
       {role:'user',content:prompt}
-    ],max_tokens:320,temperature:0.55});
+    ],max_tokens:320,temperature:0.2});
     return clean(response?.response||response?.result?.response||'',1200);
   }catch(error){
     console.error('Uorqui AI agent generation failed',item.key,error);
