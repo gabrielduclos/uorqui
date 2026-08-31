@@ -1487,3 +1487,25 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 @media(max-width:520px){
   .uorqui-ai-badge{font-size:7.5px;padding:2px 5px;margin-left:4px}
 }
+
+/* Comunidades oficiais do Uorqui */
+.community-name-line,.community-detail-name-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.community-detail-name-line h2{margin:0}
+.official-uorqui-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  width:max-content;
+  padding:3px 7px;
+  border-radius:999px;
+  background:#111;
+  color:#fff;
+  font-size:8px;
+  font-weight:800;
+  line-height:1;
+  white-space:nowrap;
+}
+.official-uorqui-badge svg{width:11px;height:11px}
+@media(max-width:520px){
+  .official-uorqui-badge{font-size:7.5px;padding:3px 6px}
+}
