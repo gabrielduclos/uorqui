@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "uorqui-api",
-  "main": "./worker/social.js",
+  "main": "./worker/official-hotfix.js",
   "compatibility_date": "2026-08-19",
   "keep_vars": true,
   "placement": {
