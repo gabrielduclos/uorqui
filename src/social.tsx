@@ -38,26 +38,6 @@ function pushRoute(next: { people?: boolean; profileUid?: string }) {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-function normalizedPersonName(value = "") {
-  return value.trim().replace(/^@/, "").toLocaleLowerCase("pt-BR");
-}
-
-async function openPublicProfileByVisibleName(name: string) {
-  const query = name.trim();
-  if (!query || query === "Usuário") return;
-
-  try {
-    const result = await api<PeopleResponse>(`/social/people?q=${encodeURIComponent(query)}`);
-    const target = result.people.find((person) => normalizedPersonName(person.displayName) === normalizedPersonName(query))
-      || result.people.find((person) => normalizedPersonName(person.username) === normalizedPersonName(query))
-      || result.people[0];
-    if (target?.uid) pushRoute({ profileUid: target.uid });
-    else pushRoute({ people: true });
-  } catch {
-    pushRoute({ people: true });
-  }
-}
-
 export function SocialLayer() {
   const [route, setRoute] = useState(currentRoute);
 
@@ -92,23 +72,21 @@ export function SocialLayer() {
       const target = event.target;
       if (!(target instanceof Element)) return;
 
-      const postHead = target.closest(".post-head");
+      const postHead = target.closest<HTMLElement>(".post-head");
       if (postHead && (target.closest(".avatar") || target.closest(".post-author strong"))) {
-        const name = postHead.querySelector(".post-author strong")?.textContent?.trim() || "";
-        if (!name) return;
+        const uid = postHead.dataset.authorUid || "";
         event.preventDefault();
         event.stopPropagation();
-        void openPublicProfileByVisibleName(name);
+        if (uid) pushRoute({ profileUid: uid });
         return;
       }
 
-      const comment = target.closest(".inline-comment");
+      const comment = target.closest<HTMLElement>(".inline-comment");
       if (comment && (target.closest(".avatar") || target.closest(".inline-comment-body > strong"))) {
-        const name = comment.querySelector(":scope .inline-comment-body > strong")?.textContent?.trim() || "";
-        if (!name) return;
+        const uid = comment.dataset.authorUid || "";
         event.preventDefault();
         event.stopPropagation();
-        void openPublicProfileByVisibleName(name);
+        if (uid) pushRoute({ profileUid: uid });
       }
     };
 
@@ -233,7 +211,12 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
       <div className="social-profile-card">
         <div className="social-profile-top">
           <Avatar name={data.profile.displayName} mediaId={data.profile.avatarMediaId} />
-          {!data.isMe && (
+          {data.isMe ? (
+            <button className="btn social-follow-button secondary" onClick={() => {
+              history.back();
+              window.setTimeout(() => document.querySelector<HTMLButtonElement>('.side-nav button:last-child')?.click(), 0);
+            }}>Editar perfil</button>
+          ) : (
             <button className={`btn social-follow-button ${data.isFollowing ? "secondary" : ""}`} disabled={followBusy} onClick={toggleFollow}>
               <UserPlus size={17} /> {data.isFollowing ? "Seguindo" : "Seguir"}
             </button>
@@ -242,7 +225,7 @@ function PublicProfile({ uid, onBack }: { uid: string; onBack: () => void }) {
         <h2>{data.profile.displayName || "Usuário"}</h2>
         {data.profile.username && <span className="social-username">@{data.profile.username.replace(/^@/, "")}</span>}
         {data.profile.bio && <p className="social-bio">{data.profile.bio}</p>}
-        <div className="social-stats"><span><strong>{data.followingCount}</strong> seguindo</span><span><strong>{data.followerCount}</strong> seguidores</span></div>
+        <div className="social-stats"><button onClick={onBack}><strong>{data.followingCount}</strong> seguindo</button><button onClick={onBack}><strong>{data.followerCount}</strong> seguidores</button></div>
       </div>
 
       <div className="social-profile-feed">
