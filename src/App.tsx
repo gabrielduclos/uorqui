@@ -4241,6 +4241,7 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   const [recordedAudioUrl,setRecordedAudioUrl]=useState("");
   const [audioDuration,setAudioDuration]=useState(0);
   const [selectedMessage,setSelectedMessage]=useState<DirectMessage|null>(null);
+  const [messagePopover,setMessagePopover]=useState<{top:number;left:number;align:"left"|"right";above:boolean}|null>(null);
   const [messageActionBusy,setMessageActionBusy]=useState(false);
   const mediaRecorderRef=useRef<MediaRecorder|null>(null);
   const mediaStreamRef=useRef<MediaStream|null>(null);
@@ -4540,7 +4541,18 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
           <div className="message-scroll">
             {nextBefore&&<button className="text-button messages-more" onClick={()=>void loadMessages(targetUid,nextBefore)}>Mensagens anteriores</button>}
             {messages.map(message=><article key={message.id} className={`message-bubble-row ${message.senderUid===me.uid?"mine":""}`}>
-              <button type="button" className="message-bubble message-bubble-button" onClick={()=>setSelectedMessage(message)}>
+              <button type="button" className="message-bubble message-bubble-button" onClick={(event)=>{
+                const rect=event.currentTarget.getBoundingClientRect();
+                const estimatedHeight=132;
+                const below=rect.bottom+8;
+                const above=rect.top-estimatedHeight-8;
+                const useAbove=below+estimatedHeight>window.innerHeight-12&&above>12;
+                const width=260;
+                const desiredLeft=message.senderUid===me.uid?rect.right-width:rect.left;
+                const left=Math.max(12,Math.min(desiredLeft,window.innerWidth-width-12));
+                setMessagePopover({top:useAbove?above:below,left,align:message.senderUid===me.uid?"right":"left",above:useAbove});
+                setSelectedMessage(message);
+              }}>
                 {message.cancelledAt ? <p className="message-cancelled-copy">Mensagem cancelada</p> : <>
                   {message.text&&<p>{message.text}</p>}
                   {message.sharedPost&&<span className="message-shared-post" onClick={event=>{event.stopPropagation();window.dispatchEvent(new CustomEvent("uorqui:open-post-thread",{detail:{postId:message.sharedPost?.id,companyId:message.sharedPost?.companyId||""}}));}}><Share2 size={15}/><span><strong>Publicação de {message.sharedPost.authorName||"usuário"}</strong><small>{message.sharedPost.text||"Abrir publicação"}</small></span></span>}
@@ -4602,9 +4614,9 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
             </div>
           </form>
           {selectedMessage&&<>
-            <button className="message-details-backdrop" aria-label="Fechar detalhes" onClick={()=>!messageActionBusy&&setSelectedMessage(null)}/>
-            <div className={`message-details-popover ${selectedMessage.senderUid===me.uid?"mine":""}`}>
-              <button className="message-details-close" onClick={()=>!messageActionBusy&&setSelectedMessage(null)} aria-label="Fechar"><X size={13}/></button>
+            <button className="message-details-backdrop" aria-label="Fechar detalhes" onClick={()=>{if(!messageActionBusy){setSelectedMessage(null);setMessagePopover(null);}}}/>
+            <div className={`message-details-popover ${selectedMessage.senderUid===me.uid?"mine":""} ${messagePopover?.above?"above":""}`} style={messagePopover?{top:messagePopover.top,left:messagePopover.left}:undefined}>
+              <button className="message-details-close" onClick={()=>{if(!messageActionBusy){setSelectedMessage(null);setMessagePopover(null);}}} aria-label="Fechar"><X size={13}/></button>
               <div className="message-details-line"><span>Enviada</span><strong>{selectedMessage.createdAt?new Date(selectedMessage.createdAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—"}</strong></div>
               <div className="message-details-line"><span>Status</span><strong>{selectedMessage.cancelledAt?"Cancelada":selectedMessage.senderUid===me.uid?(selectedMessage.readAt?"Lida":"Enviada"):"Recebida"}</strong></div>
               {selectedMessage.senderUid===me.uid&&selectedMessage.readAt&&!selectedMessage.cancelledAt&&<div className="message-details-line"><span>Lida</span><strong>{new Date(selectedMessage.readAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</strong></div>}
