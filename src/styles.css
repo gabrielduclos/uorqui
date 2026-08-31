@@ -1169,3 +1169,27 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
     transform:translate3d(0,0,0)!important;
   }
 }
+
+/* v1.3.2 — header flutuante real no mobile/Safari */
+.topbar-spacer{display:none}
+@media(max-width:850px){
+  .main{position:relative}
+  .topbar{
+    position:fixed!important;
+    top:0;
+    left:50%;
+    right:auto;
+    width:min(680px,100%);
+    transform:translate3d(-50%,0,0)!important;
+    -webkit-transform:translate3d(-50%,0,0)!important;
+    z-index:55;
+    box-shadow:0 1px 0 rgba(0,0,0,.04);
+    transition:transform .12s ease!important;
+    -webkit-transition:-webkit-transform .12s ease!important;
+  }
+  .topbar.scroll-hidden{
+    transform:translate3d(-50%,-102%,0)!important;
+    -webkit-transform:translate3d(-50%,-102%,0)!important;
+  }
+  .topbar-spacer{display:block;width:100%;pointer-events:none}
+}
