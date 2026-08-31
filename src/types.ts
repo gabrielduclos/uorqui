@@ -63,6 +63,18 @@ export interface Community {
   description?: string;
   visibility?: "public" | "private";
   memberCount?: number;
+  verifiedCompany?: boolean;
+}
+
+export interface CommunityTopic {
+  id: string;
+  communityId: string;
+  companyId?: string;
+  name: string;
+  description?: string;
+  kind?: "topic" | "sector";
+  createdBy?: string;
+  createdAt?: string;
 }
 
 export interface CommunityMember {
@@ -127,6 +139,8 @@ export interface Post {
   communityId?: string;
   communityName?: string;
   communityVisibility?: "public" | "private";
+  topicId?: string;
+  topicName?: string;
   type: "post" | "question" | "announcement" | "poll" | "event";
   text: string;
   title?: string;
