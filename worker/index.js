@@ -248,9 +248,17 @@ async function routeApi(request, env, identity, url, ctx) {
     const requestId = decodeURIComponent(path.split('/')[2]);
     return json(await respondCommunityJoinRequest(env, identity, requestId, await readJson(request), ctx));
   }
+  if (method === 'GET' && /^\/communities\/[^/]+\/topics$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await getCommunityTopics(env, identity, communityId));
+  }
+  if (method === 'POST' && /^\/communities\/[^/]+\/topics$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await createCommunityTopic(env, identity, communityId, await readJson(request)), 201);
+  }
   if (method === 'GET' && /^\/communities\/[^/]+\/posts$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
-    return json(await getCommunityPosts(env, identity, communityId));
+    return json(await getCommunityPosts(env, identity, communityId, url.searchParams.get('topicId') || ''));
   }
   if (method === 'PATCH' && /^\/communities\/[^/]+$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
@@ -1798,6 +1806,10 @@ async function requestOrJoinCommunity(env, identity, communityId, ctx) {
   const existingMember = await fsGet(env, 'communityMembers', memberId);
   if (existingMember) return { status: 'joined', alreadyMember: true, communityId };
 
+  if (community.companyId) {
+    throw httpError(403, 'Esta é uma comunidade de empresa. Somente a empresa pode convidar colaboradores.');
+  }
+
   if (publicCommunity(community)) {
     const membership = {
       id: memberId,
@@ -2357,12 +2369,67 @@ async function deleteJob(env, identity, jobId, ctx) {
   return { ok: true, deletedJobId: jobId };
 }
 
-async function getCommunityPosts(env, identity, communityId) {
+async function canManageCommunityStructure(env, identity, community) {
+  if (community.createdBy === identity.uid) return true;
+  const membership = await fsGet(env, 'communityMembers', `${community.id}_${identity.uid}`);
+  if (membership && ['owner', 'moderator', 'admin'].includes(membership.role)) return true;
+  if (community.companyId) {
+    const companyMembership = await fsGet(env, 'companyMembers', `${community.companyId}_${identity.uid}`);
+    if (companyMembership?.status === 'active' && ['owner', 'admin'].includes(companyMembership.role)) return true;
+  }
+  return false;
+}
+
+async function getCommunityTopics(env, identity, communityId) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  await requireCommunityAccess(env, identity.uid, community);
+  const topics = await fsWhere(env, 'communityTopics', 'communityId', communityId, 250);
+  topics.sort((a,b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+  return {
+    community: communityView(community),
+    kind: community.companyId ? 'sector' : 'topic',
+    topics
+  };
+}
+
+async function createCommunityTopic(env, identity, communityId, body) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  if (!(await canManageCommunityStructure(env, identity, community))) {
+    throw httpError(403, community.companyId ? 'Somente administradores podem criar setores.' : 'Somente o dono ou moderadores podem criar assuntos.');
+  }
+
+  const name = clean(body?.name, 80);
+  const description = clean(body?.description || '', 220);
+  if (!name) throw httpError(400, community.companyId ? 'Informe o nome do setor.' : 'Informe o nome do assunto.');
+
+  const existing = await fsWhere(env, 'communityTopics', 'communityId', communityId, 250);
+  if (existing.some(item => String(item.name || '').trim().toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) {
+    throw httpError(409, community.companyId ? 'Já existe um setor com este nome.' : 'Já existe um assunto com este nome.');
+  }
+
+  const topicId = id();
+  const topic = {
+    id: topicId,
+    communityId,
+    companyId: community.companyId || '',
+    name,
+    description,
+    kind: community.companyId ? 'sector' : 'topic',
+    createdBy: identity.uid,
+    createdAt: nowIso()
+  };
+  await fsPut(env, 'communityTopics', topicId, topic);
+  return { topic };
+}
+
+async function getCommunityPosts(env, identity, communityId, topicId = '') {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
   await requireCommunityAccess(env, identity.uid, community);
 
   let posts = await fsWhere(env, 'posts', 'communityId', communityId, 120);
   posts = posts.filter(p => p.scope === 'community');
+  const normalizedTopicId = clean(topicId, 150);
+  if (normalizedTopicId) posts = posts.filter(post => post.topicId === normalizedTopicId);
 
   const reactions = await fsWhere(env, 'reactions', 'uid', identity.uid, 250);
   const likedIds = new Set(reactions.map(r => r.postId));
@@ -2615,8 +2682,10 @@ async function createPost(env, identity, body, ctx) {
 
   const companyId = body.companyId ? clean(body.companyId, 120) : null;
   const communityId = body.communityId ? clean(body.communityId, 120) : null;
+  const topicId = body.topicId ? clean(body.topicId, 120) : '';
   let company = null;
   let community = null;
+  let topic = null;
 
   if (scope !== 'world') {
     if (!companyId) throw httpError(400, 'Empresa obrigatória.');
@@ -2629,6 +2698,10 @@ async function createPost(env, identity, body, ctx) {
     community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
     if (community.companyId !== companyId) throw httpError(400, 'Comunidade inválida.');
     await requireCommunityMember(env, identity.uid, communityId);
+    if (topicId) {
+      topic = await fsGetRequired(env, 'communityTopics', topicId, 'Assunto não encontrado.');
+      if (topic.communityId !== communityId) throw httpError(400, 'Assunto inválido para esta comunidade.');
+    }
   }
 
   if (type === 'announcement') {
@@ -2706,6 +2779,8 @@ async function createPost(env, identity, body, ctx) {
     communityId: communityId || '',
     communityName: community?.name || '',
     communityVisibility: community ? normalizedCommunityVisibility(community.visibility) : '',
+    topicId: topic?.id || '',
+    topicName: topic?.name || '',
     type,
     text,
     title: type === 'announcement' || type === 'event' ? title : '',
