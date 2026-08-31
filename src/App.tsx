@@ -61,6 +61,19 @@ function errorMessage(error: unknown) {
   return "Não foi possível concluir esta ação.";
 }
 
+function CommunityImage({ community, large = false }: { community: Community; large?: boolean }) {
+  const [src,setSrc]=useState("");
+  useEffect(()=>{
+    let active=true;
+    if(!community.avatarMediaId){ setSrc(""); return; }
+    mediaBlobUrl(community.avatarMediaId).then(url=>{if(active)setSrc(url);}).catch(()=>{if(active)setSrc("");});
+    return()=>{active=false;};
+  },[community.avatarMediaId]);
+  return src
+    ? <img className={`community-avatar community-avatar-image ${large ? "large" : ""}`} src={src} alt="" />
+    : <div className={`community-avatar ${large ? "large" : ""}`}>{community.name.slice(0,2).toUpperCase()}</div>;
+}
+
 function communityVisibility(community?: Pick<Community, "visibility"> | null): "public" | "private" {
   return community?.visibility === "public" ? "public" : "private";
 }
@@ -1651,6 +1664,7 @@ function CommunitiesPage({
   const [selectedTopicId, setSelectedTopicId] = useState("");
   const [topicCreateOpen, setTopicCreateOpen] = useState(false);
   const [topicBusy, setTopicBusy] = useState(false);
+  const [communityImageBusy,setCommunityImageBusy]=useState(false);
   const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
 
@@ -1805,6 +1819,32 @@ function CommunitiesPage({
     if (selectedCommunityId && !membersLoaded) void loadCommunityMembers(selectedCommunityId);
   };
 
+  const uploadCommunityImage=async(communityId:string,file:File)=>{
+    if(file.size>5*1024*1024)throw new Error("A foto da comunidade pode ter no máximo 5 MB.");
+    const qs=new URLSearchParams({scope:"community_avatar",communityId,name:file.name});
+    const uploaded=await api<{media:{id:string}}>(`/media/upload?${qs}`,{
+      method:"POST",
+      headers:{"Content-Type":file.type||"image/jpeg","X-File-Name":file.name},
+      body:file
+    });
+    await api(`/communities/${encodeURIComponent(communityId)}`,{
+      method:"PATCH",
+      body:JSON.stringify({avatarMediaId:uploaded.media.id})
+    });
+    return uploaded.media.id;
+  };
+
+  const changeCommunityImage=async(file:File)=>{
+    if(!selectedCommunityId||communityImageBusy)return;
+    setCommunityImageBusy(true);
+    try{
+      await uploadCommunityImage(selectedCommunityId,file);
+      showToast("Foto da comunidade atualizada.");
+      await refresh();
+    }catch(error){showToast(errorMessage(error));}
+    finally{setCommunityImageBusy(false);}
+  };
+
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
@@ -1819,6 +1859,10 @@ function CommunitiesPage({
           visibility: fd.get("visibility")
         })
       });
+      const photo=fd.get("photo");
+      if(photo instanceof File&&photo.size){
+        await uploadCommunityImage(result.community.id,photo);
+      }
       setCreateOpen(false);
       showToast("Comunidade criada.");
       await refresh();
@@ -2013,7 +2057,7 @@ function CommunitiesPage({
             <b>{memberCount}</b>
           </button>
           <div className="community-detail-title">
-            <div className="community-avatar large">{selectedCommunity.name.slice(0, 2).toUpperCase()}</div>
+            <CommunityImage community={selectedCommunity} large />
             <div>
               <div className="community-detail-name-line"><h2>{selectedCommunity.name}</h2>{selectedCommunity.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {selectedCommunity.officialLabel || "Oficial Uorqui"}</span>}</div>
               <p>{selectedCommunity.description || (communityVisibility(selectedCommunity) === "public" ? "Comunidade pública." : "Comunidade privada.")}</p>
@@ -2024,6 +2068,12 @@ function CommunitiesPage({
             </div>
           </div>
           <div className="community-detail-actions">
+            {(data.canAdmin || selectedCommunity.createdBy === data.me.uid) && (
+              <label className="btn secondary small community-image-upload">
+                <Camera size={15}/> {communityImageBusy ? "Enviando…" : "Alterar foto"}
+                <input hidden type="file" accept="image/jpeg,image/png,image/webp" disabled={communityImageBusy} onChange={e=>{const file=e.target.files?.[0];if(file)void changeCommunityImage(file);e.currentTarget.value="";}}/>
+              </label>
+            )}
             {isJoinedCommunity(selectedCommunity.id) ? (
               <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
             ) : (
@@ -2120,7 +2170,7 @@ function CommunitiesPage({
           return (
             <article className="community-card community-link" key={community.id}>
               <button className="community-card-open" onClick={() => onSelectCommunity(community.id)}>
-                <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
+                <CommunityImage community={community} />
                 <div>
                   <div className="community-name-line"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {community.officialLabel || "Oficial Uorqui"}</span>}</div>
                   <p>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública." : "Comunidade privada.")}</p>
@@ -2161,6 +2211,7 @@ function CommunitiesPage({
         <form className="stack-form" onSubmit={create}>
           <label><span>Nome</span><input name="name" required maxLength={90} placeholder="Ex.: Assistência Técnica" /></label>
           <label><span>Descrição</span><textarea name="description" maxLength={280} rows={3} placeholder="Que assuntos ficam aqui?" /></label>
+          <label><span>Foto da comunidade</span><input name="photo" type="file" accept="image/jpeg,image/png,image/webp" /></label>
           <label>
             <span>Visibilidade</span>
             <select name="visibility" defaultValue="public">
@@ -2309,7 +2360,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
                 history.pushState({}, "", `${location.pathname}?${params.toString()}`);
                 window.dispatchEvent(new PopStateEvent("popstate"));
               }}>
-                <span className="community-avatar">{community.name.slice(0,2).toUpperCase()}</span>
+                <CommunityImage community={community} />
                 <div className="discover-community-name"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={10}/> Oficial</span>}</div>
                 <small>{community.verifiedCompany ? "Empresa verificada" : community.description || "Comunidade pública"}</small>
               </button>
@@ -3050,7 +3101,7 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
         <p className="admin-community-help">Abra uma comunidade para visualizar todos os colaboradores e adicionar ou remover participantes.</p>
         {data.allCompanyCommunities.map((community) => (
           <div className="admin-community-row" key={community.id}>
-            <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
+            <CommunityImage community={community} />
             <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública" : "Comunidade privada")} · {community.memberCount || 0} membros</small></div>
             <select
               className={`community-visibility-select ${communityVisibilityOverrides[community.id] || communityVisibility(community)}`}
@@ -3739,7 +3790,7 @@ function CompaniesPage({
                 <div className="company-summary-communities">
                   {company.communities.map((community) => (
                     <div className="company-summary-community" key={community.id}>
-                      <div className="community-avatar">{community.name.slice(0, 2).toUpperCase()}</div>
+                      <CommunityImage community={community} />
                       <div className="ellipsis"><strong>{community.name}</strong><small>{community.description || "Comunidade privada"}{typeof community.memberCount === "number" ? ` · ${community.memberCount} membros` : ""}</small></div>
                     </div>
                   ))}
