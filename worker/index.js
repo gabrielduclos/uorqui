@@ -4250,7 +4250,7 @@ async function sendDirectMessage(env, identity, targetUid, body, ctx) {
     };
   } else if (conversation.status === 'pending' && conversation.requestedBy === identity.uid) {
     const existingMessages = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 20).catch(() => []);
-    if (existingMessages.length) throw httpError(409, 'Aguarde a pessoa aceitar sua solicitação de conversa.');
+    if (existingMessages.length) throw httpError(409, 'Você já enviou uma solicitação de mensagem para esta pessoa.');
   }
 
   const text = clean(body.text || '', 4000);
