@@ -3330,31 +3330,35 @@ function SuperadminPage({
         </div>
         <div className="superadmin-head-actions">
           {onProfile && <button className="btn secondary small" onClick={onProfile}>Perfil</button>}
-          <button className="btn secondary small" disabled={Boolean(aiBusy)} onClick={() => void seedAiCommunities()}>
-            {aiBusy === "seed" ? "Criando…" : "Garantir comunidades"}
-          </button>
-          <button className="btn small" disabled={Boolean(aiBusy)} onClick={() => void publishAiNow()}>
-            {aiBusy === "publish" ? "Publicando…" : "Publicar agentes agora"}
-          </button>
           <button className="btn secondary small" disabled={loadingSuperadmin} onClick={load}>Atualizar</button>
         </div>
       </div>
 
-      {loadingSuperadmin && !metrics && <div className="loading-line">Carregando métricas…</div>}
-
-      {aiStatus && (
-        <section className="panel-card superadmin-ai-panel">
-          <div className="superadmin-ai-head">
-            <div>
-              <span className="superadmin-kicker"><Crown size={14}/> Equipe Uorqui · IA</span>
-              <h3>Comunidades oficiais e publicações</h3>
-              <p className="muted">Uma publicação por comunidade por dia. O disparo manual respeita a trava diária e não cria duplicados.</p>
-            </div>
-            <div className="superadmin-ai-summary">
-              <strong>{aiStatus.postsToday}/{aiStatus.totalAgents}</strong>
-              <span>publicadas hoje</span>
-            </div>
+      <section className="panel-card superadmin-ai-panel">
+        <div className="superadmin-ai-head">
+          <div>
+            <span className="superadmin-kicker"><Crown size={14}/> Equipe Uorqui · IA</span>
+            <h3>Comunidades oficiais e publicações</h3>
+            <p className="muted">Uma publicação por comunidade por dia. O disparo manual respeita a trava diária e não cria duplicados.</p>
           </div>
+          <div className="superadmin-ai-summary">
+            <strong>{aiStatus ? `${aiStatus.postsToday}/${aiStatus.totalAgents}` : "—"}</strong>
+            <span>publicadas hoje</span>
+          </div>
+        </div>
+
+        <div className="superadmin-ai-mobile-actions">
+          <button className="btn secondary" disabled={Boolean(aiBusy)} onClick={() => void seedAiCommunities()}>
+            {aiBusy === "seed" ? "Criando…" : "Garantir comunidades"}
+          </button>
+          <button className="btn" disabled={Boolean(aiBusy)} onClick={() => void publishAiNow()}>
+            {aiBusy === "publish" ? "Publicando…" : "Publicar agentes agora"}
+          </button>
+        </div>
+
+        {!aiStatus ? (
+          <div className="loading-line superadmin-ai-loading">Carregando agentes…</div>
+        ) : (
           <div className="superadmin-ai-grid">
             {aiStatus.agents.map(agent => (
               <div className="superadmin-ai-row" key={agent.key}>
@@ -3367,8 +3371,10 @@ function SuperadminPage({
               </div>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
+
+      {loadingSuperadmin && !metrics && <div className="loading-line">Carregando métricas…</div>}
 
       {metrics && (
         <>
