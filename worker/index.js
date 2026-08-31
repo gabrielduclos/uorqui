@@ -144,6 +144,16 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'GET' && path === '/superadmin/overview') {
     return json(await getSuperadminOverview(env, identity));
   }
+  if (method === 'GET' && path === '/creator/dashboard') {
+    return json(await getCreatorDashboard(env, identity));
+  }
+  if (method === 'POST' && path === '/creator/activate') {
+    return json(await activateCreator(env, identity));
+  }
+  if (method === 'POST' && /^\/creator\/communities\/[^/]+\/activate$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[3]);
+    return json(await activateCreatorCommunity(env, identity, communityId, await readJson(request)));
+  }
   if (method === 'PATCH' && /^\/superadmin\/companies\/[^/]+\/premium$/.test(path)) {
     const companyId = decodeURIComponent(path.split('/')[3]);
     return json(await updateSuperadminPremium(env, identity, companyId, await readJson(request)));
@@ -455,6 +465,26 @@ function premiumMonthlyPrice(env) {
   return Number.isFinite(value) && value > 0 ? value : 49.90;
 }
 
+function creatorPlatformFeePercent(env) {
+  const value = Number(env.CREATOR_PLATFORM_FEE_PERCENT || 25);
+  if (!Number.isFinite(value)) return 25;
+  return Math.max(0, Math.min(100, value));
+}
+
+function moneyNumber(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function paidCreatorTransaction(item) {
+  return ['paid', 'received', 'settled', 'confirmed'].includes(String(item?.status || '').toLowerCase());
+}
+
+function completedCreatorPayout(item) {
+  return ['paid', 'completed', 'settled', 'transferred'].includes(String(item?.status || '').toLowerCase());
+}
+
+
 function hasPremiumAccess(company) {
   if (!company) return false;
 
@@ -580,16 +610,187 @@ async function getCompaniesSummary(env, identity) {
   return { companies };
 }
 
+async function activateCreator(env, identity) {
+  const user = await ensureUser(env, identity);
+  const now = nowIso();
+  const profile = await fsGet(env, 'creatorProfiles', identity.uid);
+  const updatedProfile = {
+    ...(profile || {}),
+    id: identity.uid,
+    uid: identity.uid,
+    enabled: true,
+    platformFeePercent: creatorPlatformFeePercent(env),
+    createdAt: profile?.createdAt || now,
+    updatedAt: now
+  };
+  await fsPut(env, 'creatorProfiles', identity.uid, updatedProfile);
+  await fsPut(env, 'users', identity.uid, {
+    ...user,
+    creatorEnabled: true,
+    creatorActivatedAt: user.creatorActivatedAt || now,
+    updatedAt: now
+  });
+  return { ok: true, creator: updatedProfile };
+}
+
+async function creatorOwnedCommunities(env, uid) {
+  const communities = await fsListCollection(env, 'communities', 5000);
+  return communities
+    .filter(community => !community.companyId && community.createdBy === uid && community.archived !== true)
+    .sort((a,b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+}
+
+async function activateCreatorCommunity(env, identity, communityId, body) {
+  await activateCreator(env, identity);
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  if (community.companyId) throw httpError(400, 'Uma comunidade de empresa não pode ser convertida em comunidade de Criador.');
+  if (community.createdBy !== identity.uid) throw httpError(403, 'Somente o dono da comunidade pode ativar o modo Criador.');
+
+  const monthlyPrice = Number(body.monthlyPrice);
+  if (!Number.isFinite(monthlyPrice) || monthlyPrice < 4.90 || monthlyPrice > 999.90) {
+    throw httpError(400, 'Defina um valor mensal entre R$ 4,90 e R$ 999,90.');
+  }
+
+  const now = nowIso();
+  const creatorCommunity = {
+    id: communityId,
+    communityId,
+    creatorUid: identity.uid,
+    monthlyPrice: Number(monthlyPrice.toFixed(2)),
+    platformFeePercent: creatorPlatformFeePercent(env),
+    status: 'active',
+    createdAt: community.creatorActivatedAt || now,
+    updatedAt: now
+  };
+  await fsPut(env, 'creatorCommunities', communityId, creatorCommunity);
+  await fsPut(env, 'communities', communityId, {
+    ...community,
+    creatorMode: true,
+    creatorUid: identity.uid,
+    creatorMonthlyPrice: creatorCommunity.monthlyPrice,
+    creatorPlatformFeePercent: creatorCommunity.platformFeePercent,
+    creatorActivatedAt: community.creatorActivatedAt || now,
+    updatedAt: now
+  });
+
+  return { ok: true, community: creatorCommunity };
+}
+
+async function getCreatorDashboard(env, identity) {
+  const [user, profile, ownedCommunities, subscriptions, transactions, payouts, creatorCommunities] = await Promise.all([
+    fsGetRequired(env, 'users', identity.uid, 'Usuário não encontrado.'),
+    fsGet(env, 'creatorProfiles', identity.uid),
+    creatorOwnedCommunities(env, identity.uid),
+    fsWhere(env, 'creatorSubscriptions', 'creatorUid', identity.uid, 5000).catch(() => []),
+    fsWhere(env, 'creatorTransactions', 'creatorUid', identity.uid, 10000).catch(() => []),
+    fsWhere(env, 'creatorPayouts', 'creatorUid', identity.uid, 1000).catch(() => []),
+    fsWhere(env, 'creatorCommunities', 'creatorUid', identity.uid, 500).catch(() => [])
+  ]);
+
+  const enabled = Boolean(profile?.enabled || user.creatorEnabled);
+  const activeSubscriptions = subscriptions.filter(item => String(item.status || '').toLowerCase() === 'active');
+  const paidTransactions = transactions.filter(paidCreatorTransaction);
+
+  let grossRevenue = 0;
+  let platformFees = 0;
+  let creatorNetRevenue = 0;
+
+  for (const item of paidTransactions) {
+    const gross = moneyNumber(item.grossAmount ?? item.amount ?? item.value);
+    const fee = item.platformFeeAmount !== undefined
+      ? moneyNumber(item.platformFeeAmount)
+      : gross * (moneyNumber(item.platformFeePercent || creatorPlatformFeePercent(env)) / 100);
+    const net = item.creatorNetAmount !== undefined
+      ? moneyNumber(item.creatorNetAmount)
+      : Math.max(0, gross - fee);
+
+    grossRevenue += gross;
+    platformFees += fee;
+    creatorNetRevenue += net;
+  }
+
+  const completedPayouts = payouts.filter(completedCreatorPayout);
+  const totalPaidOut = completedPayouts.reduce((sum, item) =>
+    sum + moneyNumber(item.amount ?? item.netAmount ?? item.value), 0);
+  const pendingBalance = Math.max(0, creatorNetRevenue - totalPaidOut);
+
+  const creatorCommunityMap = new Map(creatorCommunities.map(item => [item.communityId || item.id, item]));
+  const communities = ownedCommunities.map(community => {
+    const creator = creatorCommunityMap.get(community.id);
+    const activeCount = activeSubscriptions.filter(item => item.communityId === community.id).length;
+    return {
+      id: community.id,
+      name: community.name || 'Comunidade',
+      description: community.description || '',
+      visibility: normalizedCommunityVisibility(community.visibility),
+      creatorEnabled: Boolean(creator?.status === 'active' || community.creatorMode),
+      monthlyPrice: moneyNumber(creator?.monthlyPrice ?? community.creatorMonthlyPrice),
+      activeSubscribers: activeCount
+    };
+  });
+
+  const recentSubscriptions = subscriptions
+    .sort(byCreatedDesc)
+    .slice(0, 50)
+    .map(item => ({
+      id: item.id,
+      communityId: item.communityId || '',
+      subscriberUid: item.subscriberUid || '',
+      subscriberName: item.subscriberName || '',
+      status: item.status || '',
+      monthlyPrice: moneyNumber(item.monthlyPrice ?? item.amount),
+      createdAt: item.createdAt || '',
+      currentPeriodEnd: item.currentPeriodEnd || item.renewalAt || ''
+    }));
+
+  const payoutRows = payouts
+    .sort(byCreatedDesc)
+    .slice(0, 50)
+    .map(item => ({
+      id: item.id,
+      amount: moneyNumber(item.amount ?? item.netAmount ?? item.value),
+      status: item.status || '',
+      requestedAt: item.requestedAt || item.createdAt || '',
+      paidAt: item.paidAt || item.completedAt || ''
+    }));
+
+  return {
+    creator: {
+      enabled,
+      platformFeePercent: moneyNumber(profile?.platformFeePercent || creatorPlatformFeePercent(env)),
+      createdAt: profile?.createdAt || user.creatorActivatedAt || ''
+    },
+    metrics: {
+      activeSubscribers: activeSubscriptions.length,
+      totalSubscriptions: subscriptions.length,
+      grossRevenue: Number(grossRevenue.toFixed(2)),
+      platformFees: Number(platformFees.toFixed(2)),
+      netRevenue: Number(creatorNetRevenue.toFixed(2)),
+      pendingBalance: Number(pendingBalance.toFixed(2)),
+      totalPaidOut: Number(totalPaidOut.toFixed(2)),
+      activeCommunities: communities.filter(item => item.creatorEnabled).length
+    },
+    communities,
+    subscriptions: recentSubscriptions,
+    payouts: payoutRows
+  };
+}
+
 async function getSuperadminOverview(env, identity) {
   requireSuperadmin(env, identity);
 
-  const [users, companies, memberships, communities, posts, comments] = await Promise.all([
+  const [users, companies, memberships, communities, posts, comments, creatorProfiles, creatorCommunities, creatorSubscriptions, creatorTransactions, creatorPayouts] = await Promise.all([
     fsListCollection(env, 'users', 5000),
     fsListCollection(env, 'companies', 2500),
     fsListCollection(env, 'companyMembers', 10000),
     fsListCollection(env, 'communities', 10000),
     fsListCollection(env, 'posts', 15000),
-    fsListCollection(env, 'comments', 20000)
+    fsListCollection(env, 'comments', 20000),
+    fsListCollection(env, 'creatorProfiles', 5000),
+    fsListCollection(env, 'creatorCommunities', 5000),
+    fsListCollection(env, 'creatorSubscriptions', 15000),
+    fsListCollection(env, 'creatorTransactions', 30000),
+    fsListCollection(env, 'creatorPayouts', 10000)
   ]);
 
   const activeMemberships = memberships.filter(item => item.status === 'active');
@@ -655,6 +856,59 @@ async function getSuperadminOverview(env, identity) {
     };
   }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
+  const enabledCreators = creatorProfiles.filter(item => item.enabled !== false);
+  const activeCreatorSubscriptions = creatorSubscriptions.filter(item => String(item.status || '').toLowerCase() === 'active');
+  const paidCreatorTransactions = creatorTransactions.filter(paidCreatorTransaction);
+
+  let creatorGrossRevenue = 0;
+  let creatorPlatformRevenue = 0;
+  let creatorNetRevenue = 0;
+  for (const item of paidCreatorTransactions) {
+    const gross = moneyNumber(item.grossAmount ?? item.amount ?? item.value);
+    const fee = item.platformFeeAmount !== undefined
+      ? moneyNumber(item.platformFeeAmount)
+      : gross * (moneyNumber(item.platformFeePercent || creatorPlatformFeePercent(env)) / 100);
+    creatorGrossRevenue += gross;
+    creatorPlatformRevenue += fee;
+    creatorNetRevenue += item.creatorNetAmount !== undefined
+      ? moneyNumber(item.creatorNetAmount)
+      : Math.max(0, gross - fee);
+  }
+
+  const creatorPaidOut = creatorPayouts
+    .filter(completedCreatorPayout)
+    .reduce((sum, item) => sum + moneyNumber(item.amount ?? item.netAmount ?? item.value), 0);
+
+  const subscriptionsByCreator = {};
+  const grossByCreator = {};
+  const feeByCreator = {};
+  for (const subscription of activeCreatorSubscriptions) {
+    subscriptionsByCreator[subscription.creatorUid] = Number(subscriptionsByCreator[subscription.creatorUid] || 0) + 1;
+  }
+  for (const transaction of paidCreatorTransactions) {
+    const gross = moneyNumber(transaction.grossAmount ?? transaction.amount ?? transaction.value);
+    const fee = transaction.platformFeeAmount !== undefined
+      ? moneyNumber(transaction.platformFeeAmount)
+      : gross * (moneyNumber(transaction.platformFeePercent || creatorPlatformFeePercent(env)) / 100);
+    grossByCreator[transaction.creatorUid] = moneyNumber(grossByCreator[transaction.creatorUid]) + gross;
+    feeByCreator[transaction.creatorUid] = moneyNumber(feeByCreator[transaction.creatorUid]) + fee;
+  }
+
+  const creatorRows = enabledCreators.map(profile => {
+    const uid = profile.uid || profile.id;
+    const user = userByUid.get(uid) || {};
+    return {
+      uid,
+      displayName: user.displayName || 'Criador',
+      email: user.email || '',
+      activeSubscribers: Number(subscriptionsByCreator[uid] || 0),
+      grossRevenue: Number(moneyNumber(grossByCreator[uid]).toFixed(2)),
+      platformRevenue: Number(moneyNumber(feeByCreator[uid]).toFixed(2)),
+      communityCount: creatorCommunities.filter(item => item.creatorUid === uid && item.status === 'active').length,
+      createdAt: profile.createdAt || user.creatorActivatedAt || ''
+    };
+  }).sort((a,b) => b.grossRevenue - a.grossRevenue || a.displayName.localeCompare(b.displayName, 'pt-BR'));
+
   return {
     metrics: {
       totalUsers: users.length,
@@ -673,9 +927,19 @@ async function getSuperadminOverview(env, identity) {
       comments30d: createdInLast30Days(comments),
       estimatedMonthlyRecurringRevenue:
         Number((paidPremiumCompanies * premiumMonthlyPrice(env)).toFixed(2)),
-      premiumMonthlyPrice: premiumMonthlyPrice(env)
+      premiumMonthlyPrice: premiumMonthlyPrice(env),
+      totalCreators: enabledCreators.length,
+      activeCreatorCommunities: creatorCommunities.filter(item => item.status === 'active').length,
+      activeCreatorSubscriptions: activeCreatorSubscriptions.length,
+      creatorGrossRevenue: Number(creatorGrossRevenue.toFixed(2)),
+      creatorPlatformRevenue: Number(creatorPlatformRevenue.toFixed(2)),
+      creatorNetRevenue: Number(creatorNetRevenue.toFixed(2)),
+      creatorPaidOut: Number(creatorPaidOut.toFixed(2)),
+      creatorPendingPayout: Number(Math.max(0, creatorNetRevenue - creatorPaidOut).toFixed(2)),
+      creatorPlatformFeePercent: creatorPlatformFeePercent(env)
     },
     companies: rows,
+    creators: creatorRows,
     generatedAt: nowIso()
   };
 }
