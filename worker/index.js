@@ -3843,13 +3843,23 @@ async function confirmRead(env, identity, postId) {
 
 async function acceptSolution(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
-  if (post.type !== 'question' || !post.companyId) {
-    throw httpError(400, 'Somente perguntas de empresa podem ter uma resposta aceita.');
+  if (post.type !== 'question' || post.scope === 'world') {
+    throw httpError(400, 'Somente perguntas de comunidades ou empresas podem ter uma resposta aceita.');
   }
 
+  await requirePostAccess(env, identity.uid, post);
+
   if (post.authorUid !== identity.uid) {
-    if (!post.companyId) throw httpError(403, 'Sem permissão.');
-    await requireCompanyAdmin(env, identity.uid, post.companyId);
+    if (post.companyId) {
+      await requireCompanyAdmin(env, identity.uid, post.companyId);
+    } else if (post.communityId) {
+      const community = await fsGetRequired(env, 'communities', post.communityId, 'Comunidade não encontrada.');
+      if (!(await canManageCommunityStructure(env, identity, community))) {
+        throw httpError(403, 'Somente o autor, dono ou moderadores da comunidade podem aceitar uma resposta.');
+      }
+    } else {
+      throw httpError(403, 'Sem permissão.');
+    }
   }
 
   const comment = await fsGetRequired(env, 'comments', clean(body.commentId, 120), 'Resposta não encontrada.');
@@ -3868,13 +3878,22 @@ async function acceptSolution(env, identity, postId, body, ctx) {
 
 async function setPostResolved(env, identity, postId, body, ctx) {
   const post = await fsGetRequired(env, 'posts', postId, 'Publicação não encontrada.');
-  if (post.type !== 'question' || !post.companyId) {
-    throw httpError(400, 'Somente perguntas de empresa podem ser marcadas como resolvidas.');
+  if (post.type !== 'question' || post.scope === 'world') {
+    throw httpError(400, 'Somente perguntas de comunidades ou empresas podem ser marcadas como resolvidas.');
   }
   await requirePostAccess(env, identity.uid, post);
 
   if (post.authorUid !== identity.uid) {
-    await requireCompanyAdmin(env, identity.uid, post.companyId);
+    if (post.companyId) {
+      await requireCompanyAdmin(env, identity.uid, post.companyId);
+    } else if (post.communityId) {
+      const community = await fsGetRequired(env, 'communities', post.communityId, 'Comunidade não encontrada.');
+      if (!(await canManageCommunityStructure(env, identity, community))) {
+        throw httpError(403, 'Somente o autor, dono ou moderadores da comunidade podem marcar esta pergunta como resolvida.');
+      }
+    } else {
+      throw httpError(403, 'Sem permissão.');
+    }
   }
 
   const resolved = body.resolved !== false;
