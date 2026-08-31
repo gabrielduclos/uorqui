@@ -4601,15 +4601,16 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
               )}
             </div>
           </form>
-          {selectedMessage&&<Modal title="Detalhes da mensagem" onClose={()=>!messageActionBusy&&setSelectedMessage(null)}>
-            <div className="message-details-panel">
-              <div><span>Enviada em</span><strong>{selectedMessage.createdAt?new Date(selectedMessage.createdAt).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"}):"—"}</strong></div>
-              <div><span>Status</span><strong>{selectedMessage.cancelledAt?"Cancelada":selectedMessage.senderUid===me.uid?(selectedMessage.readAt?"Lida":"Enviada"):"Recebida"}</strong></div>
-              {selectedMessage.senderUid===me.uid&&selectedMessage.readAt&&!selectedMessage.cancelledAt&&<div><span>Lida em</span><strong>{new Date(selectedMessage.readAt).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</strong></div>}
-              {selectedMessage.cancelledAt&&<div><span>Cancelada em</span><strong>{new Date(selectedMessage.cancelledAt).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</strong></div>}
-              {selectedMessage.senderUid===me.uid&&!selectedMessage.cancelledAt&&<button className="btn danger-confirm" disabled={messageActionBusy} onClick={()=>void cancelSentMessage(selectedMessage)}>{messageActionBusy?"Cancelando…":"Cancelar envio"}</button>}
+          {selectedMessage&&<>
+            <button className="message-details-backdrop" aria-label="Fechar detalhes" onClick={()=>!messageActionBusy&&setSelectedMessage(null)}/>
+            <div className={`message-details-popover ${selectedMessage.senderUid===me.uid?"mine":""}`}>
+              <button className="message-details-close" onClick={()=>!messageActionBusy&&setSelectedMessage(null)} aria-label="Fechar"><X size={13}/></button>
+              <div className="message-details-line"><span>Enviada</span><strong>{selectedMessage.createdAt?new Date(selectedMessage.createdAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—"}</strong></div>
+              <div className="message-details-line"><span>Status</span><strong>{selectedMessage.cancelledAt?"Cancelada":selectedMessage.senderUid===me.uid?(selectedMessage.readAt?"Lida":"Enviada"):"Recebida"}</strong></div>
+              {selectedMessage.senderUid===me.uid&&selectedMessage.readAt&&!selectedMessage.cancelledAt&&<div className="message-details-line"><span>Lida</span><strong>{new Date(selectedMessage.readAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</strong></div>}
+              {selectedMessage.senderUid===me.uid&&!selectedMessage.cancelledAt&&<button className="message-unsend-link" disabled={messageActionBusy} onClick={()=>void cancelSentMessage(selectedMessage)}>{messageActionBusy?"Cancelando…":"Cancelar envio"}</button>}
             </div>
-          </Modal>}
+          </>}
         </>}
       </section>
     </div>
