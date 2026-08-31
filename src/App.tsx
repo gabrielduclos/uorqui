@@ -1669,7 +1669,7 @@ function CommunitiesPage({
     || data.communities.find((community) => community.id === selectedCommunityId);
 
   const joinedCommunityIds = useMemo(() => new Set(data.communities.map((community) => community.id)), [data.communities]);
-  const isJoinedCommunity = (communityId: string) => joinedCommunityIds.has(communityId) || joinStatusByCommunity[communityId] === "joined";
+  const isJoinedCommunity = (communityId: string) => joinStatusByCommunity[communityId] === "left" ? false : joinedCommunityIds.has(communityId) || joinStatusByCommunity[communityId] === "joined";
 
   const joinCommunity = async (community: Community) => {
     if (joinBusyId) return;
@@ -1683,6 +1683,22 @@ function CommunitiesPage({
       } else {
         showToast("Solicitação enviada ao dono e aos administradores.");
       }
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setJoinBusyId("");
+    }
+  };
+
+  const leaveCommunity = async (community: Community) => {
+    if (joinBusyId) return;
+    if (!confirm(`Sair de “${community.name}”? Você deixará de participar desta comunidade e precisará entrar novamente se mudar de ideia.`)) return;
+    setJoinBusyId(community.id);
+    try {
+      await api(`/communities/${encodeURIComponent(community.id)}/join`, { method: "DELETE" });
+      setJoinStatusByCommunity((current) => ({ ...current, [community.id]: "left" }));
+      showToast(`Você saiu de ${community.name}.`);
+      await refresh();
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -2076,7 +2092,7 @@ function CommunitiesPage({
             )}
             {isJoinedCommunity(selectedCommunity.id) ? (
               <>
-                <button className="btn secondary small" disabled><Check size={16} /> Participando</button>
+                <button className="btn secondary small" disabled={joinBusyId===selectedCommunity.id} onClick={()=>void leaveCommunity(selectedCommunity)}><Check size={16} /> {joinBusyId===selectedCommunity.id?"Saindo…":"Participando"}</button>
                 <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
               </>
             ) : (
@@ -2188,8 +2204,8 @@ function CommunitiesPage({
                 <ChevronRight className="community-chevron" size={18} />
               </button>
               {joined ? (
-                <button className="btn secondary small community-join-card-button" disabled>
-                  <Check size={15} /> Participando
+                <button className="btn secondary small community-join-card-button" disabled={joinBusyId===community.id} onClick={()=>void leaveCommunity(community)}>
+                  <Check size={15} /> {joinBusyId===community.id?"Saindo…":"Participando"}
                 </button>
               ) : (
                 <button
@@ -4201,7 +4217,7 @@ type MessageConversation = {
   status: "pending" | "accepted"; requestedBy?: string; lastMessagePreview?: string; lastMessageAt?: string; unreadCount?: number;
 };
 type DirectMessage = {
-  id: string; senderUid: string; recipientUid: string; text?: string; createdAt?: string;
+  id: string; senderUid: string; recipientUid: string; text?: string; createdAt?: string; readAt?: string; cancelledAt?: string;
   attachments?: Array<{id:string;name?:string;contentType?:string;size?:number}>;
   sharedPost?: {id:string;authorName?:string;text?:string;scope?:string;companyId?:string} | null;
 };
@@ -4224,6 +4240,8 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   const [recordedAudio,setRecordedAudio]=useState<File|null>(null);
   const [recordedAudioUrl,setRecordedAudioUrl]=useState("");
   const [audioDuration,setAudioDuration]=useState(0);
+  const [selectedMessage,setSelectedMessage]=useState<DirectMessage|null>(null);
+  const [messageActionBusy,setMessageActionBusy]=useState(false);
   const mediaRecorderRef=useRef<MediaRecorder|null>(null);
   const mediaStreamRef=useRef<MediaStream|null>(null);
   const audioChunksRef=useRef<Blob[]>([]);
@@ -4465,6 +4483,19 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
     }catch(error){showToast(errorMessage(error));}
   };
 
+  const cancelSentMessage=async(message:DirectMessage)=>{
+    if(messageActionBusy||message.senderUid!==me.uid||message.cancelledAt||!targetUid)return;
+    if(!confirm("Cancelar o envio desta mensagem? Ela será substituída por “Mensagem cancelada” para todos na conversa."))return;
+    setMessageActionBusy(true);
+    try{
+      const result=await api<{message:DirectMessage}>(`/messages/${encodeURIComponent(targetUid)}/${encodeURIComponent(message.id)}`,{method:"DELETE"});
+      setMessages(current=>current.map(item=>item.id===message.id?result.message:item));
+      setSelectedMessage(result.message);
+      await loadConversations();
+      showToast("Envio cancelado.");
+    }catch(error){showToast(errorMessage(error));}finally{setMessageActionBusy(false);}
+  };
+
   const target=conversations.find(c=>c.targetUid===targetUid);
   return <section className="page-section messages-page">
     <div className="messages-layout">
@@ -4509,18 +4540,20 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
           <div className="message-scroll">
             {nextBefore&&<button className="text-button messages-more" onClick={()=>void loadMessages(targetUid,nextBefore)}>Mensagens anteriores</button>}
             {messages.map(message=><article key={message.id} className={`message-bubble-row ${message.senderUid===me.uid?"mine":""}`}>
-              <div className="message-bubble">
-                {message.text&&<p>{message.text}</p>}
-                {message.sharedPost&&<button className="message-shared-post" onClick={()=>window.dispatchEvent(new CustomEvent("uorqui:open-post-thread",{detail:{postId:message.sharedPost?.id,companyId:message.sharedPost?.companyId||""}}))}><Share2 size={15}/><span><strong>Publicação de {message.sharedPost.authorName||"usuário"}</strong><small>{message.sharedPost.text||"Abrir publicação"}</small></span></button>}
-                {(message.attachments||[]).map(att=>{
-                  const url=mediaUrls[att.id]||"";
-                  if(String(att.contentType||"").startsWith("image/"))return url?<img key={att.id} className="message-media-image" src={url} alt={att.name||"Foto"}/>:null;
-                  if(String(att.contentType||"").startsWith("video/"))return url?<video key={att.id} className="message-media-video" src={url} controls playsInline/>:null;
-                  if(String(att.contentType||"").startsWith("audio/"))return url?<audio key={att.id} src={url} controls/>:null;
-                  return url?<a key={att.id} href={url} download={att.name||"arquivo"}>{att.name||"Arquivo"}</a>:null;
-                })}
+              <button type="button" className="message-bubble message-bubble-button" onClick={()=>setSelectedMessage(message)}>
+                {message.cancelledAt ? <p className="message-cancelled-copy">Mensagem cancelada</p> : <>
+                  {message.text&&<p>{message.text}</p>}
+                  {message.sharedPost&&<span className="message-shared-post" onClick={event=>{event.stopPropagation();window.dispatchEvent(new CustomEvent("uorqui:open-post-thread",{detail:{postId:message.sharedPost?.id,companyId:message.sharedPost?.companyId||""}}));}}><Share2 size={15}/><span><strong>Publicação de {message.sharedPost.authorName||"usuário"}</strong><small>{message.sharedPost.text||"Abrir publicação"}</small></span></span>}
+                  {(message.attachments||[]).map(att=>{
+                    const url=mediaUrls[att.id]||"";
+                    if(String(att.contentType||"").startsWith("image/"))return url?<img key={att.id} className="message-media-image" src={url} alt={att.name||"Foto"} onClick={event=>event.stopPropagation()}/>:null;
+                    if(String(att.contentType||"").startsWith("video/"))return url?<video key={att.id} className="message-media-video" src={url} controls playsInline onClick={event=>event.stopPropagation()}/>:null;
+                    if(String(att.contentType||"").startsWith("audio/"))return url?<audio key={att.id} src={url} controls onClick={event=>event.stopPropagation()}/>:null;
+                    return url?<a key={att.id} href={url} download={att.name||"arquivo"} onClick={event=>event.stopPropagation()}>{att.name||"Arquivo"}</a>:null;
+                  })}
+                </>}
                 <time>{message.createdAt?new Date(message.createdAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):""}</time>
-              </div>
+              </button>
             </article>)}
           </div>
           <form className="message-composer" onSubmit={sendMessage}>
@@ -4568,6 +4601,15 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
               )}
             </div>
           </form>
+          {selectedMessage&&<Modal title="Detalhes da mensagem" onClose={()=>!messageActionBusy&&setSelectedMessage(null)}>
+            <div className="message-details-panel">
+              <div><span>Enviada em</span><strong>{selectedMessage.createdAt?new Date(selectedMessage.createdAt).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"}):"—"}</strong></div>
+              <div><span>Status</span><strong>{selectedMessage.cancelledAt?"Cancelada":selectedMessage.senderUid===me.uid?(selectedMessage.readAt?"Lida":"Enviada"):"Recebida"}</strong></div>
+              {selectedMessage.senderUid===me.uid&&selectedMessage.readAt&&!selectedMessage.cancelledAt&&<div><span>Lida em</span><strong>{new Date(selectedMessage.readAt).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</strong></div>}
+              {selectedMessage.cancelledAt&&<div><span>Cancelada em</span><strong>{new Date(selectedMessage.cancelledAt).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</strong></div>}
+              {selectedMessage.senderUid===me.uid&&!selectedMessage.cancelledAt&&<button className="btn danger-confirm" disabled={messageActionBusy} onClick={()=>void cancelSentMessage(selectedMessage)}>{messageActionBusy?"Cancelando…":"Cancelar envio"}</button>}
+            </div>
+          </Modal>}
         </>}
       </section>
     </div>
