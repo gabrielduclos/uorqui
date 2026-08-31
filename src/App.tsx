@@ -149,6 +149,16 @@ export default function App() {
   }, []);
 
 
+  useEffect(() => {
+    const goFeed = () => {
+      setView("home");
+      setHomeTab("for-you");
+      window.scrollTo({ top: 0, behavior: "auto" });
+    };
+    window.addEventListener("uorqui:go-feed", goFeed);
+    return () => window.removeEventListener("uorqui:go-feed", goFeed);
+  }, []);
+
   useEffect(() => onAuthStateChanged(auth, (next) => {
     setUser(next);
     setAuthReady(true);
@@ -777,7 +787,7 @@ export default function App() {
           <nav className="side-nav">
             <NavButton active={view === "home" || view === "jobs"} icon={<Home />} label="Rede" onClick={() => navigate("home")} />
             <NavButton active={view === "communities"} icon={<Users />} label="Comunidades" onClick={() => navigate("communities")} />
-            <NavButton active={view === "search"} icon={<Search />} label="Buscar" onClick={() => navigate("search")} />
+            <NavButton active={view === "search"} icon={<Compass />} label="Descobrir" onClick={() => navigate("search")} />
             {!!data.companies.length && data.canAdmin && <NavButton active={view === "admin" || view === "company-data"} icon={<Settings />} label="Administrar" onClick={() => navigate("admin")} />}
             <NavButton active={view === "plans"} icon={<Crown />} label="Planos" onClick={() => openPlans("manual")} />
             {data.isSuperadmin && <NavButton active={view === "superadmin"} icon={<ShieldCheck />} label="Superadmin" onClick={() => navigate("superadmin")} />}
@@ -1313,12 +1323,16 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
     if (tab === "communities") source = communityPosts;
     else if (tab === "world") source = data.worldPosts;
     else if (tab === "recent") source = mergeUnique([...data.worldPosts, ...data.posts]);
-    else source = mergeUnique([...communityPosts, ...data.worldPosts]);
+    else if (socialFollowingCount !== null) {
+      source = socialFeedPosts.length
+        ? socialFeedPosts
+        : mergeUnique([...data.worldPosts, ...communityPosts]);
+    } else source = mergeUnique([...communityPosts, ...data.worldPosts]);
 
     return source
       .filter((post) => !hiddenPostIds.has(post.id))
       .map((post) => postOverrides[post.id] || post);
-  }, [communityPosts, data.posts, data.worldPosts, tab, hiddenPostIds, postOverrides]);
+  }, [communityPosts, data.posts, data.worldPosts, tab, hiddenPostIds, postOverrides, socialFeedPosts, socialFollowingCount]);
 
   const like = async (post: Post) => {
     try {
@@ -1363,9 +1377,46 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
     }
   };
 
+  const [socialFeedPosts, setSocialFeedPosts] = useState<Post[]>([]);
+  const [socialFollowingCount, setSocialFollowingCount] = useState<number | null>(null);
+  const [suggestedCommunities, setSuggestedCommunities] = useState<Community[]>([]);
+
+  const loadSocialFeed = async () => {
+    try {
+      const result = await api<{ followingCount: number; posts: Post[]; communities: Community[] }>("/social/feed");
+      setSocialFeedPosts(result.posts || []);
+      setSocialFollowingCount(result.followingCount || 0);
+      setSuggestedCommunities(result.communities || []);
+      void prefetchPostMedia(result.posts || [], 16);
+    } catch {
+      // O bootstrap continua sendo fallback se a camada social falhar.
+    }
+  };
+
+  useEffect(() => {
+    void loadSocialFeed();
+  }, [data.worldPosts.length, data.posts.length]);
+
   return (
     <div className="social-home social-home-clean">
       <section className="feed social-feed social-feed-clean">
+        {tab === "for-you" && socialFollowingCount === 0 && !!suggestedCommunities.length && (
+          <div className="feed-community-suggestions">
+            <div className="feed-community-suggestions-head">
+              <strong>Comunidades abertas para descobrir</strong>
+              <button className="text-button" onClick={onOpenPeople}>Encontrar pessoas</button>
+            </div>
+            <div className="feed-community-suggestions-row">
+              {suggestedCommunities.slice(0, 8).map((community) => (
+                <button key={community.id} onClick={() => onOpenCommunity(community.id)}>
+                  <span>{community.name.slice(0,2).toUpperCase()}</span>
+                  <strong>{community.name}</strong>
+                  <small>{community.description || "Comunidade aberta"}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {posts.map((post) => (
           <PostCard
             key={post.id}
