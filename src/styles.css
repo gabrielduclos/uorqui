@@ -1232,3 +1232,55 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   .message-user-search input{font-size:16px!important}
   .message-user-results{top:93px}
 }
+
+/* Mensagens — compositor compacto em uma linha */
+.message-compose-line{
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr) 42px!important;
+  gap:8px!important;
+  align-items:center!important;
+}
+.message-media-actions{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  flex:none;
+}
+.message-media-action{
+  width:36px;
+  height:36px;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:inherit;
+  cursor:pointer;
+}
+.message-media-action:hover{background:#f2f2f3}
+.message-media-action svg{width:23px;height:23px}
+.message-compose-line textarea{
+  min-height:40px!important;
+  height:40px;
+  max-height:112px;
+  padding:9px 13px!important;
+  border-radius:20px!important;
+  font-size:14px;
+}
+.message-send{
+  width:40px!important;
+  height:40px!important;
+  min-width:40px!important;
+  display:grid!important;
+  place-items:center!important;
+}
+.message-media-hint{display:none!important}
+@media(max-width:520px){
+  .message-composer{padding:8px 8px calc(8px + env(safe-area-inset-bottom))!important}
+  .message-compose-line{grid-template-columns:auto minmax(0,1fr) 40px!important;gap:5px!important}
+  .message-media-actions{gap:0}
+  .message-media-action{width:32px;height:38px}
+  .message-media-action svg{width:22px;height:22px}
+  .message-compose-line textarea{font-size:16px!important;min-width:0!important}
+  .message-send{width:38px!important;height:38px!important;min-width:38px!important}
+}
