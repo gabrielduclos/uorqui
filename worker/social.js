@@ -61,27 +61,49 @@ async function routeSocial(request, env, identity, url) {
   return json({ error: 'Rota social não encontrada.' }, 404);
 }
 
-async function publicSocialPost(env, post, communityCache) {
+async function visibleSocialPost(env, identity, post, communityCache, membershipCache) {
   if (!post || post.deletedAt || post.deletedByAdmin) return false;
   if (post.scope === 'world') return true;
-  if (post.scope !== 'community' || !post.communityId) return false;
 
+  if (post.scope === 'company') {
+    if (!post.companyId) return false;
+    const key = `company:${post.companyId}`;
+    if (!membershipCache.has(key)) {
+      membershipCache.set(key, Boolean(await fsGet(env, 'companyMembers', `${post.companyId}_${identity.uid}`)));
+    }
+    return membershipCache.get(key);
+  }
+
+  if (post.scope !== 'community' || !post.communityId) return false;
   let community = communityCache.get(post.communityId);
   if (community === undefined) {
     community = await fsGet(env, 'communities', post.communityId);
     communityCache.set(post.communityId, community || null);
   }
   if (!community) return false;
-  // Conteúdo empresarial continua fechado, mesmo se uma comunidade antiga estiver marcada como pública.
-  if (community.companyId) return false;
-  return community.visibility === 'public';
+
+  // Comunidade social pública aparece no perfil/feed para qualquer usuário.
+  if (!community.companyId && community.visibility === 'public') return true;
+
+  const key = `community:${post.communityId}`;
+  if (!membershipCache.has(key)) {
+    membershipCache.set(key, Boolean(await fsGet(env, 'communityMembers', `${post.communityId}_${identity.uid}`)));
+  }
+  return membershipCache.get(key);
+}
+
+async function listAllPosts(env, pageSize = 300) {
+  const response = await fsRequest(env, `/documents/posts?pageSize=${pageSize}`);
+  return (response?.documents || []).map(fromDoc);
 }
 
 async function hydrateSocialPosts(env, identity, rows, limit = 60) {
   const communityCache = new Map();
+  const membershipCache = new Map();
   const visible = [];
-  for (const post of rows.sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))) {
-    if (await publicSocialPost(env, post, communityCache)) visible.push(post);
+
+  for (const post of [...rows].sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))) {
+    if (await visibleSocialPost(env, identity, post, communityCache, membershipCache)) visible.push(post);
     if (visible.length >= limit) break;
   }
 
@@ -100,29 +122,35 @@ async function hydrateSocialPosts(env, identity, rows, limit = 60) {
 }
 
 async function getSocialFeed(env, identity) {
-  const follows = await queryCollection(env, 'socialFollows', 'followerUid', identity.uid, 500);
+  const [follows, allPosts] = await Promise.all([
+    queryCollection(env, 'socialFollows', 'followerUid', identity.uid, 500).catch(() => []),
+    listAllPosts(env, 300)
+  ]);
   const followedUids = [...new Set(follows.map(item => item.targetUid).filter(Boolean))];
+  const followedSet = new Set(followedUids);
 
-  let rawPosts = [];
-  if (followedUids.length) {
-    const batches = await Promise.all(
-      followedUids.slice(0, 120).map(uid => queryCollection(env, 'posts', 'authorUid', uid, 30).catch(() => []))
-    );
-    rawPosts = batches.flat();
-  } else {
-    const response = await fsRequest(env, '/documents/posts?pageSize=160');
-    rawPosts = (response?.documents || []).map(fromDoc);
-  }
+  const followedRows = followedUids.length
+    ? allPosts.filter(post => followedSet.has(post.authorUid))
+    : [];
 
-  const posts = await hydrateSocialPosts(env, identity, rawPosts, followedUids.length ? 80 : 45);
+  const recommendedRows = allPosts.filter(post => !followedSet.has(post.authorUid));
+  const followedPosts = await hydrateSocialPosts(env, identity, followedRows, 80);
+  const recommendedPosts = await hydrateSocialPosts(env, identity, recommendedRows, 45);
 
-  const communitiesResponse = await fsRequest(env, '/documents/communities?pageSize=120');
+  // Mesmo seguindo alguém, nunca deixamos o feed vazio: conteúdo público relevante complementa.
+  const seen = new Set();
+  const posts = [...followedPosts, ...recommendedPosts]
+    .filter(post => !seen.has(post.id) && seen.add(post.id))
+    .slice(0, 80);
+
+  const communitiesResponse = await fsRequest(env, '/documents/communities?pageSize=160');
   const communities = (communitiesResponse?.documents || [])
     .map(fromDoc)
     .filter(community => !community.companyId && community.visibility === 'public' && community.archived !== true)
-    .slice(0, 20)
+    .slice(0, 24)
     .map(community => ({
       id: community.id,
+      companyId: '',
       name: community.name || 'Comunidade',
       description: community.description || '',
       visibility: 'public',
@@ -136,6 +164,7 @@ async function getSocialFeed(env, identity) {
     communities
   };
 }
+
 
 async function listPeople(env, identity, query) {
   const response = await fsRequest(env, '/documents/users?pageSize=80');
@@ -162,14 +191,15 @@ async function getPublicProfile(env, identity, targetUid) {
   const user = await fsGet(env, 'users', targetUid);
   if (!user) throw httpError(404, 'Perfil não encontrado.');
 
-  const [followingRows, followerRows, postRows, following] = await Promise.all([
-    queryCollection(env, 'socialFollows', 'followerUid', targetUid, 500),
-    queryCollection(env, 'socialFollows', 'targetUid', targetUid, 500),
-    queryCollection(env, 'posts', 'authorUid', targetUid, 80),
+  const [followingRows, followerRows, allPosts, following] = await Promise.all([
+    queryCollection(env, 'socialFollows', 'followerUid', targetUid, 500).catch(() => []),
+    queryCollection(env, 'socialFollows', 'targetUid', targetUid, 500).catch(() => []),
+    listAllPosts(env, 300),
     targetUid === identity.uid ? null : fsGet(env, 'socialFollows', followId(identity.uid, targetUid))
   ]);
 
-  const posts = await hydrateSocialPosts(env, identity, postRows, 50);
+  const authored = allPosts.filter(post => post.authorUid === targetUid);
+  const posts = await hydrateSocialPosts(env, identity, authored, 60);
 
   return {
     profile: publicUser(user),
