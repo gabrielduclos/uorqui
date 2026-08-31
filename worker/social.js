@@ -63,18 +63,42 @@ async function routeSocial(request, env, identity, url) {
 
 async function visibleSocialPost(env, identity, post, communityCache, membershipCache) {
   if (!post || post.deletedAt || post.deletedByAdmin) return false;
+
+  // Mundo é sempre público.
   if (post.scope === 'world') return true;
 
-  if (post.scope === 'company') {
-    if (!post.companyId) return false;
-    const key = `company:${post.companyId}`;
+  const getCompanyMembership = async (companyId) => {
+    if (!companyId) return null;
+    const key = `company:${companyId}`;
     if (!membershipCache.has(key)) {
-      membershipCache.set(key, Boolean(await fsGet(env, 'companyMembers', `${post.companyId}_${identity.uid}`)));
+      membershipCache.set(key, await fsGet(env, 'companyMembers', `${companyId}_${identity.uid}`));
     }
     return membershipCache.get(key);
+  };
+
+  const isCompanyAdmin = (membership) =>
+    Boolean(membership?.status === 'active' && ['owner', 'admin'].includes(membership.role));
+
+  const getSectorAccess = async (companyId, topicId, companyMembership) => {
+    if (!topicId) return true;
+    if (isCompanyAdmin(companyMembership)) return true;
+    const key = `sector:${topicId}`;
+    if (!membershipCache.has(key)) {
+      membershipCache.set(key, Boolean(await fsGet(env, 'communityTopicMembers', `${topicId}_${identity.uid}`)));
+    }
+    return Boolean(membershipCache.get(key));
+  };
+
+  // Publicação diretamente na empresa: precisa ser colaborador ativo;
+  // se estiver vinculada a um setor, também precisa participar dele.
+  if (post.scope === 'company') {
+    const companyMembership = await getCompanyMembership(post.companyId);
+    if (!companyMembership || companyMembership.status !== 'active') return false;
+    return getSectorAccess(post.companyId, post.topicId, companyMembership);
   }
 
   if (post.scope !== 'community' || !post.communityId) return false;
+
   let community = communityCache.get(post.communityId);
   if (community === undefined) {
     community = await fsGet(env, 'communities', post.communityId);
@@ -82,14 +106,25 @@ async function visibleSocialPost(env, identity, post, communityCache, membership
   }
   if (!community) return false;
 
-  // Comunidade social pública aparece no perfil/feed para qualquer usuário.
+  // Comunidade social comum e aberta: perfil pode mostrar para qualquer visitante.
   if (!community.companyId && community.visibility === 'public') return true;
 
-  const key = `community:${post.communityId}`;
-  if (!membershipCache.has(key)) {
-    membershipCache.set(key, Boolean(await fsGet(env, 'communityMembers', `${post.communityId}_${identity.uid}`)));
+  // Comunidade social privada: visitante precisa participar dela.
+  if (!community.companyId) {
+    const key = `community:${post.communityId}`;
+    if (!membershipCache.has(key)) {
+      membershipCache.set(key, Boolean(await fsGet(env, 'communityMembers', `${post.communityId}_${identity.uid}`)));
+    }
+    return Boolean(membershipCache.get(key));
   }
-  return membershipCache.get(key);
+
+  // Comunidade convertida em empresa: precisa pertencer à empresa.
+  const companyMembership = await getCompanyMembership(community.companyId);
+  if (!companyMembership || companyMembership.status !== 'active') return false;
+
+  // Conteúdo geral da empresa é visível aos colaboradores.
+  // Conteúdo de setor exige participação no setor; dono/admin sempre tem acesso.
+  return getSectorAccess(community.companyId, post.topicId, companyMembership);
 }
 
 async function listAllPosts(env, pageSize = 300) {
