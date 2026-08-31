@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { SocialLayer } from "./social";
 import "./comment-replies.css";
 import "./product-v121.css";
 import "./product-v121-enhancements.css";
@@ -19,11 +20,12 @@ import "./pull-refresh-v123";
 import "./reply-to-reply-v123";
 import "./login-logo-v123";
 
-const PRODUCT_VERSION = "1.2.23";
+const PRODUCT_VERSION = "social-preview-1";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />
+    <SocialLayer />
   </StrictMode>
 );
 
