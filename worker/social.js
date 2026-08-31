@@ -467,7 +467,7 @@ async function getGoogleAccessToken(env) {
   const header = b64urlJson({ alg: 'RS256', typ: 'JWT' });
   const claims = b64urlJson({
     iss: env.FIREBASE_SERVICE_ACCOUNT_EMAIL,
-    scope: 'https://www.googleapis.com/auth/datastore',
+    scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging',
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600
