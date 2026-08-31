@@ -1118,3 +1118,6 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .social-home-clean{gap:0}.social-feed-clean{padding-top:8px}
 .notification-request-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
 @media(max-width:760px){.topbar{transition-duration:.14s}.social-feed-clean{padding-top:4px}}
+
+.community-card-open{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;width:100%;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer}
+.community-join-card-button{margin:10px 0 0 50px}
