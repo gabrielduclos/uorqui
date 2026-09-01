@@ -3346,11 +3346,9 @@ function SuperadminPage({
       showToast(
         result.published
           ? `${result.published} publicação(ões) dos agentes criada(s).`
-          : result.postsToday === result.totalAgents
-            ? "As 10 comunidades já receberam a publicação de hoje."
-            : result.failed
-              ? `Falha em ${result.failed} agente(s): ${result.results?.find(item => item.status === "failed")?.error || "verifique o status no painel."}`
-              : "Nenhuma nova publicação foi gerada."
+          : result.failed
+            ? `Falha em ${result.failed} agente(s): ${result.results?.find(item => item.status === "failed")?.error || "verifique o status no painel."}`
+            : "Nenhuma nova publicação foi gerada nesta rodada."
       );
     } catch (error) {
       showToast(errorMessage(error));
@@ -3395,7 +3393,7 @@ function SuperadminPage({
           <div>
             <span className="superadmin-kicker"><Crown size={14}/> Equipe Uorqui · IA</span>
             <h3>Comunidades oficiais e publicações</h3>
-            <p className="muted">Os agentes misturam pautas recentes e conteúdo factual. O cron evita duplicação diária; o disparo manual cria uma nova rodada.</p>
+            <p className="muted">O automático publica no máximo 1 vez por comunidade ao dia. O disparo manual pelo Superadmin não tem limite diário e cria uma nova rodada a cada clique.</p>
           </div>
           <div className="superadmin-ai-summary">
             <strong>{aiStatus ? aiStatus.postsToday : "—"}</strong>
