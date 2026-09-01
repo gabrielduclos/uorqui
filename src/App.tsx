@@ -1665,7 +1665,9 @@ function CommunitiesPage({
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersLoaded, setMembersLoaded] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
-  const [memberAction, setMemberAction] = useState<{ uid: string; kind: "add" | "remove" } | null>(null);
+  const [inviteCandidates, setInviteCandidates] = useState<Array<{uid:string;displayName?:string;username?:string;email?:string;avatarMediaId?:string;alreadyMember?:boolean;invitePending?:boolean}>>([]);
+  const [inviteSearchBusy,setInviteSearchBusy]=useState(false);
+  const [memberAction, setMemberAction] = useState<{ uid: string; kind: "add" | "remove" | "invite" } | null>(null);
   const [membersPage, setMembersPage] = useState(false);
   const [joinBusyId, setJoinBusyId] = useState("");
   const [joinStatusByCommunity, setJoinStatusByCommunity] = useState<Record<string, string>>({});
@@ -1789,6 +1791,8 @@ function CommunitiesPage({
     setCommunityMembers([]);
     setMembersLoaded(false);
     setMemberSearch("");
+    setInviteCandidates([]);
+    setInviteSearchBusy(false);
     setMemberAction(null);
     setTopics([]);
     setSelectedTopicId("");
