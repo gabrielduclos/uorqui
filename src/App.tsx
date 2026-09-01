@@ -4412,7 +4412,7 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
 
   const startAudioRecording=async()=>{
     if(!targetUid||busy||audioSendingRef.current||recordingAudio)return;
-    if(conversation?.status==="pending"&&conversation.requestedBy===me.uid)return;
+
     if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined"){
       showToast("Este navegador não oferece gravação de áudio.");
       return;
