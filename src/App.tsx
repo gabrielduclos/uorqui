@@ -1674,6 +1674,7 @@ function CommunitiesPage({
   const [topicCreateOpen, setTopicCreateOpen] = useState(false);
   const [topicBusy, setTopicBusy] = useState(false);
   const [communityImageBusy,setCommunityImageBusy]=useState(false);
+  const [communityDeleteBusy,setCommunityDeleteBusy]=useState(false);
   const [createdCommunities,setCreatedCommunities]=useState<Community[]>([]);
   const selectedCommunity = createdCommunities.find((community) => community.id === selectedCommunityId)
     || data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
@@ -1881,6 +1882,37 @@ function CommunitiesPage({
       await refresh();
     }catch(error){showToast(errorMessage(error));}
     finally{setCommunityImageBusy(false);}
+  };
+
+  const deleteSelectedCommunity = async () => {
+    if (!selectedCommunity || communityDeleteBusy) return;
+    const social = !selectedCommunity.companyId;
+    const message = social
+      ? `Apagar definitivamente “${selectedCommunity.name}”? Todas as publicações, assuntos, membros e arquivos desta comunidade serão removidos. Esta ação não pode ser desfeita.`
+      : `Solicitar a exclusão de “${selectedCommunity.name}”? A exclusão seguirá o fluxo de aprovação dos administradores da empresa.`;
+    if (!confirm(message)) return;
+
+    setCommunityDeleteBusy(true);
+    try {
+      const result = await api<{ deleted?: boolean; pending?: boolean; requiredApprovals?: number }>(
+        `/communities/${encodeURIComponent(selectedCommunity.id)}`,
+        { method: "DELETE" }
+      );
+      if (result.deleted) {
+        setCreatedCommunities((current) => current.filter((community) => community.id !== selectedCommunity.id));
+        onBack();
+        showToast("Comunidade apagada.");
+        await refresh();
+      } else {
+        showToast(result.pending
+          ? `Solicitação enviada. ${result.requiredApprovals || 0} administrador(es) precisam aprovar.`
+          : "Solicitação de exclusão registrada.");
+      }
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setCommunityDeleteBusy(false);
+    }
   };
 
   const create = async (event: FormEvent<HTMLFormElement>) => {
@@ -2118,6 +2150,15 @@ function CommunitiesPage({
                 <Camera size={15}/> {communityImageBusy ? "Enviando…" : "Alterar foto"}
                 <input hidden type="file" accept="image/jpeg,image/png,image/webp" disabled={communityImageBusy} onChange={e=>{const file=e.target.files?.[0];if(file)void changeCommunityImage(file);e.currentTarget.value="";}}/>
               </label>
+            )}
+            {canManageSelectedCommunity && (
+              <button
+                className="btn secondary small community-delete-button"
+                disabled={communityDeleteBusy}
+                onClick={() => void deleteSelectedCommunity()}
+              >
+                <Trash2 size={15}/> {communityDeleteBusy ? "Apagando…" : "Apagar comunidade"}
+              </button>
             )}
             {isJoinedCommunity(selectedCommunity.id) ? (
               <>
