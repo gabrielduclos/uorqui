@@ -1557,7 +1557,7 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
             community={data.communityMap[post.communityId || ""]}
             onLike={like}
             onRead={read}
-            canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
+            canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world") || (data.isSuperadmin && post.authorAccountType === "uorqui_agent")}
             onDelete={remove}
             currentUid={data.me.uid}
             canAdmin={data.canAdmin}
@@ -1619,7 +1619,7 @@ function SharedPostPage({
         community={data.communityMap[post.communityId || ""]}
         onLike={like}
         onRead={read}
-        canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world")}
+        canDelete={post.authorUid === data.me.uid || (data.canAdmin && post.scope !== "world") || (data.isSuperadmin && post.authorAccountType === "uorqui_agent")}
         onDelete={remove}
         currentUid={data.me.uid}
         canAdmin={data.canAdmin}
@@ -2158,7 +2158,7 @@ function CommunitiesPage({
               community={selectedCommunity}
               onLike={like}
               onRead={read}
-              canDelete={post.authorUid === data.me.uid || data.canAdmin}
+              canDelete={post.authorUid === data.me.uid || data.canAdmin || (data.isSuperadmin && post.authorAccountType === "uorqui_agent")}
               onDelete={removePost}
               currentUid={data.me.uid}
               canAdmin={data.canAdmin}
@@ -2447,7 +2447,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
             community={data.communityMap[post.communityId || ""]}
             onLike={like}
             onRead={async () => {}}
-            canDelete={post.authorUid === data.me.uid}
+            canDelete={post.authorUid === data.me.uid || (data.isSuperadmin && post.authorAccountType === "uorqui_agent")}
             onDelete={async () => {}}
             currentUid={data.me.uid}
             canAdmin={false}
