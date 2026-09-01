@@ -2497,9 +2497,7 @@ async function createCommunity(env, identity, companyId, body) {
 
 async function updateCommunityVisibility(env, identity, communityId, body) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-  if (community.companyId) {
-    await requireCompanyAdmin(env, identity.uid, community.companyId);
-  } else if (!(await canManageCommunityStructure(env, identity, community))) {
+  if (!(await canManageCommunityStructure(env, identity, community))) {
     throw httpError(403, 'Somente o dono ou moderadores podem alterar esta comunidade.');
   }
 
@@ -2738,41 +2736,20 @@ async function respondCommunityJoinRequest(env, identity, requestId, body, ctx) 
 
 async function getCommunityMembers(env, identity, communityId) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-
-  if (community.companyId) {
-    const companyMember = await requireCompanyMember(env, identity.uid, community.companyId);
-    if (companyMember.role !== 'owner' && companyMember.role !== 'admin') {
-      await requireCommunityMember(env, identity.uid, community.id);
-    }
-  } else {
-    if (!publicCommunity(community)) await requireCommunityMember(env, identity.uid, community.id);
-  }
+  if (!publicCommunity(community)) await requireCommunityMember(env, identity.uid, community.id);
 
   const docs = await fsWhere(env, 'communityMembers', 'communityId', communityId, 250);
   const members = [];
   for (const membership of docs) {
     const user = await fsGet(env, 'users', membership.uid);
-    if (community.companyId) {
-      const companyMember = await fsGet(env, 'companyMembers', `${community.companyId}_${membership.uid}`);
-      if (!companyMember || companyMember.status !== 'active') continue;
-      members.push({
-        uid: membership.uid,
-        displayName: user?.displayName || companyMember.displayName || '',
-        email: user?.email || companyMember.email || '',
-        avatarMediaId: user?.avatarMediaId || '',
-        companyRole: companyMember.role || 'member',
-        communityRole: membership.role || 'member'
-      });
-    } else {
-      members.push({
-        uid: membership.uid,
-        displayName: user?.displayName || '',
-        email: user?.email || '',
-        avatarMediaId: user?.avatarMediaId || '',
-        companyRole: '',
-        communityRole: membership.role || 'member'
-      });
-    }
+    members.push({
+      uid: membership.uid,
+      displayName: user?.displayName || '',
+      email: user?.email || '',
+      avatarMediaId: user?.avatarMediaId || '',
+      companyRole: '',
+      communityRole: membership.role || 'member'
+    });
   }
   members.sort((a,b) => (a.displayName || a.email).localeCompare(b.displayName || b.email, 'pt-BR'));
   return { community: { ...communityView(community), memberCount: members.length }, members, count: members.length };
@@ -2780,57 +2757,30 @@ async function getCommunityMembers(env, identity, communityId) {
 
 async function addCommunityMember(env, identity, communityId, body, ctx) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-  await requireCompanyAdmin(env, identity.uid, community.companyId);
-
+  if (!(await canManageCommunityStructure(env, identity, community))) {
+    throw httpError(403, 'Somente administradores da comunidade podem adicionar pessoas.');
+  }
   const targetUid = clean(body.uid, 150);
   if (!targetUid) throw httpError(400, 'Escolha um usuário.');
-  const companyMember = await fsGet(env, 'companyMembers', `${community.companyId}_${targetUid}`);
-  if (!companyMember || companyMember.status !== 'active') throw httpError(400, 'Este usuário não faz parte da empresa.');
+  await fsGetRequired(env, 'users', targetUid, 'Usuário não encontrado.');
 
   const memberId = `${communityId}_${targetUid}`;
   const existing = await fsGet(env, 'communityMembers', memberId);
   if (existing) return { member: existing, alreadyMember: true };
 
   const membership = {
-    id: memberId,
-    companyId: community.companyId,
-    communityId,
-    uid: targetUid,
-    role: 'member',
-    joinedAt: nowIso(),
-    addedBy: identity.uid
+    id: memberId, companyId: '', communityId, uid: targetUid, role: 'member',
+    joinedAt: nowIso(), addedBy: identity.uid, joinedBy: 'admin'
   };
   await fsPut(env, 'communityMembers', memberId, membership);
-
-  const notificationId = `community_added_${communityId}_${targetUid}_${Date.now()}`;
-  const notification = {
-    recipientUid: targetUid,
-    type: 'community_added',
-    title: `Você foi adicionado a ${community.name}`,
-    body: 'Um administrador adicionou você a esta comunidade.',
-    data: { companyId: community.companyId, communityId, targetView: 'community' },
-    read: false,
-    status: 'new',
-    createdAt: nowIso()
-  };
-  await fsPut(env, 'notifications', notificationId, notification);
-  deferPushes(ctx, [sendPushToUser(env, targetUid, {
-    title: notification.title,
-    body: notification.body,
-    notificationId,
-    type: notification.type,
-    companyId: community.companyId,
-    communityId,
-    targetView: 'community',
-    url: `/?community=${encodeURIComponent(communityId)}&company=${encodeURIComponent(community.companyId)}`
-  })]);
-
   return { member: membership };
 }
 
 async function removeCommunityMember(env, identity, communityId, targetUid, ctx) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-  await requireCompanyAdmin(env, identity.uid, community.companyId);
+  if (!(await canManageCommunityStructure(env, identity, community))) {
+    throw httpError(403, 'Somente administradores da comunidade podem remover pessoas.');
+  }
 
   const memberId = `${communityId}_${targetUid}`;
   const existing = await fsGet(env, 'communityMembers', memberId);
@@ -2845,7 +2795,7 @@ async function removeCommunityMember(env, identity, communityId, targetUid, ctx)
     body: publicCommunity(community)
       ? 'Você não participa mais desta comunidade, mas as publicações públicas continuam disponíveis na pesquisa.'
       : 'Seu acesso a esta comunidade foi removido por um administrador.',
-    data: { companyId: community.companyId, communityId, targetView: 'notifications' },
+    data: { companyId: '', communityId, targetView: 'notifications' },
     read: false,
     status: 'new',
     createdAt: nowIso()
@@ -2856,7 +2806,7 @@ async function removeCommunityMember(env, identity, communityId, targetUid, ctx)
     body: notification.body,
     notificationId,
     type: notification.type,
-    companyId: community.companyId,
+    companyId: '',
     communityId,
     targetView: 'notifications',
     url: `/?notifications=1&company=${encodeURIComponent(community.companyId)}`
@@ -2906,10 +2856,7 @@ async function searchCommunityInviteCandidates(env, identity, communityId, param
 
 async function createCommunityInvite(env, identity, communityId, body, ctx) {
   const community=await fsGetRequired(env,'communities',communityId,'Comunidade não encontrada.');
-
-  if (community.companyId) {
-    await requireCompanyAdmin(env,identity.uid,community.companyId);
-  } else if (!(await canManageCommunityStructure(env, identity, community))) {
+  if (!(await canManageCommunityStructure(env, identity, community))) {
     throw httpError(403,'Somente administradores da comunidade podem convidar pessoas.');
   }
 
@@ -2921,11 +2868,6 @@ async function createCommunityInvite(env, identity, communityId, body, ctx) {
   }
   if(!target)throw httpError(404,'Usuário não encontrado.');
 
-  if (community.companyId) {
-    const member=await fsGet(env,'companyMembers',`${community.companyId}_${target.uid}`);
-    if(!member||member.status!=='active')throw httpError(400,'Este usuário não faz parte da empresa.');
-  }
-
   const existing=await fsGet(env,'communityMembers',`${communityId}_${target.uid}`);
   if(existing)throw httpError(409,'O usuário já participa desta comunidade.');
 
@@ -2933,14 +2875,14 @@ async function createCommunityInvite(env, identity, communityId, body, ctx) {
   const pending=existingInvites.find(item=>item.targetUid===target.uid&&item.status==='pending');
   if(pending)return {inviteId:pending.id,alreadyPending:true};
 
-  const company=community.companyId?await fsGet(env,'companies',community.companyId):null;
   const token=randomToken();
   const inviteId=id();
   const invite={
     id:inviteId,
     type:'community',
-    companyId:community.companyId||'',
-    companyName:company?.name||'',
+    companyId:'',
+    verifiedCompanyId:community.verifiedCompanyId||community.legacyCompanyId||'',
+    companyName:community.verifiedCompanyName||'',
     communityId,
     communityName:community.name,
     email:target.email||'',
@@ -2964,8 +2906,8 @@ async function createInviteNotification(env, invite, uid, ctx) {
     title: invite.type === 'company' ? `${invite.companyName} convidou você` : `Convite para ${invite.communityName}`,
     body: invite.type === 'company'
       ? 'Aceite para entrar no ambiente privado da empresa.'
-      : invite.companyId
-        ? `A empresa convidou você para ${invite.communityName}.`
+      : invite.verifiedCompanyId
+        ? `${invite.companyName || 'Uma empresa verificada'} convidou você para ${invite.communityName}.`
         : `Você recebeu um convite para participar de ${invite.communityName}.`,
     data: {
       inviteId: invite.id,
@@ -3252,8 +3194,9 @@ async function canManageCommunityStructure(env, identity, community) {
     membership.addedBy === identity.uid ||
     membership.joinedBy === 'creator'
   )) return true;
-  if (community.companyId) {
-    const companyMembership = await fsGet(env, 'companyMembers', `${community.companyId}_${identity.uid}`);
+  const verifiedCompanyId = community.verifiedCompanyId || community.legacyCompanyId || '';
+  if (verifiedCompanyId) {
+    const companyMembership = await fsGet(env, 'companyMembers', `${verifiedCompanyId}_${identity.uid}`);
     if (companyMembership?.status === 'active' && ['owner', 'admin'].includes(companyMembership.role)) return true;
   }
   return false;
@@ -3266,7 +3209,7 @@ async function getCommunityTopics(env, identity, communityId) {
   topics.sort((a,b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
   return {
     community: communityView(community),
-    kind: community.companyId ? 'sector' : 'topic',
+    kind: 'topic',
     topics
   };
 }
@@ -3274,41 +3217,30 @@ async function getCommunityTopics(env, identity, communityId) {
 async function createCommunityTopic(env, identity, communityId, body) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
   if (!(await canManageCommunityStructure(env, identity, community))) {
-    throw httpError(403, community.companyId ? 'Somente administradores podem criar setores.' : 'Somente o dono ou moderadores podem criar assuntos.');
+    throw httpError(403, 'Somente o dono ou moderadores podem criar assuntos.');
   }
 
   const name = clean(body?.name, 80);
   const description = clean(body?.description || '', 220);
-  if (!name) throw httpError(400, community.companyId ? 'Informe o nome do setor.' : 'Informe o nome do assunto.');
+  if (!name) throw httpError(400, 'Informe o nome do assunto.');
 
   const existing = await fsWhere(env, 'communityTopics', 'communityId', communityId, 250);
   if (existing.some(item => String(item.name || '').trim().toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) {
-    throw httpError(409, community.companyId ? 'Já existe um setor com este nome.' : 'Já existe um assunto com este nome.');
+    throw httpError(409, 'Já existe um assunto com este nome.');
   }
 
   const topicId = id();
   const topic = {
     id: topicId,
     communityId,
-    companyId: community.companyId || '',
+    companyId: '',
     name,
     description,
-    kind: community.companyId ? 'sector' : 'topic',
+    kind: 'topic',
     createdBy: identity.uid,
     createdAt: nowIso()
   };
   await fsPut(env, 'communityTopics', topicId, topic);
-  if (community.companyId) {
-    await fsPut(env, 'communityTopicMembers', `${topicId}_${identity.uid}`, {
-      id: `${topicId}_${identity.uid}`,
-      topicId,
-      communityId,
-      companyId: community.companyId,
-      uid: identity.uid,
-      role: 'admin',
-      joinedAt: nowIso()
-    });
-  }
   return { topic };
 }
 
