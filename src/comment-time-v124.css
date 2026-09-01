@@ -1,0 +1,6 @@
+.comment-relative-time{
+  color:var(--muted,#777b82);
+  font-size:9px;
+  font-weight:500;
+  white-space:nowrap;
+}
