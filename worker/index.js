@@ -3046,7 +3046,18 @@ async function acceptInvite(env, identity, body, ctx) {
     const existingMember = await fsGet(env,'companyMembers',`${invite.companyId}_${identity.uid}`);
     if(!existingMember || existingMember.status!=='active') await assertMemberCapacity(env, invite.companyId, false);
     joiningUser=await fsGet(env,'users',identity.uid);
-    await fsPut(env,'companyMembers',`${invite.companyId}_${identity.uid}`,{id:`${invite.companyId}_${identity.uid}`,companyId:invite.companyId,uid:identity.uid,displayName:joiningUser?.displayName||identity.name||'',email:normalizeEmail(identity.email||''),role:'member',status:'active',joinedAt:nowIso()});
+    const joinedAt=nowIso();
+    await fsPut(env,'companyMembers',`${invite.companyId}_${identity.uid}`,{id:`${invite.companyId}_${identity.uid}`,companyId:invite.companyId,uid:identity.uid,displayName:joiningUser?.displayName||identity.name||'',email:normalizeEmail(identity.email||''),role:'member',status:'active',joinedAt});
+    const linkedCompany=await fsGet(env,'companies',invite.companyId);
+    if(linkedCompany){
+      const verifiedCommunity=await ensureVerifiedCompanyCommunity(env,linkedCompany);
+      if(verifiedCommunity){
+        await fsPut(env,'communityMembers',`${verifiedCommunity.id}_${identity.uid}`,{
+          id:`${verifiedCommunity.id}_${identity.uid}`,companyId:'',legacyCompanyId:invite.companyId,
+          communityId:verifiedCommunity.id,uid:identity.uid,role:'member',joinedAt,joinedBy:'company_invite'
+        });
+      }
+    }
   } else {
     if (invite.companyId) {
       const member=await fsGet(env,'companyMembers',`${invite.companyId}_${identity.uid}`);
