@@ -74,3 +74,57 @@
   .auth-card>p{margin-bottom:12px}
   .auth-card form{gap:8px}
 }
+
+/* Community detail actions: three compact controls on the same row. */
+.community-detail-actions{
+  grid-template-columns:repeat(3,minmax(0,190px))!important;
+  justify-content:center!important;
+  align-items:stretch!important;
+  gap:8px!important;
+}
+.community-detail-actions .community-image-upload,
+.community-detail-actions .community-participating-button,
+.community-detail-actions .community-publish-button{
+  grid-column:auto!important;
+  justify-self:stretch!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  min-height:36px!important;
+  padding:7px 9px!important;
+  font-size:10px!important;
+  justify-content:center!important;
+}
+.community-detail-actions .community-publish-button{
+  background:#111216!important;
+  border-color:#111216!important;
+  color:#fff!important;
+}
+.community-detail-actions .community-publish-button:hover{
+  background:#000!important;
+  border-color:#000!important;
+  color:#fff!important;
+}
+.community-detail-actions .community-publish-button svg{color:#fff!important}
+
+@media(max-width:850px){
+  .community-detail-actions{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:6px!important;
+  }
+  .community-detail-actions .community-image-upload,
+  .community-detail-actions .community-participating-button,
+  .community-detail-actions .community-publish-button{
+    min-height:34px!important;
+    padding:6px 5px!important;
+    font-size:9px!important;
+    gap:4px!important;
+  }
+  .community-detail-actions .community-image-upload svg,
+  .community-detail-actions .community-participating-button svg,
+  .community-detail-actions .community-publish-button svg{
+    width:14px!important;
+    height:14px!important;
+    flex:0 0 14px!important;
+  }
+}
