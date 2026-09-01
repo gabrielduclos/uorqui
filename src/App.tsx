@@ -2240,8 +2240,8 @@ function CommunitiesPage({
             )}
             {isJoinedCommunity(selectedCommunity.id) ? (
               <>
-                <button className="btn secondary small" disabled={joinBusyId===selectedCommunity.id} onClick={()=>void leaveCommunity(selectedCommunity)}><Check size={16} /> {joinBusyId===selectedCommunity.id?"Saindo…":"Participando"}</button>
-                <button className="btn" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
+                <button className="btn secondary small community-participating-button" disabled={joinBusyId===selectedCommunity.id} onClick={()=>void leaveCommunity(selectedCommunity)}><Check size={16} /> {joinBusyId===selectedCommunity.id?"Saindo…":"Participando"}</button>
+                <button className="btn community-publish-button" onClick={() => onComposeCommunity(selectedCommunity.id)}><Plus size={17} /> Publicar aqui</button>
               </>
             ) : (
               <button
