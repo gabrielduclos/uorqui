@@ -3,6 +3,39 @@ import liveNewsCore, { RealtimeHub } from './live-news.js';
 export { RealtimeHub };
 
 const emptyNewsAttempts = new Map();
+const nativeFetch = globalThis.fetch.bind(globalThis);
+
+// O publicador legado ainda pode decidir não gravar a imagem mesmo quando a
+// matéria possui uma. Interceptamos somente a gravação de posts automáticos de
+// notícia no Firestore: se sourceImageUrl vier vazio, tentamos recuperar a
+// imagem social da própria matéria. Sem imagem válida, o post segue em texto.
+globalThis.fetch = async (input, init) => {
+  try {
+    const requestUrl = input instanceof Request ? input.url : String(input || '');
+    const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const isPostWrite = method === 'PATCH' && /firestore\.googleapis\.com\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents\/posts\//i.test(requestUrl);
+
+    if (isPostWrite && typeof init?.body === 'string') {
+      const payload = JSON.parse(init.body);
+      const fields = payload?.fields;
+      const contentMode = String(fields?.aiContentMode?.stringValue || '');
+      const currentImage = String(fields?.sourceImageUrl?.stringValue || '');
+      const sourceUrl = String(fields?.sourceUrl?.stringValue || '');
+
+      if (contentMode === 'news' && !currentImage && /^https?:\/\//i.test(sourceUrl)) {
+        const sourceImageUrl = await discoverSourceImage(sourceUrl).catch(() => '');
+        if (sourceImageUrl) {
+          fields.sourceImageUrl = { stringValue: sourceImageUrl };
+          init = { ...init, body: JSON.stringify(payload) };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Uorqui source image preference failed:', error?.message || error);
+  }
+
+  return nativeFetch(input, init);
+};
 
 export default {
   async fetch(request, env, ctx) {
@@ -16,6 +49,56 @@ export default {
     return liveNewsCore.scheduled(controller, withEditorialAi(env), ctx);
   }
 };
+
+async function discoverSourceImage(sourceUrl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4500);
+  try {
+    const response = await nativeFetch(sourceUrl, {
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; UorquiNews/2.2)',
+        'Accept': 'text/html,application/xhtml+xml'
+      }
+    });
+    if (!response.ok) return '';
+
+    const html = (await response.text()).slice(0, 500000);
+    const candidates = [
+      metaContent(html, 'og:image'),
+      metaContent(html, 'twitter:image'),
+      metaContent(html, 'twitter:image:src')
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      try {
+        const resolved = new URL(candidate, response.url || sourceUrl).toString();
+        if (/^https?:\/\//i.test(resolved)) return resolved;
+      } catch {}
+    }
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function metaContent(html, name) {
+  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const direct = String(html || '').match(new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, 'i'));
+  const reverse = String(html || '').match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, 'i'));
+  return decodeHtml(direct?.[1] || reverse?.[1] || '');
+}
+
+function decodeHtml(value = '') {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
 
 function withEditorialAi(env) {
   if (!env?.AI || env.__uorquiEditorialAi) return env;
