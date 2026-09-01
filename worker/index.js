@@ -4264,7 +4264,7 @@ async function getDirectMessages(env, identity, targetUid, params) {
   const page = rows.slice(0, limit);
   const messages = page.reverse();
 
-  if (Number(conversation[`unread_${identity.uid}`] || 0) > 0) {
+  if (conversation.status === 'accepted' && Number(conversation[`unread_${identity.uid}`] || 0) > 0) {
     const readAt = nowIso();
     const unreadForMe = rows.filter(item =>
       item.recipientUid === identity.uid &&
@@ -4300,9 +4300,22 @@ async function acceptMessageRequest(env, identity, targetUid) {
   if (conversation.status !== 'pending' || conversation.requestedBy === identity.uid) {
     throw httpError(409, 'Esta solicitação não está aguardando sua aprovação.');
   }
-  const updated = { ...conversation, status: 'accepted', acceptedAt: nowIso(), updatedAt: nowIso() };
+  const acceptedAt = nowIso();
+  const pendingMessages = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 500).catch(() => []);
+  for (const message of pendingMessages) {
+    if (message.recipientUid === identity.uid && !message.readAt && !message.cancelledAt) {
+      await fsPut(env, 'directMessages', message.id, { ...message, readAt: acceptedAt, acceptedAt });
+    }
+  }
+  const updated = {
+    ...conversation,
+    status: 'accepted',
+    acceptedAt,
+    updatedAt: acceptedAt,
+    [`unread_${identity.uid}`]: 0
+  };
   await fsPut(env, 'messageConversations', conversationId, updated);
-  return { ok: true, status: 'accepted' };
+  return { ok: true, status: 'accepted', readAt: acceptedAt };
 }
 
 async function rejectMessageRequest(env, identity, targetUid) {
@@ -4370,9 +4383,6 @@ async function sendDirectMessage(env, identity, targetUid, body, ctx) {
       [`unread_${identity.uid}`]: 0,
       [`unread_${targetUid}`]: 0
     };
-  } else if (conversation.status === 'pending' && conversation.requestedBy === identity.uid) {
-    const existingMessages = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 20).catch(() => []);
-    if (existingMessages.length) throw httpError(409, 'Você já enviou uma solicitação de mensagem para esta pessoa.');
   }
 
   const text = clean(body.text || '', 4000);
