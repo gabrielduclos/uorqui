@@ -1106,9 +1106,7 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
   // Sempre preservar as comunidades sociais do usuário, mesmo quando há uma empresa ativa.
   // Antes, selecionar uma empresa descartava memberships com companyId vazio e fazia
   // comunidades sociais recém-criadas "sumirem" após o refresh.
-  const communityMemberships = cmAll.filter(m =>
-    !selectedCompanyId || !m.companyId || m.companyId === selectedCompanyId
-  );
+  const communityMemberships = cmAll;
   const memberCommunityIds = new Set(communityMemberships.map(m => m.communityId));
 
   const companyCommunityMemberships = selectedCompanyId
@@ -1144,14 +1142,10 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
   const communityIds = new Set(communities.map(c => c.id));
   const communityMap = Object.fromEntries(communities.map(c => [c.id, c]));
 
-  let posts = [];
-  if (selectedCompanyId) {
-    const raw = await fsWhere(env, 'posts', 'companyId', selectedCompanyId, 100);
-    const visiblePostCommunityIds = canAdmin
-      ? new Set(companyCommunities.map(community => community.id))
-      : communityIds;
-    posts = raw.filter(p => p.scope === 'company' || (p.scope === 'community' && visiblePostCommunityIds.has(p.communityId)));
-  }
+  const rawCommunityPosts = await fsListCollection(env, 'posts', 500).catch(() => []);
+  let posts = rawCommunityPosts.filter(p =>
+    p.scope === 'community' && p.communityId && communityIds.has(p.communityId)
+  );
   let worldPosts = await fsWhere(env, 'posts', 'scope', 'world', 40);
 
   const userReactions = await fsWhere(env, 'reactions', 'uid', identity.uid, 200);
@@ -1194,10 +1188,7 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
 
   notifications = notifications.sort(byCreatedDesc).slice(0, 60);
 
-  let allCompanyCommunities = Array.from(new Map([
-    ...companyCommunities,
-    ...socialCommunities
-  ].map(c => [c.id, c])).values()).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  let allCompanyCommunities = [...communities];
   let members = [];
   if (selectedCompanyId && canAdmin) {
     const companyMemberDocs = (await fsWhere(env, 'companyMembers', 'companyId', selectedCompanyId, 100)).filter(m => m.status === 'active');
@@ -2809,7 +2800,7 @@ async function removeCommunityMember(env, identity, communityId, targetUid, ctx)
     companyId: '',
     communityId,
     targetView: 'notifications',
-    url: `/?notifications=1&company=${encodeURIComponent(community.companyId)}`
+    url: '/?notifications=1'
   })]);
 
   return { ok: true };
@@ -3538,7 +3529,7 @@ async function createPost(env, identity, body, ctx) {
     throw httpError(400, type === 'event' ? 'Informe o título do evento.' : 'Informe o título do comunicado.');
   }
 
-  const companyId = body.companyId ? clean(body.companyId, 120) : null;
+  let companyId = body.companyId ? clean(body.companyId, 120) : null;
   const communityId = body.communityId ? clean(body.communityId, 120) : null;
   const topicId = body.topicId ? clean(body.topicId, 120) : '';
   let company = null;
@@ -3554,9 +3545,9 @@ async function createPost(env, identity, body, ctx) {
   if (scope === 'community') {
     if (!communityId) throw httpError(400, 'Escolha a comunidade.');
     community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-    if ((community.companyId || '') !== (companyId || '')) throw httpError(400, 'Comunidade inválida.');
+    companyId = null;
+    company = null;
     await requireCommunityAccess(env, identity.uid, community);
-    if (community.companyId) company = await fsGet(env, 'companies', community.companyId);
     if (topicId) {
       topic = await fsGetRequired(env, 'communityTopics', topicId, 'Assunto não encontrado.');
       if (topic.communityId !== communityId) throw httpError(400, 'Assunto inválido para esta comunidade.');
@@ -3618,7 +3609,7 @@ async function createPost(env, identity, body, ctx) {
     if (m.ownerUid !== identity.uid) throw httpError(403, 'Anexo inválido.');
     if (
       m.scope !== scope ||
-      ((scope !== 'world' && scope !== 'message') && (m.companyId || '') !== (companyId || '')) ||
+      (scope === 'company' && (m.companyId || '') !== (companyId || '')) ||
       (scope === 'community' && m.communityId !== communityId)
     ) {
       throw httpError(400, 'O anexo foi enviado para outra audiência.');
@@ -3638,6 +3629,8 @@ async function createPost(env, identity, body, ctx) {
     communityId: communityId || '',
     communityName: community?.name || '',
     communityVisibility: community ? normalizedCommunityVisibility(community.visibility) : '',
+    communityVerifiedCompany: Boolean(community?.verifiedCompany),
+    communityInviteOnly: Boolean(community?.inviteOnly || community?.verifiedCompany),
     topicId: topic?.id || '',
     topicName: topic?.name || '',
     type,
@@ -4286,7 +4279,10 @@ async function discoverContent(env, identity) {
     .map(community => ({
       ...communityView(community),
       alreadyMember: joinedCommunityIds.has(community.id),
-      verifiedCompany: false
+      verifiedCompany: Boolean(community.verifiedCompany),
+      verifiedCompanyId: community.verifiedCompanyId || '',
+      verifiedCompanyName: community.verifiedCompanyName || '',
+      inviteOnly: Boolean(community.inviteOnly || community.verifiedCompany)
     }))
     .sort((a,b) => {
       if (Boolean(a.officialUorqui) !== Boolean(b.officialUorqui)) return a.officialUorqui ? -1 : 1;
@@ -4677,10 +4673,11 @@ async function sendDirectMessage(env, identity, targetUid, body, ctx) {
 async function uploadMedia(request, env, identity, params) {
   const scope=params.get('scope');
   if(!['world','company','community','avatar','community_avatar','message'].includes(scope))throw httpError(400,'Audiência inválida.');
-  const companyId=params.get('companyId')||'';const communityId=params.get('communityId')||'';const targetUid=params.get('targetUid')||'';
+  let companyId=params.get('companyId')||'';const communityId=params.get('communityId')||'';const targetUid=params.get('targetUid')||'';
   if(scope==='company')await requireCompanyMember(env,identity.uid,companyId);
   if(scope==='community'){
     const community=await fsGetRequired(env,'communities',communityId,'Comunidade não encontrada.');
+    companyId='';
     await requireCommunityAccess(env,identity.uid,community);
   }
   if(scope==='community_avatar'){
