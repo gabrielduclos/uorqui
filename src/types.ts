@@ -64,6 +64,10 @@ export interface Community {
   visibility?: "public" | "private";
   memberCount?: number;
   verifiedCompany?: boolean;
+  verifiedCompanyId?: string;
+  verifiedCompanyName?: string;
+  inviteOnly?: boolean;
+  validationType?: "company" | string;
   officialUorqui?: boolean;
   officialLabel?: string;
   seededByUorqui?: boolean;
@@ -90,7 +94,7 @@ export interface CommunityMember {
   email?: string;
   avatarMediaId?: string;
   companyRole?: "owner" | "admin" | "member";
-  communityRole?: "moderator" | "member";
+  communityRole?: "owner" | "admin" | "moderator" | "member";
 }
 
 export interface NotificationItem {
