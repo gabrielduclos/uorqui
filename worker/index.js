@@ -2405,9 +2405,10 @@ async function updateCommunityVisibility(env, identity, communityId, body) {
 
 async function requireCommunityAccess(env, uid, community) {
   if (!community.companyId) {
+    const membership = await fsGet(env, 'communityMembers', `${community.id}_${uid}`);
+    if (membership) return membership;
     if (publicCommunity(community)) return { uid, role: 'member', social: true };
-    const membership = await requireCommunityMember(env, uid, community.id);
-    return membership;
+    return await requireCommunityMember(env, uid, community.id);
   }
 
   const companyMember = await requireCompanyMember(env, uid, community.companyId);
