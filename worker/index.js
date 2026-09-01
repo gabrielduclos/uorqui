@@ -394,6 +394,10 @@ async function routeApi(request, env, identity, url, ctx) {
     const targetUid = decodeURIComponent(path.split('/')[2]);
     return json(await rejectMessageRequest(env, identity, targetUid));
   }
+  if (method === 'DELETE' && /^\/messages\/[^/]+$/.test(path)) {
+    const targetUid = decodeURIComponent(path.split('/')[2]);
+    return json(await hideDirectConversation(env, identity, targetUid));
+  }
   if (method === 'DELETE' && /^\/messages\/[^/]+\/[^/]+$/.test(path)) {
     const parts = path.split('/');
     const targetUid = decodeURIComponent(parts[2]);
@@ -4222,6 +4226,7 @@ async function listMessageConversations(env, identity, params) {
   ]);
   const all = [...asA, ...asB]
     .filter((item, index, arr) => arr.findIndex(x => x.id === item.id) === index)
+    .filter(item => !item[`hidden_${identity.uid}`])
     .sort((a,b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
 
   const slice = all.slice(offset, offset + pageSize);
@@ -4259,6 +4264,11 @@ async function getDirectMessages(env, identity, targetUid, params) {
   const limit = Math.min(60, Math.max(10, Number(params.get('limit') || 30)));
   const before = clean(params.get('before') || '', 80);
   let rows = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 500).catch(() => []);
+  const deletedBefore = conversation[`deletedBefore_${identity.uid}`] || '';
+  if (deletedBefore) {
+    const cutoff = new Date(deletedBefore).getTime();
+    rows = rows.filter(item => new Date(item.createdAt || 0).getTime() > cutoff);
+  }
   rows = rows.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   if (before) rows = rows.filter(item => new Date(item.createdAt || 0).getTime() < new Date(before).getTime());
   const page = rows.slice(0, limit);
@@ -4328,6 +4338,21 @@ async function rejectMessageRequest(env, identity, targetUid) {
   const messages = await fsWhere(env, 'directMessages', 'conversationId', conversationId, 100).catch(() => []);
   for (const message of messages) await fsDelete(env, 'directMessages', message.id);
   return { ok: true, rejected: true };
+}
+
+async function hideDirectConversation(env, identity, targetUid) {
+  const conversationId = directConversationId(identity.uid, targetUid);
+  const conversation = await fsGetRequired(env, 'messageConversations', conversationId, 'Conversa não encontrada.');
+  const deletedAt = nowIso();
+  const updated = {
+    ...conversation,
+    [`hidden_${identity.uid}`]: true,
+    [`deletedBefore_${identity.uid}`]: deletedAt,
+    [`unread_${identity.uid}`]: 0,
+    updatedAt: conversation.updatedAt || deletedAt
+  };
+  await fsPut(env, 'messageConversations', conversationId, updated);
+  return { ok: true, deletedForMe: true, deletedAt };
 }
 
 async function cancelDirectMessage(env, identity, targetUid, messageId) {
@@ -4439,6 +4464,8 @@ async function sendDirectMessage(env, identity, targetUid, body, ctx) {
 
   conversation = {
     ...conversation,
+    [`hidden_${identity.uid}`]: false,
+    [`hidden_${targetUid}`]: false,
     lastMessagePreview: preview,
     lastMessageAt: createdAt,
     lastSenderUid: identity.uid,
