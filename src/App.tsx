@@ -2239,6 +2239,15 @@ function CommunitiesPage({
           {!detailLoading && !communityPosts.length && <Empty title="Nenhuma publicação ainda" text="Comece uma conversa nesta comunidade." />}
             </>
           )}
+        {topicCreateOpen && selectedCommunity && (
+        <Modal title={selectedCommunity.companyId ? "Criar setor" : "Criar assunto"} onClose={() => setTopicCreateOpen(false)}>
+          <form className="stack-form" onSubmit={createTopic}>
+            <label><span>Nome</span><input name="name" required maxLength={80} placeholder={selectedCommunity.companyId ? "Ex.: Engenharia" : "Ex.: Manutenção"} /></label>
+            <label><span>Descrição</span><textarea name="description" maxLength={220} rows={3} placeholder="O que será discutido aqui?" /></label>
+            <button className="btn" disabled={topicBusy}>{topicBusy ? "Criando…" : selectedCommunity.companyId ? "Criar setor" : "Criar assunto"}</button>
+          </form>
+        </Modal>
+      )}
         </div>
       </section>
     );
@@ -2294,15 +2303,7 @@ function CommunitiesPage({
         })}
       </div>
       {!listedCommunities.length && <Empty title={data.canAdmin ? "Crie a primeira comunidade" : "Você ainda não está em comunidades"} text={data.canAdmin ? "Crie apenas os grupos que sua empresa realmente precisa." : "Quando você for adicionado a uma comunidade, ela aparecerá aqui."} />}
-      {topicCreateOpen && selectedCommunity && (
-        <Modal title={selectedCommunity.companyId ? "Criar setor" : "Criar assunto"} onClose={() => setTopicCreateOpen(false)}>
-          <form className="stack-form" onSubmit={createTopic}>
-            <label><span>Nome</span><input name="name" required maxLength={80} placeholder={selectedCommunity.companyId ? "Ex.: Engenharia" : "Ex.: Manutenção"} /></label>
-            <label><span>Descrição</span><textarea name="description" maxLength={220} rows={3} placeholder="O que será discutido aqui?" /></label>
-            <button className="btn" disabled={topicBusy}>{topicBusy ? "Criando…" : selectedCommunity.companyId ? "Criar setor" : "Criar assunto"}</button>
-          </form>
-        </Modal>
-      )}
+      
       {createOpen && <Modal title="Criar comunidade" onClose={() => setCreateOpen(false)}>
         <form className="stack-form" onSubmit={create}>
           <label><span>Nome</span><input name="name" required maxLength={90} placeholder="Ex.: Assistência Técnica" /></label>
