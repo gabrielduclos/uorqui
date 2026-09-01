@@ -42,7 +42,7 @@ async function openNotificationInsideApp(message: NotificationOpenMessage) {
     const index = await notificationIndex(notificationId, title);
 
     const bell = document.querySelector<HTMLButtonElement>(".top-bell");
-    if (bell && !bell.classList.contains("active")) bell.click();
+    if (bell && !document.querySelector(".notifications-page") && !bell.classList.contains("active")) bell.click();
 
     for (let attempt = 0; attempt < 30; attempt += 1) {
       await wait(attempt === 0 ? 80 : 100);
@@ -59,9 +59,7 @@ async function openNotificationInsideApp(message: NotificationOpenMessage) {
       return;
     }
 
-    // Se a lista ainda não sincronizou, mantém o usuário na Central de
-    // Notificações sem recarregar a aplicação inteira.
-    if (bell && !bell.classList.contains("active")) bell.click();
+    if (bell && !document.querySelector(".notifications-page") && !bell.classList.contains("active")) bell.click();
   } finally {
     routing = false;
   }
@@ -75,18 +73,35 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// O sino funciona como toggle: quando a Central de Notificações já está
-// aberta, um novo clique fecha a central e volta para o feed principal.
-// O listener roda em capture para impedir que o onClick React navegue de novo
-// para "notifications" no mesmo clique.
+// O sino usa o conteúdo realmente renderizado como fonte da verdade.
+// Isso evita depender apenas da classe `active`, que continua ativa quando
+// uma publicação é aberta por cima da Central de Notificações.
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
   const bell = target.closest<HTMLButtonElement>(".top-bell");
-  if (!bell || !bell.classList.contains("active")) return;
+  if (!bell) return;
 
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
-  window.dispatchEvent(new CustomEvent("uorqui:go-feed"));
+  const sharedPostPage = document.querySelector<HTMLElement>(".shared-post-page");
+  const notificationsPage = document.querySelector<HTMLElement>(".notifications-page");
+
+  // Publicação aberta a partir de uma notificação: o estado de view continua
+  // em `notifications`. O segundo clique no sino deve fechar a publicação e
+  // revelar novamente a Central, e não tentar navegar para o feed.
+  if (sharedPostPage && bell.classList.contains("active")) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    const back = sharedPostPage.querySelector<HTMLButtonElement>(".shared-post-back");
+    back?.click();
+    return;
+  }
+
+  // Central visível: segundo clique fecha e volta ao feed.
+  if (notificationsPage) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    window.dispatchEvent(new CustomEvent("uorqui:go-feed"));
+  }
 }, true);
