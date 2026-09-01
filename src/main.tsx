@@ -20,16 +20,6 @@ import "./pull-refresh-v123";
 import "./reply-to-reply-v123";
 import "./login-logo-v123";
 
-// uorqui-community-popstate-reload
-let lastCommunityParam = new URLSearchParams(window.location.search).get("community") || "";
-window.addEventListener("popstate", () => {
-  const nextCommunity = new URLSearchParams(window.location.search).get("community") || "";
-  if (nextCommunity && nextCommunity !== lastCommunityParam) {
-    lastCommunityParam = nextCommunity;
-    window.location.reload();
-  }
-});
-
 const PRODUCT_VERSION = "1.3.4-runtime-diagnostics";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
