@@ -5392,43 +5392,62 @@ async function extractArticlePreview(news){
     return {...base,source:siteName||base.source,canonicalUrl:canonical,imageUrl:/^https?:\/\//i.test(imageUrl)?imageUrl:''};
   }catch{return base;}
 }
-async function fetchNewsRss(query,window='2d'){
-  const rssUrl=`https://news.google.com/rss/search?q=${encodeURIComponent(query+' when:'+window)}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
-  const response=await fetch(rssUrl,{headers:{'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/1.0)','Accept':'application/rss+xml,application/xml,text/xml,*/*'}});
-  if(!response.ok)throw new Error(`Google News RSS HTTP ${response.status}`);
-  const xml=await response.text();
-  const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0,20);
+function parseNewsItems(xml, fallbackSource=''){
+  const items=[...String(xml||'').matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0,25);
+  const parsed=[];
   for(const match of items){
     const raw=match[1];
     const title=decodeXmlText(raw.match(/<title>([\s\S]*?)<\/title>/i)?.[1]||'');
     const link=decodeXmlText(raw.match(/<link>([\s\S]*?)<\/link>/i)?.[1]||'');
     const pubDate=decodeXmlText(raw.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]||'');
-    const source=decodeXmlText(raw.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1]||'');
+    const source=decodeXmlText(raw.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1]||'')||fallbackSource;
     let publishedAt='';
     try{const d=new Date(pubDate);if(Number.isFinite(d.getTime()))publishedAt=d.toISOString();}catch{}
-    if(!title||!link)continue;
-    return await extractArticlePreview({title,link,source:source||'Google Notícias',publishedAt});
+    if(title&&link)parsed.push({title,link,source,publishedAt});
   }
-  return null;
+  return parsed;
+}
+
+async function fetchGoogleNews(query,window='2d'){
+  const url=`https://news.google.com/rss/search?q=${encodeURIComponent(query+' when:'+window)}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+  const response=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/1.0)','Accept':'application/rss+xml,application/xml,text/xml,*/*'}});
+  if(!response.ok)throw new Error(`Google News HTTP ${response.status}`);
+  const items=parseNewsItems(await response.text(),'Google Notícias');
+  if(!items.length)throw new Error('Google News retornou RSS sem itens');
+  return await extractArticlePreview(items[0]);
+}
+
+async function fetchBingNews(query){
+  const url=`https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss&setlang=pt-br&cc=br`;
+  const response=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/1.0)','Accept':'application/rss+xml,application/xml,text/xml,*/*'}});
+  if(!response.ok)throw new Error(`Bing News HTTP ${response.status}`);
+  const items=parseNewsItems(await response.text(),'Bing Notícias');
+  if(!items.length)throw new Error('Bing News retornou RSS sem itens');
+  return await extractArticlePreview(items[0]);
 }
 
 async function recentNewsForAgent(item){
   const specific=UORQUI_AI_NEWS_QUERIES[item.key]||item.specialty||item.name;
-  const queries=[
-    [specific,'2d'],
-    [specific,'7d'],
-    [item.specialty||item.name,'7d'],
-    [item.name,'7d']
+  const broad=item.specialty||item.name;
+  const attempts=[
+    ['google',specific,'2d'],
+    ['google',specific,'7d'],
+    ['bing',specific,''],
+    ['google',broad,'7d'],
+    ['bing',broad,''],
+    ['google',item.name,'7d'],
+    ['bing',item.name,'']
   ];
   const errors=[];
-  for(const [query,window] of queries){
+  for(const [provider,query,window] of attempts){
     try{
-      const news=await fetchNewsRss(query,window);
-      if(news)return news;
-    }catch(error){errors.push(String(error?.message||error));}
+      const news=provider==='google' ? await fetchGoogleNews(query,window||'7d') : await fetchBingNews(query);
+      if(news?.title&&news?.link)return {...news,provider};
+    }catch(error){errors.push(`${provider}: ${String(error?.message||error)}`);}
   }
-  console.warn('Uorqui AI news lookup exhausted',item.key,errors.join(' | '));
-  return null;
+  const diagnostic=errors.slice(0,6).join(' | ');
+  console.warn('Uorqui AI news lookup exhausted',item.key,diagnostic);
+  return { unavailable:true, diagnostic };
 }
 
 function aiContentChoice(item,day,force=false){
@@ -5518,9 +5537,9 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
 
     const choice=aiContentChoice(item,day,force);
     const news=await recentNewsForAgent(item);
-    if(!news){
+    if(!news || news.unavailable){
       failed+=1;
-      results.push({key:item.key,name:item.name,status:'failed',postId:'',error:'Nenhuma notícia recente encontrada para esta comunidade.'});
+      results.push({key:item.key,name:item.name,status:'failed',postId:'',error:`Nenhuma notícia recente encontrada. ${news?.diagnostic||''}`.trim()});
       return;
     }
     const text=await generateUorquiAgentPost(env,item,news);
