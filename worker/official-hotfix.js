@@ -159,9 +159,11 @@ async function publishOfficialAgentsFast(request, env, ctx, url) {
 
   const target = new URL('/api/superadmin/ai-agents/publish', url.origin);
   target.searchParams.set('force', '1');
+  const body = await request.text();
   return core.fetch(new Request(target, {
     method: 'POST',
-    headers: request.headers
+    headers: request.headers,
+    body
   }), env, ctx);
 }
 
