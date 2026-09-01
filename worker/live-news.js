@@ -371,7 +371,7 @@ async function generateNewsText(env, agent, news) {
 }
 
 async function publishNewsPost(env, agent, news, text, now) {
-  const uid = `uorqui_ai_user_${agent.key}`;
+  const uid = `uorqui_ai_agent_${agent.key}`;
   const communityId = `uorqui_ai_community_${agent.key}`;
   const [user, community] = await Promise.all([
     fsGet(env, 'users', uid).catch(() => null),
