@@ -156,7 +156,10 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'POST' && path === '/superadmin/ai-agents/publish') {
     requireSuperadmin(env, identity);
     try {
-      const result = await publishDailyUorquiAiPosts(env, false, { force: url.searchParams.get('force') === '1' });
+      // Disparo pelo painel do Superadmin é sempre manual e sem limite diário.
+      // A trava de 1 post/comunidade/dia existe apenas no cron, que chama
+      // publishDailyUorquiAiPosts(env) com force=false.
+      const result = await publishDailyUorquiAiPosts(env, false, { force: true });
       let status = null;
       try {
         status = await getUorquiAiAgentStatus(env, identity);
