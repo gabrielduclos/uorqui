@@ -1684,7 +1684,7 @@ function CommunitiesPage({
   const selectedCommunityMembership = communityMembers.find((member) => member.uid === data.me.uid);
   const canManageSelectedCommunity = Boolean(
     selectedCommunity && (
-      (selectedCommunity.companyId ? data.canAdmin : false) ||
+      (selectedCommunity.verifiedCompanyId && selectedCommunity.verifiedCompanyId === data.selectedCompanyId ? data.canAdmin : false) ||
       selectedCommunity.createdBy === data.me.uid ||
       ["owner","admin","moderator"].includes(String(selectedCommunityMembership?.communityRole || ""))
     )
@@ -1765,7 +1765,7 @@ function CommunitiesPage({
       });
       setTopics((current) => [...current, result.topic].sort((a,b) => a.name.localeCompare(b.name, "pt-BR")));
       setTopicCreateOpen(false);
-      showToast(selectedCommunity?.companyId ? "Setor criado." : "Assunto criado.");
+      showToast("Assunto criado.");
     } catch (error) {
       showToast(errorMessage(error));
     } finally {
@@ -1837,7 +1837,7 @@ function CommunitiesPage({
   }, [realtimeRevision]);
 
   useEffect(() => {
-    if (!membersPage || !selectedCommunity || selectedCommunity.companyId || !canManageSelectedCommunity) return;
+    if (!membersPage || !selectedCommunity || !canManageSelectedCommunity) return;
     const q = memberSearch.trim();
     if (q.length < 2) {
       setInviteCandidates([]);
@@ -1911,10 +1911,7 @@ function CommunitiesPage({
 
   const deleteSelectedCommunity = async () => {
     if (!selectedCommunity || communityDeleteBusy) return;
-    const social = !selectedCommunity.companyId;
-    const message = social
-      ? `Apagar definitivamente “${selectedCommunity.name}”? Todas as publicações, assuntos, membros e arquivos desta comunidade serão removidos. Esta ação não pode ser desfeita.`
-      : `Solicitar a exclusão de “${selectedCommunity.name}”? A exclusão seguirá o fluxo de aprovação dos administradores da empresa.`;
+    const message = `Apagar definitivamente “${selectedCommunity.name}”? Todas as publicações, assuntos, membros e arquivos desta comunidade serão removidos. Esta ação não pode ser desfeita.`;
     if (!confirm(message)) return;
 
     setCommunityDeleteBusy(true);
@@ -2096,15 +2093,10 @@ function CommunitiesPage({
     const communityMemberMap = new Map(communityMembers.map((member) => [member.uid, member]));
     const memberCount = membersLoaded ? communityMembers.length : Number(selectedCommunity.memberCount || 0);
     const memberSearchValue = memberSearch.trim().toLocaleLowerCase("pt-BR");
-    const listedMembers = selectedCommunity.companyId
-      ? (data.canAdmin ? data.members : communityMembers).filter((member) => {
-          if (!memberSearchValue) return true;
-          return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
-        })
-      : communityMembers.filter((member) => {
-          if (!memberSearchValue) return true;
-          return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
-        });
+    const listedMembers = communityMembers.filter((member) => {
+      if (!memberSearchValue) return true;
+      return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
+    });
 
     if (membersPage) {
       return (
@@ -2118,17 +2110,17 @@ function CommunitiesPage({
             <section className="panel-card members-manage-card">
               <div className="members-manage-copy">
                 <strong>Gerenciar participantes</strong>
-                <small>{selectedCommunity.companyId ? `${memberCount} de ${data.members.length} colaboradores participam. Adicione ou remova cada pessoa diretamente na lista.` : "Busque qualquer pessoa do Uorqui por nome, @usuário ou e-mail e envie um convite para participar."}</small>
+                <small>Busque qualquer pessoa do Uorqui por nome, @usuário ou e-mail e envie um convite para participar.</small>
               </div>
               <label className="community-member-search">
                 <Search size={16} />
-                <input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={selectedCommunity.companyId ? "Buscar por nome ou e-mail" : "Buscar pessoa no Uorqui"} />
+                <input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Buscar pessoa no Uorqui" />
                 {memberSearch && <button type="button" onClick={() => setMemberSearch("")} aria-label="Limpar busca"><X size={14} /></button>}
               </label>
             </section>
           )}
 
-          {!selectedCommunity.companyId && canManageSelectedCommunity && memberSearch.trim().length >= 2 && (
+          {canManageSelectedCommunity && memberSearch.trim().length >= 2 && (
             <section className="panel-card social-community-invite-results">
               <strong>Convidar pessoas</strong>
               {inviteSearchBusy && <div className="loading-line">Buscando pessoas…</div>}
@@ -2214,11 +2206,11 @@ function CommunitiesPage({
           <div className="community-detail-title">
             <CommunityImage community={selectedCommunity} large />
             <div>
-              <div className="community-detail-name-line"><h2>{selectedCommunity.name}</h2>{selectedCommunity.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {selectedCommunity.officialLabel || "Oficial Uorqui"}</span>}</div>
+              <div className="community-detail-name-line"><h2>{selectedCommunity.name}</h2>{selectedCommunity.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {selectedCommunity.officialLabel || "Oficial Uorqui"}</span>}{selectedCommunity.verifiedCompany && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {selectedCommunity.verifiedCompanyName || "Empresa verificada"}</span>}</div>
               <p>{selectedCommunity.description || (communityVisibility(selectedCommunity) === "public" ? "Comunidade pública." : "Comunidade privada.")}</p>
               <span className={`community-visibility-badge ${communityVisibility(selectedCommunity)}`}>
                 {communityVisibility(selectedCommunity) === "public" ? <Globe2 size={13} /> : <ShieldCheck size={13} />}
-                {communityVisibility(selectedCommunity) === "public" ? "Pública na empresa" : "Privada"}
+                {selectedCommunity.inviteOnly ? "Somente por convite" : communityVisibility(selectedCommunity) === "public" ? "Pública" : "Privada"}
               </span>
             </div>
           </div>
@@ -2247,14 +2239,14 @@ function CommunitiesPage({
               <button
                 className="btn"
                 disabled={joinBusyId === selectedCommunity.id || joinStatusByCommunity[selectedCommunity.id] === "pending"}
-                onClick={() => { if (!selectedCommunity.companyId) void joinCommunity(selectedCommunity); }}
+                onClick={() => { if (!selectedCommunity.inviteOnly) void joinCommunity(selectedCommunity); }}
               >
                 <UserPlus size={17} />
                 {joinBusyId === selectedCommunity.id
                   ? "Enviando…"
                   : joinStatusByCommunity[selectedCommunity.id] === "pending"
                     ? "Solicitação enviada"
-                    : selectedCommunity.companyId
+                    : selectedCommunity.inviteOnly
                       ? "Somente por convite"
                       : communityVisibility(selectedCommunity) === "public"
                         ? "Participar"
@@ -2266,10 +2258,10 @@ function CommunitiesPage({
 
         <section className="community-topics">
           <div className="community-topics-head">
-            <strong>{selectedCommunity.companyId ? "Setores" : "Assuntos"}</strong>
+            <strong>{"Assuntos"}</strong>
             {canManageSelectedCommunity && (
               <button className="text-button" onClick={() => setTopicCreateOpen(true)}>
-                <Plus size={14} /> Novo {selectedCommunity.companyId ? "setor" : "assunto"}
+                <Plus size={14} /> Novo {"assunto"}
               </button>
             )}
           </div>
@@ -2318,11 +2310,11 @@ function CommunitiesPage({
             </>
           )}
         {topicCreateOpen && selectedCommunity && (
-        <Modal title={selectedCommunity.companyId ? "Criar setor" : "Criar assunto"} onClose={() => setTopicCreateOpen(false)}>
+        <Modal title={"Criar assunto"} onClose={() => setTopicCreateOpen(false)}>
           <form className="stack-form" onSubmit={createTopic}>
-            <label><span>Nome</span><input name="name" required maxLength={80} placeholder={selectedCommunity.companyId ? "Ex.: Engenharia" : "Ex.: Manutenção"} /></label>
+            <label><span>Nome</span><input name="name" required maxLength={80} placeholder={"Ex.: Manutenção"} /></label>
             <label><span>Descrição</span><textarea name="description" maxLength={220} rows={3} placeholder="O que será discutido aqui?" /></label>
-            <button className="btn" disabled={topicBusy}>{topicBusy ? "Criando…" : selectedCommunity.companyId ? "Criar setor" : "Criar assunto"}</button>
+            <button className="btn" disabled={topicBusy}>{topicBusy ? "Criando…" : "Criar assunto"}</button>
           </form>
         </Modal>
       )}
@@ -2351,7 +2343,7 @@ function CommunitiesPage({
               <button className="community-card-open" onClick={() => onSelectCommunity(community.id)}>
                 <CommunityImage community={community} />
                 <div>
-                  <div className="community-name-line"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {community.officialLabel || "Oficial Uorqui"}</span>}</div>
+                  <div className="community-name-line"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={11}/> {community.officialLabel || "Oficial Uorqui"}</span>}{community.verifiedCompany && <span className="official-uorqui-badge"><ShieldCheck size={11}/> Verificada</span>}</div>
                   <p>{community.description || (communityVisibility(community) === "public" ? "Comunidade pública." : "Comunidade privada.")}</p>
                   <div className="community-card-meta">
                     <small className={`community-visibility-badge ${communityVisibility(community)}`}>
@@ -2371,16 +2363,16 @@ function CommunitiesPage({
                 <button
                   className="btn secondary small community-join-card-button"
                   disabled={joinBusyId === community.id || pending}
-                  onClick={() => { if (!community.companyId) void joinCommunity(community); }}
+                  onClick={() => { if (!community.inviteOnly) void joinCommunity(community); }}
                 >
-                  {community.companyId ? "Somente por convite" : pending ? "Solicitação enviada" : communityVisibility(community) === "public" ? "Participar" : "Solicitar participação"}
+                  {community.inviteOnly ? "Somente por convite" : pending ? "Solicitação enviada" : communityVisibility(community) === "public" ? "Participar" : "Solicitar participação"}
                 </button>
               )}
             </article>
           );
         })}
       </div>
-      {!listedCommunities.length && <Empty title={data.canAdmin ? "Crie a primeira comunidade" : "Você ainda não está em comunidades"} text={data.canAdmin ? "Crie apenas os grupos que sua empresa realmente precisa." : "Quando você for adicionado a uma comunidade, ela aparecerá aqui."} />}
+      {!listedCommunities.length && <Empty title="Você ainda não está em comunidades" text="Crie uma comunidade, participe de uma comunidade aberta ou aceite um convite." />}
       
       {createOpen && <Modal title="Criar comunidade" onClose={() => setCreateOpen(false)}>
         <form className="stack-form" onSubmit={create}>
