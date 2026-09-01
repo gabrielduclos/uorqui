@@ -5768,6 +5768,15 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
       createdAt,
       updatedAt:createdAt
     });
+    const aiPost = await fsGet(env,'posts',postId);
+    if (aiPost) {
+      try {
+        await notifyInterestedPostRecipients(env, aiPost, uid);
+      } catch (notificationError) {
+        console.error('Falha ao notificar publicação do agente IA:', item.key, notificationError?.message || notificationError);
+      }
+    }
+
     published+=1;
     results.push({key:item.key,name:item.name,status:'published',postId,mode:'news',withImage:Boolean(choice.withSourceImage&&news.imageUrl),source:news.source||''});
   };
