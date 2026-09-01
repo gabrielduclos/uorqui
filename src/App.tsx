@@ -2055,6 +2055,23 @@ function CommunitiesPage({
     }
   };
 
+  const inviteSocialMember = async (uid: string) => {
+    if (!selectedCommunityId || !uid || memberAction) return;
+    setMemberAction({ uid, kind: "invite" });
+    try {
+      const result = await api<{inviteId:string;alreadyPending?:boolean}>(`/communities/${encodeURIComponent(selectedCommunityId)}/invites`, {
+        method: "POST",
+        body: JSON.stringify({ uid })
+      });
+      setInviteCandidates(current => current.map(person => person.uid === uid ? { ...person, invitePending: true } : person));
+      showToast(result.alreadyPending ? "Convite já estava pendente." : "Convite enviado.");
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setMemberAction(null);
+    }
+  };
+
   const removeMember = async (member: CommunityMember) => {
     if (!selectedCommunityId || memberAction) return;
     if (!confirm(`Remover ${member.displayName || member.email || "este usuário"} desta comunidade?`)) return;
@@ -2079,10 +2096,15 @@ function CommunitiesPage({
     const communityMemberMap = new Map(communityMembers.map((member) => [member.uid, member]));
     const memberCount = membersLoaded ? communityMembers.length : Number(selectedCommunity.memberCount || 0);
     const memberSearchValue = memberSearch.trim().toLocaleLowerCase("pt-BR");
-    const listedMembers = (selectedCommunity.companyId && data.canAdmin ? data.members : communityMembers).filter((member) => {
-      if (!memberSearchValue) return true;
-      return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
-    });
+    const listedMembers = selectedCommunity.companyId
+      ? (data.canAdmin ? data.members : communityMembers).filter((member) => {
+          if (!memberSearchValue) return true;
+          return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
+        })
+      : communityMembers.filter((member) => {
+          if (!memberSearchValue) return true;
+          return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
+        });
 
     if (membersPage) {
       return (
@@ -2096,11 +2118,11 @@ function CommunitiesPage({
             <section className="panel-card members-manage-card">
               <div className="members-manage-copy">
                 <strong>Gerenciar participantes</strong>
-                <small>{memberCount} de {data.members.length} colaboradores participam. Adicione ou remova cada pessoa diretamente na lista.</small>
+                <small>{selectedCommunity.companyId ? `${memberCount} de ${data.members.length} colaboradores participam. Adicione ou remova cada pessoa diretamente na lista.` : "Busque qualquer pessoa do Uorqui por nome, @usuário ou e-mail e envie um convite para participar."}</small>
               </div>
               <label className="community-member-search">
                 <Search size={16} />
-                <input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Buscar por nome ou e-mail" />
+                <input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={selectedCommunity.companyId ? "Buscar por nome ou e-mail" : "Buscar pessoa no Uorqui"} />
                 {memberSearch && <button type="button" onClick={() => setMemberSearch("")} aria-label="Limpar busca"><X size={14} /></button>}
               </label>
             </section>
