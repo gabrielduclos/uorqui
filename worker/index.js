@@ -4242,6 +4242,7 @@ async function votePoll(env, identity, postId, body, ctx) {
 }
 
 async function discoverContent(env, identity) {
+  await migrateLegacyCorporateCommunities(env);
   await ensureUorquiAiSeeds(env);
   const [postResponse, communityResponse, worldJobs, follows, memberships, reactions] = await Promise.all([
     fsListCollection(env, 'posts', 300),
