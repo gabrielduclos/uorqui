@@ -1767,3 +1767,43 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
     right:11px;
   }
 }
+
+/* v1.2.25 — ações da comunidade compactas */
+.community-detail-actions{
+  grid-template-columns:minmax(0,220px) minmax(0,220px);
+  justify-content:center;
+  gap:8px 10px;
+}
+.community-detail-actions .community-image-upload,
+.community-detail-actions .community-participating-button{
+  min-height:36px;
+  padding:7px 10px;
+  font-size:10px;
+}
+.community-detail-actions .community-publish-button{
+  grid-column:1/-1;
+  justify-self:center;
+  width:220px;
+  min-height:38px;
+  padding:8px 12px;
+  font-size:10px;
+}
+@media(max-width:850px){
+  .community-detail-actions{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:7px 8px;
+  }
+  .community-detail-actions .community-image-upload,
+  .community-detail-actions .community-participating-button{
+    min-height:34px;
+    padding:6px 8px;
+    font-size:9.5px;
+  }
+  .community-detail-actions .community-publish-button{
+    width:min(46%,220px);
+    min-width:150px;
+    min-height:36px;
+    padding:7px 10px;
+    font-size:9.5px;
+  }
+}
