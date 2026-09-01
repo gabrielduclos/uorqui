@@ -1855,7 +1855,7 @@ function CommunitiesPage({
     let active = true;
     const timer = window.setTimeout(() => {
       setInviteSearchBusy(true);
-      api<{people:Array<{uid:string;displayName?:string;username?:string;email?:string;avatarMediaId?:string;alreadyMember?:boolean;invitePending?:boolean}>>(
+      api<{people:Array<{uid:string;displayName?:string;username?:string;email?:string;avatarMediaId?:string;alreadyMember?:boolean;invitePending?:boolean}>}>(
         `/communities/${encodeURIComponent(selectedCommunity.id)}/invite-candidates?q=${encodeURIComponent(q)}`
       )
         .then(result => { if (active) setInviteCandidates(result.people || []); })
