@@ -19,6 +19,7 @@ import "./notification-router-v121";
 import "./pull-refresh-v123";
 import "./reply-to-reply-v123";
 import "./login-logo-v123";
+import "./comment-time-v124";
 
 const PRODUCT_VERSION = "1.3.4-runtime-diagnostics";
 
