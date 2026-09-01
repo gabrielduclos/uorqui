@@ -5727,7 +5727,11 @@ async function fetchGoogleNews(query,window='2d'){
   if(!response.ok)throw new Error(`Google News HTTP ${response.status}`);
   const items=parseNewsItems(await response.text(),'Google Notícias');
   if(!items.length)throw new Error('Google News retornou RSS sem itens');
-  return await extractArticlePreview(items[0]);
+  const previews=[];
+  for(const item of items.slice(0,12)){
+    try{previews.push(await extractArticlePreview(item));}catch{previews.push(item);}
+  }
+  return previews;
 }
 
 async function fetchBingNews(query){
@@ -5736,10 +5740,42 @@ async function fetchBingNews(query){
   if(!response.ok)throw new Error(`Bing News HTTP ${response.status}`);
   const items=parseNewsItems(await response.text(),'Bing Notícias');
   if(!items.length)throw new Error('Bing News retornou RSS sem itens');
-  return await extractArticlePreview(items[0]);
+  const previews=[];
+  for(const item of items.slice(0,12)){
+    try{previews.push(await extractArticlePreview(item));}catch{previews.push(item);}
+  }
+  return previews;
 }
 
-async function recentNewsForAgent(item){
+function normalizeNewsHeadline(value=''){
+  return String(value||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim()
+    .replace(/\s+/g,' ');
+}
+
+function normalizeNewsUrl(value=''){
+  try{
+    const url=new URL(String(value||''));
+    url.hash='';
+    for(const key of [...url.searchParams.keys()]){
+      if(/^utm_|^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key))url.searchParams.delete(key);
+    }
+    return `${url.origin}${url.pathname}${url.searchParams.toString()?`?${url.searchParams.toString()}`:''}`.replace(/\/$/,'');
+  }catch{return String(value||'').trim();}
+}
+
+function aiNewsDuplicate(candidate,usedUrls,usedHeadlines){
+  const url=normalizeNewsUrl(candidate?.canonicalUrl||candidate?.link||'');
+  const headline=normalizeNewsHeadline(candidate?.title||'');
+  if(url&&usedUrls.has(url))return true;
+  if(headline&&usedHeadlines.has(headline))return true;
+  return false;
+}
+
+async function recentNewsForAgent(item,usedUrls=new Set(),usedHeadlines=new Set()){
   const specific=UORQUI_AI_NEWS_QUERIES[item.key]||item.specialty||item.name;
   const broad=item.specialty||item.name;
   const attempts=[
@@ -5754,13 +5790,17 @@ async function recentNewsForAgent(item){
   const errors=[];
   for(const [provider,query,window] of attempts){
     try{
-      const news=provider==='google' ? await fetchGoogleNews(query,window||'7d') : await fetchBingNews(query);
-      if(news?.title&&news?.link)return {...news,provider};
+      const candidates=provider==='google' ? await fetchGoogleNews(query,window||'7d') : await fetchBingNews(query);
+      for(const news of candidates){
+        if(!news?.title||!news?.link)continue;
+        if(aiNewsDuplicate(news,usedUrls,usedHeadlines))continue;
+        return {...news,provider};
+      }
     }catch(error){errors.push(`${provider}: ${String(error?.message||error)}`);}
   }
   const diagnostic=errors.slice(0,6).join(' | ');
   console.warn('Uorqui AI news lookup exhausted',item.key,diagnostic);
-  return { unavailable:true, diagnostic };
+  return { unavailable:true, diagnostic, duplicateOnly:!errors.length };
 }
 
 function aiContentChoice(item,day,force=false){
@@ -5840,6 +5880,15 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
   const results=[];
   let cursor=0;
 
+  const recentAiPosts=(await fsWhere(env,'posts','authorAccountType','uorqui_agent',500).catch(()=>[]))
+    .filter(post=>{
+      if(!post?.createdAt)return false;
+      const age=Date.now()-new Date(post.createdAt).getTime();
+      return Number.isFinite(age)&&age<=30*24*60*60*1000;
+    });
+  const usedNewsUrls=new Set(recentAiPosts.map(post=>normalizeNewsUrl(post.sourceUrl||'')).filter(Boolean));
+  const usedNewsHeadlines=new Set(recentAiPosts.map(post=>normalizeNewsHeadline(post.sourceHeadline||'')).filter(Boolean));
+
   const publishOne=async(item,index)=>{
     const uid=aiSeedId('agent',item.key);
     const communityId=aiSeedId('community',item.key);
@@ -5854,12 +5903,25 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
     }
 
     const choice=aiContentChoice(item,day,force);
-    const news=await recentNewsForAgent(item);
+    const news=await recentNewsForAgent(item,usedNewsUrls,usedNewsHeadlines);
     if(!news || news.unavailable){
-      failed+=1;
-      results.push({key:item.key,name:item.name,status:'failed',postId:'',error:`Nenhuma notícia recente encontrada. ${news?.diagnostic||''}`.trim()});
+      skipped+=1;
+      results.push({
+        key:item.key,
+        name:item.name,
+        status:'skipped',
+        postId:'',
+        error:news?.duplicateOnly
+          ? 'As notícias recentes encontradas já foram publicadas pelos agentes.'
+          : `Nenhuma notícia recente inédita encontrada. ${news?.diagnostic||''}`.trim()
+      });
       return;
     }
+
+    const newsUrlKey=normalizeNewsUrl(news.canonicalUrl||news.link||'');
+    const newsHeadlineKey=normalizeNewsHeadline(news.title||'');
+    if(newsUrlKey)usedNewsUrls.add(newsUrlKey);
+    if(newsHeadlineKey)usedNewsHeadlines.add(newsHeadlineKey);
     const text=await generateUorquiAgentPost(env,item,news);
     if(!text){
       failed+=1;
