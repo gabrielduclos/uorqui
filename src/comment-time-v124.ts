@@ -1,3 +1,5 @@
+export {};
+
 type CommentSnapshot = {
   id?: string;
   authorUid?: string;
@@ -73,7 +75,7 @@ function syncCommentTimes() {
   });
 }
 
-const observer = new MutationObserver(syncCommentTimes);
-observer.observe(document.documentElement, { childList: true, subtree: true });
+const commentTimeObserver = new MutationObserver(syncCommentTimes);
+commentTimeObserver.observe(document.documentElement, { childList: true, subtree: true });
 window.setInterval(syncCommentTimes, 60_000);
 syncCommentTimes();
