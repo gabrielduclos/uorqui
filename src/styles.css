@@ -1680,3 +1680,18 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
 .superadmin-ai-post-row b{font-size:9.5px}.superadmin-ai-post-row small{font-size:7.5px;color:var(--muted);margin-top:2px}
 .superadmin-ai-post-row p{margin:5px 0 0;font-size:8.5px;line-height:1.4;color:#50545a}
 @media(max-width:600px){.superadmin-ai-post-row{grid-template-columns:1fr}.superadmin-ai-post-row .btn{width:100%}}
+
+.feed-loading-spinner{
+  min-height:180px;
+  display:grid;
+  place-items:center;
+}
+.feed-loading-spinner>span{
+  width:28px;
+  height:28px;
+  border:3px solid rgba(0,0,0,.12);
+  border-top-color:#111;
+  border-radius:50%;
+  animation:uorqui-feed-spin .75s linear infinite;
+}
+@keyframes uorqui-feed-spin{to{transform:rotate(360deg)}}
