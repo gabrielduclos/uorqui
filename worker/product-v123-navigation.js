@@ -9,6 +9,12 @@ export default {
     const response = await core.fetch(request, env, ctx);
     const url = new URL(request.url);
 
+    // Preserve Cloudflare's special 101 WebSocket response. Rebuilding it with
+    // new Response(...) would discard the webSocket object and throw a RangeError.
+    if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket' || response.status === 101) {
+      return response;
+    }
+
     if (url.pathname.startsWith('/api/')) {
       const headers = new Headers(response.headers);
       headers.set('X-Uorqui-Version', PRODUCT_VERSION);
