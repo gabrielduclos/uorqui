@@ -4303,6 +4303,7 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
   const [selectedMessage,setSelectedMessage]=useState<DirectMessage|null>(null);
   const [messagePopover,setMessagePopover]=useState<{top:number;left:number;align:"left"|"right";above:boolean}|null>(null);
   const [messageActionBusy,setMessageActionBusy]=useState(false);
+  const [conversationDeleteBusy,setConversationDeleteBusy]=useState(false);
   const mediaRecorderRef=useRef<MediaRecorder|null>(null);
   const mediaStreamRef=useRef<MediaStream|null>(null);
   const audioChunksRef=useRef<Blob[]>([]);
@@ -4557,6 +4558,21 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
     }catch(error){showToast(errorMessage(error));}finally{setMessageActionBusy(false);}
   };
 
+  const deleteConversation=async()=>{
+    if(!targetUid||conversationDeleteBusy)return;
+    if(!confirm("Apagar esta conversa? Ela será removida somente para você. Se houver uma nova mensagem no futuro, a conversa aparecerá novamente."))return;
+    setConversationDeleteBusy(true);
+    try{
+      await api(`/messages/${encodeURIComponent(targetUid)}`,{method:"DELETE"});
+      setConversations(current=>current.filter(item=>item.targetUid!==targetUid));
+      setMessages([]);
+      setConversation(null);
+      setTargetUid("");
+      sessionStorage.removeItem("uorqui-message-target");
+      showToast("Conversa apagada.");
+    }catch(error){showToast(errorMessage(error));}finally{setConversationDeleteBusy(false);}
+  };
+
   const target=conversations.find(c=>c.targetUid===targetUid);
   return <section className="page-section messages-page">
     <div className="messages-layout">
@@ -4596,6 +4612,9 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
             <button className="icon-btn message-mobile-back" onClick={()=>setTargetUid("")}><ArrowLeft size={19}/></button>
             <Avatar name={target?.displayName||"Usuário"} mediaId={target?.avatarMediaId} size={38}/>
             <div><strong>{target?.displayName||"Conversa"}</strong>{target?.username&&<small>@{target.username.replace(/^@/,"")}</small>}</div>
+            <button className="icon-btn message-delete-conversation" onClick={()=>void deleteConversation()} disabled={conversationDeleteBusy} aria-label="Apagar conversa" title="Apagar conversa">
+              <Trash2 size={18}/>
+            </button>
           </header>
           {conversation?.status==="pending"&&conversation.requestedBy!==me.uid&&<div className="message-request-banner"><span>Solicitação de mensagem</span><div><button className="btn small" onClick={()=>void decideRequest(true)}>Aceitar</button><button className="btn small secondary" onClick={()=>void decideRequest(false)}>Ignorar</button></div></div>}
           <div className="message-scroll">
@@ -4659,7 +4678,7 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
                   </div>
                 ) : (
                   <>
-                    <textarea name="message" rows={1} maxLength={4000} placeholder={recordingAudio?"Gravando áudio…":"Mensagem…"} disabled={recordingAudio||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)}/>
+                    <textarea name="message" rows={1} maxLength={4000} placeholder={recordingAudio?"Gravando áudio…":"Mensagem…"} disabled={recordingAudio}/>
                     {recordingAudio&&<span className="message-recording-label">Gravando áudio…</span>}
                   </>
                 )}
@@ -4669,7 +4688,7 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
               ) : recordedAudio ? (
                 <button type="button" className="icon-btn message-send" onClick={()=>void sendRecordedAudio()} disabled={audioSendingRef.current} aria-label="Enviar áudio"><Send size={21}/></button>
               ) : (
-                <button className="icon-btn message-send" disabled={busy||Boolean(conversation?.status==="pending"&&conversation.requestedBy===me.uid)} aria-label="Enviar mensagem"><Send size={21}/></button>
+                <button className="icon-btn message-send" disabled={busy} aria-label="Enviar mensagem"><Send size={21}/></button>
               )}
             </div>
           </form>
