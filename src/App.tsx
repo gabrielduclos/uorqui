@@ -1442,6 +1442,7 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
   const [socialFeedPosts, setSocialFeedPosts] = useState<Post[]>([]);
   const [socialFollowingCount, setSocialFollowingCount] = useState<number | null>(null);
   const [suggestedCommunities, setSuggestedCommunities] = useState<Community[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
 
   const communityPosts = useMemo(
     () => data.posts.filter((post) => post.scope === "community"),
@@ -1514,6 +1515,7 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
 
 
   const loadSocialFeed = async () => {
+    setFeedLoading(true);
     try {
       const result = await api<{ followingCount: number; posts: Post[]; communities: Community[] }>("/social/feed");
       setSocialFeedPosts(result.posts || []);
@@ -1522,6 +1524,8 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
       void prefetchPostMedia(result.posts || [], 16);
     } catch {
       // O bootstrap continua sendo fallback se a camada social falhar.
+    } finally {
+      setFeedLoading(false);
     }
   };
 
@@ -1565,7 +1569,12 @@ function HomePage({ data, tab, setTab, refresh, onCompose, onOpenCommunity, onOp
             showToast={showToast}
           />
         ))}
-        {!posts.length && <Empty title="Nada por aqui ainda" text="Novas publicações aparecerão aqui conforme a rede se movimentar." />}
+        {feedLoading && !posts.length && (
+          <div className="feed-loading-spinner" role="status" aria-label="Carregando publicações">
+            <span />
+          </div>
+        )}
+        {!feedLoading && !posts.length && <Empty title="Nada por aqui ainda" text="Novas publicações aparecerão aqui conforme a rede se movimentar." />}
       </section>
     </div>
   );
