@@ -656,6 +656,10 @@ export default function App() {
   };
 
   const navigate = (next: View) => {
+    if (next === "messages") {
+      sessionStorage.removeItem("uorqui-message-target");
+      sessionStorage.removeItem("uorqui-message-post");
+    }
     if (sharedPost) {
       setSharedPost(null);
       const params = new URLSearchParams(location.search);
@@ -4454,13 +4458,21 @@ type DirectMessage = {
 function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string}; showToast: (m:string)=>void }) {
   const [conversations,setConversations]=useState<MessageConversation[]>([]);
   const [nextOffset,setNextOffset]=useState<number|null>(null);
-  const [targetUid,setTargetUid]=useState(() => sessionStorage.getItem("uorqui-message-target") || "");
+  const [targetUid,setTargetUid]=useState(() => {
+    const target = sessionStorage.getItem("uorqui-message-target") || "";
+    sessionStorage.removeItem("uorqui-message-target");
+    return target;
+  });
   const [messages,setMessages]=useState<DirectMessage[]>([]);
   const [conversation,setConversation]=useState<{status?:string;requestedBy?:string}|null>(null);
   const [nextBefore,setNextBefore]=useState("");
   const [busy,setBusy]=useState(false);
   const [files,setFiles]=useState<File[]>([]);
-  const [sharedPostId,setSharedPostId]=useState(() => sessionStorage.getItem("uorqui-message-post") || "");
+  const [sharedPostId,setSharedPostId]=useState(() => {
+    const postId = sessionStorage.getItem("uorqui-message-post") || "";
+    sessionStorage.removeItem("uorqui-message-post");
+    return postId;
+  });
   const [mediaUrls,setMediaUrls]=useState<Record<string,string>>({});
   const [userQuery,setUserQuery]=useState("");
   const [userResults,setUserResults]=useState<Array<{uid:string;displayName?:string;username?:string;avatarMediaId?:string;bio?:string}>>([]);
@@ -4484,7 +4496,6 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
       const result=await api<{conversations:MessageConversation[];nextOffset:number|null}>(`/messages?offset=${offset}&limit=20`);
       setConversations(current=>offset?[...current,...result.conversations]:result.conversations);
       setNextOffset(result.nextOffset);
-      if(!targetUid && result.conversations[0]?.targetUid) setTargetUid(result.conversations[0].targetUid);
     }catch(error){showToast(errorMessage(error));}
   };
 
@@ -4496,7 +4507,6 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
       setConversation(result.conversation);
       setMessages(current=>before?[...result.messages,...current]:result.messages);
       setNextBefore(result.nextBefore||"");
-      sessionStorage.setItem("uorqui-message-target",uid);
     }catch(error){showToast(errorMessage(error));}
   };
 
@@ -4546,7 +4556,7 @@ function MessagesPage({ me, showToast }: { me: {uid:string;displayName?:string};
     setTargetUid(person.uid);
     setUserQuery("");
     setUserResults([]);
-    sessionStorage.setItem("uorqui-message-target",person.uid);
+
   };
 
   const sendMessagePayload=async({text="",payloadFiles=[],postId=""}:{text?:string;payloadFiles?:File[];postId?:string})=>{
