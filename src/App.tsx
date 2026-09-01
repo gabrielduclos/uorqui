@@ -3241,7 +3241,7 @@ function SuperadminPage({
   const [busyCompany, setBusyCompany] = useState("");
   const [daysByCompany, setDaysByCompany] = useState<Record<string, string>>({});
   const [aiStatus, setAiStatus] = useState<SuperadminAiStatus | null>(null);
-  const [aiBusy, setAiBusy] = useState<"" | "seed" | "publish">("");
+  const [aiBusy, setAiBusy] = useState<"" | "seed" | "publish" | `publish:${string}`>("");
   const [aiDeleteBusy, setAiDeleteBusy] = useState("");
 
   const load = async () => {
@@ -3347,21 +3347,25 @@ function SuperadminPage({
     }
   };
 
-  const publishAiNow = async () => {
-    if (aiBusy) return;
-    setAiBusy("publish");
+  const publishAiNow = async (agentKey: string, communityName: string) => {
+    if (aiBusy || !agentKey) return;
+    setAiBusy(`publish:${agentKey}`);
     try {
       const result = await api<SuperadminAiStatus & { published?: number; skipped?: number; failed?: number; results?: Array<{ name?: string; status?: string; error?: string }> }>(
         "/superadmin/ai-agents/publish",
-        { method: "POST" }
+        { method: "POST", body: JSON.stringify({ agentKey }) }
       );
-      setAiStatus(result);
+      setAiStatus({
+        ...result,
+        agents: Array.isArray(result?.agents) ? result.agents : [],
+        recentPosts: Array.isArray(result?.recentPosts) ? result.recentPosts : []
+      });
       showToast(
         result.published
-          ? `${result.published} publicação(ões) dos agentes criada(s).`
+          ? `Nova publicação criada em ${communityName}.`
           : result.failed
-            ? `Falha em ${result.failed} agente(s): ${result.results?.find(item => item.status === "failed")?.error || "verifique o status no painel."}`
-            : "Nenhuma nova publicação foi gerada nesta rodada."
+            ? `Falha em ${communityName}: ${result.results?.find(item => item.status === "failed")?.error || "verifique o status no painel."}`
+            : `Nenhuma nova publicação foi gerada em ${communityName}.`
       );
     } catch (error) {
       showToast(errorMessage(error));
@@ -3406,7 +3410,7 @@ function SuperadminPage({
           <div>
             <span className="superadmin-kicker"><Crown size={14}/> Equipe Uorqui · IA</span>
             <h3>Comunidades oficiais e publicações</h3>
-            <p className="muted">O automático publica no máximo 1 vez por comunidade ao dia. O disparo manual pelo Superadmin não tem limite diário e cria uma nova rodada a cada clique.</p>
+            <p className="muted">O automático publica no máximo 1 vez por comunidade ao dia. No manual, escolha a comunidade/agente e publique individualmente quantas vezes quiser.</p>
           </div>
           <div className="superadmin-ai-summary">
             <strong>{aiStatus ? aiStatus.postsToday : "—"}</strong>
@@ -3418,9 +3422,7 @@ function SuperadminPage({
           <button className="btn secondary" disabled={Boolean(aiBusy)} onClick={() => void seedAiCommunities()}>
             {aiBusy === "seed" ? "Criando…" : "Garantir comunidades"}
           </button>
-          <button className="btn" disabled={Boolean(aiBusy)} onClick={() => void publishAiNow()}>
-            {aiBusy === "publish" ? "Publicando…" : "Publicar agentes agora"}
-          </button>
+
         </div>
 
         {!aiStatus ? (
@@ -3435,6 +3437,13 @@ function SuperadminPage({
                 </div>
                 <span className={agent.official ? "ok" : "warn"}>{agent.official ? "Oficial" : "Pendente"}</span>
                 <span className={agent.publishedToday ? "ok" : "neutral"}>{agent.publishedToday ? `${agent.postsToday || 1} hoje` : "Ainda não publicado"}</span>
+                <button
+                  className="btn small"
+                  disabled={Boolean(aiBusy)}
+                  onClick={() => void publishAiNow(agent.key, agent.communityName)}
+                >
+                  {aiBusy === `publish:${agent.key}` ? "Publicando…" : "Publicar agora"}
+                </button>
               </div>
             ))}
           </div>
