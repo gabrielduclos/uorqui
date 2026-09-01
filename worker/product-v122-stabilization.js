@@ -10,6 +10,13 @@ export default {
     const url = new URL(request.url);
     const method = request.method.toUpperCase();
 
+    // WebSocket upgrade responses are special Cloudflare responses (101 + webSocket).
+    // Reconstructing them with new Response(...) drops the WebSocket and throws because
+    // the standard Response constructor only accepts status codes 200-599.
+    if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket' || response.status === 101) {
+      return response;
+    }
+
     if (method === 'GET' && response.ok && /^\/api\/media\/[^/]+$/.test(url.pathname)) {
       const headers = new Headers(response.headers);
       headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=900');
