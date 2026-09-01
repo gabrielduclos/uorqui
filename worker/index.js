@@ -1085,6 +1085,7 @@ async function updateSuperadminPremium(env, identity, companyId, body) {
 }
 
 async function bootstrap(env, identity, requestedCompanyId, ctx) {
+  await migrateLegacyCorporateCommunities(env);
   const me = await ensureUser(env, identity);
   await exposePendingEmailInvites(env, identity, ctx);
 
@@ -2337,7 +2338,93 @@ function publicCommunity(community) {
 }
 
 function communityView(community) {
-  return { ...community, visibility: normalizedCommunityVisibility(community?.visibility) };
+  return {
+    ...community,
+    companyId: '',
+    visibility: normalizedCommunityVisibility(community?.visibility),
+    verifiedCompany: Boolean(community?.verifiedCompany),
+    verifiedCompanyId: community?.verifiedCompanyId || community?.legacyCompanyId || '',
+    verifiedCompanyName: community?.verifiedCompanyName || '',
+    inviteOnly: Boolean(community?.inviteOnly || community?.verifiedCompany)
+  };
+}
+
+async function migrateLegacyCorporateCommunities(env) {
+  const stateId = 'community_model_unified_v1';
+  const state = await fsGet(env, 'systemConfig', stateId).catch(() => null);
+  if (state?.done) return state;
+
+  const communities = await fsListCollection(env, 'communities', 500).catch(() => []);
+  let migrated = 0;
+
+  for (const community of communities) {
+    const legacyCompanyId = community.companyId || '';
+    if (!legacyCompanyId) continue;
+
+    const company = await fsGet(env, 'companies', legacyCompanyId).catch(() => null);
+    const migratedAt = nowIso();
+    const updatedCommunity = {
+      ...community,
+      companyId: '',
+      legacyCompanyId,
+      verifiedCompany: true,
+      verifiedCompanyId: legacyCompanyId,
+      verifiedCompanyName: company?.name || community.companyName || '',
+      inviteOnly: true,
+      validationType: 'company',
+      validatedAt: community.validatedAt || migratedAt,
+      updatedAt: migratedAt
+    };
+    await fsPut(env, 'communities', community.id, updatedCommunity);
+
+    const memberships = await fsWhere(env, 'communityMembers', 'communityId', community.id, 500).catch(() => []);
+    for (const membership of memberships) {
+      await fsPut(env, 'communityMembers', membership.id, {
+        ...membership,
+        companyId: '',
+        legacyCompanyId: membership.companyId || legacyCompanyId
+      });
+    }
+
+    const posts = await fsWhere(env, 'posts', 'communityId', community.id, 500).catch(() => []);
+    for (const post of posts) {
+      await fsPut(env, 'posts', post.id, {
+        ...post,
+        companyId: '',
+        companyName: '',
+        communityVerifiedCompany: true,
+        communityInviteOnly: true,
+        legacyCompanyId: post.companyId || legacyCompanyId
+      });
+    }
+
+    const topics = await fsWhere(env, 'communityTopics', 'communityId', community.id, 500).catch(() => []);
+    for (const topic of topics) {
+      await fsPut(env, 'communityTopics', topic.id, {
+        ...topic,
+        companyId: '',
+        legacyCompanyId: topic.companyId || legacyCompanyId,
+        kind: 'topic'
+      });
+    }
+
+    const invites = await fsWhere(env, 'invites', 'communityId', community.id, 500).catch(() => []);
+    for (const invite of invites) {
+      await fsPut(env, 'invites', invite.id, {
+        ...invite,
+        companyId: '',
+        legacyCompanyId: invite.companyId || legacyCompanyId,
+        verifiedCompanyId: legacyCompanyId,
+        companyName: company?.name || invite.companyName || ''
+      });
+    }
+
+    migrated += 1;
+  }
+
+  const result = { id: stateId, done: true, migrated, completedAt: nowIso() };
+  await fsPut(env, 'systemConfig', stateId, result);
+  return result;
 }
 
 async function createSocialCommunity(env, identity, body) {
@@ -2352,6 +2439,10 @@ async function createSocialCommunity(env, identity, body) {
   const community = {
     id: communityId,
     companyId: '',
+    verifiedCompany: false,
+    verifiedCompanyId: '',
+    verifiedCompanyName: '',
+    inviteOnly: false,
     name,
     description,
     visibility,
@@ -2381,10 +2472,27 @@ async function createCommunity(env, identity, companyId, body) {
   const name=clean(body.name,90), description=clean(body.description||'',280);
   const visibility=normalizedCommunityVisibility(body.visibility);
   if(!name)throw httpError(400,'Informe o nome da comunidade.');
-  const communityId=id(); const community={id:communityId,companyId,name,description,visibility,isDefault:false,createdBy:identity.uid,createdAt:nowIso()};
+  const company=await fsGet(env,'companies',companyId);
+  const communityId=id();
+  const createdAt=nowIso();
+  const community={
+    id:communityId,
+    companyId:'',
+    legacyCompanyId:companyId,
+    verifiedCompany:true,
+    verifiedCompanyId:companyId,
+    verifiedCompanyName:company?.name||'',
+    inviteOnly:true,
+    validationType:'company',
+    validatedAt:createdAt,
+    name,description,visibility,isDefault:false,createdBy:identity.uid,createdAt,updatedAt:createdAt
+  };
   await fsPut(env,'communities',communityId,community);
-  await fsPut(env,'communityMembers',`${communityId}_${identity.uid}`,{id:`${communityId}_${identity.uid}`,companyId,communityId,uid:identity.uid,role:'owner',joinedAt:nowIso(),addedBy:identity.uid});
-  return { community };
+  await fsPut(env,'communityMembers',`${communityId}_${identity.uid}`,{
+    id:`${communityId}_${identity.uid}`,companyId:'',legacyCompanyId:companyId,communityId,uid:identity.uid,
+    role:'owner',joinedAt:createdAt,addedBy:identity.uid,joinedBy:'creator'
+  });
+  return { community: communityView(community) };
 }
 
 async function updateCommunityVisibility(env, identity, communityId, body) {
@@ -2424,18 +2532,10 @@ async function updateCommunityVisibility(env, identity, communityId, body) {
 }
 
 async function requireCommunityAccess(env, uid, community) {
-  if (!community.companyId) {
-    const membership = await fsGet(env, 'communityMembers', `${community.id}_${uid}`);
-    if (membership) return membership;
-    if (publicCommunity(community)) return { uid, role: 'member', social: true };
-    return await requireCommunityMember(env, uid, community.id);
-  }
-
-  const companyMember = await requireCompanyMember(env, uid, community.companyId);
-  if (companyMember.role === 'owner' || companyMember.role === 'admin') return companyMember;
-  if (publicCommunity(community)) return companyMember;
-  await requireCommunityMember(env, uid, community.id);
-  return companyMember;
+  const membership = await fsGet(env, 'communityMembers', `${community.id}_${uid}`);
+  if (membership) return membership;
+  if (publicCommunity(community)) return { uid, role: 'member', social: true };
+  return await requireCommunityMember(env, uid, community.id);
 }
 
 async function getCommunityJoinStatus(env, identity, communityId) {
@@ -2446,7 +2546,7 @@ async function getCommunityJoinStatus(env, identity, communityId) {
     community: communityView(community),
     member: Boolean(membership),
     requestStatus: request?.status || '',
-    canJoinImmediately: publicCommunity(community)
+    canJoinImmediately: publicCommunity(community) && !community.inviteOnly
   };
 }
 
@@ -2458,8 +2558,8 @@ async function requestOrJoinCommunity(env, identity, communityId, ctx) {
   const existingMember = await fsGet(env, 'communityMembers', memberId);
   if (existingMember) return { status: 'joined', alreadyMember: true, communityId };
 
-  if (community.companyId) {
-    throw httpError(403, 'Esta é uma comunidade de empresa. Somente a empresa pode convidar colaboradores.');
+  if (community.inviteOnly || community.verifiedCompany) {
+    throw httpError(403, 'Esta comunidade aceita entrada somente por convite.');
   }
 
   if (publicCommunity(community)) {
