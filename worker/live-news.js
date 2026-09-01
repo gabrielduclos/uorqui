@@ -7,6 +7,7 @@ const EDITORIAL_STATE_ID = 'uorqui_ai_live_news_state_v1';
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 const SEMANTIC_WINDOW = 72 * 60 * 60 * 1000;
 const FRESH_NEWS_WINDOW = 36 * 60 * 60 * 1000;
+const MAX_CANDIDATES_PER_AGENT = 10;
 let googleTokenCache = { expires: 0, token: '' };
 
 const AGENTS = [
@@ -35,8 +36,6 @@ export default {
     const scheduledAt = Number(controller?.scheduledTime || Date.now());
     const minute = new Date(scheduledAt).getUTCMinutes();
 
-    // Mantém as rotinas antigas no mesmo ritmo horário, mas impede o publicador
-    // diário antigo de competir com o novo editor de notícias ao vivo.
     if (minute === 0 && typeof scheduledCore.scheduled === 'function') {
       try {
         scheduledCore.scheduled(controller, suppressLegacyNewsAi(env), ctx);
@@ -70,36 +69,73 @@ function suppressLegacyNewsAi(env) {
 async function runLiveNewsCycle(env) {
   const now = Date.now();
   const state = await loadEditorialState(env, now);
+  const diagnostics = [];
   let published = 0;
 
   for (const agent of AGENTS) {
+    const diagnostic = { agent: agent.key, candidates: 0, attempted: 0, duplicates: 0, result: 'none' };
     try {
-      const candidate = await findFreshCandidate(agent, state, now);
-      if (!candidate) continue;
+      const candidates = await findFreshCandidates(agent, state, now);
+      diagnostic.candidates = candidates.length;
 
-      const enriched = await enrichArticle(candidate);
-      if (isDuplicateNews(enriched, state.items, now)) continue;
+      if (!candidates.length) {
+        diagnostic.result = 'no-fresh-candidate';
+        diagnostics.push(diagnostic);
+        console.info('Live news skipped:', diagnostic);
+        continue;
+      }
 
-      const text = await generateNewsText(env, agent, enriched);
-      if (!text) continue;
+      let post = null;
+      for (const candidate of candidates.slice(0, MAX_CANDIDATES_PER_AGENT)) {
+        diagnostic.attempted += 1;
+        const enriched = await enrichArticle(candidate);
+        if (isDuplicateNews(enriched, state.items, now)) {
+          diagnostic.duplicates += 1;
+          continue;
+        }
 
-      const post = await publishNewsPost(env, agent, enriched, text, now);
-      if (!post) continue;
+        const text = await generateNewsText(env, agent, enriched);
+        if (!text) {
+          diagnostic.result = 'empty-text';
+          continue;
+        }
 
-      rememberNews(state, enriched, post.createdAt);
-      await saveEditorialState(env, state, post.createdAt);
-      await notifyCommunityMembers(env, post).catch(error => {
-        console.warn('Live news notifications failed:', agent.key, error?.message || error);
-      });
-      published += 1;
+        post = await publishNewsPost(env, agent, enriched, text, now);
+        if (!post) {
+          diagnostic.result = 'missing-agent-or-community';
+          break;
+        }
+
+        rememberNews(state, enriched, post.createdAt);
+        await saveEditorialState(env, state, post.createdAt);
+        await notifyCommunityMembers(env, post).catch(error => {
+          console.warn('Live news notifications failed:', agent.key, error?.message || error);
+        });
+        published += 1;
+        diagnostic.result = 'published';
+        diagnostic.postId = post.id;
+        break;
+      }
+
+      if (!post && diagnostic.result === 'none') {
+        diagnostic.result = diagnostic.duplicates >= diagnostic.attempted ? 'all-duplicates' : 'no-publishable-candidate';
+      }
+      diagnostics.push(diagnostic);
+      console.info('Live news agent result:', diagnostic);
     } catch (error) {
+      diagnostic.result = 'error';
+      diagnostic.error = String(error?.message || error);
+      diagnostics.push(diagnostic);
       console.warn('Live news agent failed:', agent.key, error?.message || error);
     }
   }
 
   state.items = pruneStateItems(state.items, Date.now());
-  await saveEditorialState(env, state, new Date().toISOString());
-  console.log('Uorqui live news cycle complete', { published, checked: AGENTS.length });
+  state.lastRunAt = new Date().toISOString();
+  state.lastCycle = { published, checked: AGENTS.length, diagnostics };
+  if (published) state.lastPublishedAt = new Date().toISOString();
+  await saveEditorialState(env, state, state.lastRunAt);
+  console.log('Uorqui live news cycle complete', { published, checked: AGENTS.length, diagnostics });
 }
 
 async function loadEditorialState(env, now) {
@@ -149,41 +185,52 @@ async function saveEditorialState(env, state, updatedAt) {
   await fsPut(env, 'systemConfig', EDITORIAL_STATE_ID, state);
 }
 
-async function findFreshCandidate(agent, state, now) {
-  const groups = await Promise.all([
-    fetchGoogleNews(agent.query),
-    fetchBingNews(agent.query).catch(() => [])
+async function findFreshCandidates(agent, state, now) {
+  const [google, bing] = await Promise.all([
+    fetchGoogleNews(agent.query).catch(error => {
+      console.warn('Google News source failed:', agent.key, error?.message || error);
+      return [];
+    }),
+    fetchBingNews(agent.query).catch(error => {
+      console.warn('Bing News source failed:', agent.key, error?.message || error);
+      return [];
+    })
   ]);
-  const candidates = groups.flat()
+
+  const seen = new Set();
+  return [...google, ...bing]
     .filter(item => item?.title && item?.link)
     .filter(item => {
       const stamp = new Date(item.publishedAt || 0).getTime();
       return !Number.isFinite(stamp) || now - stamp <= FRESH_NEWS_WINDOW;
     })
-    .sort((a,b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
-
-  for (const candidate of candidates) {
-    if (!isDuplicateNews(candidate, state.items, now)) return candidate;
-  }
-  return null;
+    .sort((a,b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0))
+    .filter(item => {
+      const key = `${normalizeHeadline(item.title)}|${normalizeNewsUrl(item.link)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .filter(item => !isDuplicateNews(item, state.items, now))
+    .slice(0, 20);
 }
 
 async function fetchGoogleNews(query) {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:1d`)}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
-  const response = await fetch(url, { headers: { 'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/2.0)', 'Accept':'application/rss+xml,application/xml,text/xml,*/*' } });
+  const response = await fetch(url, { headers: { 'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/2.1)', 'Accept':'application/rss+xml,application/xml,text/xml,*/*' } });
   if (!response.ok) throw new Error(`Google News HTTP ${response.status}`);
   return parseNewsItems(await response.text(), 'Google Notícias');
 }
 
 async function fetchBingNews(query) {
   const url = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss&setlang=pt-br&cc=br`;
-  const response = await fetch(url, { headers: { 'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/2.0)', 'Accept':'application/rss+xml,application/xml,text/xml,*/*' } });
+  const response = await fetch(url, { headers: { 'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/2.1)', 'Accept':'application/rss+xml,application/xml,text/xml,*/*' } });
   if (!response.ok) throw new Error(`Bing News HTTP ${response.status}`);
   return parseNewsItems(await response.text(), 'Bing Notícias');
 }
 
 function parseNewsItems(xml, fallbackSource = '') {
-  const items = [...String(xml || '').matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 20);
+  const items = [...String(xml || '').matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 25);
   return items.map(match => {
     const raw = match[1];
     const title = decodeXmlText(raw.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || '');
@@ -205,9 +252,8 @@ async function enrichArticle(news) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5500);
     const response = await fetch(base.link, {
-      redirect:'follow',
-      signal:controller.signal,
-      headers:{'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/2.0)','Accept':'text/html,application/xhtml+xml'}
+      redirect:'follow', signal:controller.signal,
+      headers:{'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/2.1)','Accept':'text/html,application/xhtml+xml'}
     });
     clearTimeout(timer);
     if (!response.ok) return base;
@@ -232,11 +278,9 @@ function stateItem(news, createdAt = new Date().toISOString()) {
   const tokens = topicTokens(news.title || '');
   return {
     url: normalizeNewsUrl(news.canonicalUrl || news.link || ''),
-    headline: normalizeHeadline(news.title || ''),
-    tokens,
+    headline: normalizeHeadline(news.title || ''), tokens,
     topicKey: tokens.slice().sort().join('|'),
-    publishedAt: news.publishedAt || '',
-    createdAt
+    publishedAt: news.publishedAt || '', createdAt
   };
 }
 
@@ -250,7 +294,6 @@ function isDuplicateNews(news, previousItems = [], now = Date.now()) {
   for (const previous of previousItems) {
     if (current.url && previous.url && current.url === previous.url) return true;
     if (current.headline && previous.headline && current.headline === previous.headline) return true;
-
     const stamp = new Date(previous.createdAt || previous.publishedAt || 0).getTime();
     if (!Number.isFinite(stamp) || now - stamp > SEMANTIC_WINDOW) continue;
     if (sameTopic(current.tokens, Array.isArray(previous.tokens) ? previous.tokens : topicTokens(previous.headline || ''))) return true;
@@ -260,8 +303,7 @@ function isDuplicateNews(news, previousItems = [], now = Date.now()) {
 
 function sameTopic(a = [], b = []) {
   if (a.length < 3 || b.length < 3) return false;
-  const left = new Set(a);
-  const right = new Set(b);
+  const left = new Set(a), right = new Set(b);
   let common = 0;
   for (const token of left) if (right.has(token)) common += 1;
   const minCoverage = common / Math.min(left.size, right.size);
@@ -280,20 +322,14 @@ function topicTokens(value = '') {
 }
 
 function normalizeHeadline(value = '') {
-  return String(value || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toLocaleLowerCase('pt-BR')
-    .replace(/[^a-z0-9]+/g,' ')
-    .trim().replace(/\s+/g,' ');
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
 }
 
 function normalizeNewsUrl(value = '') {
   try {
     const url = new URL(String(value || ''));
     url.hash = '';
-    for (const key of [...url.searchParams.keys()]) {
-      if (/^utm_|^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
-    }
+    for (const key of [...url.searchParams.keys()]) if (/^utm_|^(fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
     return `${url.origin}${url.pathname}${url.searchParams.toString()?`?${url.searchParams.toString()}`:''}`.replace(/\/$/,'');
   } catch { return String(value || '').trim(); }
 }
@@ -309,7 +345,7 @@ async function generateNewsText(env, agent, news) {
     `PUBLICADA EM: ${news.publishedAt || 'recentemente'}`,
     'Escreva entre 250 e 600 caracteres em português do Brasil.',
     'Não invente números, contexto, causas, consequências ou declarações que não estejam na manchete.',
-    'Atribua a informação à fonte. Termine com uma pergunta curta que convide à discussão.',
+    'Atribua a informação à fonte.',
     'Não use markdown, hashtags ou invente citações.'
   ].join('\n');
 
@@ -317,10 +353,7 @@ async function generateNewsText(env, agent, news) {
     for (const model of ['@cf/zai-org/glm-4.7-flash','@cf/meta/llama-3.1-8b-instruct-fast']) {
       try {
         const response = await env.AI.run(model, {
-          messages:[
-            {role:'system',content:'Priorize precisão factual e nunca acrescente informação não fornecida.'},
-            {role:'user',content:prompt}
-          ],
+          messages:[{role:'system',content:'Priorize precisão factual e nunca acrescente informação não fornecida.'},{role:'user',content:prompt}],
           temperature:0.15,
           ...(model.includes('llama-3.1-8b-instruct-fast') ? {max_tokens:340} : {max_completion_tokens:340})
         });
@@ -334,7 +367,7 @@ async function generateNewsText(env, agent, news) {
 
   const headline = String(news.title || '').replace(/[\s.!?]+$/g,'').trim();
   if (!headline) return '';
-  return clean(`Segundo ${source}, ${headline}. A informação vem da matéria original e foi mantida sem acrescentar detalhes não confirmados. O que você acha desse assunto?`, 1400);
+  return clean(`Segundo ${source}, ${headline}. A informação vem da matéria original e foi mantida sem acrescentar detalhes não confirmados.`, 1400);
 }
 
 async function publishNewsPost(env, agent, news, text, now) {
@@ -344,48 +377,24 @@ async function publishNewsPost(env, agent, news, text, now) {
     fsGet(env, 'users', uid).catch(() => null),
     fsGet(env, 'communities', communityId).catch(() => null)
   ]);
-  if (!user || !community) return null;
+  if (!user || !community) {
+    console.warn('Live news publication target missing:', agent.key, { user: Boolean(user), community: Boolean(community) });
+    return null;
+  }
 
   const createdAt = new Date(now).toISOString();
   const postId = `uorqui_ai_live_${agent.key}_${now}_${crypto.randomUUID().slice(0,8)}`;
   const useSourceImage = Boolean(news.imageUrl && stableHash(news.title || '') % 10 < 6);
   const post = {
-    id:postId,
-    authorUid:uid,
-    authorName:agent.agent,
-    authorAvatarMediaId:user.avatarMediaId || '',
-    authorAccountType:'uorqui_agent',
-    authorAiAssisted:true,
-    authorTeamLabel:'Equipe Uorqui · IA',
-    scope:'community',
-    companyId:'',
-    communityId,
-    communityName:agent.name,
-    communityVisibility:'public',
-    communityOfficialUorqui:true,
-    communityOfficialLabel:'Oficial Uorqui',
-    topicId:'',
-    topicName:'',
-    type:'post',
-    text,
-    title:'',
-    requiresReadReceipt:false,
-    attachments:[],
-    reactionCount:0,
-    commentCount:0,
-    aiGenerated:true,
-    aiDisclosure:'Conteúdo assistido por IA pela Equipe Uorqui',
-    aiDay:brazilDateKey(new Date(now)),
-    aiContentMode:'news',
-    aiImageGenerated:false,
-    sourceName:news.source || '',
-    sourceUrl:news.canonicalUrl || news.link || '',
-    sourceImageUrl:useSourceImage ? (news.imageUrl || '') : '',
-    sourcePublishedAt:news.publishedAt || '',
-    sourceHeadline:news.title || '',
-    newsTopicKey:topicTokens(news.title || '').slice().sort().join('|'),
-    createdAt,
-    updatedAt:createdAt
+    id:postId, authorUid:uid, authorName:agent.agent,
+    authorAvatarMediaId:user.avatarMediaId || '', authorAccountType:'uorqui_agent', authorAiAssisted:true,
+    authorTeamLabel:'Equipe Uorqui · IA', scope:'community', companyId:'', communityId, communityName:agent.name,
+    communityVisibility:'public', communityOfficialUorqui:true, communityOfficialLabel:'Oficial Uorqui', topicId:'', topicName:'',
+    type:'post', text, title:'', requiresReadReceipt:false, attachments:[], reactionCount:0, commentCount:0,
+    aiGenerated:true, aiDisclosure:'Conteúdo assistido por IA pela Equipe Uorqui', aiDay:brazilDateKey(new Date(now)), aiContentMode:'news', aiImageGenerated:false,
+    sourceName:news.source || '', sourceUrl:news.canonicalUrl || news.link || '', sourceImageUrl:useSourceImage ? (news.imageUrl || '') : '',
+    sourcePublishedAt:news.publishedAt || '', sourceHeadline:news.title || '', newsTopicKey:topicTokens(news.title || '').slice().sort().join('|'),
+    createdAt, updatedAt:createdAt
   };
   await fsPut(env, 'posts', postId, post);
   return post;
@@ -395,95 +404,35 @@ async function notifyCommunityMembers(env, post) {
   const memberships = await fsWhere(env, 'communityMembers', 'communityId', post.communityId, 300).catch(() => []);
   const recipients = [...new Set(memberships.map(item => item.uid).filter(uid => uid && uid !== post.authorUid))];
   if (!recipients.length) return;
-
   const title = `Nova publicação em ${post.communityName}`;
   const body = `${post.authorName} publicou uma nova notícia.`;
   for (const uid of recipients) {
     const id = `post_${post.id}_${uid}`;
-    await fsPut(env, 'notifications', id, {
-      id,
-      recipientUid:uid,
-      type:'new_post',
-      title,
-      body,
-      data:{ postId:post.id, companyId:'', communityId:post.communityId, targetView:'communities' },
-      read:false,
-      persistent:false,
-      createdAt:post.createdAt
-    }).catch(() => null);
+    await fsPut(env, 'notifications', id, { id, recipientUid:uid, type:'new_post', title, body, data:{ postId:post.id, companyId:'', communityId:post.communityId, targetView:'communities' }, read:false, persistent:false, createdAt:post.createdAt }).catch(() => null);
     await sendPushToUser(env, uid, { title, body, postId:post.id, communityId:post.communityId, type:'new_post' }).catch(() => null);
   }
 }
 
 async function sendPushToUser(env, uid, payload) {
-  const subscriptions = (await fsWhere(env, 'pushSubscriptions', 'uid', uid, 20).catch(() => []))
-    .filter(item => item.enabled !== false && item.token);
+  const subscriptions = (await fsWhere(env, 'pushSubscriptions', 'uid', uid, 20).catch(() => [])).filter(item => item.enabled !== false && item.token);
   if (!subscriptions.length) return;
-
   const accessToken = await getGoogleAccessToken(env);
   const endpoint = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/messages:send`;
   for (const subscription of subscriptions) {
-    const data = {
-      type:String(payload.type || 'new_post'),
-      postId:String(payload.postId || ''),
-      communityId:String(payload.communityId || ''),
-      url:`/?post=${encodeURIComponent(payload.postId || '')}`
-    };
-    const response = await fetch(endpoint, {
-      method:'POST',
-      headers:{'Authorization':`Bearer ${accessToken}`,'Content-Type':'application/json'},
-      body:JSON.stringify({message:{token:subscription.token,notification:{title:payload.title,body:payload.body},data,webpush:{headers:{Urgency:'normal'},fcm_options:{link:data.url}}}})
-    }).catch(() => null);
+    const data = { type:String(payload.type || 'new_post'), postId:String(payload.postId || ''), communityId:String(payload.communityId || ''), url:`/?post=${encodeURIComponent(payload.postId || '')}` };
+    const response = await fetch(endpoint, { method:'POST', headers:{'Authorization':`Bearer ${accessToken}`,'Content-Type':'application/json'}, body:JSON.stringify({message:{token:subscription.token,notification:{title:payload.title,body:payload.body},data,webpush:{headers:{Urgency:'normal'},fcm_options:{link:data.url}}}}) }).catch(() => null);
     if (!response?.ok) console.warn('Live news push failed', uid, response?.status || 'network');
   }
 }
 
-function promptText(input) {
-  const messages = Array.isArray(input?.messages) ? input.messages : [];
-  return messages.map(message => contentText(message?.content)).filter(Boolean).join('\n');
-}
-
-function contentText(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map(part => typeof part === 'string' ? part : typeof part?.text === 'string' ? part.text : typeof part?.content === 'string' ? part.content : '').filter(Boolean).join('\n');
-}
-
-function extractAiText(result) {
-  if (typeof result === 'string') return result.trim();
-  if (!result || typeof result !== 'object') return '';
-  const direct = [result.response,result.output_text,result.text,result.result?.response,result.result?.output_text,result.result?.text,result.choices?.[0]?.message?.content,result.choices?.[0]?.text];
-  for (const candidate of direct) {
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
-    const text = contentText(candidate);
-    if (text.trim()) return text.trim();
-  }
-  return '';
-}
-
-function stableHash(value = '') {
-  let hash = 0;
-  for (const ch of String(value)) hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
-  return Math.abs(hash);
-}
-
-function brazilDateKey(date = new Date()) {
-  return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
-}
-
-function clean(value, max = 1000) {
-  return String(value || '').replace(/\u0000/g,'').trim().slice(0,max);
-}
-
-function decodeXmlText(value = '') {
-  return decodeHtml(String(value || '').replace(/^<!\[CDATA\[|\]\]>$/g,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());
-}
-
-function decodeHtml(value = '') {
-  return String(value || '')
-    .replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'")
-    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)||32));
-}
+function promptText(input) { const messages = Array.isArray(input?.messages) ? input.messages : []; return messages.map(message => contentText(message?.content)).filter(Boolean).join('\n'); }
+function contentText(content) { if (typeof content === 'string') return content; if (!Array.isArray(content)) return ''; return content.map(part => typeof part === 'string' ? part : typeof part?.text === 'string' ? part.text : typeof part?.content === 'string' ? part.content : '').filter(Boolean).join('\n'); }
+function extractAiText(result) { if (typeof result === 'string') return result.trim(); if (!result || typeof result !== 'object') return ''; const direct = [result.response,result.output_text,result.text,result.result?.response,result.result?.output_text,result.result?.text,result.choices?.[0]?.message?.content,result.choices?.[0]?.text]; for (const candidate of direct) { if (typeof candidate === 'string' && candidate.trim()) return candidate.trim(); const text = contentText(candidate); if (text.trim()) return text.trim(); } return ''; }
+function stableHash(value = '') { let hash = 0; for (const ch of String(value)) hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0; return Math.abs(hash); }
+function brazilDateKey(date = new Date()) { return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date); }
+function clean(value, max = 1000) { return String(value || '').replace(/\u0000/g,'').trim().slice(0,max); }
+function decodeXmlText(value = '') { return decodeHtml(String(value || '').replace(/^<!\[CDATA\[|\]\]>$/g,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()); }
+function decodeHtml(value = '') { return String(value || '').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)||32)); }
 
 function firebaseServiceAccount(env) {
   let email = String(env.FIREBASE_SERVICE_ACCOUNT_EMAIL || '').trim();
@@ -507,19 +456,12 @@ async function getGoogleAccessToken(env) {
   if (!credentials.email || !credentials.privateKey) throw new Error('Service Account do Firebase incompleta no Worker.');
   const now = Math.floor(Date.now()/1000);
   const header = b64urlJson({alg:'RS256',typ:'JWT'});
-  const claims = b64urlJson({
-    iss:credentials.email,
-    scope:'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging',
-    aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3600
-  });
+  const claims = b64urlJson({ iss:credentials.email, scope:'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging', aud:'https://oauth2.googleapis.com/token', iat:now, exp:now+3600 });
   const input = `${header}.${claims}`;
   const key = await importPrivateKey(credentials.privateKey);
   const signature = await crypto.subtle.sign({name:'RSASSA-PKCS1-v1_5'},key,new TextEncoder().encode(input));
   const assertion = `${input}.${b64url(new Uint8Array(signature))}`;
-  const response = await fetch('https://oauth2.googleapis.com/token',{
-    method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion})
-  });
+  const response = await fetch('https://oauth2.googleapis.com/token',{ method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion}) });
   const data = await response.json().catch(()=>({}));
   if (!response.ok || !data.access_token) throw new Error(`Firebase Service Account recusada: ${data.error_description || data.error || response.status}`);
   googleTokenCache = { token:data.access_token, expires:Date.now()+Number(data.expires_in||3600)*1000 };
@@ -531,17 +473,9 @@ async function importPrivateKey(pem) {
   const bytes = Uint8Array.from(atob(value),char=>char.charCodeAt(0));
   return crypto.subtle.importKey('pkcs8',bytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);
 }
-
 function b64urlJson(value) { return b64url(new TextEncoder().encode(JSON.stringify(value))); }
-function b64url(bytes) {
-  let binary='';
-  for (const byte of bytes) binary+=String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-}
-
-function fsBase(env) {
-  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)`;
-}
+function b64url(bytes) { let binary=''; for (const byte of bytes) binary+=String.fromCharCode(byte); return btoa(binary).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_'); }
+function fsBase(env) { return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)`; }
 
 async function fsRequest(env, path, options = {}) {
   const token = await getGoogleAccessToken(env);
@@ -557,61 +491,12 @@ async function fsRequest(env, path, options = {}) {
   return data;
 }
 
-async function fsGet(env, collection, docId) {
-  const doc = await fsRequest(env, `/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}`);
-  return doc ? fromDoc(doc) : null;
-}
-
-async function fsPut(env, collection, docId, object) {
-  const doc = await fsRequest(env, `/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}`,{
-    method:'PATCH',body:JSON.stringify({fields:toFields({...object,id:object.id||docId})})
-  });
-  return fromDoc(doc);
-}
-
-async function fsListCollection(env, collection, limit = 300) {
-  const data = await fsRequest(env, `/documents/${encodeURIComponent(collection)}?pageSize=${Math.min(500,Math.max(1,limit))}`);
-  return (data?.documents || []).map(fromDoc);
-}
-
-async function fsWhere(env, collection, field, value, limit = 100) {
-  const data = await fsRequest(env, '/documents:runQuery',{
-    method:'POST',
-    body:JSON.stringify({structuredQuery:{
-      from:[{collectionId:collection}],
-      where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:toValue(value)}},
-      limit:Math.min(500,Math.max(1,limit))
-    }})
-  });
-  return (Array.isArray(data)?data:[]).map(row=>row.document).filter(Boolean).map(fromDoc);
-}
-
-function fromDoc(document) {
-  if (!document) return null;
-  const object = fromFields(document.fields || {});
-  object.id = object.id || decodeURIComponent(String(document.name || '').split('/').pop() || '');
-  return object;
-}
+async function fsGet(env, collection, docId) { const doc = await fsRequest(env, `/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}`); return doc ? fromDoc(doc) : null; }
+async function fsPut(env, collection, docId, object) { const doc = await fsRequest(env, `/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}`,{ method:'PATCH', body:JSON.stringify({fields:toFields({...object,id:object.id||docId})}) }); return fromDoc(doc); }
+async function fsListCollection(env, collection, limit = 300) { const data = await fsRequest(env, `/documents/${encodeURIComponent(collection)}?pageSize=${Math.min(500,Math.max(1,limit))}`); return (data?.documents || []).map(fromDoc); }
+async function fsWhere(env, collection, field, value, limit = 100) { const data = await fsRequest(env, '/documents:runQuery',{ method:'POST', body:JSON.stringify({structuredQuery:{ from:[{collectionId:collection}], where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:toValue(value)}}, limit:Math.min(500,Math.max(1,limit)) }}) }); return (Array.isArray(data)?data:[]).map(row=>row.document).filter(Boolean).map(fromDoc); }
+function fromDoc(document) { if (!document) return null; const object = fromFields(document.fields || {}); object.id = object.id || decodeURIComponent(String(document.name || '').split('/').pop() || ''); return object; }
 function toFields(object) { return Object.fromEntries(Object.entries(object).filter(([,v])=>v!==undefined).map(([k,v])=>[k,toValue(v)])); }
-function toValue(value) {
-  if (value === null) return {nullValue:null};
-  if (typeof value === 'string') return {stringValue:value};
-  if (typeof value === 'boolean') return {booleanValue:value};
-  if (typeof value === 'number') return Number.isInteger(value)?{integerValue:String(value)}:{doubleValue:value};
-  if (Array.isArray(value)) return {arrayValue:{values:value.map(toValue)}};
-  if (typeof value === 'object') return {mapValue:{fields:toFields(value)}};
-  return {stringValue:String(value)};
-}
+function toValue(value) { if (value === null) return {nullValue:null}; if (typeof value === 'string') return {stringValue:value}; if (typeof value === 'boolean') return {booleanValue:value}; if (typeof value === 'number') return Number.isInteger(value)?{integerValue:String(value)}:{doubleValue:value}; if (Array.isArray(value)) return {arrayValue:{values:value.map(toValue)}}; if (typeof value === 'object') return {mapValue:{fields:toFields(value)}}; return {stringValue:String(value)}; }
 function fromFields(fields) { return Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,fromValue(v)])); }
-function fromValue(value) {
-  if (!value || typeof value !== 'object') return null;
-  if ('stringValue' in value) return value.stringValue;
-  if ('booleanValue' in value) return value.booleanValue;
-  if ('integerValue' in value) return Number(value.integerValue);
-  if ('doubleValue' in value) return Number(value.doubleValue);
-  if ('timestampValue' in value) return value.timestampValue;
-  if ('nullValue' in value) return null;
-  if ('arrayValue' in value) return (value.arrayValue?.values || []).map(fromValue);
-  if ('mapValue' in value) return fromFields(value.mapValue?.fields || {});
-  return null;
-}
+function fromValue(value) { if (!value || typeof value !== 'object') return null; if ('stringValue' in value) return value.stringValue; if ('booleanValue' in value) return value.booleanValue; if ('integerValue' in value) return Number(value.integerValue); if ('doubleValue' in value) return Number(value.doubleValue); if ('timestampValue' in value) return value.timestampValue; if ('nullValue' in value) return null; if ('arrayValue' in value) return (value.arrayValue?.values || []).map(fromValue); if ('mapValue' in value) return fromFields(value.mapValue?.fields || {}); return null; }
