@@ -166,6 +166,7 @@ export default function App() {
   const [planOfferReason, setPlanOfferReason] = useState<PlanOfferReason>(null);
   const [lastCreatedPost, setLastCreatedPost] = useState<Post | null>(null);
   const [realtimeRevision, setRealtimeRevision] = useState(0);
+  const [messagesListRevision, setMessagesListRevision] = useState(0);
   const [, setAuthRevision] = useState(0);
 
   useEffect(() => {
@@ -659,6 +660,7 @@ export default function App() {
     if (next === "messages") {
       sessionStorage.removeItem("uorqui-message-target");
       sessionStorage.removeItem("uorqui-message-post");
+      setMessagesListRevision((current) => current + 1);
     }
     if (sharedPost) {
       setSharedPost(null);
@@ -938,7 +940,7 @@ export default function App() {
       onOpenPlans={() => openPlans("manual")}
       showToast={showToast}
     />;
-    if (view === "messages") return <MessagesPage me={data.me} showToast={showToast} />;
+    if (view === "messages") return <MessagesPage key={messagesListRevision} me={data.me} showToast={showToast} />;
     if (view === "plans") return <PlansPage
       data={data}
       reason={planOfferReason}
