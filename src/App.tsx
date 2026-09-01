@@ -859,7 +859,7 @@ export default function App() {
         onUpgradeRequired={(message) => openPlans("limit", message)}
       />
     );
-    if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} />;
+    if (view === "search") return <SearchPage data={data} initialQuery={searchSeed} refresh={() => refresh()} showToast={showToast} onOpenCommunity={openCommunity} />;
     if (view === "jobs") return <HomePage
       data={data}
       tab={homeTab}
@@ -2249,8 +2249,8 @@ function CommunitiesPage({
   );
 }
 
-function SearchPage({ data, initialQuery, refresh, showToast }: {
-  data: BootstrapData; initialQuery?: string; refresh: () => Promise<void>; showToast: (m: string) => void;
+function SearchPage({ data, initialQuery, refresh, showToast, onOpenCommunity }: {
+  data: BootstrapData; initialQuery?: string; refresh: () => Promise<void>; showToast: (m: string) => void; onOpenCommunity: (communityId: string) => void;
 }) {
   const [query, setQuery] = useState(initialQuery || "");
   const [posts, setPosts] = useState<Post[]>([]);
@@ -2377,11 +2377,7 @@ function SearchPage({ data, initialQuery, refresh, showToast }: {
           <div className="discover-community-row">
             {communities.slice(0, 10).map((community) => (
               <button className={`discover-community-card ${community.officialUorqui ? "official" : ""}`} key={community.id} onClick={() => {
-                const params = new URLSearchParams(location.search);
-                params.set("community", community.id);
-                if (community.companyId) params.set("company", community.companyId);
-                history.pushState({}, "", `${location.pathname}?${params.toString()}`);
-                window.dispatchEvent(new PopStateEvent("popstate"));
+                onOpenCommunity(community.id);
               }}>
                 <CommunityImage community={community} />
                 <div className="discover-community-name"><strong>{community.name}</strong>{community.officialUorqui && <span className="official-uorqui-badge"><ShieldCheck size={10}/> Oficial</span>}</div>
