@@ -261,6 +261,10 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'POST' && path === '/communities') {
     return json(await createSocialCommunity(env, identity, await readJson(request)), 201);
   }
+  if (method === 'GET' && /^\/communities\/[^/]+\/invite-candidates$/.test(path)) {
+    const communityId = decodeURIComponent(path.split('/')[2]);
+    return json(await searchCommunityInviteCandidates(env, identity, communityId, url.searchParams));
+  }
   if (method === 'POST' && /^\/communities\/[^/]+\/invites$/.test(path)) {
     const communityId = decodeURIComponent(path.split('/')[2]);
     return json(await createCommunityInvite(env, identity, communityId, await readJson(request), ctx), 201);
@@ -2761,19 +2765,94 @@ async function removeCommunityMember(env, identity, communityId, targetUid, ctx)
   return { ok: true };
 }
 
+async function searchCommunityInviteCandidates(env, identity, communityId, params) {
+  const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+  if (!(await canManageCommunityStructure(env, identity, community))) {
+    throw httpError(403, 'Somente administradores da comunidade podem convidar pessoas.');
+  }
+
+  const q = String(params.get('q') || '').trim().toLocaleLowerCase('pt-BR');
+  if (q.length < 2) return { people: [] };
+
+  const [users, members, pendingInvites] = await Promise.all([
+    fsListCollection(env, 'users', 500).catch(() => []),
+    fsWhere(env, 'communityMembers', 'communityId', communityId, 500).catch(() => []),
+    fsWhere(env, 'invites', 'communityId', communityId, 500).catch(() => [])
+  ]);
+  const memberUids = new Set(members.map(item => item.uid));
+  const pendingUids = new Set(
+    pendingInvites.filter(item => item.status === 'pending').map(item => item.targetUid).filter(Boolean)
+  );
+
+  const people = users
+    .filter(user => user?.uid && user.uid !== identity.uid && user.accountType !== 'uorqui_agent')
+    .filter(user => {
+      const haystack = `${user.displayName || ''} ${user.username || ''} ${user.email || ''}`.toLocaleLowerCase('pt-BR');
+      return haystack.includes(q);
+    })
+    .slice(0, 25)
+    .map(user => ({
+      uid: user.uid,
+      displayName: user.displayName || 'Usuário',
+      username: user.username || '',
+      email: user.email || '',
+      avatarMediaId: user.avatarMediaId || '',
+      alreadyMember: memberUids.has(user.uid),
+      invitePending: pendingUids.has(user.uid)
+    }));
+
+  return { people };
+}
+
 async function createCommunityInvite(env, identity, communityId, body, ctx) {
   const community=await fsGetRequired(env,'communities',communityId,'Comunidade não encontrada.');
-  await requireCompanyAdmin(env,identity.uid,community.companyId);
+
+  if (community.companyId) {
+    await requireCompanyAdmin(env,identity.uid,community.companyId);
+  } else if (!(await canManageCommunityStructure(env, identity, community))) {
+    throw httpError(403,'Somente administradores da comunidade podem convidar pessoas.');
+  }
+
   let target=null;
   if(body.uid) target=await fsGet(env,'users',clean(body.uid,150));
-  else if(body.email){const u=await fsWhere(env,'users','email',normalizeEmail(body.email),5);target=u[0]||null;}
-  if(!target)throw httpError(404,'Usuário não encontrado. Ele precisa entrar primeiro na empresa.');
-  const member=await fsGet(env,'companyMembers',`${community.companyId}_${target.uid}`);
-  if(!member||member.status!=='active')throw httpError(400,'Este usuário não faz parte da empresa.');
-  const existing=await fsGet(env,'communityMembers',`${communityId}_${target.uid}`); if(existing)throw httpError(409,'O usuário já participa desta comunidade.');
-  const company=await fsGet(env,'companies',community.companyId); const token=randomToken(); const inviteId=id();
-  const invite={id:inviteId,type:'community',companyId:community.companyId,companyName:company?.name||'',communityId,communityName:community.name,email:target.email,targetUid:target.uid,invitedBy:identity.uid,status:'pending',tokenHash:await sha256(token),createdAt:nowIso(),expiresAt:new Date(Date.now()+7*86400000).toISOString()};
-  await fsPut(env,'invites',inviteId,invite); await createInviteNotification(env,invite,target.uid,ctx);
+  else if(body.email){
+    const u=await fsWhere(env,'users','email',normalizeEmail(body.email),5);
+    target=u[0]||null;
+  }
+  if(!target)throw httpError(404,'Usuário não encontrado.');
+
+  if (community.companyId) {
+    const member=await fsGet(env,'companyMembers',`${community.companyId}_${target.uid}`);
+    if(!member||member.status!=='active')throw httpError(400,'Este usuário não faz parte da empresa.');
+  }
+
+  const existing=await fsGet(env,'communityMembers',`${communityId}_${target.uid}`);
+  if(existing)throw httpError(409,'O usuário já participa desta comunidade.');
+
+  const existingInvites=await fsWhere(env,'invites','communityId',communityId,250).catch(()=>[]);
+  const pending=existingInvites.find(item=>item.targetUid===target.uid&&item.status==='pending');
+  if(pending)return {inviteId:pending.id,alreadyPending:true};
+
+  const company=community.companyId?await fsGet(env,'companies',community.companyId):null;
+  const token=randomToken();
+  const inviteId=id();
+  const invite={
+    id:inviteId,
+    type:'community',
+    companyId:community.companyId||'',
+    companyName:company?.name||'',
+    communityId,
+    communityName:community.name,
+    email:target.email||'',
+    targetUid:target.uid,
+    invitedBy:identity.uid,
+    status:'pending',
+    tokenHash:await sha256(token),
+    createdAt:nowIso(),
+    expiresAt:new Date(Date.now()+7*86400000).toISOString()
+  };
+  await fsPut(env,'invites',inviteId,invite);
+  await createInviteNotification(env,invite,target.uid,ctx);
   return { inviteId };
 }
 
@@ -2785,7 +2864,9 @@ async function createInviteNotification(env, invite, uid, ctx) {
     title: invite.type === 'company' ? `${invite.companyName} convidou você` : `Convite para ${invite.communityName}`,
     body: invite.type === 'company'
       ? 'Aceite para entrar no ambiente privado da empresa.'
-      : `A empresa convidou você para ${invite.communityName}.`,
+      : invite.companyId
+        ? `A empresa convidou você para ${invite.communityName}.`
+        : `Você recebeu um convite para participar de ${invite.communityName}.`,
     data: {
       inviteId: invite.id,
       companyId: invite.companyId,
@@ -2836,8 +2917,19 @@ async function acceptInvite(env, identity, body, ctx) {
     joiningUser=await fsGet(env,'users',identity.uid);
     await fsPut(env,'companyMembers',`${invite.companyId}_${identity.uid}`,{id:`${invite.companyId}_${identity.uid}`,companyId:invite.companyId,uid:identity.uid,displayName:joiningUser?.displayName||identity.name||'',email:normalizeEmail(identity.email||''),role:'member',status:'active',joinedAt:nowIso()});
   } else {
-    const member=await fsGet(env,'companyMembers',`${invite.companyId}_${identity.uid}`);if(!member||member.status!=='active')throw httpError(403,'Você precisa fazer parte da empresa antes de entrar na comunidade.');
-    await fsPut(env,'communityMembers',`${invite.communityId}_${identity.uid}`,{id:`${invite.communityId}_${identity.uid}`,companyId:invite.companyId,communityId:invite.communityId,uid:identity.uid,role:'member',joinedAt:nowIso()});
+    if (invite.companyId) {
+      const member=await fsGet(env,'companyMembers',`${invite.companyId}_${identity.uid}`);
+      if(!member||member.status!=='active')throw httpError(403,'Você precisa fazer parte da empresa antes de entrar na comunidade.');
+    }
+    await fsPut(env,'communityMembers',`${invite.communityId}_${identity.uid}`,{
+      id:`${invite.communityId}_${identity.uid}`,
+      companyId:invite.companyId||'',
+      communityId:invite.communityId,
+      uid:identity.uid,
+      role:'member',
+      joinedAt:nowIso(),
+      joinedBy:'invite'
+    });
   }
   invite.status='accepted';invite.acceptedBy=identity.uid;invite.acceptedAt=nowIso();await fsPut(env,'invites',invite.id,invite);
   const nid=`invite_${invite.id}_${identity.uid}`;const n=await fsGet(env,'notifications',nid);if(n)await fsPut(env,'notifications',nid,{...n,read:true,status:'accepted'});
