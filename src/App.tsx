@@ -1665,10 +1665,15 @@ function CommunitiesPage({
   const [topicCreateOpen, setTopicCreateOpen] = useState(false);
   const [topicBusy, setTopicBusy] = useState(false);
   const [communityImageBusy,setCommunityImageBusy]=useState(false);
-  const selectedCommunity = data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
+  const [createdCommunities,setCreatedCommunities]=useState<Community[]>([]);
+  const selectedCommunity = createdCommunities.find((community) => community.id === selectedCommunityId)
+    || data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
 
-  const joinedCommunityIds = useMemo(() => new Set(data.communities.map((community) => community.id)), [data.communities]);
+  const joinedCommunityIds = useMemo(() => new Set([
+    ...data.communities.map((community) => community.id),
+    ...createdCommunities.map((community) => community.id)
+  ]), [data.communities, createdCommunities]);
   const isJoinedCommunity = (communityId: string) => joinStatusByCommunity[communityId] === "left" ? false : joinedCommunityIds.has(communityId) || joinStatusByCommunity[communityId] === "joined";
 
   const joinCommunity = async (community: Community) => {
@@ -1879,10 +1884,17 @@ function CommunitiesPage({
       if(photo instanceof File&&photo.size){
         await uploadCommunityImage(result.community.id,photo);
       }
+      const created = { ...result.community, memberCount: Math.max(1, Number(result.community.memberCount || 1)) };
+      setCreatedCommunities((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setCreateOpen(false);
       showToast("Comunidade criada.");
+      onSelectCommunity(created.id);
       await refresh();
-      onSelectCommunity(result.community.id);
+      setCreatedCommunities((current) => current.filter((item) =>
+        item.id !== created.id ||
+        (!data.allCompanyCommunities.some((community) => community.id === created.id) &&
+         !data.communities.some((community) => community.id === created.id))
+      ));
     } catch (err) {
       if (isPlanLimitError(err)) {
         setCreateOpen(false);
@@ -2174,7 +2186,10 @@ function CommunitiesPage({
     );
   }
 
-  const listedCommunities = data.allCompanyCommunities.length ? data.allCompanyCommunities : data.communities;
+  const listedCommunities = Array.from(new Map([
+    ...createdCommunities,
+    ...(data.allCompanyCommunities.length ? data.allCompanyCommunities : data.communities)
+  ].map((community) => [community.id, community])).values());
 
   return (
     <section className="page-section">
@@ -2860,7 +2875,7 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
     const form = event.currentTarget;
     const fd = new FormData(form);
     try {
-      await api(`/companies/${data.selectedCompanyId}/communities`, {
+      const result = await api<{ community: Community }>(`/companies/${data.selectedCompanyId}/communities`, {
         method: "POST",
         body: JSON.stringify({
           name: fd.get("name"),
@@ -2868,7 +2883,9 @@ function AdminPage({ data, onCompanyChange, onEditCompany, onManageCommunity, re
           visibility: fd.get("visibility")
         })
       });
-      form.reset(); showToast("Comunidade criada."); await refresh();
+      form.reset();
+      showToast(`Comunidade “${result.community.name}” criada.`);
+      await refresh();
     } catch (err) {
       if (isPlanLimitError(err)) {
         onUpgradeRequired(errorMessage(err));
