@@ -59,7 +59,7 @@ window.fetch = async (...args) => {
 };
 
 function candidateScore(card: HTMLElement, post: PostMeta) {
-  if (!post.topicName) return -1;
+  if (post.scope !== "community" || !post.communityName) return -1;
 
   const author = normalize(card.querySelector<HTMLElement>(".post-author strong")?.textContent || "");
   const scope = normalize(card.querySelector<HTMLElement>(".post-author .scope")?.textContent || "");
@@ -85,33 +85,49 @@ function candidateScore(card: HTMLElement, post: PostMeta) {
   return score;
 }
 
+function resolvePost(card: HTMLElement, available: PostMeta[]) {
+  const rememberedId = card.dataset.uorquiPostId || "";
+  if (rememberedId) {
+    const remembered = knownPosts.get(rememberedId);
+    if (remembered?.scope === "community" && remembered.communityName) return remembered;
+  }
+
+  let best: PostMeta | null = null;
+  let bestScore = -1;
+  for (const post of available) {
+    const score = candidateScore(card, post);
+    if (score > bestScore) {
+      best = post;
+      bestScore = score;
+    }
+  }
+  return best && bestScore >= 6 ? best : null;
+}
+
 function syncPostTopics() {
-  const available = [...knownPosts.values()].filter(post => post.topicName);
+  const available = [...knownPosts.values()].filter(post => post.scope === "community" && post.communityName);
   if (!available.length) return;
 
   document.querySelectorAll<HTMLElement>(".post-card").forEach((card) => {
-    const existing = card.querySelector<HTMLElement>(".post-topic-v125");
-    if (existing) return;
+    const post = resolvePost(card, available);
+    if (!post?.communityName) return;
 
-    let best: PostMeta | null = null;
-    let bestScore = -1;
-    for (const post of available) {
-      const score = candidateScore(card, post);
-      if (score > bestScore) {
-        best = post;
-        bestScore = score;
-      }
-    }
-
-    if (!best?.topicName || bestScore < 6) return;
     const authorBlock = card.querySelector<HTMLElement>(".post-author");
-    if (!authorBlock) return;
+    const scopeLabel = authorBlock?.querySelector<HTMLElement>(".scope");
+    if (!authorBlock || !scopeLabel) return;
 
-    const label = document.createElement("span");
-    label.className = "post-topic-v125";
-    label.textContent = `Assunto · ${best.topicName}`;
-    authorBlock.appendChild(label);
-    card.dataset.uorquiPostId = best.id;
+    // O assunto agora faz parte da mesma linha de contexto da publicação.
+    // Ex.: Comunidades - Tecnologia & IA - Inteligência artificial
+    const topic = String(post.topicName || "").trim();
+    const label = ["Comunidades", String(post.communityName).trim(), topic]
+      .filter(Boolean)
+      .join(" - ");
+
+    if (scopeLabel.textContent !== label) scopeLabel.textContent = label;
+
+    // Remove o rótulo separado usado pela versão anterior para evitar duplicação.
+    authorBlock.querySelector<HTMLElement>(".post-topic-v125")?.remove();
+    card.dataset.uorquiPostId = post.id;
   });
 }
 
