@@ -2128,6 +2128,37 @@ function CommunitiesPage({
             </section>
           )}
 
+          {!selectedCommunity.companyId && canManageSelectedCommunity && memberSearch.trim().length >= 2 && (
+            <section className="panel-card social-community-invite-results">
+              <strong>Convidar pessoas</strong>
+              {inviteSearchBusy && <div className="loading-line">Buscando pessoas…</div>}
+              {!inviteSearchBusy && inviteCandidates.map(person => (
+                <div className="community-member-row members-page-row" key={person.uid}>
+                  <Avatar name={person.displayName || person.username || "Usuário"} mediaId={person.avatarMediaId} size={42} />
+                  <div className="ellipsis">
+                    <strong>{person.displayName || "Usuário"}</strong>
+                    <small>{person.username ? `@${person.username.replace(/^@/,"")}` : person.email || ""}</small>
+                  </div>
+                  {person.alreadyMember ? (
+                    <span className="community-membership-status active"><Check size={13} /> Participa</span>
+                  ) : person.invitePending ? (
+                    <span className="community-membership-status active"><Check size={13} /> Convite enviado</span>
+                  ) : (
+                    <button
+                      className="member-community-action add"
+                      disabled={Boolean(memberAction)}
+                      onClick={() => void inviteSocialMember(person.uid)}
+                    >
+                      <UserPlus size={15} />
+                      {memberAction?.uid === person.uid && memberAction.kind === "invite" ? "Enviando…" : "Convidar"}
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!inviteSearchBusy && !inviteCandidates.length && <p className="muted">Nenhuma pessoa encontrada.</p>}
+            </section>
+          )}
+
           <section className="panel-card members-page-list">
             {membersLoading && <div className="loading-line">Carregando membros…</div>}
             {!membersLoading && listedMembers.map((companyMember) => {
