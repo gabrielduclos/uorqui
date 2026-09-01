@@ -1944,9 +1944,9 @@ function CommunitiesPage({
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     try {
-      const endpoint = data.selectedCompanyId && data.canAdmin
-        ? `/companies/${data.selectedCompanyId}/communities`
-        : "/communities";
+      // Comunidades criadas pela tela social são sempre comunidades do Uorqui.
+      // Comunidades corporativas continuam sendo criadas pelo painel da empresa.
+      const endpoint = "/communities";
       const result = await api<{ community: Community }>(endpoint, {
         method: "POST", body: JSON.stringify({
           name: fd.get("name"),
