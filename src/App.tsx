@@ -3414,11 +3414,42 @@ function SuperadminPage({
         "/superadmin/ai-agents/publish",
         { method: "POST", body: JSON.stringify({ agentKey }) }
       );
-      setAiStatus({
-        ...result,
-        agents: Array.isArray(result?.agents) ? result.agents : [],
-        recentPosts: Array.isArray(result?.recentPosts) ? result.recentPosts : []
-      });
+      if (result.published) {
+        // Atualização otimista: reflete imediatamente no painel sem esperar nova leitura.
+        setAiStatus((current) => {
+          const base = current || result;
+          const agents = (Array.isArray(base?.agents) ? base.agents : []).map((agent) =>
+            agent.key === agentKey
+              ? { ...agent, publishedToday: true, postsToday: Number(agent.postsToday || 0) + Number(result.published || 0) }
+              : agent
+          );
+          return {
+            ...base,
+            postsToday: Number(base?.postsToday || 0) + Number(result.published || 0),
+            newsPostsToday: Number(base?.newsPostsToday || 0) + Number(result.published || 0),
+            agents
+          };
+        });
+
+        // Sincroniza logo em seguida com os dados reais gravados no backend.
+        try {
+          const fresh = await api<SuperadminAiStatus>("/superadmin/ai-agents/status");
+          setAiStatus({
+            ...fresh,
+            agents: Array.isArray(fresh?.agents) ? fresh.agents : [],
+            recentPosts: Array.isArray(fresh?.recentPosts) ? fresh.recentPosts : []
+          });
+        } catch {
+          // Mantém o estado otimista se a leitura de sincronização falhar.
+        }
+      } else {
+        setAiStatus({
+          ...result,
+          agents: Array.isArray(result?.agents) ? result.agents : [],
+          recentPosts: Array.isArray(result?.recentPosts) ? result.recentPosts : []
+        });
+      }
+
       showToast(
         result.published
           ? `Nova publicação criada em ${communityName}.`
