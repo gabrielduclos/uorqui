@@ -292,10 +292,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const openMessages = (event: Event) => {
-      const detail = (event as CustomEvent<{ targetUid?: string; postId?: string }>).detail || {};
-      if (detail.targetUid) sessionStorage.setItem("uorqui-message-target", detail.targetUid);
-      if (detail.postId) sessionStorage.setItem("uorqui-message-post", detail.postId);
+    const openMessages = () => {
+      sessionStorage.removeItem("uorqui-message-target");
+      sessionStorage.removeItem("uorqui-message-post");
+      setMessagesListRevision((current) => current + 1);
       setView("messages");
     };
     window.addEventListener("uorqui:open-messages", openMessages);
@@ -916,8 +916,10 @@ export default function App() {
         setSelectedCommunityId(communityId);
         setView("communities");
       }}
-      onOpenMessages={(uid) => {
-        if (uid) sessionStorage.setItem("uorqui-message-target", uid);
+      onOpenMessages={() => {
+        sessionStorage.removeItem("uorqui-message-target");
+        sessionStorage.removeItem("uorqui-message-post");
+        setMessagesListRevision((current) => current + 1);
         setView("messages");
       }}
     />;
