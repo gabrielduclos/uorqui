@@ -5392,28 +5392,42 @@ async function extractArticlePreview(news){
     return {...base,source:siteName||base.source,canonicalUrl:canonical,imageUrl:/^https?:\/\//i.test(imageUrl)?imageUrl:''};
   }catch{return base;}
 }
-async function recentNewsForAgent(item){
-  const query=UORQUI_AI_NEWS_QUERIES[item.key]||item.specialty||item.name;
-  const rssUrl=`https://news.google.com/rss/search?q=${encodeURIComponent(query+' when:2d')}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
-  try{
-    const response=await fetch(rssUrl,{headers:{'User-Agent':'Uorqui/1.0','Accept':'application/rss+xml,application/xml,text/xml'}});
-    if(!response.ok)return null;
-    const xml=await response.text();
-    const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0,8);
-    for(const match of items){
-      const raw=match[1];
-      const title=decodeXmlText(raw.match(/<title>([\s\S]*?)<\/title>/i)?.[1]||'');
-      const link=decodeXmlText(raw.match(/<link>([\s\S]*?)<\/link>/i)?.[1]||'');
-      const pubDate=decodeXmlText(raw.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]||'');
-      const source=decodeXmlText(raw.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1]||'');
-      const publishedAt=pubDate?new Date(pubDate).toISOString():'';
-      if(!title||!link)continue;
-      if(publishedAt && Date.now()-new Date(publishedAt).getTime()>3*24*60*60*1000)continue;
-      return await extractArticlePreview({title,link,source:source||'Google Notícias',publishedAt});
-    }
-  }catch(error){
-    console.warn('Uorqui AI news lookup failed',item.key,error?.message||error);
+async function fetchNewsRss(query,window='2d'){
+  const rssUrl=`https://news.google.com/rss/search?q=${encodeURIComponent(query+' when:'+window)}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+  const response=await fetch(rssUrl,{headers:{'User-Agent':'Mozilla/5.0 (compatible; UorquiNews/1.0)','Accept':'application/rss+xml,application/xml,text/xml,*/*'}});
+  if(!response.ok)throw new Error(`Google News RSS HTTP ${response.status}`);
+  const xml=await response.text();
+  const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0,20);
+  for(const match of items){
+    const raw=match[1];
+    const title=decodeXmlText(raw.match(/<title>([\s\S]*?)<\/title>/i)?.[1]||'');
+    const link=decodeXmlText(raw.match(/<link>([\s\S]*?)<\/link>/i)?.[1]||'');
+    const pubDate=decodeXmlText(raw.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]||'');
+    const source=decodeXmlText(raw.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1]||'');
+    let publishedAt='';
+    try{const d=new Date(pubDate);if(Number.isFinite(d.getTime()))publishedAt=d.toISOString();}catch{}
+    if(!title||!link)continue;
+    return await extractArticlePreview({title,link,source:source||'Google Notícias',publishedAt});
   }
+  return null;
+}
+
+async function recentNewsForAgent(item){
+  const specific=UORQUI_AI_NEWS_QUERIES[item.key]||item.specialty||item.name;
+  const queries=[
+    [specific,'2d'],
+    [specific,'7d'],
+    [item.specialty||item.name,'7d'],
+    [item.name,'7d']
+  ];
+  const errors=[];
+  for(const [query,window] of queries){
+    try{
+      const news=await fetchNewsRss(query,window);
+      if(news)return news;
+    }catch(error){errors.push(String(error?.message||error));}
+  }
+  console.warn('Uorqui AI news lookup exhausted',item.key,errors.join(' | '));
   return null;
 }
 
