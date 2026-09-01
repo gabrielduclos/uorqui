@@ -2,51 +2,20 @@ import liveNewsCore, { RealtimeHub } from './live-news.js';
 
 export { RealtimeHub };
 
-const LIVE_NEWS_INTERVAL_MS = 15 * 60 * 1000;
-let lastTrafficKickAt = 0;
-let trafficKickInFlight = false;
 const emptyNewsAttempts = new Map();
 
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const now = Date.now();
-
-    // Segunda garantia além do Cron Trigger: se o Uorqui estiver recebendo
-    // tráfego e o último disparo local tiver mais de 15 minutos, roda o mesmo
-    // ciclo editorial em background. Assim uma falha/atraso do trigger da
-    // Cloudflare não obriga o Superadmin a publicar manualmente.
-    if (
-      url.pathname.startsWith('/api/') &&
-      request.method !== 'OPTIONS' &&
-      !trafficKickInFlight &&
-      now - lastTrafficKickAt >= LIVE_NEWS_INTERVAL_MS
-    ) {
-      lastTrafficKickAt = now;
-      trafficKickInFlight = true;
-      const task = kickLiveNewsFromTraffic(env, ctx, now)
-        .catch(error => console.error('Uorqui traffic live-news fallback failed:', error?.message || error))
-        .finally(() => { trafficKickInFlight = false; });
-      if (ctx?.waitUntil) ctx.waitUntil(task);
-    }
-
+    // Notícias automáticas são disparadas exclusivamente pelo Cron Trigger.
+    // Evita corridas entre múltiplas instâncias do Worker e o cron, que podiam
+    // publicar a mesma notícia duas vezes antes do estado editorial ser salvo.
     return liveNewsCore.fetch(request, withEditorialAi(env), ctx);
   },
 
   async scheduled(controller, env, ctx) {
-    lastTrafficKickAt = Date.now();
     return liveNewsCore.scheduled(controller, withEditorialAi(env), ctx);
   }
 };
-
-async function kickLiveNewsFromTraffic(env, ctx, now) {
-  // Usa minuto diferente de zero para não repetir as rotinas horárias antigas;
-  // o live-news.js executa o editor de notícias em qualquer minuto do scheduled.
-  const fakeTime = new Date(now);
-  fakeTime.setUTCMinutes(fakeTime.getUTCMinutes() === 0 ? 1 : fakeTime.getUTCMinutes(), 0, 0);
-  const controller = { scheduledTime: fakeTime.getTime(), cron: 'traffic-fallback' };
-  return liveNewsCore.scheduled(controller, withEditorialAi(env), ctx);
-}
 
 function withEditorialAi(env) {
   if (!env?.AI || env.__uorquiEditorialAi) return env;
@@ -122,8 +91,6 @@ function stripTrailingQuestion(value = '') {
   const before = parts.slice(0, -1).join('').trim();
   if (!before || before.length < 60) return text;
 
-  // Em conteúdo jornalístico do Uorqui, uma última sentença interrogativa é
-  // tratada como chamada de engajamento e removida. O corpo factual permanece.
   if (last.endsWith('?')) return before;
   return text;
 }
