@@ -58,7 +58,7 @@ export interface Company {
 
 export interface Community {
   id: string;
-  companyId: string;
+  companyId?: string;
   name: string;
   description?: string;
   visibility?: "public" | "private";
@@ -157,6 +157,7 @@ export interface Post {
   sourceImageUrl?: string;
   sourcePublishedAt?: string;
   sourceHeadline?: string;
+  newsTopicKey?: string;
   scope: "world" | "company" | "community";
   companyId?: string;
   companyName?: string;
