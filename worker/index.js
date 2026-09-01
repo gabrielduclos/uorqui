@@ -1098,7 +1098,12 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
   const canAdmin = role === 'owner' || role === 'admin';
 
   const cmAll = await fsWhere(env, 'communityMembers', 'uid', identity.uid, 150);
-  const communityMemberships = cmAll.filter(m => !selectedCompanyId || m.companyId === selectedCompanyId);
+  // Sempre preservar as comunidades sociais do usuário, mesmo quando há uma empresa ativa.
+  // Antes, selecionar uma empresa descartava memberships com companyId vazio e fazia
+  // comunidades sociais recém-criadas "sumirem" após o refresh.
+  const communityMemberships = cmAll.filter(m =>
+    !selectedCompanyId || !m.companyId || m.companyId === selectedCompanyId
+  );
   const memberCommunityIds = new Set(communityMemberships.map(m => m.communityId));
 
   const companyCommunityMemberships = selectedCompanyId
@@ -1114,7 +1119,23 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
     ...communityView(c),
     memberCount: Number(memberCountByCommunity[c.id] || 0)
   }));
-  const communities = companyCommunities.filter(c => memberCommunityIds.has(c.id)).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+
+  const socialMemberships = communityMemberships.filter(m => !m.companyId);
+  const socialCommunities = [];
+  for (const membership of socialMemberships) {
+    const social = await fsGet(env, 'communities', membership.communityId);
+    if (!social || social.companyId) continue;
+    socialCommunities.push({
+      ...communityView(social),
+      memberCount: Math.max(1, Number(social.memberCount || 0))
+    });
+  }
+
+  const communities = Array.from(new Map([
+    ...companyCommunities.filter(c => memberCommunityIds.has(c.id)),
+    ...socialCommunities
+  ].map(c => [c.id, c])).values()).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+
   const communityIds = new Set(communities.map(c => c.id));
   const communityMap = Object.fromEntries(communities.map(c => [c.id, c]));
 
@@ -1168,7 +1189,10 @@ async function bootstrap(env, identity, requestedCompanyId, ctx) {
 
   notifications = notifications.sort(byCreatedDesc).slice(0, 60);
 
-  let allCompanyCommunities = companyCommunities.sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  let allCompanyCommunities = Array.from(new Map([
+    ...companyCommunities,
+    ...socialCommunities
+  ].map(c => [c.id, c])).values()).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
   let members = [];
   if (selectedCompanyId && canAdmin) {
     const companyMemberDocs = (await fsWhere(env, 'companyMembers', 'companyId', selectedCompanyId, 100)).filter(m => m.status === 'active');
@@ -2339,7 +2363,7 @@ async function createCommunity(env, identity, companyId, body) {
   if(!name)throw httpError(400,'Informe o nome da comunidade.');
   const communityId=id(); const community={id:communityId,companyId,name,description,visibility,isDefault:false,createdBy:identity.uid,createdAt:nowIso()};
   await fsPut(env,'communities',communityId,community);
-  await fsPut(env,'communityMembers',`${communityId}_${identity.uid}`,{id:`${communityId}_${identity.uid}`,companyId,communityId,uid:identity.uid,role:'moderator',joinedAt:nowIso()});
+  await fsPut(env,'communityMembers',`${communityId}_${identity.uid}`,{id:`${communityId}_${identity.uid}`,companyId,communityId,uid:identity.uid,role:'owner',joinedAt:nowIso(),addedBy:identity.uid});
   return { community };
 }
 
