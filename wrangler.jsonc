@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "uorqui-api",
-  "main": "./worker/ai-news-compat.js",
+  "main": "./worker/live-news.js",
   "compatibility_date": "2026-08-19",
   "keep_vars": true,
   "placement": {
@@ -52,7 +52,7 @@
   },
   "triggers": {
     "crons": [
-      "0 */3 * * *"
+      "*/15 * * * *"
     ]
   },
   "ai": {
