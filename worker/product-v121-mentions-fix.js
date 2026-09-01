@@ -37,20 +37,23 @@ async function searchMentionUsers(request, env, ctx, url) {
   const communityId = clean(url.searchParams.get('communityId'), 150);
   let allowedUids = null;
   if (communityId) {
+    const community = [
+      ...(Array.isArray(bootstrap.communities) ? bootstrap.communities : []),
+      ...(Array.isArray(bootstrap.allCompanyCommunities) ? bootstrap.allCompanyCommunities : [])
+    ].find(item => item?.id === communityId);
+
+    const isPublicCommunity = community?.visibility === 'public';
     const visibleCommunity = Boolean(bootstrap.canAdmin) ||
       (bootstrap.communities || []).some(item => item.id === communityId) ||
-      (bootstrap.allCompanyCommunities || []).some(item => item.id === communityId && item.visibility === 'public');
+      isPublicCommunity;
     if (!visibleCommunity) throw httpError(403, 'Você não tem acesso a esta comunidade.');
 
-    const memberships = await fsWhere(env, 'communityMembers', 'communityId', communityId, 300);
-    allowedUids = new Set(memberships.map(item => item.uid).filter(Boolean));
-
-    // Administradores têm acesso à comunidade mesmo quando não existe um
-    // documento de membership explícito. Mantém esses usuários pesquisáveis.
-    for (const member of await fsWhere(env, 'companyMembers', 'companyId', companyId, 300)) {
-      if (member.status === 'active' && ['owner', 'admin'].includes(member.role) && member.uid) {
-        allowedUids.add(member.uid);
-      }
+    // Comunidade aberta: qualquer membro ativo da empresa pode ser mencionado,
+    // mesmo que ainda não tenha um documento em communityMembers.
+    // Comunidade fechada: somente membros reais daquela comunidade aparecem.
+    if (!isPublicCommunity) {
+      const memberships = await fsWhere(env, 'communityMembers', 'communityId', communityId, 300);
+      allowedUids = new Set(memberships.map(item => item.uid).filter(Boolean));
     }
   }
 
