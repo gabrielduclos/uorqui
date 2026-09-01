@@ -74,3 +74,19 @@ if ("serviceWorker" in navigator) {
     void openNotificationInsideApp(message);
   });
 }
+
+// O sino funciona como toggle: quando a Central de Notificações já está
+// aberta, um novo clique fecha a central e volta para o feed principal.
+// O listener roda em capture para impedir que o onClick React navegue de novo
+// para "notifications" no mesmo clique.
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const bell = target.closest<HTMLButtonElement>(".top-bell");
+  if (!bell || !bell.classList.contains("active")) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  window.dispatchEvent(new CustomEvent("uorqui:go-feed"));
+}, true);
