@@ -1837,6 +1837,27 @@ function CommunitiesPage({
   }, [realtimeRevision]);
 
   useEffect(() => {
+    if (!membersPage || !selectedCommunity || selectedCommunity.companyId || !canManageSelectedCommunity) return;
+    const q = memberSearch.trim();
+    if (q.length < 2) {
+      setInviteCandidates([]);
+      setInviteSearchBusy(false);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setInviteSearchBusy(true);
+      api<{people:Array<{uid:string;displayName?:string;username?:string;email?:string;avatarMediaId?:string;alreadyMember?:boolean;invitePending?:boolean}>>(
+        `/communities/${encodeURIComponent(selectedCommunity.id)}/invite-candidates?q=${encodeURIComponent(q)}`
+      )
+        .then(result => { if (active) setInviteCandidates(result.people || []); })
+        .catch(error => { if (active) { setInviteCandidates([]); showToast(errorMessage(error)); } })
+        .finally(() => { if (active) setInviteSearchBusy(false); });
+    }, 220);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [membersPage, memberSearch, selectedCommunityId, canManageSelectedCommunity]);
+
+  useEffect(() => {
     if (!openMembersRequested || !selectedCommunityId) return;
     setMembersPage(true);
     if (!membersLoaded) void loadCommunityMembers(selectedCommunityId);
