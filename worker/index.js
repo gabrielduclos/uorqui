@@ -1815,6 +1815,21 @@ async function requestCompanyDeletion(env, identity, companyId, body, ctx) {
 
 async function requestCommunityDeletion(env, identity, communityId, ctx) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
+
+  if (!community.companyId) {
+    const membership = await fsGet(env, 'communityMembers', `${communityId}_${identity.uid}`);
+    const ownsCommunity = community.createdBy === identity.uid || Boolean(
+      membership && (
+        membership.role === 'owner' ||
+        membership.addedBy === identity.uid ||
+        membership.joinedBy === 'creator'
+      )
+    );
+    if (!ownsCommunity) throw httpError(403, 'Somente o proprietário pode apagar esta comunidade.');
+    await deleteCommunityCascade(env, communityId);
+    return { ok: true, deleted: true, direct: true };
+  }
+
   const approvers = await deletionApproversForCommunity(env, community);
   return createDeletionRequest(env, identity, 'community', community, approvers, ctx);
 }
@@ -2348,7 +2363,8 @@ async function createSocialCommunity(env, identity, body) {
     uid: identity.uid,
     role: 'owner',
     joinedAt: createdAt,
-    addedBy: identity.uid
+    addedBy: identity.uid,
+    joinedBy: 'creator'
   };
   await fsPut(env, 'communities', communityId, community);
   await fsPut(env, 'communityMembers', membership.id, membership);
@@ -3039,7 +3055,11 @@ async function deleteJob(env, identity, jobId, ctx) {
 async function canManageCommunityStructure(env, identity, community) {
   if (community.createdBy === identity.uid) return true;
   const membership = await fsGet(env, 'communityMembers', `${community.id}_${identity.uid}`);
-  if (membership && ['owner', 'moderator', 'admin'].includes(membership.role)) return true;
+  if (membership && (
+    ['owner', 'moderator', 'admin'].includes(membership.role) ||
+    membership.addedBy === identity.uid ||
+    membership.joinedBy === 'creator'
+  )) return true;
   if (community.companyId) {
     const companyMembership = await fsGet(env, 'companyMembers', `${community.companyId}_${identity.uid}`);
     if (companyMembership?.status === 'active' && ['owner', 'admin'].includes(companyMembership.role)) return true;
