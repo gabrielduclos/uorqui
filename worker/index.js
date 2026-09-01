@@ -1086,7 +1086,7 @@ async function updateSuperadminPremium(env, identity, companyId, body) {
 
 async function bootstrap(env, identity, requestedCompanyId, ctx) {
   await migrateLegacyCorporateCommunities(env);
-  await migrateOpenCompaniesToCommunities(env);
+  await migrateCompaniesToCommunities(env);
   const me = await ensureUser(env, identity);
   await exposePendingEmailInvites(env, identity, ctx);
 
@@ -1506,9 +1506,10 @@ async function createCompany(env, identity, body) {
     if (error?.status === 409) throw httpError(409, 'Já existe uma empresa cadastrada com este CNPJ.');
     throw error;
   }
-  // Toda empresa já nasce como uma comunidade verificada e somente por convite.
-  await ensureVerifiedCompanyCommunity(env, company);
-  return { company, communityId: verifiedCompanyCommunityId(companyId) };
+  // Enquanto a área empresarial estiver fora do produto social, toda empresa cadastrada
+  // é representada por uma comunidade normal, sem selo ou regra Premium.
+  await ensureCompanyCommunity(env, company);
+  return { company, communityId: companyCommunityId(companyId) };
 }
 
 async function syncCompanyNameReferences(env, companyId, companyName) {
@@ -1605,7 +1606,7 @@ async function updateCompany(env, identity, companyId, body, ctx) {
   if (company.name !== name) {
     const syncTask = Promise.all([
       syncCompanyNameReferences(env, companyId, name),
-      ensureVerifiedCompanyCommunity(env, updated)
+      ensureCompanyCommunity(env, updated)
     ])
       .catch(error => console.error('Falha ao atualizar o nome da empresa nos conteúdos:', error));
     if (ctx?.waitUntil) ctx.waitUntil(syncTask);
@@ -2332,13 +2333,13 @@ function communityView(community) {
   };
 }
 
-function verifiedCompanyCommunityId(companyId) {
+function companyCommunityId(companyId) {
   return `verified_company_${String(companyId || '').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,120)}`;
 }
 
-async function ensureVerifiedCompanyCommunity(env, company) {
+async function ensureCompanyCommunity(env, company) {
   if (!company?.id) return null;
-  const communityId = verifiedCompanyCommunityId(company.id);
+  const communityId = companyCommunityId(company.id);
   const existing = await fsGet(env, 'communities', communityId).catch(() => null);
   const createdAt = existing?.createdAt || company.createdAt || nowIso();
   const ownerUid = company.ownerUid || existing?.createdBy || '';
@@ -2347,12 +2348,12 @@ async function ensureVerifiedCompanyCommunity(env, company) {
     id: communityId,
     companyId: '',
     legacyCompanyId: company.id,
-    verifiedCompany: true,
-    verifiedCompanyId: company.id,
-    verifiedCompanyName: company.name || existing?.verifiedCompanyName || '',
-    inviteOnly: true,
-    validationType: 'company',
-    validatedAt: existing?.validatedAt || createdAt,
+    verifiedCompany: false,
+    verifiedCompanyId: '',
+    verifiedCompanyName: '',
+    inviteOnly: false,
+    validationType: '',
+    validatedAt: '',
     name: company.name || existing?.name || 'Empresa',
     description: existing?.description || '',
     visibility: 'public',
@@ -2395,8 +2396,8 @@ async function ensureVerifiedCompanyCommunity(env, company) {
       communityId,
       communityName: community.name,
       communityVisibility: 'public',
-      communityVerifiedCompany: true,
-      communityInviteOnly: true,
+      communityVerifiedCompany: false,
+      communityInviteOnly: false,
       updatedAt: nowIso()
     });
   }
@@ -2404,15 +2405,15 @@ async function ensureVerifiedCompanyCommunity(env, company) {
   return community;
 }
 
-async function migrateOpenCompaniesToCommunities(env) {
-  const stateId = 'open_companies_to_verified_communities_v1';
+async function migrateCompaniesToCommunities(env) {
+  const stateId = 'open_companies_to_communities_v2';
   const state = await fsGet(env, 'systemConfig', stateId).catch(() => null);
   if (state?.done) return state;
 
   const companies = await fsListCollection(env, 'companies', 500).catch(() => []);
   let migrated = 0;
   for (const company of companies) {
-    await ensureVerifiedCompanyCommunity(env, company);
+    await ensureCompanyCommunity(env, company);
     migrated += 1;
   }
 
@@ -2421,7 +2422,7 @@ async function migrateOpenCompaniesToCommunities(env) {
   return result;
 }
 async function migrateLegacyCorporateCommunities(env) {
-  const stateId = 'community_model_unified_v2';
+  const stateId = 'community_model_unified_v3';
   const state = await fsGet(env, 'systemConfig', stateId).catch(() => null);
   if (state?.done) return state;
 
@@ -2438,12 +2439,12 @@ async function migrateLegacyCorporateCommunities(env) {
       ...community,
       companyId: '',
       legacyCompanyId,
-      verifiedCompany: true,
-      verifiedCompanyId: legacyCompanyId,
-      verifiedCompanyName: company?.name || community.companyName || '',
-      inviteOnly: true,
-      validationType: 'company',
-      validatedAt: community.validatedAt || migratedAt,
+      verifiedCompany: false,
+      verifiedCompanyId: '',
+      verifiedCompanyName: '',
+      inviteOnly: false,
+      validationType: '',
+      validatedAt: '',
       updatedAt: migratedAt
     };
     await fsPut(env, 'communities', community.id, updatedCommunity);
@@ -2463,8 +2464,8 @@ async function migrateLegacyCorporateCommunities(env) {
         ...post,
         companyId: '',
         companyName: '',
-        communityVerifiedCompany: true,
-        communityInviteOnly: true,
+        communityVerifiedCompany: false,
+        communityInviteOnly: false,
         legacyCompanyId: post.companyId || legacyCompanyId
       });
     }
@@ -2485,8 +2486,8 @@ async function migrateLegacyCorporateCommunities(env) {
         ...invite,
         companyId: '',
         legacyCompanyId: invite.companyId || invite.legacyCompanyId || legacyCompanyId,
-        verifiedCompanyId: legacyCompanyId,
-        companyName: company?.name || invite.companyName || ''
+        verifiedCompanyId: '',
+        companyName: ''
       });
     }
 
@@ -3050,7 +3051,7 @@ async function acceptInvite(env, identity, body, ctx) {
     await fsPut(env,'companyMembers',`${invite.companyId}_${identity.uid}`,{id:`${invite.companyId}_${identity.uid}`,companyId:invite.companyId,uid:identity.uid,displayName:joiningUser?.displayName||identity.name||'',email:normalizeEmail(identity.email||''),role:'member',status:'active',joinedAt});
     const linkedCompany=await fsGet(env,'companies',invite.companyId);
     if(linkedCompany){
-      const verifiedCommunity=await ensureVerifiedCompanyCommunity(env,linkedCompany);
+      const verifiedCommunity=await ensureCompanyCommunity(env,linkedCompany);
       if(verifiedCommunity){
         await fsPut(env,'communityMembers',`${verifiedCommunity.id}_${identity.uid}`,{
           id:`${verifiedCommunity.id}_${identity.uid}`,companyId:'',legacyCompanyId:invite.companyId,
