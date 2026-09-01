@@ -1811,23 +1811,11 @@ async function requestCompanyDeletion(env, identity, companyId, body, ctx) {
 
 async function requestCommunityDeletion(env, identity, communityId, ctx) {
   const community = await fsGetRequired(env, 'communities', communityId, 'Comunidade não encontrada.');
-
-  if (!community.companyId) {
-    const membership = await fsGet(env, 'communityMembers', `${communityId}_${identity.uid}`);
-    const ownsCommunity = community.createdBy === identity.uid || Boolean(
-      membership && (
-        membership.role === 'owner' ||
-        membership.addedBy === identity.uid ||
-        membership.joinedBy === 'creator'
-      )
-    );
-    if (!ownsCommunity) throw httpError(403, 'Somente o proprietário pode apagar esta comunidade.');
-    await deleteCommunityCascade(env, communityId);
-    return { ok: true, deleted: true, direct: true };
+  if (!(await canManageCommunityStructure(env, identity, community))) {
+    throw httpError(403, 'Somente administradores podem apagar esta comunidade.');
   }
-
-  const approvers = await deletionApproversForCommunity(env, community);
-  return createDeletionRequest(env, identity, 'community', community, approvers, ctx);
+  await deleteCommunityCascade(env, communityId);
+  return { ok: true, deleted: true, direct: true };
 }
 
 async function deletePostCascade(env, post) {
@@ -2341,7 +2329,7 @@ function communityView(community) {
 }
 
 async function migrateLegacyCorporateCommunities(env) {
-  const stateId = 'community_model_unified_v1';
+  const stateId = 'community_model_unified_v2';
   const state = await fsGet(env, 'systemConfig', stateId).catch(() => null);
   if (state?.done) return state;
 
@@ -2349,7 +2337,7 @@ async function migrateLegacyCorporateCommunities(env) {
   let migrated = 0;
 
   for (const community of communities) {
-    const legacyCompanyId = community.companyId || '';
+    const legacyCompanyId = community.companyId || community.legacyCompanyId || community.verifiedCompanyId || '';
     if (!legacyCompanyId) continue;
 
     const company = await fsGet(env, 'companies', legacyCompanyId).catch(() => null);
@@ -2404,9 +2392,27 @@ async function migrateLegacyCorporateCommunities(env) {
       await fsPut(env, 'invites', invite.id, {
         ...invite,
         companyId: '',
-        legacyCompanyId: invite.companyId || legacyCompanyId,
+        legacyCompanyId: invite.companyId || invite.legacyCompanyId || legacyCompanyId,
         verifiedCompanyId: legacyCompanyId,
         companyName: company?.name || invite.companyName || ''
+      });
+    }
+
+    const mediaRows = await fsWhere(env, 'media', 'communityId', community.id, 500).catch(() => []);
+    for (const media of mediaRows) {
+      await fsPut(env, 'media', media.id, {
+        ...media,
+        companyId: '',
+        legacyCompanyId: media.companyId || media.legacyCompanyId || legacyCompanyId
+      });
+    }
+
+    const joinRequests = await fsWhere(env, 'communityJoinRequests', 'communityId', community.id, 500).catch(() => []);
+    for (const request of joinRequests) {
+      await fsPut(env, 'communityJoinRequests', request.id, {
+        ...request,
+        companyId: '',
+        legacyCompanyId: request.companyId || request.legacyCompanyId || legacyCompanyId
       });
     }
 
@@ -4730,7 +4736,6 @@ async function getMedia(env, identity, mediaId) {
   }
   else if(media.scope==='community'){
     const community=await fsGetRequired(env,'communities',media.communityId,'Comunidade não encontrada.');
-    if(community.companyId!==media.companyId)throw httpError(403,'Comunidade inválida.');
     await requireCommunityAccess(env,identity.uid,community);
   }
   const object=await env.MEDIA.get(media.key);if(!object)throw httpError(404,'Arquivo não encontrado no armazenamento.');
