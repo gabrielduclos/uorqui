@@ -1669,6 +1669,14 @@ function CommunitiesPage({
   const selectedCommunity = createdCommunities.find((community) => community.id === selectedCommunityId)
     || data.allCompanyCommunities.find((community) => community.id === selectedCommunityId)
     || data.communities.find((community) => community.id === selectedCommunityId);
+  const selectedCommunityMembership = communityMembers.find((member) => member.uid === data.me.uid);
+  const canManageSelectedCommunity = Boolean(
+    selectedCommunity && (
+      (selectedCommunity.companyId ? data.canAdmin : false) ||
+      selectedCommunity.createdBy === data.me.uid ||
+      ["owner","admin","moderator"].includes(String(selectedCommunityMembership?.communityRole || ""))
+    )
+  );
 
   const joinedCommunityIds = useMemo(() => new Set([
     ...data.communities.map((community) => community.id),
@@ -1926,7 +1934,7 @@ function CommunitiesPage({
   };
 
   const removePost = async (post: Post) => {
-    const adminDeletingAnother = data.canAdmin && post.authorUid !== data.me.uid;
+    const adminDeletingAnother = canManageSelectedCommunity && post.authorUid !== data.me.uid;
     const message = adminDeletingAnother
       ? "Apagar esta publicação como administrador? O conteúdo será removido e ficará um aviso informando que foi apagado pela administração."
       : "Excluir sua publicação? Esta ação não pode ser desfeita.";
@@ -2005,7 +2013,7 @@ function CommunitiesPage({
     const communityMemberMap = new Map(communityMembers.map((member) => [member.uid, member]));
     const memberCount = membersLoaded ? communityMembers.length : Number(selectedCommunity.memberCount || 0);
     const memberSearchValue = memberSearch.trim().toLocaleLowerCase("pt-BR");
-    const listedMembers = (data.canAdmin ? data.members : communityMembers).filter((member) => {
+    const listedMembers = (selectedCommunity.companyId && data.canAdmin ? data.members : communityMembers).filter((member) => {
       if (!memberSearchValue) return true;
       return `${member.displayName || ""} ${member.email || ""}`.toLocaleLowerCase("pt-BR").includes(memberSearchValue);
     });
@@ -2015,10 +2023,10 @@ function CommunitiesPage({
         <section className="page-section">
           <div className="members-page-head">
             <button className="back-button" onClick={() => setMembersPage(false)}><ArrowLeft size={18} /> {selectedCommunity.name}</button>
-            <div><h2>{data.canAdmin ? "Gerenciar membros" : "Membros"} de {selectedCommunity.name}</h2><p>{memberCount} {memberCount === 1 ? "membro" : "membros"} nesta comunidade.</p></div>
+            <div><h2>{canManageSelectedCommunity ? "Gerenciar membros" : "Membros"} de {selectedCommunity.name}</h2><p>{memberCount} {memberCount === 1 ? "membro" : "membros"} nesta comunidade.</p></div>
           </div>
 
-          {data.canAdmin && (
+          {canManageSelectedCommunity && (
             <section className="panel-card members-manage-card">
               <div className="members-manage-copy">
                 <strong>Gerenciar participantes</strong>
@@ -2048,7 +2056,7 @@ function CommunitiesPage({
                   <Avatar name={displayName} mediaId={membership?.avatarMediaId} size={42} />
                   <div className="ellipsis"><strong>{displayName}</strong><small>{email}</small></div>
                   <span className="private-pill">{role === "owner" ? "Proprietário" : role === "admin" ? "Administrador" : "Usuário"}</span>
-                  {data.canAdmin && (
+                  {canManageSelectedCommunity && (
                     <div className="member-community-controls">
                       <span className={`community-membership-status ${isMember ? "active" : "inactive"}`}>
                         {isMember ? <Check size={13} /> : <X size={13} />}
@@ -2081,7 +2089,7 @@ function CommunitiesPage({
           <button className="back-button" onClick={onBack}><ArrowLeft size={18} /> Comunidades</button>
           <button className="community-manage-members-tag" onClick={openMembers}>
             <Users size={13} />
-            {data.canAdmin ? "Gerenciar membros" : "Ver membros"}
+            {canManageSelectedCommunity ? "Gerenciar membros" : "Ver membros"}
             <b>{memberCount}</b>
           </button>
           <div className="community-detail-title">
@@ -2096,7 +2104,7 @@ function CommunitiesPage({
             </div>
           </div>
           <div className="community-detail-actions">
-            {(data.canAdmin || selectedCommunity.createdBy === data.me.uid) && (
+            {canManageSelectedCommunity && (
               <label className="btn secondary small community-image-upload">
                 <Camera size={15}/> {communityImageBusy ? "Enviando…" : "Alterar foto"}
                 <input hidden type="file" accept="image/jpeg,image/png,image/webp" disabled={communityImageBusy} onChange={e=>{const file=e.target.files?.[0];if(file)void changeCommunityImage(file);e.currentTarget.value="";}}/>
@@ -2131,7 +2139,7 @@ function CommunitiesPage({
         <section className="community-topics">
           <div className="community-topics-head">
             <strong>{selectedCommunity.companyId ? "Setores" : "Assuntos"}</strong>
-            {(data.canAdmin || selectedCommunity.createdBy === data.me.uid) && (
+            {canManageSelectedCommunity && (
               <button className="text-button" onClick={() => setTopicCreateOpen(true)}>
                 <Plus size={14} /> Novo {selectedCommunity.companyId ? "setor" : "assunto"}
               </button>
@@ -2170,7 +2178,7 @@ function CommunitiesPage({
               community={selectedCommunity}
               onLike={like}
               onRead={read}
-              canDelete={post.authorUid === data.me.uid || data.canAdmin || (data.isSuperadmin && post.authorAccountType === "uorqui_agent")}
+              canDelete={post.authorUid === data.me.uid || canManageSelectedCommunity || (data.isSuperadmin && post.authorAccountType === "uorqui_agent")}
               onDelete={removePost}
               currentUid={data.me.uid}
               canAdmin={data.canAdmin}
