@@ -1695,3 +1695,75 @@ button[aria-busy="true"]{opacity:.58!important;cursor:wait!important}
   animation:uorqui-feed-spin .75s linear infinite;
 }
 @keyframes uorqui-feed-spin{to{transform:rotate(360deg)}}
+
+/* v1.2.24 — proporção dos controles da comunidade */
+.community-detail-actions{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:10px;
+  width:100%;
+  grid-column:1/-1;
+  position:relative;
+  padding-top:34px;
+}
+.community-detail-actions .community-image-upload,
+.community-detail-actions .community-participating-button{
+  width:100%;
+  justify-content:center;
+  min-height:42px;
+}
+.community-detail-actions .community-publish-button{
+  grid-column:1/-1;
+  width:100%;
+  justify-content:center;
+  min-height:46px;
+}
+.community-detail-actions .community-delete-button{
+  position:absolute;
+  top:0;
+  right:0;
+  width:auto;
+  min-height:28px;
+  padding:5px 8px;
+  border:0;
+  background:transparent;
+  color:#666a72;
+  font-size:9px;
+  gap:5px;
+}
+.community-detail-actions .community-delete-button:hover{
+  background:#f5f5f6;
+  color:#b42318;
+}
+.community-detail-actions .community-delete-button svg{
+  width:13px;
+  height:13px;
+}
+.community-manage-members-tag{
+  top:11px;
+  right:142px;
+}
+@media(max-width:850px){
+  .community-detail-actions{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:8px;
+    padding-top:32px;
+  }
+  .community-detail-actions .community-image-upload,
+  .community-detail-actions .community-participating-button{
+    min-height:40px;
+    padding:8px 10px;
+    font-size:10px;
+  }
+  .community-detail-actions .community-publish-button{
+    min-height:44px;
+  }
+  .community-detail-actions .community-delete-button{
+    font-size:8.5px;
+    padding:4px 6px;
+  }
+  .community-manage-members-tag{
+    top:43px;
+    right:11px;
+  }
+}
