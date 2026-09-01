@@ -156,10 +156,10 @@ async function routeApi(request, env, identity, url, ctx) {
   if (method === 'POST' && path === '/superadmin/ai-agents/publish') {
     requireSuperadmin(env, identity);
     try {
-      // Disparo pelo painel do Superadmin é sempre manual e sem limite diário.
-      // A trava de 1 post/comunidade/dia existe apenas no cron, que chama
-      // publishDailyUorquiAiPosts(env) com force=false.
-      const result = await publishDailyUorquiAiPosts(env, false, { force: true });
+      const body = await readJson(request).catch(() => ({}));
+      const agentKey = clean(body?.agentKey || '', 80);
+      if (!agentKey) throw httpError(400, 'Escolha um agente para publicar.');
+      const result = await publishDailyUorquiAiPosts(env, false, { force: true, agentKey });
       let status = null;
       try {
         status = await getUorquiAiAgentStatus(env, identity);
@@ -5579,6 +5579,11 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
   await ensureUorquiAiSeeds(env,forceSeed);
   const day=brazilDateKey();
   const force=Boolean(options?.force);
+  const requestedAgentKey=clean(options?.agentKey||'',80);
+  const selectedItems=requestedAgentKey
+    ? UORQUI_AI_COMMUNITIES.filter(item=>item.key===requestedAgentKey)
+    : UORQUI_AI_COMMUNITIES;
+  if(requestedAgentKey&&!selectedItems.length) throw httpError(404,'Agente não encontrado.');
   let published=0,skipped=0,failed=0;
   const results=[];
   let cursor=0;
@@ -5655,9 +5660,9 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
   };
 
   const runner=async()=>{
-    while(cursor<UORQUI_AI_COMMUNITIES.length){
+    while(cursor<selectedItems.length){
       const index=cursor++;
-      const item=UORQUI_AI_COMMUNITIES[index];
+      const item=selectedItems[index];
       try{await publishOne(item,index);}
       catch(error){
         failed+=1;
@@ -5665,9 +5670,9 @@ async function publishDailyUorquiAiPosts(env,forceSeed=false,options={}){
       }
     }
   };
-  await Promise.all(Array.from({length:Math.min(4,UORQUI_AI_COMMUNITIES.length)},()=>runner()));
+  await Promise.all(Array.from({length:Math.min(4,selectedItems.length)},()=>runner()));
 
-  return {ok:true,day,published,skipped,failed,total:UORQUI_AI_COMMUNITIES.length,results,forced:force};
+  return {ok:true,day,published,skipped,failed,total:selectedItems.length,results,forced:force,agentKey:requestedAgentKey||''};
 }
 
 async function getUorquiAiAgentStatus(env,identity){
