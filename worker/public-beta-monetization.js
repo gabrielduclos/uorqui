@@ -4,9 +4,9 @@ const JSON_HEADERS = {
 };
 
 /**
- * Beta público: nenhuma nova cobrança ou ativação de monetização pode ser
- * iniciada. Mantemos consultas, cancelamentos e webhooks funcionando para que
- * estados antigos possam ser reconciliados sem risco.
+ * O Uorqui continua operando normalmente no modo Free e nos fluxos já
+ * existentes. Somente novas ativações/mutações do modo Criador ficam
+ * temporariamente indisponíveis.
  */
 export function publicBetaMonetizationResponse(request) {
   const method = String(request?.method || 'GET').toUpperCase();
@@ -16,16 +16,13 @@ export function publicBetaMonetizationResponse(request) {
   try { path = new URL(request.url).pathname; }
   catch { return null; }
 
-  const companyCheckout = method === 'POST' && /^\/api\/companies\/[^/]+\/billing\/checkout\/?$/i.test(path);
-  const creatorWrite = method !== 'GET' && /^\/api\/creator(?:\/|$)/i.test(path);
-
-  if (!companyCheckout && !creatorWrite) return null;
+  const creatorWrite = /^\/api\/creator(?:\/|$)/i.test(path);
+  if (!creatorWrite) return null;
 
   return new Response(JSON.stringify({
-    error: 'Recurso em breve. Durante o beta público, pagamentos e monetização estão desativados.',
-    code: 'PUBLIC_BETA_COMING_SOON',
-    comingSoon: true,
-    publicBeta: true
+    error: 'O modo Criador está temporariamente indisponível.',
+    code: 'CREATOR_MODE_UNAVAILABLE',
+    creatorUnavailable: true
   }), {
     status: 423,
     headers: JSON_HEADERS
