@@ -27,7 +27,7 @@ import "./post-topic-v125";
 import "./superadmin-growth-v125";
 import "./public-beta-ui";
 
-const PRODUCT_VERSION = "1.3.6-public-beta";
+const PRODUCT_VERSION = "1.3.6-creator-unavailable";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
