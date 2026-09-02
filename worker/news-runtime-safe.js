@@ -3,11 +3,14 @@ import './news-source-safety.js';
 import './news-query-rotation.js';
 import runtime, { RealtimeHub } from './news-runtime.js';
 import { prepareNewsTestMode } from './news-test-mode.js';
+import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
 
 export { RealtimeHub };
 
 export default {
   async fetch(request, env, ctx) {
+    const betaResponse = publicBetaMonetizationResponse(request);
+    if (betaResponse) return betaResponse;
     return runtime.fetch(request, env, ctx);
   },
 
