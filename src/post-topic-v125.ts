@@ -125,8 +125,6 @@ function syncPostTopics() {
     const scopeLabel = authorBlock?.querySelector<HTMLElement>(".scope");
     if (!authorBlock || !scopeLabel) return;
 
-    // O assunto faz parte da mesma linha de contexto da publicação.
-    // Ex.: Comunidades - Tecnologia & IA - Inteligência artificial
     const topic = String(post.topicName || "").trim();
     const label = ["Comunidades", String(post.communityName).trim(), topic]
       .filter(Boolean)
@@ -134,7 +132,6 @@ function syncPostTopics() {
 
     if (scopeLabel.textContent !== label) scopeLabel.textContent = label;
 
-    // Remove o rótulo separado usado pela versão anterior para evitar duplicação.
     authorBlock.querySelector<HTMLElement>(".post-topic-v125")?.remove();
     card.dataset.uorquiPostId = post.id;
 
@@ -148,10 +145,12 @@ function syncRichNewsCard(card: HTMLElement, post: PostMeta) {
   const sourceCard = card.querySelector<HTMLElement>(".ai-news-card");
   if (!sourceCard) return;
 
+  // A galeria usa somente as URLs validadas pelo Worker. A imagem que já veio
+  // renderizada no card não entra como fallback, pois pode ser um asset legado
+  // do agregador/publisher e poderia reintroduzir logo ou repetição.
   const imageUrls = uniqueImageUrls([
     ...(Array.isArray(post.sourceImageUrls) ? post.sourceImageUrls : []),
-    post.sourceImageUrl || "",
-    sourceCard.querySelector<HTMLImageElement>("img")?.src || ""
+    post.sourceImageUrl || ""
   ]).slice(0, 4);
   const signature = `${post.id}|${imageUrls.join("|")}|${post.sourceUrl}`;
 
@@ -215,15 +214,49 @@ function syncRichNewsCard(card: HTMLElement, post: PostMeta) {
 function uniqueImageUrls(values: string[]) {
   const seen = new Set<string>();
   const result: string[] = [];
+
   values.forEach((value) => {
     const url = String(value || "").trim();
-    if (!/^https?:\/\//i.test(url)) return;
-    const key = url.replace(/#.*$/, "");
-    if (seen.has(key)) return;
+    if (!/^https?:\/\//i.test(url) || !isPlausibleArticleImage(url)) return;
+    const key = imageIdentityKey(url);
+    if (!key || seen.has(key)) return;
     seen.add(key);
     result.push(url);
   });
+
   return result;
+}
+
+function isPlausibleArticleImage(value: string) {
+  return !/(?:logo|favicon|brandmark|sprite|avatar|author|perfil|profile|pixel|tracking|doubleclick|google[-_.]?news|googlenews|gnews[-_.]?logo|placeholder|default[-_.]?image|no[-_.]?image|banner|newsletter|advert|publicidade|social[-_.]?share|icon[-_.]?)/i.test(value);
+}
+
+function imageIdentityKey(value: string): string {
+  try {
+    const url = new URL(value);
+
+    for (const name of ["url", "src", "image", "img"]) {
+      const nested = url.searchParams.get(name);
+      if (!nested) continue;
+      try {
+        const decoded = decodeURIComponent(nested);
+        if (/^https?:\/\//i.test(decoded) && decoded !== value) return imageIdentityKey(decoded);
+      } catch {}
+    }
+
+    let path = decodeURIComponent(url.pathname).toLowerCase();
+    path = path
+      .replace(/[-_](?:\d{2,4})x(?:\d{2,4})(?=\.[a-z0-9]{2,5}$)/gi, "")
+      .replace(/[-_](?:w|h)?\d{2,4}(?=\.[a-z0-9]{2,5}$)/gi, "")
+      .replace(/\/(?:w|h|width|height)[-_]?\d{2,4}\//gi, "/")
+      .replace(/\/\d{2,4}x\d{2,4}\//g, "/");
+
+    const parts = path.split("/").filter(Boolean);
+    const file = parts[parts.length - 1] || path;
+    return `${url.hostname.toLowerCase()}|${file}`;
+  } catch {
+    return value.split(/[?#]/)[0].toLowerCase();
+  }
 }
 
 function gallerySizeClass(length: number) {
