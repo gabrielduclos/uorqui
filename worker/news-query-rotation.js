@@ -10,10 +10,14 @@ const RAW_QUERY_VARIANTS = [
     'cibersegurança segurança digital tecnologia'
   ]],
   ['games jogos videogames lançamento indústria', [
-    'games jogos lançamentos',
-    'PlayStation Xbox Nintendo games',
-    'PC games indústria de jogos',
-    'videogames novidades Brasil'
+    'games lançamentos novidades videogames',
+    'PlayStation PS5 jogos novidades',
+    'Xbox Game Pass jogos novidades',
+    'Nintendo Switch 2 jogos novidades',
+    'Steam PC games lançamentos',
+    'games DLC atualização novos jogos',
+    'indústria de games estúdios aquisições',
+    'videogames jogos Brasil novidades'
   ]],
   ['motos motociclismo motocicletas brasil', [
     'motos motocicletas Brasil',
@@ -65,16 +69,10 @@ const RAW_QUERY_VARIANTS = [
   ]]
 ];
 
-// As chaves também precisam ser normalizadas. Antes apenas a consulta recebia
-// normalize(), então categorias com acentos não encontravam suas variantes.
 const QUERY_VARIANTS = new Map(
   RAW_QUERY_VARIANTS.map(([key, variants]) => [normalize(key), variants])
 );
 
-// Distribui as 10 comunidades pelos três ciclos principais de cada hora.
-// O minuto :00 está reservado à manutenção + Saúde em news-runtime-safe.js.
-// :15/:30/:45 processam um lote por vez, mantendo cada invocation bem abaixo
-// do limite de subrequests do Cloudflare.
 const QUERY_BATCH = new Map([
   [normalize('tecnologia inteligência artificial segurança digital brasil'), 0],
   [normalize('games jogos videogames lançamento indústria'), 0],
