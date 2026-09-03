@@ -14,18 +14,17 @@ let queued = false;
 const style = document.createElement('style');
 style.dataset.uorquiCommunityNotifyToggle = '1';
 style.textContent = `
-.${ROOT_CLASS}{display:flex;align-items:center;gap:9px;margin-right:auto;padding:7px 10px;border:1px solid var(--border,#e2e5e9);border-radius:999px;background:var(--surface,#fff);color:inherit;font:inherit}
-.${ROOT_CLASS} .uorqui-community-notify-copy{display:flex;flex-direction:column;gap:1px;text-align:left;min-width:0}
-.${ROOT_CLASS} .uorqui-community-notify-copy strong{font-size:12px;line-height:1.2;font-weight:700;white-space:nowrap}
-.${ROOT_CLASS} .uorqui-community-notify-copy small{font-size:10px;line-height:1.15;color:var(--muted,#707781);white-space:nowrap}
-.${ROOT_CLASS} .uorqui-community-notify-switch{position:relative;width:34px;height:20px;min-width:34px;border:0;border-radius:999px;background:#c8cdd3;padding:0;cursor:pointer;transition:background .16s ease}
-.${ROOT_CLASS} .uorqui-community-notify-switch::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .16s ease}
+.${ROOT_CLASS}{grid-column:1/-1;justify-self:center;display:inline-flex;align-items:center;justify-content:center;gap:8px;width:auto;min-height:24px;margin:1px 0 0;padding:2px 4px;border:0;background:transparent;color:inherit;font:inherit}
+.${ROOT_CLASS} .uorqui-community-notify-copy{display:flex;align-items:center;min-width:0;text-align:left}
+.${ROOT_CLASS} .uorqui-community-notify-copy strong{font-size:10px;line-height:1.2;font-weight:700;white-space:nowrap;color:var(--muted,#707781)}
+.${ROOT_CLASS} .uorqui-community-notify-switch{position:relative;width:32px;height:18px;min-width:32px;border:0;border-radius:999px;background:#c8cdd3;padding:0;cursor:pointer;transition:background .16s ease}
+.${ROOT_CLASS} .uorqui-community-notify-switch::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .16s ease}
 .${ROOT_CLASS} .uorqui-community-notify-switch[aria-checked="true"]{background:#16191d}
 .${ROOT_CLASS} .uorqui-community-notify-switch[aria-checked="true"]::after{transform:translateX(14px)}
 .${ROOT_CLASS} .uorqui-community-notify-switch:disabled{opacity:.55;cursor:wait}
 @media(max-width:700px){
-  .${ROOT_CLASS}{width:100%;justify-content:space-between;border-radius:12px;padding:10px 12px;order:20}
-  .${ROOT_CLASS} .uorqui-community-notify-copy strong,.${ROOT_CLASS} .uorqui-community-notify-copy small{white-space:normal}
+  .${ROOT_CLASS}{grid-column:1/-1;justify-self:center;width:auto;min-height:22px;margin-top:0;padding:1px 3px;gap:7px}
+  .${ROOT_CLASS} .uorqui-community-notify-copy strong{font-size:9.5px;white-space:nowrap}
 }
 `;
 document.head.appendChild(style);
@@ -42,8 +41,6 @@ async function loadPreference(communityId: string) {
     const result = await api<PreferenceResponse>(`/communities/${encodeURIComponent(communityId)}/notification-preference`);
     preferenceByCommunity.set(communityId, result.notifyNewPosts === true);
   } catch {
-    // Se a pessoa deixou a comunidade ou o endpoint ainda não estiver disponível,
-    // não exibimos erro global. O padrão continua desligado.
     preferenceByCommunity.set(communityId, false);
   } finally {
     loadingCommunities.delete(communityId);
@@ -58,7 +55,7 @@ function buildToggle(communityId: string) {
 
   const copy = document.createElement('div');
   copy.className = 'uorqui-community-notify-copy';
-  copy.innerHTML = '<strong>Notificar novas publicações</strong><small>Desligado por padrão · somente desta comunidade</small>';
+  copy.innerHTML = '<strong>Notificar novas publicações</strong>';
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -102,7 +99,9 @@ function syncToggle() {
   let wrapper = actions.querySelector<HTMLElement>(`.${ROOT_CLASS}`);
   if (!wrapper) {
     wrapper = buildToggle(communityId);
-    actions.prepend(wrapper);
+    // Mantém a ordem original do grid (imagem/participação/publicar). O toggle
+    // entra somente depois das ações existentes e não desloca "Ver membros".
+    actions.append(wrapper);
   }
 
   const button = wrapper.querySelector<HTMLButtonElement>('.uorqui-community-notify-switch');
