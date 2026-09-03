@@ -7,6 +7,7 @@ import { prepareNewsTestMode } from './news-test-mode.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
 import { handleCommunityNotificationPreferenceRequest } from './community-notification-preferences.js';
 import { handlePublicPostRequest } from './public-post.js';
+import { scheduleOfficialCommunityAdminSync } from './official-community-admin-sync.js';
 
 export { RealtimeHub };
 
@@ -20,7 +21,13 @@ export default {
 
     const betaResponse = publicBetaMonetizationResponse(request);
     if (betaResponse) return betaResponse;
-    return runtime.fetch(request, env, ctx);
+
+    const response = await runtime.fetch(request, env, ctx);
+    // O runtime acabou de validar o Firebase ID token. Só depois de uma
+    // resposta autenticada bem-sucedida sincronizamos o papel do superadmin
+    // nas comunidades oficiais, sem depender do cron editorial.
+    scheduleOfficialCommunityAdminSync(request, response, env, ctx);
+    return response;
   },
 
   async scheduled(controller, env, ctx) {
