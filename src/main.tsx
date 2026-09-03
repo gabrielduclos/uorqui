@@ -27,8 +27,9 @@ import "./post-topic-v125";
 import "./superadmin-growth-v125";
 import "./public-beta-ui";
 import "./community-notification-toggle";
+import "./public-post-view";
 
-const PRODUCT_VERSION = "1.3.7-community-notifications";
+const PRODUCT_VERSION = "1.3.8-public-post";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
