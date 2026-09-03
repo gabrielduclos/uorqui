@@ -26,8 +26,9 @@ import "./composer-media-preview-v125";
 import "./post-topic-v125";
 import "./superadmin-growth-v125";
 import "./public-beta-ui";
+import "./community-notification-toggle";
 
-const PRODUCT_VERSION = "1.3.6-creator-unavailable";
+const PRODUCT_VERSION = "1.3.7-community-notifications";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
