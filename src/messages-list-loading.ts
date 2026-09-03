@@ -1,3 +1,5 @@
+export {};
+
 const upstreamFetch = globalThis.fetch.bind(globalThis);
 const ROOT_CLASS = 'uorqui-conversations-loading';
 let pendingConversationLoads = 0;
