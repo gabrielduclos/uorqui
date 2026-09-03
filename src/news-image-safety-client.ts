@@ -1,6 +1,8 @@
 export {};
 
-const BAD_IMAGE_RE = /(?:logo|favicon|brandmark|sprite|avatar|author|perfil|profile|pixel|tracking|doubleclick|google[-_.]?news|googlenews|gnews[-_.]?logo|placeholder|default[-_.]?image|no[-_.]?image|banner|newsletter|advert|publicidade|social[-_.]?share|icon[-_.]?|badge|widget|recommended|related|recomendad)/i;
+const BAD_IMAGE_RE = /(?:logo|favicon|brandmark|sprite|avatar|author|perfil|profile|pixel|tracking|doubleclick|google[-_.]?news|googlenews|gnews[-_.]?logo|placeholder|default[-_.]?image|no[-_.]?image|banner|newsletter|advert|publicidade|social[-_.]?share|social[-_.]?media|social[-_.]?network|share|sharing|follow|icon[-_.]?|icone|ícone|badge|widget|recommended|related|recomendad|facebook|instagram|youtube|linkedin|twitter|tiktok|tik-tok|whatsapp|telegram|pinterest|reddit|threads|bluesky|mastodon|snapchat|discord)/i;
+const ICON_HOST_RE = /(?:^|\.)(?:flaticon\.com|icons8\.com|simpleicons\.org|cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com|fontawesome\.com)$/i;
+const TINY_SQUARE_RE = /(?:^|[\/_\-])(?:16|20|24|28|32|36|40|48|50|56|60|64|72|80|96|100|120|128)x(?:16|20|24|28|32|36|40|48|50|56|60|64|72|80|96|100|120|128)(?:[\/_\-.]|$)/i;
 
 function safeDecode(value: string) {
   try { return decodeURIComponent(value); }
@@ -41,10 +43,13 @@ function isBadNewsImage(value = "") {
   try {
     const url = new URL(String(value || ""), window.location.origin);
     const host = url.hostname.toLowerCase();
-    const full = url.toString().toLowerCase();
+    const full = safeDecode(url.toString()).toLowerCase();
+    const path = safeDecode(url.pathname).toLowerCase();
 
     if (/\.svg(?:\?|$)/i.test(full)) return true;
     if (BAD_IMAGE_RE.test(full)) return true;
+    if (ICON_HOST_RE.test(host)) return true;
+    if (TINY_SQUARE_RE.test(path)) return true;
     if (/(?:^|\.)gstatic\.com$/i.test(host)) return true;
     if (/(?:^|\.)googleusercontent\.com$/i.test(host)) return true;
     if (/(?:^|\.)news\.google\./i.test(host)) return true;
