@@ -29,8 +29,9 @@ import "./public-beta-ui";
 import "./superadmin-official-community-access";
 import "./community-notification-toggle";
 import "./public-post-view";
+import "./messages-list-loading";
 
-const PRODUCT_VERSION = "1.3.9-official-admin";
+const PRODUCT_VERSION = "1.3.10-messages-spinner";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
