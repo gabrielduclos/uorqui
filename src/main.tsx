@@ -30,8 +30,10 @@ import "./superadmin-official-community-access";
 import "./community-notification-toggle";
 import "./public-post-view";
 import "./messages-list-loading";
+import "./post-message-share-modal";
+import "./external-share-preview";
 
-const PRODUCT_VERSION = "1.3.10-messages-spinner";
+const PRODUCT_VERSION = "1.3.11-share-modal";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
