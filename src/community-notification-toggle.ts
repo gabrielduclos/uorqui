@@ -14,7 +14,13 @@ let queued = false;
 const style = document.createElement('style');
 style.dataset.uorquiCommunityNotifyToggle = '1';
 style.textContent = `
-.${ROOT_CLASS}{grid-column:1/-1;justify-self:center;display:inline-flex;align-items:center;justify-content:center;gap:8px;width:auto;min-height:24px;margin:1px 0 0;padding:2px 4px;border:0;background:transparent;color:inherit;font:inherit}
+/* Mantém "Ver membros" na mesma linha do retorno "Comunidades". */
+.community-detail-head{position:relative}
+.community-manage-members-tag{top:14px!important;right:14px!important}
+.community-detail-head>.back-button{padding-right:175px!important;min-height:28px!important}
+
+/* O opt-in de novas publicações fica na mesma linha do selo Pública/Privada. */
+.${ROOT_CLASS}{float:right;display:inline-flex;align-items:center;justify-content:flex-end;gap:8px;width:auto;min-height:24px;margin:0;padding:2px 0;border:0;background:transparent;color:inherit;font:inherit;vertical-align:middle}
 .${ROOT_CLASS} .uorqui-community-notify-copy{display:flex;align-items:center;min-width:0;text-align:left}
 .${ROOT_CLASS} .uorqui-community-notify-copy strong{font-size:10px;line-height:1.2;font-weight:700;white-space:nowrap;color:var(--muted,#707781)}
 .${ROOT_CLASS} .uorqui-community-notify-switch{position:relative;width:32px;height:18px;min-width:32px;border:0;border-radius:999px;background:#c8cdd3;padding:0;cursor:pointer;transition:background .16s ease}
@@ -22,9 +28,16 @@ style.textContent = `
 .${ROOT_CLASS} .uorqui-community-notify-switch[aria-checked="true"]{background:#16191d}
 .${ROOT_CLASS} .uorqui-community-notify-switch[aria-checked="true"]::after{transform:translateX(14px)}
 .${ROOT_CLASS} .uorqui-community-notify-switch:disabled{opacity:.55;cursor:wait}
+
+@media(max-width:850px){
+  .community-manage-members-tag{top:14px!important;right:14px!important}
+  .community-detail-head>.back-button{padding-right:160px!important}
+}
 @media(max-width:700px){
-  .${ROOT_CLASS}{grid-column:1/-1;justify-self:center;width:auto;min-height:22px;margin-top:0;padding:1px 3px;gap:7px}
-  .${ROOT_CLASS} .uorqui-community-notify-copy strong{font-size:9.5px;white-space:nowrap}
+  .${ROOT_CLASS}{min-height:22px;gap:6px;padding:1px 0}
+  .${ROOT_CLASS} .uorqui-community-notify-copy strong{font-size:9px;white-space:nowrap}
+  .${ROOT_CLASS} .uorqui-community-notify-switch{width:30px;height:18px;min-width:30px}
+  .${ROOT_CLASS} .uorqui-community-notify-switch[aria-checked="true"]::after{transform:translateX(12px)}
 }
 `;
 document.head.appendChild(style);
@@ -88,21 +101,22 @@ function buildToggle(communityId: string) {
 function syncToggle() {
   const actions = document.querySelector<HTMLElement>('.community-detail-actions');
   const participating = actions?.querySelector<HTMLElement>('.community-participating-button');
+  const visibilityBadge = document.querySelector<HTMLElement>('.community-detail-title .community-visibility-badge');
+  const visibilityHost = visibilityBadge?.parentElement || null;
   const communityId = selectedCommunityId();
 
   document.querySelectorAll<HTMLElement>(`.${ROOT_CLASS}`).forEach(element => {
-    if (!actions || !participating || !communityId || element.dataset.communityId !== communityId) element.remove();
+    if (!actions || !participating || !visibilityHost || !communityId || element.dataset.communityId !== communityId) element.remove();
   });
 
-  if (!actions || !participating || !communityId) return;
+  if (!actions || !participating || !visibilityHost || !communityId) return;
 
-  let wrapper = actions.querySelector<HTMLElement>(`.${ROOT_CLASS}`);
-  if (!wrapper) {
-    wrapper = buildToggle(communityId);
-    // Mantém a ordem original do grid (imagem/participação/publicar). O toggle
-    // entra somente depois das ações existentes e não desloca "Ver membros".
-    actions.append(wrapper);
-  }
+  let wrapper = document.querySelector<HTMLElement>(`.${ROOT_CLASS}[data-community-id="${CSS.escape(communityId)}"]`);
+  if (!wrapper) wrapper = buildToggle(communityId);
+
+  // O selo de visibilidade permanece controlado pelo React. Inserimos apenas
+  // o toggle como irmão, à direita, para não alterar a estrutura do cabeçalho.
+  if (wrapper.parentElement !== visibilityHost) visibilityHost.append(wrapper);
 
   const button = wrapper.querySelector<HTMLButtonElement>('.uorqui-community-notify-switch');
   if (button) {
