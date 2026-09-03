@@ -1,6 +1,7 @@
 import './news-image-recovery.js';
 import './news-source-safety.js';
 import './news-query-rotation.js';
+import './notification-policy.js';
 import runtime, { RealtimeHub } from './news-runtime.js';
 import { prepareNewsTestMode } from './news-test-mode.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
