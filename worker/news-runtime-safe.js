@@ -7,12 +7,16 @@ import { prepareNewsTestMode } from './news-test-mode.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
 import { handleCommunityNotificationPreferenceRequest } from './community-notification-preferences.js';
 import { handlePublicPostRequest } from './public-post.js';
+import { handlePublicSharePage } from './public-share-page.js';
 import { scheduleOfficialCommunityAdminSync } from './official-community-admin-sync.js';
 
 export { RealtimeHub };
 
 export default {
   async fetch(request, env, ctx) {
+    const sharePageResponse = await handlePublicSharePage(request, env);
+    if (sharePageResponse) return sharePageResponse;
+
     const publicPostResponse = await handlePublicPostRequest(request, env);
     if (publicPostResponse) return publicPostResponse;
 
