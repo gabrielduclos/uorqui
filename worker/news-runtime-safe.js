@@ -6,11 +6,15 @@ import runtime, { RealtimeHub } from './news-runtime.js';
 import { prepareNewsTestMode } from './news-test-mode.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
 import { handleCommunityNotificationPreferenceRequest } from './community-notification-preferences.js';
+import { handlePublicPostRequest } from './public-post.js';
 
 export { RealtimeHub };
 
 export default {
   async fetch(request, env, ctx) {
+    const publicPostResponse = await handlePublicPostRequest(request, env);
+    if (publicPostResponse) return publicPostResponse;
+
     const preferenceResponse = await handleCommunityNotificationPreferenceRequest(request, env);
     if (preferenceResponse) return preferenceResponse;
 
