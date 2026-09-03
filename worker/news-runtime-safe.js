@@ -1,3 +1,4 @@
+import { withNewsEditorialQuality } from './news-editorial-quality.js';
 import './news-image-final-safety.js';
 import './news-image-recovery.js';
 import './news-source-safety.js';
@@ -27,7 +28,7 @@ export default {
     const betaResponse = publicBetaMonetizationResponse(request);
     if (betaResponse) return betaResponse;
 
-    const response = await runtime.fetch(request, env, ctx);
+    const response = await runtime.fetch(request, withNewsEditorialQuality(env), ctx);
     // O runtime acabou de validar o Firebase ID token. Só depois de uma
     // resposta autenticada bem-sucedida sincronizamos o papel do superadmin
     // nas comunidades oficiais, sem depender do cron editorial.
@@ -38,6 +39,7 @@ export default {
   async scheduled(controller, env, ctx) {
     const scheduledAt = Number(controller?.scheduledTime || Date.now());
     const minute = new Date(scheduledAt).getUTCMinutes();
+    const editorialEnv = withNewsEditorialQuality(env);
 
     // Saúde tem um ciclo próprio no :00. Antes ela rodava por último dentro de
     // uma manutenção pesada (seed + superadmins + reconciliação), consumindo o
@@ -47,7 +49,7 @@ export default {
     if (minute === 0) {
       console.info('Uorqui health news cycle started', { minute });
       try {
-        const result = await runHealthNewsCycle(env, scheduledAt);
+        const result = await runHealthNewsCycle(editorialEnv, scheduledAt);
         console.info('Uorqui health news cycle complete', { minute, ...result });
       } catch (error) {
         console.error('Uorqui health news cycle failed:', error?.message || error);
@@ -59,6 +61,6 @@ export default {
     // Cada execução preserva seu orçamento para Google/Bing, leitura da matéria,
     // IA, Firestore e notificações.
     console.info('Uorqui main news cycle started', { minute });
-    return runtime.scheduled(controller, env, ctx);
+    return runtime.scheduled(controller, editorialEnv, ctx);
   }
 };
