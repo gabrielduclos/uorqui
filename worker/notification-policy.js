@@ -12,6 +12,19 @@ globalThis.fetch = async (input, init) => {
   let nextInit = init;
 
   try {
+    // Alterar a preferência precisa ter efeito imediato. Como esse PATCH passa
+    // pelo mesmo fetch global, descartamos qualquer cache antes das próximas
+    // gravações/leitura do sino.
+    if (
+      method === 'PATCH' &&
+      /firestore\.googleapis\.com\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents\/communityMembers\//i.test(url) &&
+      typeof init?.body === 'string'
+    ) {
+      const payload = JSON.parse(init.body);
+      if (payload?.fields?.notifyNewPosts) preferenceCache.clear();
+    }
+
+    // Impede que new_post seja persistida para quem não optou pela comunidade.
     if (
       method === 'POST' &&
       /firestore\.googleapis\.com\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents:commit(?:\?|$)/i.test(url) &&
@@ -35,7 +48,6 @@ globalThis.fetch = async (input, init) => {
             );
           }
 
-          const originalCount = payload.writes.length;
           const writes = payload.writes.filter(write => {
             if (!isNewPostNotificationWrite(write)) return true;
             const { recipientUid, communityId } = notificationWriteData(write);
@@ -44,7 +56,7 @@ globalThis.fetch = async (input, init) => {
             cachePreference(communityId, recipientUid, allowed);
             return allowed;
           });
-          const suppressed = originalCount - writes.length;
+          const suppressed = payload.writes.length - writes.length;
 
           if (suppressed > 0) {
             console.info('Uorqui new-post notifications filtered by community preference', {
@@ -68,6 +80,47 @@ globalThis.fetch = async (input, init) => {
             body: JSON.stringify({ ...payload, writes })
           };
         }
+      }
+    }
+
+    // Também filtra a LEITURA do sino. Isso remove imediatamente da interface
+    // notificações new_post antigas que foram gravadas antes da política de
+    // opt-in, sem apagar comunicados, respostas, menções, convites etc.
+    if (
+      method === 'POST' &&
+      /firestore\.googleapis\.com\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents:runQuery(?:\?|$)/i.test(url) &&
+      typeof nextInit?.body === 'string'
+    ) {
+      const payload = JSON.parse(nextInit.body);
+      const recipientUid = notificationQueryRecipientUid(payload);
+      if (recipientUid) {
+        const authorization = headerValue(nextInit?.headers || (input instanceof Request ? input.headers : null), 'authorization');
+        const projectId = firestoreProjectId(url);
+        const optedCommunities = await optedInCommunitiesForUser(projectId, authorization, recipientUid);
+        const response = await upstreamFetch(input, nextInit);
+        if (!response.ok) return response;
+
+        const rows = await response.json().catch(() => null);
+        if (!Array.isArray(rows)) return responseFromJson(rows, response);
+
+        let suppressed = 0;
+        const filtered = rows.filter(row => {
+          const fields = row?.document?.fields || null;
+          if (!fields) return true;
+          if (String(fields?.type?.stringValue || '') !== 'new_post') return true;
+          const communityId = String(fields?.data?.mapValue?.fields?.communityId?.stringValue || '');
+          const allowed = communityId && optedCommunities.has(communityId);
+          if (!allowed) suppressed += 1;
+          return Boolean(allowed);
+        });
+
+        if (suppressed > 0) {
+          console.info('Uorqui stale new-post notifications hidden from bell', {
+            uid: recipientUid,
+            suppressed
+          });
+        }
+        return responseFromJson(filtered, response);
       }
     }
 
@@ -155,6 +208,82 @@ async function optedInCommunityMembers(projectId, authorization, communityId) {
 
   preferenceCache.set(cacheKey, { value: opted, expires: Date.now() + PREFERENCE_CACHE_TTL });
   return opted;
+}
+
+async function optedInCommunitiesForUser(projectId, authorization, uid) {
+  const cacheKey = `user:${uid}`;
+  const cached = preferenceCache.get(cacheKey);
+  if (cached && cached.expires > Date.now() && cached.value instanceof Set) return cached.value;
+  if (!projectId || !authorization || !uid) return new Set();
+
+  const endpoint = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents:runQuery`;
+  const response = await upstreamFetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: authorization,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: 'communityMembers' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'uid' },
+            op: 'EQUAL',
+            value: { stringValue: uid }
+          }
+        },
+        limit: 500
+      }
+    })
+  });
+  if (!response.ok) return new Set();
+
+  const rows = await response.json().catch(() => []);
+  const opted = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const fields = row?.document?.fields || {};
+    const communityId = String(fields?.communityId?.stringValue || '');
+    if (communityId && fields?.notifyNewPosts?.booleanValue === true) opted.add(communityId);
+  }
+  preferenceCache.set(cacheKey, { value: opted, expires: Date.now() + PREFERENCE_CACHE_TTL });
+  return opted;
+}
+
+function notificationQueryRecipientUid(payload) {
+  const query = payload?.structuredQuery;
+  const from = Array.isArray(query?.from) ? query.from : [];
+  if (!from.some(item => String(item?.collectionId || '') === 'notifications')) return '';
+  return findRecipientFilterValue(query?.where);
+}
+
+function findRecipientFilterValue(where) {
+  if (!where || typeof where !== 'object') return '';
+  const filter = where.fieldFilter;
+  if (
+    String(filter?.field?.fieldPath || '') === 'recipientUid' &&
+    String(filter?.op || '') === 'EQUAL'
+  ) return String(filter?.value?.stringValue || '');
+
+  const filters = where.compositeFilter?.filters;
+  if (Array.isArray(filters)) {
+    for (const item of filters) {
+      const value = findRecipientFilterValue(item);
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
+function responseFromJson(value, original) {
+  const headers = new Headers(original.headers);
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  headers.delete('Content-Length');
+  return new Response(JSON.stringify(value), {
+    status: original.status,
+    statusText: original.statusText,
+    headers
+  });
 }
 
 function isNewPostNotificationWrite(write) {
