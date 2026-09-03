@@ -26,10 +26,11 @@ import "./composer-media-preview-v125";
 import "./post-topic-v125";
 import "./superadmin-growth-v125";
 import "./public-beta-ui";
+import "./superadmin-official-community-access";
 import "./community-notification-toggle";
 import "./public-post-view";
 
-const PRODUCT_VERSION = "1.3.8-public-post";
+const PRODUCT_VERSION = "1.3.9-official-admin";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
