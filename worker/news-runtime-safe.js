@@ -12,6 +12,16 @@ import { scheduleOfficialCommunityAdminSync } from './official-community-admin-s
 
 export { RealtimeHub };
 
+function healthRotationTimestamp(scheduledAt) {
+  // news-test-mode escolhe uma das quatro buscas de Saúde usando slots de
+  // 15 minutos. Como Saúde roda somente no ciclo :00, usar o timestamp real
+  // faria o índice avançar 4 posições por hora e cair sempre na mesma busca.
+  // Convertemos o ordinal da hora em um ordinal de slot para avançar exatamente
+  // uma consulta por hora: 0, 1, 2, 3 e então reinicia.
+  const hourOrdinal = Math.floor(Number(scheduledAt || Date.now()) / (60 * 60 * 1000));
+  return hourOrdinal * 15 * 60 * 1000;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const sharePageResponse = await handlePublicSharePage(request, env);
@@ -43,8 +53,12 @@ export default {
     // oficiais e tentativa da comunidade Saúde. Isso evita que dezenas de
     // operações Firestore concorram com as buscas dos demais agentes.
     if (minute === 0) {
-      console.info('Uorqui news maintenance cycle started', { minute });
-      await prepareNewsTestMode(env, scheduledAt);
+      const healthScheduledAt = healthRotationTimestamp(scheduledAt);
+      console.info('Uorqui news maintenance cycle started', {
+        minute,
+        healthQuerySlot: Math.floor(healthScheduledAt / (15 * 60 * 1000)) % 4
+      });
+      await prepareNewsTestMode(env, healthScheduledAt);
       console.info('Uorqui news maintenance cycle complete', { minute });
       return;
     }
