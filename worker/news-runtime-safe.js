@@ -5,11 +5,15 @@ import './notification-policy.js';
 import runtime, { RealtimeHub } from './news-runtime.js';
 import { prepareNewsTestMode } from './news-test-mode.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
+import { handleCommunityNotificationPreferenceRequest } from './community-notification-preferences.js';
 
 export { RealtimeHub };
 
 export default {
   async fetch(request, env, ctx) {
+    const preferenceResponse = await handleCommunityNotificationPreferenceRequest(request, env);
+    if (preferenceResponse) return preferenceResponse;
+
     const betaResponse = publicBetaMonetizationResponse(request);
     if (betaResponse) return betaResponse;
     return runtime.fetch(request, env, ctx);
