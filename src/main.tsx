@@ -38,7 +38,7 @@ import "./feed-membership-only";
 import "./feed-only-header-scroll";
 import "./news-read-more";
 
-const PRODUCT_VERSION = "1.3.19-news-read-more";
+const PRODUCT_VERSION = "1.3.20-news-read-toggle";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
