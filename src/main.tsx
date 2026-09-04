@@ -32,8 +32,9 @@ import "./public-post-view";
 import "./messages-list-loading";
 import "./post-message-share-modal";
 import "./external-share-preview";
+import "./feed-only-header-scroll";
 
-const PRODUCT_VERSION = "1.3.11-share-modal";
+const PRODUCT_VERSION = "1.3.12-header-feed";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
