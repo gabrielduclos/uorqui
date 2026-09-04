@@ -6,10 +6,13 @@ type Conversation = { unreadCount?: number };
 type ConversationResult = { conversations?: Conversation[] };
 
 const BADGE_CLASS = "uorqui-message-nav-badge";
+const MIN_REFRESH_INTERVAL = 5000;
 let unreadTotal = 0;
 let refreshBusy = false;
 let refreshQueued = false;
 let syncQueued = false;
+let lastRefreshAt = 0;
+let deferredRefreshTimer = 0;
 
 const style = document.createElement("style");
 style.dataset.uorquiMessageUnreadBadge = "1";
@@ -63,22 +66,43 @@ function applyConversationResult(result: ConversationResult | null | undefined) 
   window.dispatchEvent(new CustomEvent("uorqui:message-unread-count", { detail: { count: unreadTotal } }));
 }
 
-async function refreshUnreadCount() {
-  if (refreshBusy) {
-    refreshQueued = true;
+function scheduleDeferredRefresh(delay: number) {
+  window.clearTimeout(deferredRefreshTimer);
+  deferredRefreshTimer = window.setTimeout(() => {
+    deferredRefreshTimer = 0;
+    void refreshUnreadCount(false);
+  }, Math.max(80, delay));
+}
+
+async function refreshUnreadCount(force = false) {
+  if (document.visibilityState === "hidden" && !force) return;
+
+  const elapsed = Date.now() - lastRefreshAt;
+  if (!force && lastRefreshAt && elapsed < MIN_REFRESH_INTERVAL) {
+    scheduleDeferredRefresh(MIN_REFRESH_INTERVAL - elapsed);
     return;
   }
+
+  if (refreshBusy) {
+    refreshQueued = refreshQueued || force;
+    return;
+  }
+
+  window.clearTimeout(deferredRefreshTimer);
+  deferredRefreshTimer = 0;
   refreshBusy = true;
   try {
     const result = await api<ConversationResult>("/messages?offset=0&limit=100");
+    lastRefreshAt = Date.now();
     applyConversationResult(result);
   } catch {
     // O usuário pode ainda não estar autenticado. O próximo evento de realtime/foco tenta novamente.
   } finally {
     refreshBusy = false;
     if (refreshQueued) {
+      const queuedForce = refreshQueued;
       refreshQueued = false;
-      window.setTimeout(() => void refreshUnreadCount(), 80);
+      window.setTimeout(() => void refreshUnreadCount(queuedForce), 100);
     }
   }
 }
@@ -86,21 +110,24 @@ async function refreshUnreadCount() {
 const observer = new MutationObserver(scheduleSync);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
-window.addEventListener("uorqui:realtime-refresh", () => void refreshUnreadCount());
-window.addEventListener("uorqui:open-messages", () => window.setTimeout(() => void refreshUnreadCount(), 220));
-window.addEventListener("online", () => void refreshUnreadCount());
-window.addEventListener("focus", () => void refreshUnreadCount());
+// Realtime agora já chega agrupado. Ainda assim aplicamos uma janela mínima para
+// que curtidas/comentários/publicações não façam o contador de mensagens reler o
+// Firestore repetidamente sem necessidade.
+window.addEventListener("uorqui:realtime-refresh", () => void refreshUnreadCount(false));
+window.addEventListener("uorqui:open-messages", () => window.setTimeout(() => void refreshUnreadCount(true), 220));
+window.addEventListener("online", () => void refreshUnreadCount(true));
+window.addEventListener("focus", () => void refreshUnreadCount(false));
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") void refreshUnreadCount();
+  if (document.visibilityState === "visible") void refreshUnreadCount(false);
 });
 
-// Ao abrir uma conversa o backend marca as mensagens como lidas. Atualizamos o
-// contador logo depois sem esperar outro evento do websocket.
+// Ao abrir uma conversa o backend marca as mensagens como lidas. Este é um dos
+// poucos casos em que forçamos a atualização sem esperar a janela de 5 segundos.
 document.addEventListener("click", (event) => {
   const target = event.target as Element | null;
   if (!target?.closest(".message-contact")) return;
-  window.setTimeout(() => void refreshUnreadCount(), 450);
+  window.setTimeout(() => void refreshUnreadCount(true), 450);
 });
 
-window.setTimeout(() => void refreshUnreadCount(), 1200);
+window.setTimeout(() => void refreshUnreadCount(true), 1200);
 scheduleSync();
