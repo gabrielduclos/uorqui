@@ -9,10 +9,21 @@ type ThreadResult = {
   messages?: MessageSnapshot[];
 };
 
+type ThreadRequest = {
+  uid: string;
+  before: string;
+  method: string;
+};
+
 const upstreamFetch = globalThis.fetch.bind(globalThis);
 let activeTargetUid = "";
 let activeMessages: MessageSnapshot[] = [];
 let syncQueued = false;
+let stickToLatest = false;
+let pendingInitialJump = false;
+let programmaticScroll = false;
+let pendingPrependRestore: { height: number; top: number } | null = null;
+const trackedScrollers = new WeakSet<HTMLElement>();
 
 const style = document.createElement("style");
 style.dataset.uorquiMessageReadState = "1";
@@ -22,11 +33,11 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-function threadRequest(input: RequestInfo | URL, init?: RequestInit) {
+function messageRequest(input: RequestInfo | URL, init?: RequestInit): ThreadRequest | null {
   try {
     const request = input instanceof Request ? input : null;
     const method = String(init?.method || request?.method || "GET").toUpperCase();
-    if (method !== "GET") return null;
+    if (method !== "GET" && method !== "POST") return null;
 
     const raw = request?.url || String(input || "");
     const url = new URL(raw, location.origin);
@@ -35,11 +46,39 @@ function threadRequest(input: RequestInfo | URL, init?: RequestInit) {
 
     return {
       uid: decodeURIComponent(match[1]),
-      before: url.searchParams.get("before") || ""
+      before: url.searchParams.get("before") || "",
+      method
     };
   } catch {
     return null;
   }
+}
+
+function currentScroller() {
+  return document.querySelector<HTMLElement>(".message-thread.open .message-scroll, .message-thread .message-scroll");
+}
+
+function distanceFromBottom(scroll: HTMLElement) {
+  return Math.max(0, scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop);
+}
+
+function bindScrollTracking(scroll: HTMLElement) {
+  if (trackedScrollers.has(scroll)) return;
+  trackedScrollers.add(scroll);
+
+  scroll.addEventListener("scroll", () => {
+    if (programmaticScroll) return;
+    stickToLatest = distanceFromBottom(scroll) <= 84;
+  }, { passive: true });
+}
+
+function jumpToLatest(scroll: HTMLElement) {
+  programmaticScroll = true;
+  scroll.scrollTop = scroll.scrollHeight;
+  requestAnimationFrame(() => {
+    programmaticScroll = false;
+    stickToLatest = true;
+  });
 }
 
 function scheduleSync() {
@@ -55,8 +94,9 @@ function scheduleSync() {
 }
 
 function syncThread() {
-  const scroll = document.querySelector<HTMLElement>(".message-thread.open .message-scroll, .message-thread .message-scroll");
+  const scroll = currentScroller();
   if (!scroll) return;
+  bindScrollTracking(scroll);
 
   const rows = Array.from(scroll.querySelectorAll<HTMLElement>(".message-bubble-row"));
   const offset = Math.max(0, activeMessages.length - rows.length);
@@ -70,13 +110,46 @@ function syncThread() {
     if (shouldShowRead) bubble.dataset.uorquiRead = "1";
     else delete bubble.dataset.uorquiRead;
   });
+
+  if (pendingPrependRestore) {
+    const restore = pendingPrependRestore;
+    pendingPrependRestore = null;
+    programmaticScroll = true;
+    scroll.scrollTop = restore.top + Math.max(0, scroll.scrollHeight - restore.height);
+    requestAnimationFrame(() => { programmaticScroll = false; });
+    return;
+  }
+
+  if (pendingInitialJump) {
+    pendingInitialJump = false;
+    jumpToLatest(scroll);
+    return;
+  }
+
+  if (stickToLatest) jumpToLatest(scroll);
 }
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  const thread = threadRequest(input, init);
+  const thread = messageRequest(input, init);
+
+  if (thread?.method === "GET" && thread.before) {
+    const scroll = currentScroller();
+    if (scroll) pendingPrependRestore = { height: scroll.scrollHeight, top: scroll.scrollTop };
+    stickToLatest = false;
+  }
+
   const response = await upstreamFetch(input, init);
 
   if (!thread || !response.ok) return response;
+
+  if (thread.method === "POST") {
+    // Mensagem enviada pelo usuário: a nova bolha deve ficar visível imediatamente,
+    // sem animação de scroll. O MutationObserver completa o ajuste após o React renderizar.
+    activeTargetUid = thread.uid;
+    stickToLatest = true;
+    scheduleSync();
+    return response;
+  }
 
   void response.clone().json().then((result: ThreadResult) => {
     const messages = Array.isArray(result?.messages) ? result.messages : [];
@@ -89,8 +162,14 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       return;
     }
 
+    const openingThread = activeTargetUid !== thread.uid || !currentScroller();
     activeTargetUid = thread.uid;
     activeMessages = messages;
+
+    if (openingThread) {
+      pendingInitialJump = true;
+      stickToLatest = true;
+    }
     scheduleSync();
   }).catch(() => {});
 
