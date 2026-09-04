@@ -13,6 +13,7 @@ import { handleCommunityNotificationPreferenceRequest } from './community-notifi
 import { handleBootstrapRefresh } from './bootstrap-refresh.js';
 import { handleMessageFeaturesRequest } from './message-features.js';
 import { handleMessageRealtimeRequest, scheduleMessageRealtimeBroadcast } from './message-realtime.js';
+import { scheduleMessageNotificationReadOnThreadOpen } from './message-notification-read.js';
 import { handlePublicPostRequest } from './public-post.js';
 import { handlePublicSharePage } from './public-share-page.js';
 import { scheduleOfficialCommunityAdminSync } from './official-community-admin-sync.js';
@@ -54,10 +55,11 @@ export default {
     if (betaResponse) return betaResponse;
 
     const editorialEnv = withNewsEditorialQuality(env);
+    const nextRuntime = (nextRequest) => runtime.fetch(nextRequest, editorialEnv, ctx);
     const messageFeatureResponse = await handleMessageFeaturesRequest(
       request,
       env,
-      (nextRequest) => runtime.fetch(nextRequest, editorialEnv, ctx)
+      nextRuntime
     );
     if (messageFeatureResponse) {
       scheduleMessageRealtimeBroadcast(request, messageFeatureResponse, env, ctx);
@@ -66,6 +68,7 @@ export default {
 
     const response = await runtime.fetch(request, editorialEnv, ctx);
     scheduleMessageRealtimeBroadcast(request, response, env, ctx);
+    scheduleMessageNotificationReadOnThreadOpen(request, response, ctx, nextRuntime);
     scheduleOfficialCommunityAdminSync(request, response, env, ctx);
     return response;
   },
