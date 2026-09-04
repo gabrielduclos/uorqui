@@ -1,0 +1,48 @@
+/* Mantém o cabeçalho da conversa sempre disponível no mobile, como em apps de mensagem. */
+@media (max-width: 850px) {
+  .ig-messages-overlay {
+    z-index: 30;
+  }
+
+  .ig-thread {
+    overflow: hidden;
+  }
+
+  .ig-thread-header {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    flex: 0 0 auto;
+    min-height: 60px;
+    padding-top: env(safe-area-inset-top);
+    height: calc(60px + env(safe-area-inset-top));
+    background: rgba(255, 255, 255, .985);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    isolation: isolate;
+  }
+
+  .ig-back {
+    display: grid !important;
+    position: relative;
+    z-index: 13;
+    flex: none;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .ig-thread-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ig-composer {
+    position: relative;
+    z-index: 11;
+    flex: 0 0 auto;
+  }
+}
