@@ -14,6 +14,7 @@ import "./login-mobile-v123.css";
 import "./comment-time-v124.css";
 import "./product-v125.css";
 import "./messages-instagram.css";
+import "./messages-instagram-mobile-header.css";
 import "./product-v121";
 import "./product-v121-enhancements";
 import "./company-lookup";
@@ -41,7 +42,7 @@ import "./feed-membership-only";
 import "./feed-only-header-scroll";
 import "./news-read-more";
 
-const PRODUCT_VERSION = "1.3.24-stable-messages";
+const PRODUCT_VERSION = "1.3.25-message-header-stable";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
