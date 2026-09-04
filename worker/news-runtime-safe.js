@@ -11,6 +11,7 @@ import { runHealthNewsCycle } from './health-news-cycle.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
 import { handleCommunityNotificationPreferenceRequest } from './community-notification-preferences.js';
 import { handleBootstrapRefresh } from './bootstrap-refresh.js';
+import { handleMessageFeaturesRequest } from './message-features.js';
 import { handlePublicPostRequest } from './public-post.js';
 import { handlePublicSharePage } from './public-share-page.js';
 import { scheduleOfficialCommunityAdminSync } from './official-community-admin-sync.js';
@@ -48,7 +49,15 @@ export default {
     const betaResponse = publicBetaMonetizationResponse(request);
     if (betaResponse) return betaResponse;
 
-    const response = await runtime.fetch(request, withNewsEditorialQuality(env), ctx);
+    const editorialEnv = withNewsEditorialQuality(env);
+    const messageFeatureResponse = await handleMessageFeaturesRequest(
+      request,
+      env,
+      (nextRequest) => runtime.fetch(nextRequest, editorialEnv, ctx)
+    );
+    if (messageFeatureResponse) return messageFeatureResponse;
+
+    const response = await runtime.fetch(request, editorialEnv, ctx);
     scheduleOfficialCommunityAdminSync(request, response, env, ctx);
     return response;
   },
