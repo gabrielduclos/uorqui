@@ -13,13 +13,24 @@ export function connectRealtime(companyId: string, onRefresh: () => void) {
   const attempts = new Map<string, number>();
   let disposed = false;
   let refreshTimer = 0;
+  let latestEvent = "mutation";
 
   const keyFor = (scope: RealtimeScope) => scope.scope === "world" ? "world" : `company:${scope.companyId}`;
 
-  const scheduleRefresh = () => {
+  // Vários eventos podem chegar quase juntos (curtida, comentário, mensagem,
+  // atualização de contador). O feed continua em tempo real, mas a aplicação
+  // executa somente um refresh para o lote em vez de disparar leituras para
+  // cada frame recebido pelo websocket.
+  const scheduleRefresh = (eventName = "mutation") => {
+    latestEvent = eventName || latestEvent;
     window.clearTimeout(refreshTimer);
-    window.dispatchEvent(new CustomEvent("uorqui:realtime-refresh"));
-    refreshTimer = window.setTimeout(onRefresh, 180);
+    refreshTimer = window.setTimeout(() => {
+      if (disposed) return;
+      window.dispatchEvent(new CustomEvent("uorqui:realtime-refresh", {
+        detail: { event: latestEvent }
+      }));
+      onRefresh();
+    }, 250);
   };
 
   const scheduleReconnect = (scope: RealtimeScope) => {
@@ -58,7 +69,7 @@ export function connectRealtime(companyId: string, onRefresh: () => void) {
         if (event.data === "pong") return;
         try {
           const payload = JSON.parse(String(event.data));
-          if (payload?.type === "refresh") scheduleRefresh();
+          if (payload?.type === "refresh") scheduleRefresh(String(payload?.event || "mutation"));
         } catch {
           // Mensagens desconhecidas não devem interromper a conexão.
         }
