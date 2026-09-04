@@ -57,6 +57,18 @@ export default {
     const editorialEnv = withNewsEditorialQuality(env);
     setNewsRotationTimestamp(scheduledAt);
 
+    const minute = new Date(scheduledAt).getUTCMinutes();
+    if (minute !== 0) {
+      try {
+        const result = await runtime.scheduled(controller, editorialEnv, ctx);
+        console.info('Uorqui scheduled maintenance dispatched', { minute });
+        return result;
+      } catch (error) {
+        console.error('Uorqui scheduled maintenance failed:', error?.message || error);
+        throw error;
+      }
+    }
+
     const activeIndex = activeNewsRotationIndex(scheduledAt);
     const activeAgent = HOURLY_NEWS_AGENTS[activeIndex] || 'unknown';
 
@@ -66,10 +78,6 @@ export default {
       scheduledAt: new Date(scheduledAt).toISOString()
     });
 
-    // Saúde ocupa um dos 11 slots da mesma rotação. Nos outros dez slots o
-    // editor principal roda normalmente, mas news-query-rotation.js devolve RSS
-    // vazio para os nove agentes inativos. Assim apenas um agente faz buscas,
-    // enriquece matéria, chama IA e grava no Firestore por hora.
     if (activeAgent === 'saude') {
       try {
         const result = await runHealthNewsCycle(editorialEnv, scheduledAt);
