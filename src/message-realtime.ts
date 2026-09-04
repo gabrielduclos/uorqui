@@ -1,5 +1,6 @@
 export {};
 
+import { flushSync } from "react-dom";
 import { api } from "./lib/api";
 
 type TicketResult = { ticket: string; uid: string; expiresAt?: string };
@@ -10,6 +11,7 @@ let reconnectTimer = 0;
 let reconnectAttempt = 0;
 let heartbeatTimer = 0;
 let pendingThreadTarget = "";
+let threadRefreshTimer = 0;
 let connecting = false;
 
 function activeThreadTarget() {
@@ -23,21 +25,40 @@ function threadNearBottom() {
   return scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop <= 100;
 }
 
-function remountOpenThread(targetUid: string) {
+function refreshOpenThread(targetUid: string) {
   if (!targetUid || !document.querySelector(".messages-page")) return;
-  try { sessionStorage.setItem("uorqui-message-target", targetUid); } catch {}
-  window.dispatchEvent(new CustomEvent("uorqui:open-messages"));
-  // O listener legado limpa a chave. Repondo depois do dispatch, o novo
-  // MessagesPage lê o alvo no próximo render e abre direto na conversa.
-  try { sessionStorage.setItem("uorqui-message-target", targetUid); } catch {}
+  if (activeThreadTarget() !== targetUid) return;
+
+  const back = document.querySelector<HTMLButtonElement>(".message-thread.open .message-mobile-back, .message-thread .message-mobile-back");
+  const contact = Array.from(document.querySelectorAll<HTMLButtonElement>(".message-contact[data-uorqui-target-uid]"))
+    .find(item => item.dataset.uorquiTargetUid === targetUid);
+  if (!back || !contact) return;
+
+  // Atualiza somente o thread. Os dois commits são forçados no mesmo task para
+  // que o navegador nunca pinte o estado intermediário vazio: lista, busca e
+  // restante da página permanecem montados e estáveis.
+  flushSync(() => back.click());
+  flushSync(() => contact.click());
 }
 
-function refreshOpenThreadWhenAppropriate() {
+function scheduleThreadRefresh(targetUid: string) {
+  if (!targetUid || activeThreadTarget() !== targetUid) return;
+  window.clearTimeout(threadRefreshTimer);
+  threadRefreshTimer = window.setTimeout(() => {
+    if (activeThreadTarget() !== targetUid) return;
+    refreshOpenThread(targetUid);
+  }, 120);
+}
+
+function refreshOpenThreadWhenAppropriate(peerUid: string) {
   const targetUid = activeThreadTarget();
-  if (!targetUid) return;
+  // Um evento de outra conversa atualiza badges/listas pelos listeners próprios,
+  // mas nunca deve desmontar ou recarregar o thread que o usuário está lendo.
+  if (!targetUid || !peerUid || peerUid !== targetUid) return;
+
   if (threadNearBottom()) {
     pendingThreadTarget = "";
-    remountOpenThread(targetUid);
+    scheduleThreadRefresh(targetUid);
   } else {
     // Não puxa o usuário para baixo enquanto ele lê mensagens antigas.
     pendingThreadTarget = targetUid;
@@ -47,7 +68,7 @@ function refreshOpenThreadWhenAppropriate() {
 function handleRealtimePayload(payload: MessageRealtimeEvent) {
   if (payload?.type !== "refresh") return;
   window.dispatchEvent(new CustomEvent("uorqui:message-realtime", { detail: payload }));
-  refreshOpenThreadWhenAppropriate();
+  refreshOpenThreadWhenAppropriate(String(payload.peerUid || ""));
 }
 
 function scheduleReconnect(delay?: number) {
@@ -103,10 +124,14 @@ async function connect() {
 
 document.addEventListener("scroll", () => {
   if (!pendingThreadTarget || !document.querySelector(".messages-page")) return;
+  if (activeThreadTarget() !== pendingThreadTarget) {
+    pendingThreadTarget = "";
+    return;
+  }
   if (!threadNearBottom()) return;
   const target = pendingThreadTarget;
   pendingThreadTarget = "";
-  window.setTimeout(() => remountOpenThread(target), 20);
+  scheduleThreadRefresh(target);
 }, { passive: true, capture: true });
 
 window.addEventListener("online", () => void connect());
