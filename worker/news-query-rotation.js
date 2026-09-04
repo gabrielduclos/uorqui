@@ -1,6 +1,7 @@
 const upstreamFetch = globalThis.fetch.bind(globalThis);
-const SLOT_MS = 15 * 60 * 1000;
-const BATCH_COUNT = 3;
+const HOUR_MS = 60 * 60 * 1000;
+const ROTATION_SIZE = 11; // 10 agentes principais + Saúde
+let rotationTimestamp = Date.now();
 
 const RAW_QUERY_VARIANTS = [
   ['tecnologia inteligência artificial segurança digital brasil', [
@@ -73,22 +74,31 @@ const QUERY_VARIANTS = new Map(
   RAW_QUERY_VARIANTS.map(([key, variants]) => [normalize(key), variants])
 );
 
-const QUERY_BATCH = new Map([
+const QUERY_AGENT_INDEX = new Map([
   [normalize('tecnologia inteligência artificial segurança digital brasil'), 0],
-  [normalize('games jogos videogames lançamento indústria'), 0],
-  [normalize('motos motociclismo motocicletas brasil'), 0],
-
-  [normalize('carros automóveis indústria automotiva brasil'), 1],
-  [normalize('finanças economia juros bancos brasil'), 1],
-  [normalize('empregos carreira mercado de trabalho brasil'), 1],
-
-  [normalize('futebol esportes brasil campeonato seleção'), 2],
-  [normalize('cinema filmes séries streaming brasil'), 2],
-  [normalize('ciência pesquisa descoberta espaço saúde tecnologia'), 2],
-  [normalize('viagens turismo destinos aviação brasil'), 2]
+  [normalize('games jogos videogames lançamento indústria'), 1],
+  [normalize('motos motociclismo motocicletas brasil'), 2],
+  [normalize('carros automóveis indústria automotiva brasil'), 3],
+  [normalize('finanças economia juros bancos brasil'), 4],
+  [normalize('empregos carreira mercado de trabalho brasil'), 5],
+  [normalize('futebol esportes brasil campeonato seleção'), 6],
+  [normalize('cinema filmes séries streaming brasil'), 7],
+  [normalize('ciência pesquisa descoberta espaço saúde tecnologia'), 8],
+  [normalize('viagens turismo destinos aviação brasil'), 9]
 ]);
 
-const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Uorqui deferred news batch</title></channel></rss>';
+const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Uorqui deferred news agent</title></channel></rss>';
+
+export function setNewsRotationTimestamp(value) {
+  const next = Number(value);
+  if (Number.isFinite(next) && next > 0) rotationTimestamp = next;
+}
+
+export function activeNewsRotationIndex(value = rotationTimestamp) {
+  const stamp = Number(value);
+  const hourOrdinal = Math.floor((Number.isFinite(stamp) ? stamp : Date.now()) / HOUR_MS);
+  return ((hourOrdinal % ROTATION_SIZE) + ROTATION_SIZE) % ROTATION_SIZE;
+}
 
 globalThis.fetch = async (input, init) => {
   try {
@@ -96,9 +106,9 @@ globalThis.fetch = async (input, init) => {
     const decision = rewriteNewsSourceUrl(originalUrl);
 
     if (decision?.deferred) {
-      console.info('Uorqui news query deferred by subrequest budget', {
-        batch: decision.batch + 1,
-        activeBatch: decision.activeBatch + 1,
+      console.info('Uorqui news query deferred by hourly rotation', {
+        agentIndex: decision.agentIndex,
+        activeAgentIndex: decision.activeAgentIndex,
         query: decision.baseQuery
       });
       return new Response(EMPTY_RSS, {
@@ -109,11 +119,8 @@ globalThis.fetch = async (input, init) => {
 
     const rewritten = decision?.url || originalUrl;
     if (rewritten && rewritten !== originalUrl) {
-      if (input instanceof Request) {
-        input = new Request(rewritten, input);
-      } else {
-        input = rewritten;
-      }
+      if (input instanceof Request) input = new Request(rewritten, input);
+      else input = rewritten;
     }
   } catch (error) {
     console.warn('Uorqui news query rotation failed:', error?.message || error);
@@ -142,25 +149,28 @@ function rewriteNewsSourceUrl(value) {
     return { url: url.toString() };
   }
 
-  const slot = Math.floor(Date.now() / SLOT_MS);
-  const activeBatch = slot % BATCH_COUNT;
-  const batch = QUERY_BATCH.get(normalizedBase);
+  const activeAgentIndex = activeNewsRotationIndex();
+  const agentIndex = QUERY_AGENT_INDEX.get(normalizedBase);
 
-  if (Number.isInteger(batch) && batch !== activeBatch) {
-    return { deferred: true, batch, activeBatch, baseQuery };
+  if (Number.isInteger(agentIndex) && agentIndex !== activeAgentIndex) {
+    return { deferred: true, agentIndex, activeAgentIndex, baseQuery };
   }
 
-  const variantIndex = slot % variants.length;
+  // Cada agente volta à rotação a cada 11 horas. O ordinal abaixo faz sua
+  // consulta avançar apenas quando aquele agente efetivamente roda.
+  const hourOrdinal = Math.floor(rotationTimestamp / HOUR_MS);
+  const agentRunOrdinal = Math.floor(hourOrdinal / ROTATION_SIZE);
+  const variantIndex = ((agentRunOrdinal % variants.length) + variants.length) % variants.length;
   const selected = variants[variantIndex];
   url.searchParams.set('q', google ? `${selected} when:2d` : selected);
 
-  console.info('Uorqui news query selected', {
+  console.info('Uorqui hourly news query selected', {
     source: google ? 'google' : 'bing',
     query: selected,
     variant: variantIndex + 1,
     variants: variants.length,
-    batch: Number.isInteger(batch) ? batch + 1 : null,
-    activeBatch: activeBatch + 1
+    agentIndex,
+    activeAgentIndex
   });
   return { url: url.toString() };
 }
