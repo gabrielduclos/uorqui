@@ -2,11 +2,14 @@ const downstreamFetch = globalThis.fetch.bind(globalThis);
 
 const SKIP_TOKEN = '__UORQUI_SKIP_INCOMPLETE_NEWS__';
 const PROMOTIONAL_CONTEXT_RE = /(?:programa\s+de\s+afiliad|link(?:s)?\s+(?:de|para)\s+(?:compra|afiliad)|ganh(?:a|ar)\s+(?:uma\s+)?comiss[aã]o|parceiros?\s+(?:comerciais?|que\s+ajudam)|melhores\s+pre[cç]os|\d+x\s+sem\s+juros|cupom|publicidade|conte[uú]do\s+patrocinado|oferta\s+especial|compre\s+(?:agora|aqui)|loja\s+parceira|cart[aã]o(?:ões)?\s+presente)/i;
-const BAD_OUTPUT_RE = /(?:n[aã]o\s+forneceu\s+mais\s+informa[cç][oõ]es|mais\s+detalhes\s+(?:devem|podem|ser[aã]o)\s+(?:surgir|divulgados|revelados)|not[ií]cia\s+importante\s+para|podem\s+esperar\s+por\s+mais\s+detalhes|ganh(?:a|ar)\s+(?:uma\s+)?comiss[aã]o|\d+x\s+sem\s+juros|melhores\s+pre[cç]os|programa\s+de\s+afiliad)/i;
+const PROMOTIONAL_OUTPUT_RE = /(?:ganh(?:a|ar)\s+(?:uma\s+)?comiss[aã]o|\d+x\s+sem\s+juros|melhores\s+pre[cç]os|programa\s+de\s+afiliad|conte[uú]do\s+patrocinado|cupom|compre\s+(?:agora|aqui)|loja\s+parceira)/i;
+const STYLE_OUTPUT_RE = /(?:n[aã]o\s+forneceu\s+mais\s+informa[cç][oõ]es|mais\s+detalhes\s+(?:devem|podem|ser[aã]o)\s+(?:surgir|divulgados|revelados)|not[ií]cia\s+importante\s+para|podem\s+esperar\s+por\s+mais\s+detalhes)/i;
 
-// Última trava editorial antes do Firestore. Se a IA sinalizar que a matéria
-// não identifica o assunto central, ou ainda devolver publicidade/enchimento,
-// o post não é gravado. É melhor perder uma pauta do que publicar algo vago.
+// Última trava editorial antes do Firestore. Ela só bloqueia casos realmente
+// inválidos: marcador explícito de pauta incompleta, promoção/afiliado que
+// escapou da limpeza ou assunto central que permaneceu sem identificação.
+// Problemas apenas de estilo são tratados na reescrita da IA e não derrubam
+// uma categoria inteira do editor principal.
 globalThis.fetch = async (input, init) => {
   try {
     const url = input instanceof Request ? input.url : String(input || '');
@@ -21,7 +24,7 @@ globalThis.fetch = async (input, init) => {
       const mode = String(fields?.aiContentMode?.stringValue || '');
       const text = String(fields?.text?.stringValue || '');
       if (mode === 'news' && shouldRejectPublishedText(text)) {
-        console.warn('Uorqui incomplete/generic news blocked before publish', {
+        console.warn('Uorqui incomplete/promotional news blocked before publish', {
           headline: String(fields?.sourceHeadline?.stringValue || '').slice(0, 180),
           source: String(fields?.sourceName?.stringValue || '').slice(0, 100)
         });
@@ -61,7 +64,9 @@ export function withNewsEditorialQuality(env) {
       text = extractAiText(result);
     }
 
-    if (isWeakNewsText(text)) return SKIP_TOKEN;
+    // Depois da segunda tentativa, só descartamos se houver um problema
+    // substantivo. Frases de estilo imperfeito não podem secar o feed inteiro.
+    if (shouldRejectPublishedText(text)) return SKIP_TOKEN;
     return result;
   };
 
@@ -104,7 +109,7 @@ function addRetryRules(input) {
   const messages = Array.isArray(input?.messages) ? [...input.messages] : [];
   messages.push({
     role: 'system',
-    content: `Sua resposta anterior ficou genérica ou trouxe conteúdo promocional. Reescreva usando somente fatos concretos. Nomeie o assunto central. Se o nome não estiver no material, responda somente ${SKIP_TOKEN}.`
+    content: `Sua resposta anterior ficou genérica ou trouxe conteúdo promocional. Reescreva usando somente fatos concretos e sem frases de enchimento. Nomeie o assunto central quando o nome estiver no material. Se o assunto central realmente não puder ser identificado, responda somente ${SKIP_TOKEN}.`
   });
   return { ...input, messages };
 }
@@ -123,20 +128,33 @@ function sanitizeContext(value) {
 function shouldRejectPublishedText(text) {
   const value = String(text || '').trim();
   if (!value || value.includes(SKIP_TOKEN)) return true;
-  if (BAD_OUTPUT_RE.test(value)) return true;
+  if (PROMOTIONAL_OUTPUT_RE.test(value)) return true;
+  if (hasMissingCentralIdentifier(value)) return true;
   return false;
 }
 
 function isWeakNewsText(text) {
   const value = String(text || '').trim();
-  if (!value || value.includes(SKIP_TOKEN)) return true;
-  if (BAD_OUTPUT_RE.test(value)) return true;
+  if (shouldRejectPublishedText(value)) return true;
+  if (STYLE_OUTPUT_RE.test(value)) return true;
+  return false;
+}
 
-  // Padrões que normalmente denunciam que a pauta não conseguiu identificar
-  // o próprio objeto da notícia. Não bloqueamos a expressão se houver um nome
-  // próprio próximo (ex.: "o novo jogo Doom: ...").
-  if (/\b(?:um|o)\s+novo\s+jogo\b/i.test(value) && !/\b(?:jogo|game)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç'’:-]{2,}/u.test(value)) return true;
-  if (/\b(?:um|o)\s+novo\s+(?:produto|modelo|filme|aplicativo|recurso)\b/i.test(value) && /n[aã]o\s+(?:foi|é)\s+(?:informado|revelado|divulgado)/i.test(value)) return true;
+function hasMissingCentralIdentifier(value) {
+  const text = String(value || '').trim();
+
+  // Caso que motivou a trava: "um novo jogo chegou ao Game Pass" sem dizer o
+  // nome do jogo. Exigimos um nome próprio após jogo/game ou um título citado.
+  if (/\b(?:um|o)\s+novo\s+jogo\b/i.test(text)) {
+    const namedAfterGame = /\b(?:jogo|game)\s+["'“”‘’]?[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç'’:-]{2,}/u.test(text);
+    const quotedTitle = /["“][^"”]{3,80}["”]/u.test(text);
+    if (!namedAfterGame && !quotedTitle) return true;
+  }
+
+  if (/\b(?:um|o)\s+novo\s+(?:produto|modelo|filme|aplicativo|recurso)\b/i.test(text) &&
+      /n[aã]o\s+(?:foi|é|est[aá])\s+(?:informado|revelado|divulgado|identificado)/i.test(text)) {
+    return true;
+  }
 
   return false;
 }
