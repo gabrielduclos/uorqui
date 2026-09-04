@@ -14,24 +14,34 @@ style.textContent = `
   -webkit-line-clamp:4;
   overflow:hidden;
   cursor:pointer;
-  padding-bottom:1.35em;
+  padding-right:5.8rem;
 }
 .post-card.${COLLAPSED_CLASS} .post-content > p::after{
-  content:"Ler mais";
+  content:"Leia mais";
   position:absolute;
   right:0;
   bottom:0;
   z-index:1;
-  padding-left:32px;
-  font-weight:700;
-  line-height:1.35em;
-  color:var(--primary, #2563eb);
-  background:linear-gradient(90deg, transparent 0%, var(--card, #fff) 28%, var(--card, #fff) 100%);
+  padding:0 0 0 10px;
+  font-weight:750;
+  line-height:1.55;
+  color:#2563eb;
+  background:var(--surface, #fff);
+  box-shadow:-16px 0 12px 4px var(--surface, #fff);
+  white-space:nowrap;
 }
-@media (prefers-color-scheme: dark){
-  .post-card.${COLLAPSED_CLASS} .post-content > p::after{
-    background:linear-gradient(90deg, transparent 0%, var(--card, #111827) 28%, var(--card, #111827) 100%);
-  }
+.post-card.${EXPANDED_CLASS} .post-content > p{
+  cursor:pointer;
+}
+.post-card.${EXPANDED_CLASS} .post-content > p::after{
+  content:"Leia menos";
+  display:block;
+  width:max-content;
+  margin-top:.35rem;
+  font-weight:750;
+  color:#2563eb;
+  line-height:1.4;
+  white-space:nowrap;
 }
 `;
 document.head.appendChild(style);
@@ -39,6 +49,20 @@ document.head.appendChild(style);
 function newsText(card: HTMLElement) {
   if (!card.querySelector(".ai-news-card")) return null;
   return card.querySelector<HTMLElement>(".post-content > p");
+}
+
+function setAccessibility(paragraph: HTMLElement, expanded: boolean) {
+  paragraph.setAttribute("role", "button");
+  paragraph.setAttribute("tabindex", "0");
+  paragraph.setAttribute("aria-expanded", expanded ? "true" : "false");
+  paragraph.setAttribute("aria-label", expanded ? "Recolher notícia" : "Ler notícia completa");
+}
+
+function clearAccessibility(paragraph: HTMLElement) {
+  paragraph.removeAttribute("role");
+  paragraph.removeAttribute("tabindex");
+  paragraph.removeAttribute("aria-expanded");
+  paragraph.removeAttribute("aria-label");
 }
 
 function syncCard(card: HTMLElement) {
@@ -50,50 +74,57 @@ function syncCard(card: HTMLElement) {
 
   const text = String(paragraph.textContent || "").trim();
   if (text.length <= NEWS_PREVIEW_MIN_LENGTH) {
-    card.classList.remove(COLLAPSED_CLASS);
-    paragraph.removeAttribute("role");
-    paragraph.removeAttribute("tabindex");
-    paragraph.removeAttribute("aria-expanded");
-    paragraph.removeAttribute("aria-label");
+    card.classList.remove(COLLAPSED_CLASS, EXPANDED_CLASS);
+    clearAccessibility(paragraph);
     return;
   }
 
-  if (!card.classList.contains(EXPANDED_CLASS)) {
-    card.classList.add(COLLAPSED_CLASS);
-    paragraph.setAttribute("role", "button");
-    paragraph.setAttribute("tabindex", "0");
-    paragraph.setAttribute("aria-expanded", "false");
-    paragraph.setAttribute("aria-label", "Ler notícia completa");
+  if (card.classList.contains(EXPANDED_CLASS)) {
+    card.classList.remove(COLLAPSED_CLASS);
+    setAccessibility(paragraph, true);
+    return;
   }
+
+  card.classList.add(COLLAPSED_CLASS);
+  card.classList.remove(EXPANDED_CLASS);
+  setAccessibility(paragraph, false);
 }
 
 function syncNewsCards(root: ParentNode = document) {
   root.querySelectorAll<HTMLElement>(".post-card").forEach(syncCard);
 }
 
-function expandNews(paragraph: HTMLElement) {
-  const card = paragraph.closest<HTMLElement>(`.post-card.${COLLAPSED_CLASS}`);
+function toggleNews(paragraph: HTMLElement) {
+  const card = paragraph.closest<HTMLElement>(`.post-card.${COLLAPSED_CLASS}, .post-card.${EXPANDED_CLASS}`);
   if (!card) return;
+
+  const expanded = card.classList.contains(EXPANDED_CLASS);
+  if (expanded) {
+    card.classList.remove(EXPANDED_CLASS);
+    card.classList.add(COLLAPSED_CLASS);
+    setAccessibility(paragraph, false);
+    return;
+  }
+
   card.classList.remove(COLLAPSED_CLASS);
   card.classList.add(EXPANDED_CLASS);
-  paragraph.setAttribute("aria-expanded", "true");
-  paragraph.setAttribute("aria-label", "Notícia completa");
+  setAccessibility(paragraph, true);
 }
 
 document.addEventListener("click", (event) => {
   const target = event.target as Element | null;
-  const paragraph = target?.closest<HTMLElement>(`.post-card.${COLLAPSED_CLASS} .post-content > p`);
+  const paragraph = target?.closest<HTMLElement>(`.post-card.${COLLAPSED_CLASS} .post-content > p, .post-card.${EXPANDED_CLASS} .post-content > p`);
   if (!paragraph) return;
-  expandNews(paragraph);
+  toggleNews(paragraph);
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
   const target = event.target as Element | null;
-  const paragraph = target?.closest<HTMLElement>(`.post-card.${COLLAPSED_CLASS} .post-content > p`);
+  const paragraph = target?.closest<HTMLElement>(`.post-card.${COLLAPSED_CLASS} .post-content > p, .post-card.${EXPANDED_CLASS} .post-content > p`);
   if (!paragraph) return;
   event.preventDefault();
-  expandNews(paragraph);
+  toggleNews(paragraph);
 });
 
 let syncQueued = false;
