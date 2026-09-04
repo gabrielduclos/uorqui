@@ -18,6 +18,7 @@ export function connectRealtime(companyId: string, onRefresh: () => void) {
 
   const scheduleRefresh = () => {
     window.clearTimeout(refreshTimer);
+    window.dispatchEvent(new CustomEvent("uorqui:realtime-refresh"));
     refreshTimer = window.setTimeout(onRefresh, 180);
   };
 
