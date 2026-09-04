@@ -1,7 +1,7 @@
 export {};
 
 const GENERIC = "Não foi possível concluir agora. Tente novamente.";
-const TECHNICAL = /(firebase|firestore|cloudflare|\bworker\b|service account|\bbackend\b|\bapi\b|http\s*\d{3}|resource[_ -]?exhausted|permission[_ -]?denied|quota|subrequests?|wrangler|\bbinding\b|bootstrap|social\/feed|referenceerror|typeerror|notfounderror|stack trace|index\.js:\d+)/i;
+const TECHNICAL = /(firebase|firestore|cloudflare|\bworker\b|service account|\bbackend\b|\bapi\b|http\s*\d{3}|resource[_ -]?exhausted|permission[_ -]?denied|quota|subrequests?|wrangler|\bbinding\b|bootstrap|social\/feed|referenceerror|typeerror|notfounderror|stack trace|index\.js:\d+|\bvapid\b|workers ai|service credentials|oauth)/i;
 const USER_ERROR_SELECTORS = [
   ".toast",
   ".form-error",
@@ -42,8 +42,6 @@ const observer = new MutationObserver((mutations) => {
 });
 observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 
-// Avisos JavaScript legados também passam pelo mesmo filtro. Mantemos detalhes
-// técnicos apenas no console/Observability, nunca na interface do usuário.
 const nativeAlert = window.alert.bind(window);
 window.alert = (message?: any) => nativeAlert(safeText(String(message ?? "")));
 
