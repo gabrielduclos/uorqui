@@ -13,6 +13,9 @@ export type MessageRealtimeDetail = {
   event?: string;
   peerUid?: string;
   sentAt?: string;
+  message?: DirectMessage;
+  conversation?: { status?: string; requestedBy?: string } | null;
+  likedBy?: string[];
 };
 
 type Conversation = {
@@ -86,6 +89,14 @@ function uniqueMessages(items: DirectMessage[]) {
     const ta = new Date(a.createdAt || 0).getTime();
     const tb = new Date(b.createdAt || 0).getTime();
     return ta - tb;
+  });
+}
+
+function sortConversations(items: Conversation[]) {
+  return [...items].sort((a, b) => {
+    const ta = new Date(a.lastMessageAt || 0).getTime();
+    const tb = new Date(b.lastMessageAt || 0).getTime();
+    return tb - ta;
   });
 }
 
@@ -337,13 +348,78 @@ function InstagramMessagesPage() {
       const detail = (event as CustomEvent<MessageRealtimeDetail>).detail || {};
       if (detail.type !== "refresh") return;
       const peerUid = String(detail.peerUid || "");
+      const incoming = detail.message;
+
+      if (peerUid && incoming?.id) {
+        const active = peerUid === targetRef.current;
+        const fromPeer = incoming.senderUid === peerUid;
+        shouldStickRef.current = active ? nearBottom(scrollRef.current) : shouldStickRef.current;
+
+        if (active) {
+          setMessages(current => uniqueMessages([
+            ...current.filter(item => !(item.optimistic && item.senderUid === incoming.senderUid && item.text === incoming.text)),
+            incoming
+          ]));
+          if (detail.conversation) setConversation(detail.conversation);
+        }
+
+        let foundPeer = false;
+        setConversations(current => {
+          const next = current.map(item => {
+            if (item.targetUid !== peerUid) return item;
+            foundPeer = true;
+            const unread = active || !fromPeer ? 0 : Number(item.unreadCount || 0) + 1;
+            return {
+              ...item,
+              status: (detail.conversation?.status === "pending" ? "pending" : detail.conversation?.status === "accepted" ? "accepted" : item.status),
+              requestedBy: detail.conversation?.requestedBy ?? item.requestedBy,
+              lastMessagePreview: messagePreview(incoming),
+              lastMessageAt: incoming.createdAt || detail.sentAt || item.lastMessageAt,
+              unreadCount: unread
+            };
+          });
+          return sortConversations(next);
+        });
+
+        // Conversa totalmente nova é rara; somente nesse caso buscamos os dados
+        // de perfil/metadata que não fazem parte do delta da mensagem.
+        window.clearTimeout(realtimeTimerRef.current);
+        realtimeTimerRef.current = window.setTimeout(() => {
+          setConversations(current => {
+            if (current.some(item => item.targetUid === peerUid)) return current;
+            void loadConversations(0, true);
+            return current;
+          });
+        }, foundPeer ? 0 : 250);
+        return;
+      }
+
+      if (peerUid && incoming?.id && (detail.event === "message_reaction" || detail.event === "message_cancelled")) {
+        if (peerUid === targetRef.current) {
+          setMessages(current => current.map(item => item.id === incoming.id ? incoming : item));
+        }
+        return;
+      }
+
+      if (detail.event === "message_conversation" && peerUid) {
+        if (peerUid === targetRef.current && detail.conversation) setConversation(detail.conversation);
+        if (detail.conversation) {
+          setConversations(current => current.map(item => item.targetUid === peerUid ? {
+            ...item,
+            status: detail.conversation?.status === "pending" ? "pending" : "accepted",
+            requestedBy: detail.conversation?.requestedBy ?? item.requestedBy
+          } : item));
+          return;
+        }
+      }
+
+      // Compatibilidade com eventos antigos/sem delta: um único refresh atrasado,
+      // nunca uma releitura imediata em cascata.
       window.clearTimeout(realtimeTimerRef.current);
       realtimeTimerRef.current = window.setTimeout(() => {
         void loadConversations(0, true);
-        if (peerUid && peerUid === targetRef.current) {
-          void loadThread(peerUid, { mode: "realtime" });
-        }
-      }, 90);
+        if (peerUid && peerUid === targetRef.current) void loadThread(peerUid, { mode: "realtime" });
+      }, 1200);
     };
     window.addEventListener("uorqui:message-realtime", handler);
     return () => {
@@ -482,11 +558,18 @@ function InstagramMessagesPage() {
         result.message
       ]));
       if (result.conversation) setConversation(result.conversation);
+      setConversations(current => sortConversations(current.map(item => item.targetUid === targetUid ? {
+        ...item,
+        status: result.conversation?.status === "pending" ? "pending" : result.conversation?.status === "accepted" ? "accepted" : item.status,
+        requestedBy: result.conversation?.requestedBy ?? item.requestedBy,
+        lastMessagePreview: messagePreview(result.message),
+        lastMessageAt: result.message.createdAt || new Date().toISOString(),
+        unreadCount: 0
+      } : item)));
       setFiles([]);
       setSharedPostId("");
       pendingExternalPost = "";
       try { sessionStorage.removeItem("uorqui-message-post"); } catch {}
-      void loadConversations(0, true);
     } catch (error) {
       setMessages(current => current.filter(item => item.id !== optimisticId));
       if (cleanText) setText(cleanText);
@@ -537,7 +620,10 @@ function InstagramMessagesPage() {
         { method: "DELETE" }
       );
       setMessages(current => current.map(item => item.id === message.id ? result.message : item));
-      void loadConversations(0, true);
+      setConversations(current => current.map(item => item.targetUid === targetUid && item.lastMessageAt === message.createdAt ? {
+        ...item,
+        lastMessagePreview: messagePreview(result.message)
+      } : item));
     } catch (error) {
       setLocalError(errorText(error));
     } finally {
@@ -556,9 +642,9 @@ function InstagramMessagesPage() {
         setConversations(current => current.filter(item => item.targetUid !== targetUid));
         setTargetUid("");
       } else {
-        await loadThread(targetUid, { mode: "realtime" });
+        setConversation(current => ({ ...(current || {}), status: "accepted" }));
+        setConversations(current => current.map(item => item.targetUid === targetUid ? { ...item, status: "accepted" } : item));
       }
-      await loadConversations(0, true);
     } catch (error) {
       setLocalError(errorText(error));
     } finally {
