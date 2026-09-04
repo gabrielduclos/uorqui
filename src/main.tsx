@@ -30,11 +30,12 @@ import "./superadmin-official-community-access";
 import "./community-notification-toggle";
 import "./public-post-view";
 import "./messages-list-loading";
+import "./message-unread-badge";
 import "./post-message-share-modal";
 import "./external-share-preview";
 import "./feed-only-header-scroll";
 
-const PRODUCT_VERSION = "1.3.12-header-feed";
+const PRODUCT_VERSION = "1.3.13-message-badges";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
