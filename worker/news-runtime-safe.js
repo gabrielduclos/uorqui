@@ -12,6 +12,7 @@ import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
 import { handleCommunityNotificationPreferenceRequest } from './community-notification-preferences.js';
 import { handleBootstrapRefresh } from './bootstrap-refresh.js';
 import { handleMessageFeaturesRequest } from './message-features.js';
+import { handleMessageRealtimeRequest, scheduleMessageRealtimeBroadcast } from './message-realtime.js';
 import { handlePublicPostRequest } from './public-post.js';
 import { handlePublicSharePage } from './public-share-page.js';
 import { scheduleOfficialCommunityAdminSync } from './official-community-admin-sync.js';
@@ -34,6 +35,9 @@ const HOURLY_NEWS_AGENTS = [
 
 export default {
   async fetch(request, env, ctx) {
+    const messageRealtimeResponse = await handleMessageRealtimeRequest(request, env);
+    if (messageRealtimeResponse) return messageRealtimeResponse;
+
     const sharePageResponse = await handlePublicSharePage(request, env);
     if (sharePageResponse) return sharePageResponse;
 
@@ -55,9 +59,13 @@ export default {
       env,
       (nextRequest) => runtime.fetch(nextRequest, editorialEnv, ctx)
     );
-    if (messageFeatureResponse) return messageFeatureResponse;
+    if (messageFeatureResponse) {
+      scheduleMessageRealtimeBroadcast(request, messageFeatureResponse, env, ctx);
+      return messageFeatureResponse;
+    }
 
     const response = await runtime.fetch(request, editorialEnv, ctx);
+    scheduleMessageRealtimeBroadcast(request, response, env, ctx);
     scheduleOfficialCommunityAdminSync(request, response, env, ctx);
     return response;
   },
