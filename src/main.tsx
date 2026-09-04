@@ -33,13 +33,14 @@ import "./messages-list-loading";
 import "./message-unread-badge";
 import "./message-thread-read-state";
 import "./message-experience";
+import "./message-inline-actions";
 import "./post-message-share-modal";
 import "./external-share-preview";
 import "./feed-membership-only";
 import "./feed-only-header-scroll";
 import "./news-read-more";
 
-const PRODUCT_VERSION = "1.3.21-message-experience";
+const PRODUCT_VERSION = "1.3.22-message-inline-actions";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
