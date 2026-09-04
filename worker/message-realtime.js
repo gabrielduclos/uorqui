@@ -96,9 +96,14 @@ async function broadcastMessageRealtime(request, response, env) {
     try {
       const body = await response.json();
       if (body && typeof body === 'object') {
-        if (body.message && typeof body.message === 'object') delta.message = body.message;
-        if (body.conversation && typeof body.conversation === 'object') delta.conversation = body.conversation;
-        if (Array.isArray(body.likedBy)) delta.likedBy = body.likedBy;
+        if (event === 'message') {
+          if (body.message && typeof body.message === 'object') delta.message = body.message;
+          if (body.conversation && typeof body.conversation === 'object') delta.conversation = body.conversation;
+        } else if (event === 'message_conversation') {
+          if (body.conversation && typeof body.conversation === 'object') delta.conversation = body.conversation;
+        } else if (event === 'message_reaction') {
+          if (Array.isArray(body.likedBy)) delta.likedBy = body.likedBy;
+        }
         if (body.ok === true) delta.ok = true;
       }
     } catch {}
