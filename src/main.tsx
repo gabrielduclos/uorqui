@@ -34,13 +34,16 @@ import "./message-unread-badge";
 import "./message-thread-read-state";
 import "./message-experience";
 import "./message-inline-actions";
+import "./message-realtime";
+import "./private-community-discovery";
+import "./generic-error-ui";
 import "./post-message-share-modal";
 import "./external-share-preview";
 import "./feed-membership-only";
 import "./feed-only-header-scroll";
 import "./news-read-more";
 
-const PRODUCT_VERSION = "1.3.22-message-inline-actions";
+const PRODUCT_VERSION = "1.3.23-chat-realtime-discovery";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -56,14 +59,11 @@ class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: E
   render() {
     if (this.state.error) {
       return (
-        <div style={{ maxWidth: 720, margin: "48px auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
-          <h1 style={{ fontSize: 22, marginBottom: 10 }}>Erro ao abrir o Uorqui</h1>
-          <p style={{ marginBottom: 12 }}>A aplicação encontrou um erro de execução após o login.</p>
-          <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", padding: 12, background: "#f5f5f5", borderRadius: 8 }}>
-            {this.state.error.name}: {this.state.error.message}
-          </pre>
+        <div style={{ maxWidth: 720, margin: "48px auto", padding: 24, fontFamily: "system-ui, sans-serif", textAlign: "center" }}>
+          <h1 style={{ fontSize: 22, marginBottom: 10 }}>Não foi possível abrir o Uorqui</h1>
+          <p style={{ marginBottom: 12 }}>Não foi possível concluir agora. Tente novamente.</p>
           <button onClick={() => window.location.reload()} style={{ marginTop: 12, padding: "10px 14px" }}>
-            Recarregar
+            Tentar novamente
           </button>
         </div>
       );
