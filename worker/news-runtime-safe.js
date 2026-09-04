@@ -9,6 +9,7 @@ import runtime, { RealtimeHub } from './news-runtime.js';
 import { runHealthNewsCycle } from './health-news-cycle.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
 import { handleCommunityNotificationPreferenceRequest } from './community-notification-preferences.js';
+import { handleBootstrapRefresh } from './bootstrap-refresh.js';
 import { handlePublicPostRequest } from './public-post.js';
 import { handlePublicSharePage } from './public-share-page.js';
 import { scheduleOfficialCommunityAdminSync } from './official-community-admin-sync.js';
@@ -36,6 +37,9 @@ export default {
 
     const publicPostResponse = await handlePublicPostRequest(request, env);
     if (publicPostResponse) return publicPostResponse;
+
+    const bootstrapRefreshResponse = await handleBootstrapRefresh(request, env);
+    if (bootstrapRefreshResponse) return bootstrapRefreshResponse;
 
     const preferenceResponse = await handleCommunityNotificationPreferenceRequest(request, env);
     if (preferenceResponse) return preferenceResponse;
