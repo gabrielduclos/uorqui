@@ -5,7 +5,15 @@ import { api } from "./lib/api";
 import { auth } from "./lib/firebase";
 
 type TicketResult = { ticket: string; uid: string; expiresAt?: string };
-type MessageRealtimeEvent = { type?: string; event?: string; peerUid?: string; sentAt?: string };
+type MessageRealtimeEvent = {
+  type?: string;
+  event?: string;
+  peerUid?: string;
+  sentAt?: string;
+  message?: Record<string, unknown>;
+  conversation?: Record<string, unknown>;
+  likedBy?: string[];
+};
 
 let socket: WebSocket | null = null;
 let reconnectTimer = 0;
@@ -17,27 +25,36 @@ let activeUid = "";
 let socketGeneration = 0;
 let pendingPayload: MessageRealtimeEvent | null = null;
 
+function emitPayload(payload: MessageRealtimeEvent) {
+  if (document.visibilityState === "hidden") return;
+  window.dispatchEvent(new CustomEvent("uorqui:message-realtime", { detail: payload }));
+}
+
 function flushPayload() {
   dispatchTimer = 0;
   const payload = pendingPayload;
   pendingPayload = null;
-  if (!payload || document.visibilityState === "hidden") return;
-  window.dispatchEvent(new CustomEvent("uorqui:message-realtime", { detail: payload }));
+  if (!payload) return;
+  emitPayload(payload);
 }
 
 function dispatchPayload(payload: MessageRealtimeEvent) {
   if (payload?.type !== "refresh") return;
 
-  // A confirmação de leitura não precisa reler a lista e o thread inteiro.
-  // Ignorar esse eco evita cascatas de GET /messages quando duas conversas
-  // estão abertas ao mesmo tempo.
+  // Confirmação de leitura não deve provocar releitura da conversa.
   if (payload.event === "message_read") return;
 
-  // Aba em segundo plano não deve gerar leituras do Firestore.
+  // Nenhuma consulta de Firestore enquanto a aba está em segundo plano.
   if (document.visibilityState === "hidden") return;
 
-  // Coalesce rajadas (mensagem + reação + atualização de conversa) em um único
-  // refresh. A superfície React continuará decidindo o que precisa atualizar.
+  // Mensagem com delta completo precisa chegar imediatamente e nunca pode ser
+  // descartada pelo coalescing: a UI consegue anexá-la sem fazer GET algum.
+  if (payload.event === "message" && payload.message && typeof payload.message === "object") {
+    emitPayload(payload);
+    return;
+  }
+
+  // Eventos menos frequentes podem ser agrupados para reduzir fallback reads.
   pendingPayload = payload;
   window.clearTimeout(dispatchTimer);
   dispatchTimer = window.setTimeout(flushPayload, 450);
