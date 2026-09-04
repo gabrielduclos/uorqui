@@ -59,7 +59,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const response = await upstreamFetch(input, init);
   if (!response.ok || meta.method !== "GET" || !meta.url) return response;
 
-  if (meta.url.pathname === "/api/bootstrap") {
+  if (meta.url.pathname === "/api/bootstrap" || meta.url.pathname === "/api/bootstrap-refresh") {
     try {
       rememberMemberships(await response.clone().json() as BootstrapLike);
     } catch {}
