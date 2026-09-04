@@ -2,6 +2,7 @@ import { Component, StrictMode, useState, type ErrorInfo, type ReactNode } from 
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { SocialLayer } from "./social";
+import { InstagramMessagesOverlay } from "./messages-instagram";
 import "./comment-replies.css";
 import "./product-v121.css";
 import "./product-v121-enhancements.css";
@@ -12,6 +13,7 @@ import "./reply-to-reply-v123.css";
 import "./login-mobile-v123.css";
 import "./comment-time-v124.css";
 import "./product-v125.css";
+import "./messages-instagram.css";
 import "./product-v121";
 import "./product-v121-enhancements";
 import "./company-lookup";
@@ -29,11 +31,7 @@ import "./public-beta-ui";
 import "./superadmin-official-community-access";
 import "./community-notification-toggle";
 import "./public-post-view";
-import "./messages-list-loading";
 import "./message-unread-badge";
-import "./message-thread-read-state";
-import "./message-experience";
-import "./message-inline-actions";
 import "./message-realtime";
 import "./private-community-discovery";
 import "./generic-error-ui";
@@ -43,7 +41,7 @@ import "./feed-membership-only";
 import "./feed-only-header-scroll";
 import "./news-read-more";
 
-const PRODUCT_VERSION = "1.3.23-chat-realtime-discovery";
+const PRODUCT_VERSION = "1.3.24-stable-messages";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -126,6 +124,7 @@ createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <App />
       <SocialLayer />
+      <InstagramMessagesOverlay />
       <CookieConsentBanner />
     </StrictMode>
   </RuntimeErrorBoundary>
