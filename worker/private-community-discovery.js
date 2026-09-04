@@ -35,19 +35,28 @@ export async function enrichPrivateCommunityDiscovery(request, response, env) {
         avatarMediaId: community.avatarMediaId || '',
         alreadyMember: joinedIds.has(community.id),
         requestToJoin: true
-      }));
+      }))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
 
-    const merged = new Map();
-    for (const community of Array.isArray(payload.communities) ? payload.communities : []) {
-      if (community?.id) merged.set(community.id, community);
-    }
-    for (const community of additions) {
-      if (!merged.has(community.id)) merged.set(community.id, community);
-    }
+    const existing = (Array.isArray(payload.communities) ? payload.communities : [])
+      .filter(community => community?.id)
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+    const existingIds = new Set(existing.map(community => community.id));
+    const privateOnly = additions.filter(community => !existingIds.has(community.id));
 
-    payload.communities = [...merged.values()]
-      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
-      .slice(0, 40);
+    // A tela inicial de Descobrir mostra só os primeiros cartões. Intercalamos
+    // públicas e privadas para que comunidades com solicitação de entrada
+    // apareçam realmente junto das demais, em vez de ficarem escondidas após o
+    // corte visual dos primeiros resultados.
+    const mixed = [];
+    let publicIndex = 0;
+    let privateIndex = 0;
+    while (mixed.length < 40 && (publicIndex < existing.length || privateIndex < privateOnly.length)) {
+      if (publicIndex < existing.length) mixed.push(existing[publicIndex++]);
+      if (mixed.length >= 40) break;
+      if (privateIndex < privateOnly.length) mixed.push(privateOnly[privateIndex++]);
+    }
+    payload.communities = mixed;
 
     return rewriteJson(response, payload);
   } catch (error) {
@@ -111,7 +120,7 @@ async function getGoogleAccessToken(env) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      grant_type: 'urn:ietf:params:oauth-grant-type:jwt-bearer',
       assertion
     })
   });
