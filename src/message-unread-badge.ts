@@ -5,7 +5,6 @@ import { api } from "./lib/api";
 type Conversation = { unreadCount?: number };
 type ConversationResult = { conversations?: Conversation[] };
 
-const BADGE_CLASS = "uorqui-message-nav-badge";
 const MIN_REFRESH_INTERVAL = 5000;
 let unreadTotal = 0;
 let refreshBusy = false;
@@ -17,10 +16,22 @@ let deferredRefreshTimer = 0;
 const style = document.createElement("style");
 style.dataset.uorquiMessageUnreadBadge = "1";
 style.textContent = `
-.${BADGE_CLASS}{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#111318;color:#fff;font-size:10px;font-weight:800;line-height:1;flex:0 0 auto;margin-left:auto}
-.mobile-nav .${BADGE_CLASS}{position:absolute;top:2px;left:calc(50% + 7px);min-width:17px;height:17px;padding:0 4px;margin:0;border:2px solid var(--background,#fff);font-size:9px}
+.side-nav button[data-uorqui-message-unread]::after{
+  content:attr(data-uorqui-message-unread);
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;margin-left:auto;
+  border-radius:999px;background:#111318;color:#fff;
+  font-size:10px;font-weight:800;line-height:1;flex:0 0 auto
+}
 .mobile-nav button{position:relative}
-.side-nav .${BADGE_CLASS}{margin-left:auto}
+.mobile-nav button[data-uorqui-message-unread]::after{
+  content:attr(data-uorqui-message-unread);
+  position:absolute;top:2px;left:calc(50% + 7px);
+  display:flex;align-items:center;justify-content:center;
+  min-width:17px;height:17px;padding:0 4px;
+  border-radius:999px;background:#111318;color:#fff;
+  border:2px solid var(--background,#fff);font-size:9px;font-weight:800;line-height:1
+}
 `;
 document.head.appendChild(style);
 
@@ -36,20 +47,15 @@ function messageButtons() {
 
 function syncBadges() {
   syncQueued = false;
+  const label = unreadTotal > 99 ? "99+" : String(unreadTotal);
   for (const button of messageButtons()) {
-    let badge = button.querySelector<HTMLElement>(`.${BADGE_CLASS}`);
     if (!unreadTotal) {
-      badge?.remove();
+      delete button.dataset.uorquiMessageUnread;
+      button.removeAttribute("aria-label");
       continue;
     }
-    if (!badge) {
-      badge = document.createElement("b");
-      badge.className = BADGE_CLASS;
-      badge.setAttribute("aria-label", `${unreadTotal} mensagens não lidas`);
-      button.appendChild(badge);
-    }
-    badge.textContent = unreadTotal > 99 ? "99+" : String(unreadTotal);
-    badge.setAttribute("aria-label", `${unreadTotal} mensagens não lidas`);
+    button.dataset.uorquiMessageUnread = label;
+    button.setAttribute("aria-label", `Mensagens, ${unreadTotal} não lidas`);
   }
 }
 
@@ -110,9 +116,6 @@ async function refreshUnreadCount(force = false) {
 const observer = new MutationObserver(scheduleSync);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
-// Eventos gerais continuam limitados para não transformar curtidas e posts em
-// consultas do chat. Eventos privados de mensagem são específicos do usuário e
-// por isso atualizam o contador imediatamente.
 window.addEventListener("uorqui:realtime-refresh", () => void refreshUnreadCount(false));
 window.addEventListener("uorqui:message-realtime", () => void refreshUnreadCount(true));
 window.addEventListener("uorqui:open-messages", () => window.setTimeout(() => void refreshUnreadCount(true), 220));
@@ -122,7 +125,6 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") void refreshUnreadCount(false);
 });
 
-// Ao abrir uma conversa o backend marca as mensagens como lidas.
 document.addEventListener("click", (event) => {
   const target = event.target as Element | null;
   if (!target?.closest(".message-contact")) return;
