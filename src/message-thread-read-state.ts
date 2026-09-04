@@ -13,13 +13,12 @@ const upstreamFetch = globalThis.fetch.bind(globalThis);
 let activeTargetUid = "";
 let activeMessages: MessageSnapshot[] = [];
 let syncQueued = false;
-let shouldScrollToLatest = false;
 
 const style = document.createElement("style");
 style.dataset.uorquiMessageReadState = "1";
 style.textContent = `
 .message-bubble time{display:block;text-align:right;font-size:7px;opacity:.55;margin-top:5px}
-.message-bubble[data-uorqui-read="1"] time::after{content:" · Lida";font-weight:700;white-space:nowrap}
+.message-bubble-row.mine .message-bubble[data-uorqui-read="1"] time::after{content:" · Lida";font-weight:700;white-space:nowrap}
 `;
 document.head.appendChild(style);
 
@@ -43,8 +42,7 @@ function threadRequest(input: RequestInfo | URL, init?: RequestInit) {
   }
 }
 
-function scheduleSync(scrollToLatest = false) {
-  shouldScrollToLatest = shouldScrollToLatest || scrollToLatest;
+function scheduleSync() {
   if (syncQueued) return;
   syncQueued = true;
 
@@ -68,14 +66,10 @@ function syncThread() {
     const bubble = row.querySelector<HTMLElement>(".message-bubble");
     if (!bubble) return;
 
-    if (message?.readAt) bubble.dataset.uorquiRead = "1";
+    const shouldShowRead = row.classList.contains("mine") && Boolean(message?.readAt);
+    if (shouldShowRead) bubble.dataset.uorquiRead = "1";
     else delete bubble.dataset.uorquiRead;
   });
-
-  if (shouldScrollToLatest) {
-    shouldScrollToLatest = false;
-    scroll.scrollTop = scroll.scrollHeight;
-  }
 }
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -91,19 +85,19 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const known = new Set(activeMessages.map(message => String(message.id || "")));
       const older = messages.filter(message => !known.has(String(message.id || "")));
       activeMessages = [...older, ...activeMessages];
-      scheduleSync(false);
+      scheduleSync();
       return;
     }
 
     activeTargetUid = thread.uid;
     activeMessages = messages;
-    scheduleSync(true);
+    scheduleSync();
   }).catch(() => {});
 
   return response;
 };
 
-const observer = new MutationObserver(() => scheduleSync(false));
+const observer = new MutationObserver(() => scheduleSync());
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
-window.addEventListener("uorqui:realtime-refresh", () => scheduleSync(false));
+window.addEventListener("uorqui:realtime-refresh", () => scheduleSync());
