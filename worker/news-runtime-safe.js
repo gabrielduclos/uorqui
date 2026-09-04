@@ -14,6 +14,7 @@ import { handleBootstrapRefresh } from './bootstrap-refresh.js';
 import { handleMessageFeaturesRequest } from './message-features.js';
 import { handleMessageRealtimeRequest, scheduleMessageRealtimeBroadcast } from './message-realtime.js';
 import { scheduleMessageNotificationReadOnThreadOpen } from './message-notification-read.js';
+import { enrichPrivateCommunityDiscovery } from './private-community-discovery.js';
 import { handlePublicPostRequest } from './public-post.js';
 import { handlePublicSharePage } from './public-share-page.js';
 import { scheduleOfficialCommunityAdminSync } from './official-community-admin-sync.js';
@@ -66,7 +67,8 @@ export default {
       return messageFeatureResponse;
     }
 
-    const response = await runtime.fetch(request, editorialEnv, ctx);
+    const runtimeResponse = await runtime.fetch(request, editorialEnv, ctx);
+    const response = await enrichPrivateCommunityDiscovery(request, runtimeResponse, env);
     scheduleMessageRealtimeBroadcast(request, response, env, ctx);
     scheduleMessageNotificationReadOnThreadOpen(request, response, ctx, nextRuntime);
     scheduleOfficialCommunityAdminSync(request, response, env, ctx);
