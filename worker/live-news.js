@@ -7,7 +7,11 @@ const EDITORIAL_STATE_ID = 'uorqui_ai_live_news_state_v1';
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 const SEMANTIC_WINDOW = 72 * 60 * 60 * 1000;
 const FRESH_NEWS_WINDOW = 36 * 60 * 60 * 1000;
-const MAX_CANDIDATES_PER_AGENT = 10;
+const HOUR_MS = 60 * 60 * 1000;
+const ROTATION_SIZE = 11;
+const MAX_CANDIDATES_PER_AGENT = 3;
+const MAX_NEWS_PUSH_RECIPIENTS = 8;
+const MAX_PUSH_TOKENS_PER_USER = 1;
 let googleTokenCache = { expires: 0, token: '' };
 
 const AGENTS = [
@@ -36,15 +40,20 @@ export default {
     const scheduledAt = Number(controller?.scheduledTime || Date.now());
     const minute = new Date(scheduledAt).getUTCMinutes();
 
-    if (minute === 0 && typeof scheduledCore.scheduled === 'function') {
+    // O cron de manutenção roda em outra invocação (:15) para não compartilhar
+    // o teto de subrequests do plano Free com a publicação de notícias (:00).
+    if (minute === 15 && typeof scheduledCore.scheduled === 'function') {
       try {
-        scheduledCore.scheduled(controller, suppressLegacyNewsAi(env), ctx);
+        return scheduledCore.scheduled(controller, suppressLegacyNewsAi(env), ctx);
       } catch (error) {
         console.error('Uorqui hourly scheduled tasks failed:', error?.message || error);
+        return;
       }
     }
 
-    ctx.waitUntil(runLiveNewsCycle(env).catch(error => {
+    if (minute !== 0) return;
+
+    ctx.waitUntil(runLiveNewsCycle(env, scheduledAt).catch(error => {
       console.error('Uorqui live news cycle failed:', error?.message || error);
     }));
   }
@@ -57,7 +66,7 @@ function suppressLegacyNewsAi(env) {
   wrappedAi.run = async (model, input) => {
     const prompt = promptText(input);
     if (/MANCHETE:\s*/i.test(prompt) && /FONTE:\s*/i.test(prompt)) {
-      throw new Error('Publicação automática controlada pelo editor de notícias de 15 minutos.');
+      throw new Error('Publicação automática controlada pelo editor horário de notícias.');
     }
     return originalAi.run.call(originalAi, model, input);
   };
@@ -66,13 +75,29 @@ function suppressLegacyNewsAi(env) {
   return wrappedEnv;
 }
 
-async function runLiveNewsCycle(env) {
+function rotationIndex(value) {
+  const stamp = Number(value);
+  const hourOrdinal = Math.floor((Number.isFinite(stamp) ? stamp : Date.now()) / HOUR_MS);
+  return ((hourOrdinal % ROTATION_SIZE) + ROTATION_SIZE) % ROTATION_SIZE;
+}
+
+async function runLiveNewsCycle(env, scheduledAt = Date.now()) {
   const now = Date.now();
+  const activeIndex = rotationIndex(scheduledAt);
+  const activeAgent = activeIndex >= 0 && activeIndex < AGENTS.length ? AGENTS[activeIndex] : null;
+
+  // Índice 10 pertence ao agente de Saúde e é executado no runtime externo.
+  if (!activeAgent) {
+    console.info('Uorqui live news main cycle skipped for external rotation slot', { activeIndex });
+    return;
+  }
+
   const state = await loadEditorialState(env, now);
   const diagnostics = [];
   let published = 0;
+  const agents = [activeAgent];
 
-  for (const agent of AGENTS) {
+  for (const agent of agents) {
     const diagnostic = { agent: agent.key, candidates: 0, attempted: 0, duplicates: 0, result: 'none' };
     try {
       const candidates = await findFreshCandidates(agent, state, now);
@@ -132,10 +157,10 @@ async function runLiveNewsCycle(env) {
 
   state.items = pruneStateItems(state.items, Date.now());
   state.lastRunAt = new Date().toISOString();
-  state.lastCycle = { published, checked: AGENTS.length, diagnostics };
+  state.lastCycle = { published, checked: agents.length, activeAgent: activeAgent.key, diagnostics };
   if (published) state.lastPublishedAt = new Date().toISOString();
   await saveEditorialState(env, state, state.lastRunAt);
-  console.log('Uorqui live news cycle complete', { published, checked: AGENTS.length, diagnostics });
+  console.log('Uorqui live news cycle complete', { published, checked: agents.length, activeAgent: activeAgent.key, diagnostics });
 }
 
 async function loadEditorialState(env, now) {
@@ -402,19 +427,63 @@ async function publishNewsPost(env, agent, news, text, now) {
 
 async function notifyCommunityMembers(env, post) {
   const memberships = await fsWhere(env, 'communityMembers', 'communityId', post.communityId, 300).catch(() => []);
-  const recipients = [...new Set(memberships.map(item => item.uid).filter(uid => uid && uid !== post.authorUid))];
-  if (!recipients.length) return;
+  const recipients = [...new Set(
+    memberships
+      .filter(item => item?.notifyNewPosts === true)
+      .map(item => item.uid)
+      .filter(uid => uid && uid !== post.authorUid)
+  )];
+
+  if (!recipients.length) {
+    console.info('Live news notification fanout skipped: no opted-in members', { communityId: post.communityId });
+    return;
+  }
+
   const title = `Nova publicação em ${post.communityName}`;
   const body = `${post.authorName} publicou uma nova notícia.`;
-  for (const uid of recipients) {
+  const notifications = recipients.map(uid => {
     const id = `post_${post.id}_${uid}`;
-    await fsPut(env, 'notifications', id, { id, recipientUid:uid, type:'new_post', title, body, data:{ postId:post.id, companyId:'', communityId:post.communityId, targetView:'communities' }, read:false, persistent:false, createdAt:post.createdAt }).catch(() => null);
+    return {
+      id,
+      data: {
+        id,
+        recipientUid:uid,
+        type:'new_post',
+        title,
+        body,
+        data:{ postId:post.id, companyId:'', communityId:post.communityId, targetView:'communities' },
+        read:false,
+        persistent:false,
+        createdAt:post.createdAt
+      }
+    };
+  });
+
+  // Uma única commit request grava todas as notificações em vez de uma
+  // subrequest por usuário. A notification-policy continua validando o opt-in.
+  await fsBatchPut(env, 'notifications', notifications).catch(error => {
+    console.warn('Live news notification batch failed:', error?.message || error);
+  });
+
+  const pushRecipients = recipients.slice(0, MAX_NEWS_PUSH_RECIPIENTS);
+  for (const uid of pushRecipients) {
     await sendPushToUser(env, uid, { title, body, postId:post.id, communityId:post.communityId, type:'new_post' }).catch(() => null);
+  }
+
+  if (recipients.length > pushRecipients.length) {
+    console.warn('Live news push fanout capped to protect Worker subrequest budget', {
+      communityId: post.communityId,
+      optedIn: recipients.length,
+      pushed: pushRecipients.length
+    });
   }
 }
 
 async function sendPushToUser(env, uid, payload) {
-  const subscriptions = (await fsWhere(env, 'pushSubscriptions', 'uid', uid, 20).catch(() => [])).filter(item => item.enabled !== false && item.token);
+  const subscriptions = (await fsWhere(env, 'pushSubscriptions', 'uid', uid, 20).catch(() => []))
+    .filter(item => item.enabled !== false && item.token)
+    .sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))
+    .slice(0, MAX_PUSH_TOKENS_PER_USER);
   if (!subscriptions.length) return;
   const accessToken = await getGoogleAccessToken(env);
   const endpoint = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/messages:send`;
@@ -461,7 +530,7 @@ async function getGoogleAccessToken(env) {
   const key = await importPrivateKey(credentials.privateKey);
   const signature = await crypto.subtle.sign({name:'RSASSA-PKCS1-v1_5'},key,new TextEncoder().encode(input));
   const assertion = `${input}.${b64url(new Uint8Array(signature))}`;
-  const response = await fetch('https://oauth2.googleapis.com/token',{ method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion}) });
+  const response = await fetch('https://oauth2.googleapis.com/token',{ method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({grant_type:'urn:ietf:params:oauth-token',assertion}) });
   const data = await response.json().catch(()=>({}));
   if (!response.ok || !data.access_token) throw new Error(`Firebase Service Account recusada: ${data.error_description || data.error || response.status}`);
   googleTokenCache = { token:data.access_token, expires:Date.now()+Number(data.expires_in||3600)*1000 };
@@ -476,6 +545,7 @@ async function importPrivateKey(pem) {
 function b64urlJson(value) { return b64url(new TextEncoder().encode(JSON.stringify(value))); }
 function b64url(bytes) { let binary=''; for (const byte of bytes) binary+=String.fromCharCode(byte); return btoa(binary).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_'); }
 function fsBase(env) { return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)`; }
+function fsDocumentName(env, collection, docId) { return `projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/${collection}/${docId}`; }
 
 async function fsRequest(env, path, options = {}) {
   const token = await getGoogleAccessToken(env);
@@ -493,6 +563,16 @@ async function fsRequest(env, path, options = {}) {
 
 async function fsGet(env, collection, docId) { const doc = await fsRequest(env, `/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}`); return doc ? fromDoc(doc) : null; }
 async function fsPut(env, collection, docId, object) { const doc = await fsRequest(env, `/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}`,{ method:'PATCH', body:JSON.stringify({fields:toFields({...object,id:object.id||docId})}) }); return fromDoc(doc); }
+async function fsBatchPut(env, collection, entries) {
+  if (!Array.isArray(entries) || !entries.length) return;
+  const writes = entries.map(entry => ({
+    update: {
+      name: fsDocumentName(env, collection, entry.id),
+      fields: toFields({ ...(entry.data || {}), id: entry.id })
+    }
+  }));
+  await fsRequest(env, '/documents:commit', { method:'POST', body:JSON.stringify({ writes }) });
+}
 async function fsListCollection(env, collection, limit = 300) { const data = await fsRequest(env, `/documents/${encodeURIComponent(collection)}?pageSize=${Math.min(500,Math.max(1,limit))}`); return (data?.documents || []).map(fromDoc); }
 async function fsWhere(env, collection, field, value, limit = 100) { const data = await fsRequest(env, '/documents:runQuery',{ method:'POST', body:JSON.stringify({structuredQuery:{ from:[{collectionId:collection}], where:{fieldFilter:{field:{fieldPath:field},op:'EQUAL',value:toValue(value)}}, limit:Math.min(500,Math.max(1,limit)) }}) }); return (Array.isArray(data)?data:[]).map(row=>row.document).filter(Boolean).map(fromDoc); }
 function fromDoc(document) { if (!document) return null; const object = fromFields(document.fields || {}); object.id = object.id || decodeURIComponent(String(document.name || '').split('/').pop() || ''); return object; }
