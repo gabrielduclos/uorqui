@@ -9,6 +9,10 @@ const GENERIC_MESSAGE_BODY = 'Enviou uma mensagem';
 // Mensagens privadas usam o ícone Mensagens como contador principal. O sino
 // mantém apenas uma notificação não lida por remetente/conversa e nunca expõe
 // o conteúdo da mensagem em Firestore ou no push.
+//
+// Importante: esta política não intercepta mais runQuery de notificações. O
+// bootstrap precisa receber a resposta do Firestore sem reconstrução de body;
+// a deduplicação acontece na gravação da notificação, antes de ela existir.
 globalThis.fetch = async (input, init) => {
   const url = input instanceof Request ? input.url : String(input || '');
   const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
@@ -28,8 +32,8 @@ globalThis.fetch = async (input, init) => {
         const recipientUid = String(fields?.recipientUid?.stringValue || '');
         const conversationUid = String(fields?.data?.mapValue?.fields?.conversationUid?.stringValue || '');
 
-        // Mesmo em histórico antigo, nunca persiste o texto da mensagem dentro
-        // da notificação. O conteúdo continua disponível somente no chat.
+        // Nunca persiste o texto da mensagem dentro da notificação. O conteúdo
+        // continua disponível somente no chat.
         fields.body = { stringValue: GENERIC_MESSAGE_BODY };
         nextInit = { ...init, body: JSON.stringify({ ...payload, fields }) };
 
@@ -58,53 +62,6 @@ globalThis.fetch = async (input, init) => {
           pendingConversationNotifications.set(key, Date.now() + PENDING_TTL);
         }
       }
-    }
-
-    // O bootstrap/central de notificações também é limpo na leitura para
-    // esconder duplicidades antigas que já tenham sido gravadas anteriormente.
-    if (isNotificationRunQuery(url, method, nextInit)) {
-      const response = await upstreamFetch(input, nextInit);
-      if (!response.ok) return response;
-      const rows = await response.json().catch(() => null);
-      if (!Array.isArray(rows)) return responseFromJson(rows, response);
-
-      const seenUnreadConversations = new Set();
-      let suppressed = 0;
-      const filtered = [];
-
-      for (const row of rows) {
-        const fields = row?.document?.fields || null;
-        if (!fields) {
-          filtered.push(row);
-          continue;
-        }
-
-        const type = String(fields?.type?.stringValue || '');
-        if (!isDirectMessageType(type)) {
-          filtered.push(row);
-          continue;
-        }
-
-        fields.body = { stringValue: GENERIC_MESSAGE_BODY };
-        const unread = fields?.read?.booleanValue !== true;
-        const recipientUid = String(fields?.recipientUid?.stringValue || '');
-        const conversationUid = String(fields?.data?.mapValue?.fields?.conversationUid?.stringValue || '');
-        const key = `${recipientUid}:${conversationUid}`;
-
-        if (unread && conversationUid) {
-          if (seenUnreadConversations.has(key)) {
-            suppressed += 1;
-            continue;
-          }
-          seenUnreadConversations.add(key);
-        }
-        filtered.push(row);
-      }
-
-      if (suppressed) {
-        console.info('Uorqui duplicate direct-message notifications hidden from bell', { suppressed });
-      }
-      return responseFromJson(filtered, response);
     }
 
     if (isFcmSend(url, method, nextInit)) {
@@ -142,8 +99,7 @@ globalThis.fetch = async (input, init) => {
       }
     }
   } catch (error) {
-    // Uma falha no filtro não pode impedir o envio da mensagem. Ainda assim, a
-    // sanitização de conteúdo é tentada no caminho normal acima.
+    // Uma falha no filtro não pode impedir o envio da mensagem.
     console.warn('Uorqui direct-message notification policy failed:', error?.message || error);
   }
 
@@ -195,18 +151,6 @@ function isNotificationPatch(url, method, init) {
     typeof init?.body === 'string';
 }
 
-function isNotificationRunQuery(url, method, init) {
-  if (method !== 'POST' || !/firestore\.googleapis\.com\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents:runQuery(?:\?|$)/i.test(url)) return false;
-  if (typeof init?.body !== 'string') return false;
-  try {
-    const payload = JSON.parse(init.body);
-    const from = Array.isArray(payload?.structuredQuery?.from) ? payload.structuredQuery.from : [];
-    return from.some(item => String(item?.collectionId || '') === 'notifications');
-  } catch {
-    return false;
-  }
-}
-
 function isFcmSend(url, method, init) {
   return method === 'POST' &&
     /fcm\.googleapis\.com\/v1\/projects\/[^/]+\/messages:send(?:\?|$)/i.test(url) &&
@@ -242,17 +186,6 @@ function fakeFirestoreDocument(url, payload) {
   }), {
     status: 200,
     headers: { 'Content-Type': 'application/json; charset=utf-8' }
-  });
-}
-
-function responseFromJson(value, original) {
-  const headers = new Headers(original.headers);
-  headers.set('Content-Type', 'application/json; charset=utf-8');
-  headers.delete('Content-Length');
-  return new Response(JSON.stringify(value), {
-    status: original.status,
-    statusText: original.statusText,
-    headers
   });
 }
 
