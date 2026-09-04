@@ -11,23 +11,47 @@ let socket: WebSocket | null = null;
 let reconnectTimer = 0;
 let reconnectAttempt = 0;
 let heartbeatTimer = 0;
+let dispatchTimer = 0;
 let connecting = false;
 let activeUid = "";
 let socketGeneration = 0;
+let pendingPayload: MessageRealtimeEvent | null = null;
+
+function flushPayload() {
+  dispatchTimer = 0;
+  const payload = pendingPayload;
+  pendingPayload = null;
+  if (!payload || document.visibilityState === "hidden") return;
+  window.dispatchEvent(new CustomEvent("uorqui:message-realtime", { detail: payload }));
+}
 
 function dispatchPayload(payload: MessageRealtimeEvent) {
   if (payload?.type !== "refresh") return;
-  // O socket privado somente publica o evento. A superfície React decide se
-  // atualiza a lista ou o thread ativo; nenhuma tela é desmontada aqui.
-  window.dispatchEvent(new CustomEvent("uorqui:message-realtime", { detail: payload }));
+
+  // A confirmação de leitura não precisa reler a lista e o thread inteiro.
+  // Ignorar esse eco evita cascatas de GET /messages quando duas conversas
+  // estão abertas ao mesmo tempo.
+  if (payload.event === "message_read") return;
+
+  // Aba em segundo plano não deve gerar leituras do Firestore.
+  if (document.visibilityState === "hidden") return;
+
+  // Coalesce rajadas (mensagem + reação + atualização de conversa) em um único
+  // refresh. A superfície React continuará decidindo o que precisa atualizar.
+  pendingPayload = payload;
+  window.clearTimeout(dispatchTimer);
+  dispatchTimer = window.setTimeout(flushPayload, 450);
 }
 
 function clearConnection() {
   socketGeneration += 1;
   window.clearTimeout(reconnectTimer);
+  window.clearTimeout(dispatchTimer);
   window.clearInterval(heartbeatTimer);
   reconnectTimer = 0;
+  dispatchTimer = 0;
   heartbeatTimer = 0;
+  pendingPayload = null;
   connecting = false;
   const current = socket;
   socket = null;
