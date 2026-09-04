@@ -1,3 +1,4 @@
+import './oauth-grant-safety.js';
 import { withNewsEditorialQuality } from './news-editorial-quality.js';
 import './news-image-final-safety.js';
 import './news-image-recovery.js';
