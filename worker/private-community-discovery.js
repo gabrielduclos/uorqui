@@ -20,9 +20,6 @@ export async function enrichPrivateCommunityDiscovery(request, response, env) {
     const additions = privateCommunities
       .filter(community => !community.companyId)
       .filter(community => community.archived !== true)
-      // Comunidades corporativas verificadas/invite-only continuam fora da
-      // descoberta pública. Aqui entram apenas comunidades sociais privadas nas
-      // quais qualquer usuário pode solicitar participação.
       .filter(community => !community.verifiedCompany && !community.inviteOnly)
       .map(community => ({
         id: community.id,
@@ -44,10 +41,6 @@ export async function enrichPrivateCommunityDiscovery(request, response, env) {
     const existingIds = new Set(existing.map(community => community.id));
     const privateOnly = additions.filter(community => !existingIds.has(community.id));
 
-    // A tela inicial de Descobrir mostra só os primeiros cartões. Intercalamos
-    // públicas e privadas para que comunidades com solicitação de entrada
-    // apareçam realmente junto das demais, em vez de ficarem escondidas após o
-    // corte visual dos primeiros resultados.
     const mixed = [];
     let publicIndex = 0;
     let privateIndex = 0;
@@ -120,7 +113,7 @@ async function getGoogleAccessToken(env) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth-grant-type:jwt-bearer',
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
       assertion
     })
   });
