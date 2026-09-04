@@ -35,6 +35,18 @@ const HOURLY_NEWS_AGENTS = [
   'saude'
 ];
 
+function requestForRuntime(request) {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith('/api/messages')) return request;
+
+  // Mensagens possuem um websocket privado por usuário. Remover o contexto da
+  // empresa antes de entrar no runtime impede que a mesma ação também gere o
+  // broadcast genérico de empresa e, consequentemente, refresh do app inteiro.
+  const headers = new Headers(request.headers);
+  headers.delete('X-Uorqui-Company');
+  return new Request(request, { headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const messageRealtimeResponse = await handleMessageRealtimeRequest(request, env);
@@ -56,7 +68,7 @@ export default {
     if (betaResponse) return betaResponse;
 
     const editorialEnv = withNewsEditorialQuality(env);
-    const nextRuntime = (nextRequest) => runtime.fetch(nextRequest, editorialEnv, ctx);
+    const nextRuntime = (nextRequest) => runtime.fetch(requestForRuntime(nextRequest), editorialEnv, ctx);
     const messageFeatureResponse = await handleMessageFeaturesRequest(
       request,
       env,
@@ -67,7 +79,7 @@ export default {
       return messageFeatureResponse;
     }
 
-    const runtimeResponse = await runtime.fetch(request, editorialEnv, ctx);
+    const runtimeResponse = await runtime.fetch(requestForRuntime(request), editorialEnv, ctx);
     const response = await enrichPrivateCommunityDiscovery(request, runtimeResponse, env);
     scheduleMessageRealtimeBroadcast(request, response, env, ctx);
     scheduleMessageNotificationReadOnThreadOpen(request, response, ctx, nextRuntime);
