@@ -96,7 +96,7 @@ async function refreshUnreadCount(force = false) {
     lastRefreshAt = Date.now();
     applyConversationResult(result);
   } catch {
-    // O usuário pode ainda não estar autenticado. O próximo evento de realtime/foco tenta novamente.
+    // O usuário pode ainda não estar autenticado. O próximo evento tenta novamente.
   } finally {
     refreshBusy = false;
     if (refreshQueued) {
@@ -110,10 +110,11 @@ async function refreshUnreadCount(force = false) {
 const observer = new MutationObserver(scheduleSync);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
-// Realtime agora já chega agrupado. Ainda assim aplicamos uma janela mínima para
-// que curtidas/comentários/publicações não façam o contador de mensagens reler o
-// Firestore repetidamente sem necessidade.
+// Eventos gerais continuam limitados para não transformar curtidas e posts em
+// consultas do chat. Eventos privados de mensagem são específicos do usuário e
+// por isso atualizam o contador imediatamente.
 window.addEventListener("uorqui:realtime-refresh", () => void refreshUnreadCount(false));
+window.addEventListener("uorqui:message-realtime", () => void refreshUnreadCount(true));
 window.addEventListener("uorqui:open-messages", () => window.setTimeout(() => void refreshUnreadCount(true), 220));
 window.addEventListener("online", () => void refreshUnreadCount(true));
 window.addEventListener("focus", () => void refreshUnreadCount(false));
@@ -121,8 +122,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") void refreshUnreadCount(false);
 });
 
-// Ao abrir uma conversa o backend marca as mensagens como lidas. Este é um dos
-// poucos casos em que forçamos a atualização sem esperar a janela de 5 segundos.
+// Ao abrir uma conversa o backend marca as mensagens como lidas.
 document.addEventListener("click", (event) => {
   const target = event.target as Element | null;
   if (!target?.closest(".message-contact")) return;
