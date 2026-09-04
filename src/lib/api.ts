@@ -14,7 +14,12 @@ const mediaUrlCache = new Map<string, Promise<string>>();
 const resolvedMediaUrls = new Map<string, string>();
 const MEDIA_CACHE_VERSION = "uorqui-media-v122";
 const MEDIA_CACHE_TTL = 15 * 60 * 1000;
+const BOOTSTRAP_FULL_REFRESH_TTL = 5 * 60 * 1000;
 let initialBootstrapNormalized = false;
+let bootstrapSnapshot: any = null;
+let bootstrapSnapshotUid = "";
+let bootstrapFullAt = 0;
+let bootstrapSmokeBypassUntil = 0;
 
 function mutationKey(path: string, init: RequestInit) {
   const method = String(init.method || "GET").toUpperCase();
@@ -72,9 +77,165 @@ function normalizeReadPath(path: string) {
   return path;
 }
 
+function bootstrapRefreshPath(path: string) {
+  const queryIndex = path.indexOf("?");
+  return queryIndex >= 0
+    ? `/bootstrap-refresh${path.slice(queryIndex)}`
+    : "/bootstrap-refresh";
+}
+
+function canUseBootstrapRefresh(uid: string, path: string) {
+  if (!bootstrapSnapshot || bootstrapSnapshotUid !== uid || !bootstrapFullAt) return false;
+  if (Date.now() - bootstrapFullAt >= BOOTSTRAP_FULL_REFRESH_TTL) return false;
+
+  const requestedCompanyId = bootstrapCompanyId(path);
+  const currentCompanyId = String(bootstrapSnapshot?.selectedCompanyId || "");
+  // Troca de empresa precisa do bootstrap completo para repor os blocos
+  // administrativos (members/allCompanyCommunities) da empresa correta.
+  if (requestedCompanyId && requestedCompanyId !== currentCompanyId) return false;
+  return true;
+}
+
+function mergePostRuntimeState(nextPost: any, previousPost: any) {
+  if (!previousPost) {
+    return {
+      ...nextPost,
+      liked: Boolean(nextPost?.liked),
+      hasRead: Boolean(nextPost?.hasRead),
+      myPollOptionId: nextPost?.myPollOptionId || ""
+    };
+  }
+  return {
+    ...previousPost,
+    ...nextPost,
+    liked: nextPost?.liked === undefined ? Boolean(previousPost?.liked) : Boolean(nextPost.liked),
+    hasRead: nextPost?.hasRead === undefined ? Boolean(previousPost?.hasRead) : Boolean(nextPost.hasRead),
+    myPollOptionId: nextPost?.myPollOptionId === undefined
+      ? (previousPost?.myPollOptionId || "")
+      : (nextPost?.myPollOptionId || "")
+  };
+}
+
+function mergeBootstrapRefresh(refreshPayload: any) {
+  if (!bootstrapSnapshot || !refreshPayload || typeof refreshPayload !== "object") return refreshPayload;
+
+  const previousPostMap = new Map<string, any>();
+  for (const post of [
+    ...(Array.isArray(bootstrapSnapshot.posts) ? bootstrapSnapshot.posts : []),
+    ...(Array.isArray(bootstrapSnapshot.worldPosts) ? bootstrapSnapshot.worldPosts : [])
+  ]) {
+    if (post?.id) previousPostMap.set(String(post.id), post);
+  }
+
+  const posts = Array.isArray(refreshPayload.posts)
+    ? refreshPayload.posts.map((post: any) => mergePostRuntimeState(post, previousPostMap.get(String(post?.id || ""))))
+    : bootstrapSnapshot.posts;
+  const worldPosts = Array.isArray(refreshPayload.worldPosts)
+    ? refreshPayload.worldPosts.map((post: any) => mergePostRuntimeState(post, previousPostMap.get(String(post?.id || ""))))
+    : bootstrapSnapshot.worldPosts;
+
+  return {
+    ...bootstrapSnapshot,
+    ...refreshPayload,
+    communities: Array.isArray(refreshPayload.communities)
+      ? refreshPayload.communities
+      : bootstrapSnapshot.communities,
+    communityMap: refreshPayload.communityMap && typeof refreshPayload.communityMap === "object"
+      ? { ...(bootstrapSnapshot.communityMap || {}), ...refreshPayload.communityMap }
+      : bootstrapSnapshot.communityMap,
+    posts,
+    worldPosts,
+    notifications: Array.isArray(refreshPayload.notifications)
+      ? refreshPayload.notifications
+      : bootstrapSnapshot.notifications,
+    // O refresh leve deliberadamente não consulta esses blocos caros.
+    allCompanyCommunities: Array.isArray(refreshPayload.allCompanyCommunities)
+      ? refreshPayload.allCompanyCommunities
+      : bootstrapSnapshot.allCompanyCommunities,
+    members: Array.isArray(refreshPayload.members)
+      ? refreshPayload.members
+      : bootstrapSnapshot.members
+  };
+}
+
+function shouldInvalidateBootstrapSnapshot(path: string) {
+  if (path === "/me" || path.startsWith("/superadmin/companies/")) return true;
+  if (path.startsWith("/companies/")) return true;
+  if (path === "/companies") return true;
+  if (path.startsWith("/community-join-requests/")) return true;
+  if (path === "/communities") return true;
+  if (path.startsWith("/communities/")) {
+    // Preferência de push não altera a estrutura do bootstrap.
+    if (path.includes("/notification-preference")) return false;
+    // Curtidas/comentários/posts não passam por /communities/*; aqui ficam
+    // somente entrada, saída, membros, convites e gestão da comunidade.
+    return true;
+  }
+  return false;
+}
+
+function clearBootstrapSnapshot() {
+  bootstrapSnapshot = null;
+  bootstrapSnapshotUid = "";
+  bootstrapFullAt = 0;
+  bootstrapSmokeBypassUntil = 0;
+}
+
+function patchSnapshotPost(postId: string, patch: Record<string, any>) {
+  if (!bootstrapSnapshot || !postId) return;
+  const patchList = (items: any[]) => (Array.isArray(items)
+    ? items.map(item => String(item?.id || "") === postId ? { ...item, ...patch } : item)
+    : items);
+  bootstrapSnapshot = {
+    ...bootstrapSnapshot,
+    posts: patchList(bootstrapSnapshot.posts),
+    worldPosts: patchList(bootstrapSnapshot.worldPosts)
+  };
+}
+
+function applyMutationToBootstrapSnapshot(path: string, payload: any) {
+  if (!bootstrapSnapshot || !payload || typeof payload !== "object") return;
+
+  const reactionMatch = path.match(/^\/posts\/([^/]+)\/reaction$/);
+  if (reactionMatch && payload.liked !== undefined) {
+    patchSnapshotPost(decodeURIComponent(reactionMatch[1]), {
+      liked: Boolean(payload.liked),
+      reactionCount: Number(payload.reactionCount || 0)
+    });
+    return;
+  }
+
+  const readMatch = path.match(/^\/posts\/([^/]+)\/read$/);
+  if (readMatch && payload.ok) {
+    patchSnapshotPost(decodeURIComponent(readMatch[1]), { hasRead: true });
+    return;
+  }
+
+  const pollMatch = path.match(/^\/posts\/([^/]+)\/poll-vote$/);
+  if (pollMatch && payload.optionId) {
+    patchSnapshotPost(decodeURIComponent(pollMatch[1]), {
+      myPollOptionId: String(payload.optionId || ""),
+      pollOptions: Array.isArray(payload.pollOptions) ? payload.pollOptions : undefined,
+      pollTotalVotes: Number(payload.pollTotalVotes || 0)
+    });
+  }
+}
+
 async function executeApi<T>(path: string, init: RequestInit = {}, bootstrapRetry = false): Promise<T> {
   const user = auth.currentUser;
   if (!user) throw new ApiError("Faça login para continuar.", 401);
+
+  if (bootstrapSnapshotUid && bootstrapSnapshotUid !== user.uid) clearBootstrapSnapshot();
+
+  const method = String(init.method || "GET").toUpperCase();
+  const isBootstrapRead = (method === "GET" || method === "HEAD") && path.startsWith("/bootstrap");
+  let transportPath = path;
+  let usingBootstrapRefresh = false;
+
+  if (isBootstrapRead && canUseBootstrapRefresh(user.uid, path)) {
+    transportPath = bootstrapRefreshPath(path);
+    usingBootstrapRefresh = true;
+  }
 
   const token = await user.getIdToken();
   const headers = new Headers(init.headers);
@@ -91,9 +252,20 @@ async function executeApi<T>(path: string, init: RequestInit = {}, bootstrapRetr
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`/api${path}`, { ...init, headers });
+  let response = await fetch(`/api${transportPath}`, { ...init, headers });
+
+  // Endpoint leve ausente/perfil removido: volta ao bootstrap completo. 429 e
+  // erros transitórios do Firestore NÃO fazem retry pesado para não duplicar
+  // leituras quando a cota estiver pressionada.
+  if (usingBootstrapRefresh && [404, 409, 501].includes(response.status)) {
+    clearBootstrapSnapshot();
+    usingBootstrapRefresh = false;
+    transportPath = path;
+    response = await fetch(`/api${transportPath}`, { ...init, headers });
+  }
+
   const type = response.headers.get("content-type") || "";
-  const payload = type.includes("application/json")
+  let payload: any = type.includes("application/json")
     ? await response.json()
     : await response.text();
 
@@ -104,14 +276,21 @@ async function executeApi<T>(path: string, init: RequestInit = {}, bootstrapRetr
     );
   }
 
-  const method = String(init.method || "GET").toUpperCase();
-  if (
-    (method === "GET" || method === "HEAD") &&
-    path.startsWith("/bootstrap") &&
-    payload &&
-    typeof payload === "object" &&
-    !Array.isArray(payload)
-  ) {
+  if (isBootstrapRead && payload && typeof payload === "object" && !Array.isArray(payload)) {
+    if (usingBootstrapRefresh) {
+      payload = mergeBootstrapRefresh(payload);
+    } else {
+      bootstrapFullAt = Date.now();
+    }
+    bootstrapSnapshot = payload;
+    bootstrapSnapshotUid = user.uid;
+
+    // App.tsx executa um /social/feed apenas como smoke test logo depois do
+    // bootstrap. Ele não usa esse resultado. Marcamos uma única chamada para
+    // ser respondida localmente e evitamos repetir uma consulta social pesada
+    // em todo evento realtime.
+    bootstrapSmokeBypassUntil = Date.now() + 2500;
+
     const activeCompanyId = localStorage.getItem("uorqui-company") || "";
     const responseCompanyId = String(payload.selectedCompanyId || "");
     const availableCompanyIds = new Set(
@@ -131,6 +310,11 @@ async function executeApi<T>(path: string, init: RequestInit = {}, bootstrapRetr
     }
   }
 
+  if (method !== "GET" && method !== "HEAD") {
+    if (shouldInvalidateBootstrapSnapshot(path)) clearBootstrapSnapshot();
+    else applyMutationToBootstrapSnapshot(path, payload);
+  }
+
   return payload as T;
 }
 
@@ -139,6 +323,22 @@ export async function api<T = any>(path: string, init: RequestInit = {}): Promis
   const effectivePath = method === "GET" || method === "HEAD"
     ? normalizeReadPath(path)
     : path;
+
+  // O refresh() de App.tsx chama /social/feed logo após o bootstrap somente
+  // para validar o formato da rota. A resposta não alimenta o estado nessa
+  // chamada. Bypass único evita uma segunda bateria de leituras a cada evento.
+  if (
+    (method === "GET" || method === "HEAD") &&
+    effectivePath === "/social/feed" &&
+    bootstrapSmokeBypassUntil > Date.now()
+  ) {
+    bootstrapSmokeBypassUntil = 0;
+    return {
+      followingCount: 0,
+      posts: [],
+      communities: []
+    } as T;
+  }
 
   if (method === "GET" || method === "HEAD") {
     const key = `${method}:${effectivePath}`;
