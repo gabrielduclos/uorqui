@@ -4,6 +4,7 @@ import './news-image-recovery.js';
 import './news-source-safety.js';
 import { activeNewsRotationIndex, setNewsRotationTimestamp } from './news-query-rotation.js';
 import './notification-policy.js';
+import './message-notification-policy.js';
 import runtime, { RealtimeHub } from './news-runtime.js';
 import { runHealthNewsCycle } from './health-news-cycle.js';
 import { publicBetaMonetizationResponse } from './public-beta-monetization.js';
