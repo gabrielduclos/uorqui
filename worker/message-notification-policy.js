@@ -2,20 +2,23 @@ const upstreamFetch = globalThis.fetch.bind(globalThis);
 
 const pendingConversationNotifications = new Map();
 const suppressedPushNotifications = new Map();
+const notificationAliases = new Map();
 const PENDING_TTL = 4000;
 const SUPPRESSED_PUSH_TTL = 60000;
+const ALIAS_TTL = 60000;
 const GENERIC_MESSAGE_BODY = 'Enviou uma mensagem';
 
 // Mensagens privadas usam o ícone Mensagens como contador principal. O sino
 // mantém apenas uma notificação não lida por remetente/conversa e nunca expõe
 // o conteúdo da mensagem em Firestore ou no push.
 //
-// Importante: esta política não intercepta mais runQuery de notificações. O
-// bootstrap precisa receber a resposta do Firestore sem reconstrução de body;
-// a deduplicação acontece na gravação da notificação, antes de ela existir.
+// A deduplicação é feita por um documento determinístico por conversa. Assim,
+// cada nova mensagem custa no máximo uma leitura direta desse documento, em vez
+// de consultar até centenas de notificações do usuário.
 globalThis.fetch = async (input, init) => {
   const url = input instanceof Request ? input.url : String(input || '');
   const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+  let nextInput = input;
   let nextInit = init;
 
   cleanupCaches();
@@ -28,7 +31,7 @@ globalThis.fetch = async (input, init) => {
       const unread = fields?.read?.booleanValue !== true;
 
       if (isDirectMessageType(type)) {
-        const notificationId = notificationIdFromUrl(url);
+        const originalNotificationId = notificationIdFromUrl(url);
         const recipientUid = String(fields?.recipientUid?.stringValue || '');
         const conversationUid = String(fields?.data?.mapValue?.fields?.conversationUid?.stringValue || '');
 
@@ -37,29 +40,43 @@ globalThis.fetch = async (input, init) => {
         fields.body = { stringValue: GENERIC_MESSAGE_BODY };
         nextInit = { ...init, body: JSON.stringify({ ...payload, fields }) };
 
-        if (unread && recipientUid && conversationUid && notificationId) {
+        if (recipientUid && conversationUid && originalNotificationId) {
+          const canonicalId = await canonicalConversationNotificationId(recipientUid, conversationUid);
           const key = `${recipientUid}:${conversationUid}`;
-          const pending = Number(pendingConversationNotifications.get(key) || 0) > Date.now();
-          const authorization = headerValue(init?.headers || (input instanceof Request ? input.headers : null), 'authorization');
-          const projectId = firestoreProjectId(url);
-          const duplicate = pending || await hasUnreadConversationNotification(
-            projectId,
-            authorization,
-            recipientUid,
-            conversationUid,
-            notificationId
-          );
+          notificationAliases.set(originalNotificationId, {
+            id: canonicalId,
+            expires: Date.now() + ALIAS_TTL
+          });
 
-          if (duplicate) {
-            suppressedPushNotifications.set(notificationId, Date.now() + SUPPRESSED_PUSH_TTL);
-            console.info('Uorqui duplicate direct-message notification suppressed', {
-              recipientUid,
-              conversationUid
-            });
-            return fakeFirestoreDocument(url, { ...payload, fields });
+          if (unread) {
+            const pending = Number(pendingConversationNotifications.get(key) || 0) > Date.now();
+            let duplicate = pending;
+
+            if (!duplicate) {
+              const authorization = headerValue(init?.headers || (input instanceof Request ? input.headers : null), 'authorization');
+              const projectId = firestoreProjectId(url);
+              duplicate = await hasUnreadCanonicalNotification(
+                projectId,
+                authorization,
+                canonicalId
+              );
+            }
+
+            if (duplicate) {
+              suppressedPushNotifications.set(originalNotificationId, Date.now() + SUPPRESSED_PUSH_TTL);
+              console.info('Uorqui duplicate direct-message notification suppressed', {
+                recipientUid,
+                conversationUid
+              });
+              return fakeFirestoreDocument(url, { ...payload, fields }, canonicalId);
+            }
+
+            pendingConversationNotifications.set(key, Date.now() + PENDING_TTL);
           }
 
-          pendingConversationNotifications.set(key, Date.now() + PENDING_TTL);
+          // O documento do sino é sempre o mesmo para esta conversa. Depois que
+          // o usuário o marca como lido, a próxima mensagem reutiliza o mesmo ID.
+          nextInput = replaceNotificationId(input, canonicalId);
         }
       }
     }
@@ -70,19 +87,23 @@ globalThis.fetch = async (input, init) => {
       const type = String(data.type || '');
 
       if (isDirectMessageType(type)) {
-        const notificationId = String(data.notificationId || '');
-        const suppressedUntil = Number(suppressedPushNotifications.get(notificationId) || 0);
-        if (notificationId && suppressedUntil > Date.now()) {
-          suppressedPushNotifications.delete(notificationId);
-          console.info('Uorqui duplicate direct-message push suppressed', { notificationId });
+        const originalNotificationId = String(data.notificationId || '');
+        const suppressedUntil = Number(suppressedPushNotifications.get(originalNotificationId) || 0);
+        if (originalNotificationId && suppressedUntil > Date.now()) {
+          suppressedPushNotifications.delete(originalNotificationId);
+          notificationAliases.delete(originalNotificationId);
+          console.info('Uorqui duplicate direct-message push suppressed', { notificationId: originalNotificationId });
           return new Response(JSON.stringify({ name: 'uorqui/suppressed/direct_message_duplicate' }), {
             status: 200,
             headers: { 'Content-Type': 'application/json; charset=utf-8' }
           });
         }
 
-        // FCM recebe uma cópia sanitizada mesmo que o objeto original criado
-        // pelo runtime contenha um preview textual.
+        const alias = notificationAliases.get(originalNotificationId);
+        if (alias?.id) notificationAliases.delete(originalNotificationId);
+
+        // FCM recebe uma cópia sanitizada mesmo que o runtime original contenha
+        // um preview textual. O ID aponta para o documento canônico do sino.
         const message = { ...(payload.message || {}) };
         message.notification = {
           ...(message.notification || {}),
@@ -90,6 +111,7 @@ globalThis.fetch = async (input, init) => {
         };
         message.data = {
           ...(message.data || {}),
+          ...(alias?.id ? { notificationId: alias.id } : {}),
           body: GENERIC_MESSAGE_BODY
         };
         nextInit = {
@@ -103,46 +125,47 @@ globalThis.fetch = async (input, init) => {
     console.warn('Uorqui direct-message notification policy failed:', error?.message || error);
   }
 
-  return upstreamFetch(input, nextInit);
+  return upstreamFetch(nextInput, nextInit);
 };
 
-async function hasUnreadConversationNotification(projectId, authorization, recipientUid, conversationUid, currentNotificationId) {
-  if (!projectId || !authorization || !recipientUid || !conversationUid) return false;
-  const endpoint = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents:runQuery`;
+async function hasUnreadCanonicalNotification(projectId, authorization, notificationId) {
+  if (!projectId || !authorization || !notificationId) return false;
+  const endpoint = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/notifications/${encodeURIComponent(notificationId)}`;
   const response = await upstreamFetch(endpoint, {
-    method: 'POST',
-    headers: {
-      Authorization: authorization,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: 'notifications' }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: 'recipientUid' },
-            op: 'EQUAL',
-            value: { stringValue: recipientUid }
-          }
-        },
-        limit: 200
-      }
-    })
+    method: 'GET',
+    headers: { Authorization: authorization }
   });
+
+  if (response.status === 404) return false;
   if (!response.ok) return false;
 
-  const rows = await response.json().catch(() => []);
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const document = row?.document;
-    const fields = document?.fields || {};
-    const id = String(document?.name || '').split('/').pop() || '';
-    if (!id || id === currentNotificationId) continue;
-    if (!isDirectMessageType(String(fields?.type?.stringValue || ''))) continue;
-    if (fields?.read?.booleanValue === true) continue;
-    const sender = String(fields?.data?.mapValue?.fields?.conversationUid?.stringValue || '');
-    if (sender === conversationUid) return true;
+  const document = await response.json().catch(() => null);
+  const fields = document?.fields || {};
+  const type = String(fields?.type?.stringValue || '');
+  if (!isDirectMessageType(type)) return false;
+  return fields?.read?.booleanValue !== true;
+}
+
+async function canonicalConversationNotificationId(recipientUid, conversationUid) {
+  const bytes = new TextEncoder().encode(`${recipientUid}\u0000${conversationUid}`);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  const hash = Array.from(digest, value => value.toString(16).padStart(2, '0')).join('').slice(0, 40);
+  return `message_conversation_${hash}`;
+}
+
+function replaceNotificationId(input, notificationId) {
+  const raw = input instanceof Request ? input.url : String(input || '');
+  try {
+    const parsed = new URL(raw);
+    parsed.pathname = parsed.pathname.replace(
+      /\/documents\/notifications\/[^/]+$/i,
+      `/documents/notifications/${encodeURIComponent(notificationId)}`
+    );
+    if (input instanceof Request) return new Request(parsed.toString(), input);
+    return parsed.toString();
+  } catch {
+    return input;
   }
-  return false;
 }
 
 function isNotificationPatch(url, method, init) {
@@ -176,8 +199,11 @@ function firestoreProjectId(url) {
   return match?.[1] ? decodeURIComponent(match[1]) : '';
 }
 
-function fakeFirestoreDocument(url, payload) {
-  const name = String(url || '').match(/\/v1\/(projects\/[^?]+)/i)?.[1] || '';
+function fakeFirestoreDocument(url, payload, notificationId = '') {
+  let name = String(url || '').match(/\/v1\/(projects\/[^?]+)/i)?.[1] || '';
+  if (notificationId) {
+    name = name.replace(/\/documents\/notifications\/[^/]+$/i, `/documents/notifications/${notificationId}`);
+  }
   return new Response(JSON.stringify({
     name,
     fields: payload?.fields || {},
@@ -210,5 +236,8 @@ function cleanupCaches() {
   }
   for (const [key, expires] of suppressedPushNotifications) {
     if (Number(expires || 0) <= now) suppressedPushNotifications.delete(key);
+  }
+  for (const [key, alias] of notificationAliases) {
+    if (Number(alias?.expires || 0) <= now) notificationAliases.delete(key);
   }
 }
