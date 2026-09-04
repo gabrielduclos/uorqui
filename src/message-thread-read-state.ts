@@ -18,9 +18,8 @@ let shouldScrollToLatest = false;
 const style = document.createElement("style");
 style.dataset.uorquiMessageReadState = "1";
 style.textContent = `
-.message-bubble .uorqui-message-meta{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:5px;font-size:7px;line-height:1;opacity:.58}
-.message-bubble .uorqui-message-meta time{display:inline;margin:0;font-size:inherit;opacity:1;text-align:inherit}
-.message-bubble .uorqui-message-read-status{font-size:inherit;font-weight:700;white-space:nowrap}
+.message-bubble time{display:block;text-align:right;font-size:7px;opacity:.55;margin-top:5px}
+.message-bubble[data-uorqui-read="1"] time::after{content:" · Lida";font-weight:700;white-space:nowrap}
 `;
 document.head.appendChild(style);
 
@@ -67,31 +66,10 @@ function syncThread() {
   rows.forEach((row, index) => {
     const message = activeMessages[index + offset];
     const bubble = row.querySelector<HTMLElement>(".message-bubble");
-    const time = bubble?.querySelector<HTMLTimeElement>("time");
-    if (!bubble || !time) return;
+    if (!bubble) return;
 
-    let meta = bubble.querySelector<HTMLElement>(".uorqui-message-meta");
-    if (!meta) {
-      meta = document.createElement("span");
-      meta.className = "uorqui-message-meta";
-      time.replaceWith(meta);
-      meta.appendChild(time);
-    }
-
-    let status = meta.querySelector<HTMLElement>(".uorqui-message-read-status");
-    const isRead = Boolean(message?.readAt);
-
-    if (isRead) {
-      if (!status) {
-        status = document.createElement("span");
-        status.className = "uorqui-message-read-status";
-        status.textContent = "Lida";
-        meta.appendChild(status);
-      }
-      status.hidden = false;
-    } else {
-      status?.remove();
-    }
+    if (message?.readAt) bubble.dataset.uorquiRead = "1";
+    else delete bubble.dataset.uorquiRead;
   });
 
   if (shouldScrollToLatest) {
@@ -119,8 +97,6 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
     activeTargetUid = thread.uid;
     activeMessages = messages;
-    // A abertura/refresh normal da conversa sempre posiciona no conteúdo mais recente.
-    // Paginação de mensagens antigas (before=...) preserva a posição atual.
     scheduleSync(true);
   }).catch(() => {});
 
