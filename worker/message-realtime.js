@@ -43,13 +43,14 @@ export async function handleMessageRealtimeRequest(request, env) {
 
 export function scheduleMessageRealtimeBroadcast(request, response, env, ctx) {
   if (!response?.ok || !env?.REALTIME) return;
-  const task = broadcastMessageRealtime(request, env).catch(error => {
+  const responseCopy = response.clone();
+  const task = broadcastMessageRealtime(request, responseCopy, env).catch(error => {
     console.warn('Message realtime broadcast failed:', error?.message || error);
   });
   if (ctx?.waitUntil) ctx.waitUntil(task);
 }
 
-async function broadcastMessageRealtime(request, env) {
+async function broadcastMessageRealtime(request, response, env) {
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
   const path = url.pathname;
@@ -90,6 +91,19 @@ async function broadcastMessageRealtime(request, env) {
   const currentUid = authUidFromRequest(request);
   if (!currentUid) return;
 
+  let delta = {};
+  if (event !== 'message_read') {
+    try {
+      const body = await response.json();
+      if (body && typeof body === 'object') {
+        if (body.message && typeof body.message === 'object') delta.message = body.message;
+        if (body.conversation && typeof body.conversation === 'object') delta.conversation = body.conversation;
+        if (Array.isArray(body.likedBy)) delta.likedBy = body.likedBy;
+        if (body.ok === true) delta.ok = true;
+      }
+    } catch {}
+  }
+
   const recipients = new Set([targetUid]);
   if (notifyCurrentUser) recipients.add(currentUid);
 
@@ -99,7 +113,8 @@ async function broadcastMessageRealtime(request, env) {
     await stub.broadcast({
       type: 'refresh',
       event,
-      peerUid: uid === currentUid ? targetUid : currentUid
+      peerUid: uid === currentUid ? targetUid : currentUid,
+      ...delta
     });
   }));
 }
