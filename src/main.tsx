@@ -37,7 +37,7 @@ import "./external-share-preview";
 import "./feed-membership-only";
 import "./feed-only-header-scroll";
 
-const PRODUCT_VERSION = "1.3.17-chat-latest";
+const PRODUCT_VERSION = "1.3.18-bootstrap-perf";
 
 class RuntimeErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
