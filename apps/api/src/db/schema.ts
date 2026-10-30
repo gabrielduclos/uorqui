@@ -1,0 +1,76 @@
+import { sql } from 'drizzle-orm';
+import {
+  check,
+  index,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
+
+// Database model only. Routes, authentication and authorization are not implemented yet.
+export const users = pgTable('users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  handle: varchar('handle', { length: 32 }).notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const profiles = pgTable('profiles', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  displayName: varchar('display_name', { length: 120 }).notNull(),
+  bio: text('bio'),
+  avatarKey: text('avatar_key'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const communityVisibility = pgEnum('community_visibility', [
+  'public', 'approval', 'private',
+]);
+
+export const communities = pgTable('communities', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  slug: varchar('slug', { length: 64 }).notNull().unique(),
+  name: varchar('name', { length: 120 }).notNull(),
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  visibility: communityVisibility('visibility').notNull().default('public'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const memberRole = pgEnum('member_role', [
+  'owner', 'admin', 'moderator', 'member',
+]);
+
+export const communityMembers = pgTable('community_members', {
+  communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: memberRole('role').notNull().default('member'),
+  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.communityId, table.userId] }),
+  index('community_members_user_idx').on(table.userId),
+]);
+
+export const directConversations = pgTable('direct_conversations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  participantAId: uuid('participant_a_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  participantBId: uuid('participant_b_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('direct_conversations_pair_idx').on(table.participantAId, table.participantBId),
+  check('direct_conversations_distinct_members', sql`${table.participantAId} <> ${table.participantBId}`),
+  // Application services must canonicalize participant ordering before insert.
+]);
+
+export const directMessages = pgTable('direct_messages', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  conversationId: uuid('conversation_id').notNull().references(() => directConversations.id, { onDelete: 'cascade' }),
+  authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
+]);

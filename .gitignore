@@ -1,0 +1,16 @@
+# Dependencies and build products
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Tooling and OS
+.DS_Store
+*.log
