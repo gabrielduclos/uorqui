@@ -10,7 +10,8 @@
 - [x] Documentação inicial de produto e tecnologia em dois idiomas.
 - [ ] Realizar descoberta com usuários de comunidades interessadas e documentar requisitos validados.
 - [ ] Verificar estratégia de marca e isolamento do domínio em produção do legado.
-- [ ] Definir stack, teto de orçamento, design e princípios de privacidade.
+- [x] Definir stack principal: React, TypeScript, Tailwind CSS, Node.js, Fastify, PostgreSQL na Neon e Drizzle.
+- [ ] Definir teto de orçamento, design, privacidade e fornecedores restantes de tempo real/voz/mídias.
 - [ ] Abrir issues específicas, definir testes e criar a primeira estrutura executável.
 
 **Critério:** interesse real de comunidades-piloto, escopo e limites operacionais definidos.
@@ -60,4 +61,4 @@
 
 ## Decisões pendentes
 
-Prioridades, licenças de dependências, infraestrutura, algoritmo do feed, moderação, nome do modo Vídeos, implantação e futura migração de domínio.
+Prioridades, licenças de dependências, fornecedores de tempo real/voz/mídias, algoritmo do feed, moderação, nome do modo Vídeos, implantação e futura migração de domínio.

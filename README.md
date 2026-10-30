@@ -18,6 +18,10 @@ The goal is a seamless journey from **discovering content → joining a communit
 
 Uorqui starts by validating use cases among gaming communities, particularly MMORPG players, but the product and brand are **general-purpose**.
 
+## Confirmed core technology
+
+**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). These technologies are selected but **not yet provisioned or implemented**. Realtime, voice, media and deployment integrations remain under evaluation.
+
 ## Documentation
 
 | Topic | English | Português |
@@ -34,9 +38,9 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
 - **Not done:** application scaffold, backend, database, real-time messaging, video delivery, voice infrastructure, deployment, and user validation.
-- **Next:** interview early communities, agree on a technical proposal, open implementation issues, and ship a small usable MVP.
+- **Next:** interview early communities, plan the remaining integrations, open implementation issues, and ship a small usable MVP.
 
-The architecture documents describe **proposals**, not adopted dependencies or working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
+The architecture documents distinguish **confirmed core stack decisions** from **proposed integrations**; neither implies working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
 
 ## Open source
 

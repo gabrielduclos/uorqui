@@ -1,4 +1,4 @@
-# Arquitetura — proposta, ainda não implementada
+# Arquitetura — stack principal aprovada e integrações propostas
 
 [Português](arquitetura.md) · [English](../en/architecture.md)
 
@@ -8,19 +8,37 @@
 
 Começar com um **monólito modular**: uma API implantada com módulos e limites claros. Separar as partes de mídia e voz em serviços específicos ou gerenciados apenas quando houver necessidade justificada.
 
-## Stack candidata (decisão pendente)
+## Stack principal aprovada — decisão de 30/10/2026
 
-| Camada | Candidato | Motivo para avaliação |
+| Camada | Decisão | Função |
 | --- | --- | --- |
-| Web/PWA | React, TypeScript | Cliente responsivo e acessível; ecossistema consolidado |
-| API | Node.js, Fastify | Schemas tipados e autorização controlada |
-| Dados | PostgreSQL com Drizzle | Permissões relacionais e migrações |
-| Tempo real | WebSocket | Eventos de conversas e canais |
-| Estado temporário/presença | Redis (se necessário) | Reconexão e distribuição de eventos |
-| Voz | WebRTC + LiveKit ou equivalente | Salas e controles por participante |
-| Vídeos/mídias | Armazenamento de objetos, transcodificação, CDN | Entrega controlada de imagens e vídeos |
+| Web/PWA | **React + TypeScript + Tailwind CSS** | Interface responsiva, acessível, componentes e estilização |
+| API | **Node.js + Fastify + TypeScript** | Endpoints HTTP, validação e autorização |
+| Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de usuários, publicações, comunidades, conversas e permissões |
+| Acesso ao banco | **Drizzle ORM + Drizzle Kit** | Consultas SQL tipadas, schema e migrações versionadas |
 
-Estas são **opções**, não tecnologias aprovadas nem instruções de instalação.
+Essas escolhas estão **aprovadas para o novo Uorqui**, mas **nenhum projeto/banco Neon, estrutura executável ou deploy foi criado** apenas pela documentação.
+
+### Integrações ainda em avaliação
+
+| Camada | Candidato | Situação |
+| --- | --- | --- |
+| Eventos em tempo real | WebSocket | Proposta; definir infraestrutura e semântica de entrega |
+| Salas de voz | WebRTC + LiveKit ou equivalente | Proposta; validar custos, hospedagem e suporte mobile |
+| Mídias/vídeos | Armazenamento de objetos, transcodificação e CDN | Proposta; escolher fornecedores e cotas |
+| Presença e distribuição de eventos | Redis | Opcional, quando houver necessidade |
+| Hospedagem | A definir | Deve ficar separada da produção do Uorqui legado |
+
+PostgreSQL e Drizzle armazenam **dados estruturados**, não os arquivos originais de fotos/vídeos. Mídias terão armazenamento próprio, com referências e permissões no PostgreSQL. As cotas do plano gratuito da hospedagem devem ser verificadas antes da criação do banco.
+
+### Desenvolvimento local e configuração
+
+- Versionar migrações com Drizzle Kit; executá-las por processo documentado, sem alterações automáticas no startup.
+- Separar bancos/branches de desenvolvimento, teste e produção quando disponíveis.
+- Manter `DATABASE_URL` e credenciais em variáveis de ambiente; adicionar somente um `.env.example` seguro quando existir código.
+- Usar queries parametrizadas e autorização nos serviços Fastify, nunca apenas no cliente React.
+- Priorizar SQL e índices bem definidos antes de adicionar cache ou fila. Medir desempenho de consultas e conexões.
+
 
 ## Módulos e limites
 

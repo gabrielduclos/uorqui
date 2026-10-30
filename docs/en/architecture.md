@@ -1,4 +1,4 @@
-# Architecture — proposal, not final implementation
+# Architecture — confirmed core stack and proposed integrations
 
 [English](architecture.md) · [Português](../pt-BR/arquitetura.md)
 
@@ -8,19 +8,37 @@
 
 Start with a **modular monolith**: one API deployment with clear bounded modules. Split high-cost media and live voice responsibilities into dedicated components or managed services only where justified.
 
-## Candidate stack (decision pending)
+## Confirmed application stack — decision 2026-10-30
 
-| Layer | Candidate | Reason to evaluate |
+| Layer | Decision | Role |
 | --- | --- | --- |
-| Web/PWA | React, TypeScript | Accessible, responsive client and developer ecosystem |
-| API | Node.js, Fastify | Typed schemas and controlled authorization |
-| Persistence | PostgreSQL with Drizzle | Relational permissions and migrations |
-| Realtime | WebSocket | Conversation and channel event delivery |
-| Presence/ephemeral state | Redis (only if needed) | Reconnection, fan-out and transient state |
-| Voice | WebRTC + LiveKit or equivalent | Audio rooms and per-participant controls |
-| Video/media | Object storage, transcoding, CDN | Controlled delivery of images and video |
+| Web/PWA | **React + TypeScript + Tailwind CSS** | Responsive, accessible UI, component logic and styling |
+| API | **Node.js + Fastify + TypeScript** | HTTP endpoints, validation and authorization |
+| Database | **PostgreSQL hosted on Neon** | Relational storage for users, posts, communities, conversations and permissions |
+| Database access | **Drizzle ORM + Drizzle Kit** | Type-safe SQL queries, schema and versioned migrations |
 
-These are **candidates**, not installation instructions or chosen providers.
+These choices are **approved for the new Uorqui project**, but **no Neon project/database, application scaffold or deployment has been created** by documenting them.
+
+### Remaining technical evaluations
+
+| Layer | Candidate | Status |
+| --- | --- | --- |
+| Realtime events | WebSocket | Proposed; define infrastructure and delivery semantics |
+| Voice rooms | WebRTC + LiveKit or equivalent | Proposed; validate cost, hosting and mobile support |
+| Media/video | Object storage, transcoding and CDN | Proposed; evaluate providers and usage limits |
+| Presence and distributed fan-out | Redis | Optional, only when justified |
+| Deployment | To be selected | Must remain isolated from the legacy Uorqui production environment |
+
+PostgreSQL and Drizzle manage **structured data**, not original video/image files. Store media separately, with references and permissions in PostgreSQL. The hosted database may have free-plan limits that must be checked before provisioning.
+
+### Local development and environment
+
+- Define versioned migrations with Drizzle Kit; run them through a documented workflow rather than automatic startup mutations.
+- Use separate PostgreSQL databases/branches for development, tests and production when available.
+- Keep `DATABASE_URL` and all credentials in environment variables; commit only a safe `.env.example` once the scaffold exists.
+- Use parameterized, type-safe access and enforce access rules in Fastify services, never only in the React client.
+- Prefer straightforward SQL and indexes before adding an extra cache or queue. Measure query performance and connection usage.
+
 
 ## Modules and boundaries
 

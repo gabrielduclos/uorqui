@@ -10,7 +10,8 @@
 - [x] Initial bilingual product and technical documentation.
 - [ ] Conduct user discovery with prospective communities; document validated product needs.
 - [ ] Verify trademark strategy and plan isolation from the legacy production domain.
-- [ ] Set technical stack, operating budget, design conventions and data privacy principles.
+- [x] Decide core stack: React, TypeScript, Tailwind CSS, Node.js, Fastify, Neon PostgreSQL and Drizzle.
+- [ ] Set operating budget, design conventions, data privacy principles and remaining realtime/voice/media providers.
 - [ ] Create scoped implementation issues, test approach and first runnable application scaffold.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
@@ -60,4 +61,4 @@
 
 ## Open decisions
 
-Feature priority, licensing details for third-party dependencies, final infrastructure choices, recommendation ranking, moderation policy, video mode naming, deployment and future domain migration.
+Feature priority, third-party dependency licenses, remaining realtime/voice/media providers, recommendation ranking, moderation policy, video mode naming, deployment and future domain migration.
