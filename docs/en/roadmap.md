@@ -7,8 +7,8 @@
 ## Phase 0 — Discovery and foundation
 
 - [x] Public repository created under MIT license.
-- [x] Initial bilingual business and product documentation.
-- [ ] Interview 15–20 participants across 5+ communities; record findings and prioritize problems.
+- [x] Initial bilingual product and technical documentation.
+- [ ] Conduct user discovery with prospective communities; document validated product needs.
 - [ ] Verify trademark strategy and plan isolation from the legacy production domain.
 - [ ] Set technical stack, operating budget, design conventions and data privacy principles.
 - [ ] Create scoped implementation issues, test approach and first runnable application scaffold.
@@ -43,11 +43,11 @@
 
 ## v0.4 — Pilot
 
-- [ ] Onboard 5–10 communities with real weekly activity.
-- [ ] Track activation, D7/D28 retention, reports, moderation response, costs and performance.
-- [ ] Resolve critical friction and test a paid value proposition without committing to pricing.
+- [ ] Validate the experience with invited pilot communities.
+- [ ] Track technical reliability, accessibility, moderation response and performance.
+- [ ] Resolve usability friction and prioritize fixes based on pilot feedback.
 
-**Exit condition:** demonstrated recurring use, acceptable safety and budget.
+**Exit condition:** stable workflows, responsible moderation and acceptable operational performance.
 
 ## v1.0 — Public beta readiness
 
@@ -60,4 +60,4 @@
 
 ## Open decisions
 
-Feature priority, licensing details for third-party dependencies, final infrastructure choices, recommendation ranking, moderation policy, video mode naming, commercial pricing and future domain migration.
+Feature priority, licensing details for third-party dependencies, final infrastructure choices, recommendation ranking, moderation policy, video mode naming, deployment and future domain migration.

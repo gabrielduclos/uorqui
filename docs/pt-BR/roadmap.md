@@ -7,8 +7,8 @@
 ## Fase 0 — Descoberta e fundação
 
 - [x] Repositório público criado com licença MIT.
-- [x] Documentação inicial de negócio e produto em dois idiomas.
-- [ ] Entrevistar 15–20 participantes em 5+ comunidades; registrar descobertas e problemas prioritários.
+- [x] Documentação inicial de produto e tecnologia em dois idiomas.
+- [ ] Realizar descoberta com usuários de comunidades interessadas e documentar requisitos validados.
 - [ ] Verificar estratégia de marca e isolamento do domínio em produção do legado.
 - [ ] Definir stack, teto de orçamento, design e princípios de privacidade.
 - [ ] Abrir issues específicas, definir testes e criar a primeira estrutura executável.
@@ -43,11 +43,11 @@
 
 ## v0.4 — Piloto
 
-- [ ] Convidar 5–10 comunidades com atividades semanais reais.
-- [ ] Medir ativação, D7/D28, denúncias, moderação, custos e desempenho.
-- [ ] Corrigir problemas críticos e testar valor de recursos pagos sem fixar preço.
+- [ ] Validar a experiência com comunidades-piloto convidadas.
+- [ ] Medir estabilidade técnica, acessibilidade, moderação e desempenho.
+- [ ] Corrigir problemas de usabilidade e priorizar ajustes conforme retorno do piloto.
 
-**Critério:** retorno recorrente, segurança e custos aceitáveis.
+**Critério:** fluxos estáveis, moderação responsável e desempenho operacional aceitável.
 
 ## v1.0 — Preparação para beta público
 
@@ -60,4 +60,4 @@
 
 ## Decisões pendentes
 
-Prioridades, licenças de dependências, infraestrutura, algoritmo do feed, moderação, nome do modo Vídeos, precificação e futura migração de domínio.
+Prioridades, licenças de dependências, infraestrutura, algoritmo do feed, moderação, nome do modo Vídeos, implantação e futura migração de domínio.

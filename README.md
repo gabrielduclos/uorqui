@@ -24,7 +24,6 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 | --- | --- | --- |
 | Vision and principles | [Vision](docs/en/vision.md) | [Visão](docs/pt-BR/visao.md) |
 | Product requirements | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
-| Business plan | [Business plan](docs/en/business-plan.md) | [Plano de negócios](docs/pt-BR/plano-de-negocios.md) |
 | Proposed architecture | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
 | Milestones | [Roadmap](docs/en/roadmap.md) | [Roadmap](docs/pt-BR/roadmap.md) |
 | Contributing | [Contributing](CONTRIBUTING.md) | [Contribuindo](CONTRIBUTING.pt-BR.md) |
@@ -33,11 +32,11 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 
 ## Current state
 
-- **Done:** project creation, MIT license, initial business and product documentation.
+- **Done:** project creation, MIT license, initial bilingual product and technical documentation.
 - **Not done:** application scaffold, backend, database, real-time messaging, video delivery, voice infrastructure, deployment, and user validation.
 - **Next:** interview early communities, agree on a technical proposal, open implementation issues, and ship a small usable MVP.
 
-The architecture documents describe **proposals**, not adopted dependencies or working code. See the roadmap for acceptance criteria.
+The architecture documents describe **proposals**, not adopted dependencies or working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
 
 ## Open source
 

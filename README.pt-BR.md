@@ -24,7 +24,6 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 | --- | --- | --- |
 | Visão e princípios | [Visão](docs/pt-BR/visao.md) | [Vision](docs/en/vision.md) |
 | Requisitos do produto | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
-| Plano de negócios | [Plano de negócios](docs/pt-BR/plano-de-negocios.md) | [Business plan](docs/en/business-plan.md) |
 | Arquitetura proposta | [Arquitetura](docs/pt-BR/arquitetura.md) | [Architecture](docs/en/architecture.md) |
 | Etapas do projeto | [Roadmap](docs/pt-BR/roadmap.md) | [Roadmap](docs/en/roadmap.md) |
 | Como contribuir | [Contribuindo](CONTRIBUTING.pt-BR.md) | [Contributing](CONTRIBUTING.md) |
@@ -33,11 +32,11 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 
 ## Situação atual
 
-- **Concluído:** repositório, licença MIT e documentação inicial de negócio e produto.
+- **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
 - **Ainda não implementado:** base da aplicação, API, banco de dados, mensagens em tempo real, vídeos, salas de voz, deploy e validação com usuários.
 - **Próximo:** entrevistar comunidades, decidir a arquitetura, abrir tarefas e desenvolver um MVP utilizável.
 
-A documentação técnica contém **propostas**, não tecnologias definitivas nem funcionalidades existentes.
+A documentação técnica contém **propostas**, não tecnologias definitivas nem funcionalidades existentes. O planejamento comercial, as hipóteses de preço e as projeções financeiras ficam separados deste repositório público.
 
 ## Código aberto
 
