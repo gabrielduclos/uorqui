@@ -13,7 +13,9 @@
 - [x] Decide core stack: React, TypeScript, Tailwind CSS, Node.js, Fastify, Neon PostgreSQL and Drizzle.
 - [ ] Set operating budget, design conventions, data privacy principles and remaining realtime/voice/media providers.
 - [x] Commit the initial React/Tailwind, Fastify and Drizzle development scaffold.
-- [ ] Validate builds, create implementation issues, decide authentication and provision a Neon development database.
+- [x] Create and verify a Neon PostgreSQL development database (schema still empty).
+- [x] Validate the initial scaffold with GitHub Actions typechecks and build.
+- [ ] Create implementation issues, decide authentication and review/apply schema migrations.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
 

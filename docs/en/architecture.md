@@ -2,7 +2,7 @@
 
 [English](architecture.md) · [Português](../pt-BR/arquitetura.md)
 
-> An initial local React/Fastify scaffold and Drizzle schema exist. **No production app, Neon project or applied database migration has been verified.**
+> An initial local React/Fastify scaffold and Drizzle schema exist. **Neon PostgreSQL has been provisioned and verified; no tables/migrations or production app have been deployed.**
 
 ## Design approach
 
@@ -17,7 +17,7 @@ Start with a **modular monolith**: one API deployment with clear bounded modules
 | Database | **PostgreSQL hosted on Neon** | Relational storage for users, posts, communities, conversations and permissions |
 | Database access | **Drizzle ORM + Drizzle Kit** | Type-safe SQL queries, schema and versioned migrations |
 
-These choices are **approved for the new Uorqui project**, but **no Neon project/database, application scaffold or deployment has been created** by documenting them.
+These choices are **approved for the new Uorqui project**, but **the Neon database and the application scaffold have since been created; no schema migration or production deployment is completed**.
 
 ### Remaining technical evaluations
 
@@ -29,7 +29,7 @@ These choices are **approved for the new Uorqui project**, but **no Neon project
 | Presence and distributed fan-out | Redis | Optional, only when justified |
 | Deployment | To be selected | Must remain isolated from the legacy Uorqui production environment |
 
-PostgreSQL and Drizzle manage **structured data**, not original video/image files. Store media separately, with references and permissions in PostgreSQL. The hosted database may have free-plan limits that must be checked before provisioning.
+PostgreSQL and Drizzle manage **structured data**, not original video/image files. Store media separately, with references and permissions in PostgreSQL. The hosted database has service quotas and possible costs that should be monitored as the project grows.
 
 ### Local development and environment
 

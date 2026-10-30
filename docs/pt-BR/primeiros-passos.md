@@ -24,9 +24,9 @@ npm run dev
 
 O endpoint `/health` confirma **somente o processo da API**, não a conexão do banco.
 
-## Configurar a Neon depois
+## Conectar ao banco Neon existente
 
-1. Crie um projeto gratuito `uorqui` na sua conta Neon; nunca compartilhe a senha ou a URL de conexão publicamente.
+1. No painel da Neon, abra o projeto `uorqui` já existente (região São Paulo); o PostgreSQL `uorqui` foi provisionado e testado com uma consulta SQL somente de leitura. As tabelas **ainda não foram criadas**.
 2. Copie `apps/api/.env.example` para `apps/api/.env`.
 3. Defina `DATABASE_URL` usando a URI completa de conexão fornecida pela Neon.
 4. Gere uma migração local **para revisão**: `npm run db:generate`.

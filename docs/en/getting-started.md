@@ -24,9 +24,9 @@ npm run dev
 
 `/health` verifies **the API process only** and does not test the database.
 
-## Configure Neon later
+## Connect to the existing Neon database
 
-1. Create a free Neon project called `uorqui` in your Neon account; never share its password or connection string publicly.
+1. In your Neon console, open the existing `uorqui` project (São Paulo region); the PostgreSQL database `uorqui` has been provisioned and verified with a read-only SQL query. Its tables have **not** been created.
 2. Copy `apps/api/.env.example` to `apps/api/.env`.
 3. Set `DATABASE_URL` to the full database connection URI from Neon.
 4. Generate a **reviewable local migration**: `npm run db:generate`.

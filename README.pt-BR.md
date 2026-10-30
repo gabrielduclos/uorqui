@@ -20,7 +20,7 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 
 ## Tecnologias principais definidas
 
-**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API) e **PostgreSQL na Neon + Drizzle ORM** (banco, consultas e migrações). Essas tecnologias foram escolhidas, mas **ainda não foram provisionadas nem implementadas**. Tempo real, voz, mídias e hospedagem continuam em avaliação.
+**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API) e **PostgreSQL na Neon + Drizzle ORM** (banco, consultas e migrações). Essas tecnologias foram escolhidas, mas **banco já provisionado na Neon, mas migrações e acesso a dados da aplicação ainda não implementados**. Tempo real, voz, mídias e hospedagem continuam em avaliação.
 
 ## Documentação
 
@@ -38,8 +38,8 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 ## Situação atual
 
 - **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
-- **Ainda não implementado:** provisionamento e migrações do banco, autenticação, API funcional de produto, mensagens em tempo real, vídeos, salas de voz, deploy e validação com usuários.
-- **Próximo:** configurar a Neon, revisar/aplicar o schema, definir autenticação, validar o build e implementar gradualmente um MVP utilizável.
+- **Ainda não implementado:** migrações do schema, autenticação, API funcional de produto, mensagens em tempo real, vídeos, salas de voz, deploy e validação com usuários.
+- **Próximo:** conectar o projeto existente na Neon e revisar/aplicar o schema, definir autenticação, validar o build e implementar gradualmente um MVP utilizável.
 
 A documentação técnica distingue **tecnologias principais aprovadas** de **integrações ainda propostas**, sem declarar funcionalidades implementadas. O planejamento comercial, as hipóteses de preço e as projeções financeiras ficam separados deste repositório público.
 

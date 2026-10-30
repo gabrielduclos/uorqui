@@ -2,7 +2,7 @@
 
 [Português](arquitetura.md) · [English](../en/architecture.md)
 
-> Existe uma estrutura local inicial React/Fastify e um schema Drizzle. **Não foi confirmado nenhum aplicativo publicado, projeto Neon ou migração aplicada ao banco.**
+> Existe uma estrutura local inicial React/Fastify e um schema Drizzle. **PostgreSQL provisionado e testado na Neon; não existem tabelas/migrações nem aplicação publicada.**
 
 ## Abordagem
 
@@ -17,7 +17,7 @@ Começar com um **monólito modular**: uma API implantada com módulos e limites
 | Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de usuários, publicações, comunidades, conversas e permissões |
 | Acesso ao banco | **Drizzle ORM + Drizzle Kit** | Consultas SQL tipadas, schema e migrações versionadas |
 
-Essas escolhas estão **aprovadas para o novo Uorqui**, mas **nenhum projeto/banco Neon, estrutura executável ou deploy foi criado** apenas pela documentação.
+Essas escolhas estão **aprovadas para o novo Uorqui**, mas **o projeto Neon e o scaffold já foram criados; migrações e deploy de produção ainda não foram executados**.
 
 ### Integrações ainda em avaliação
 
@@ -29,7 +29,7 @@ Essas escolhas estão **aprovadas para o novo Uorqui**, mas **nenhum projeto/ban
 | Presença e distribuição de eventos | Redis | Opcional, quando houver necessidade |
 | Hospedagem | A definir | Deve ficar separada da produção do Uorqui legado |
 
-PostgreSQL e Drizzle armazenam **dados estruturados**, não os arquivos originais de fotos/vídeos. Mídias terão armazenamento próprio, com referências e permissões no PostgreSQL. As cotas do plano gratuito da hospedagem devem ser verificadas antes da criação do banco.
+PostgreSQL e Drizzle armazenam **dados estruturados**, não os arquivos originais de fotos/vídeos. Mídias terão armazenamento próprio, com referências e permissões no PostgreSQL. As cotas e possíveis cobranças da hospedagem devem ser acompanhadas durante a evolução do projeto.
 
 ### Desenvolvimento local e configuração
 
