@@ -2,7 +2,7 @@
 
 [Português](arquitetura.md) · [English](../en/architecture.md)
 
-> Ainda não existe estrutura executável ou arquitetura em produção neste repositório.
+> Existe uma estrutura local inicial React/Fastify e um schema Drizzle. **Não foi confirmado nenhum aplicativo publicado, projeto Neon ou migração aplicada ao banco.**
 
 ## Abordagem
 

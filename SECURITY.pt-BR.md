@@ -4,7 +4,7 @@
 
 ## Estado do projeto
 
-O novo Uorqui está em **pré-MVP**. Este repositório ainda não publicou um serviço nem um aplicativo executável. O mensageiro empresarial legado é um produto separado; esta política não descreve sua segurança.
+O novo Uorqui está em **pré-MVP**. Este repositório ainda não publicou um serviço; há apenas uma estrutura inicial de desenvolvimento. O mensageiro empresarial legado é um produto separado; esta política não descreve sua segurança.
 
 ## Como relatar vulnerabilidades
 

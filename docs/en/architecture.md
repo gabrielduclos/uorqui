@@ -2,7 +2,7 @@
 
 [English](architecture.md) · [Português](../pt-BR/arquitetura.md)
 
-> No application scaffold or production architecture is deployed in this repository yet.
+> An initial local React/Fastify scaffold and Drizzle schema exist. **No production app, Neon project or applied database migration has been verified.**
 
 ## Design approach
 

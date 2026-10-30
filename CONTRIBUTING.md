@@ -4,7 +4,7 @@
 
 Thank you for considering a contribution to Uorqui.
 
-> **Current status:** pre-MVP. The repository is documentation-first; no runnable application, toolchain, or automated test suite has been established yet. Please do not assume setup commands or deployment environments exist.
+> **Current status:** pre-MVP. A basic web/API development scaffold now exists; the actual social platform, database and deployed service do not. See [Getting started](docs/en/getting-started.md).
 
 ## Before you start
 

@@ -12,7 +12,8 @@
 - [ ] Verificar estratégia de marca e isolamento do domínio em produção do legado.
 - [x] Definir stack principal: React, TypeScript, Tailwind CSS, Node.js, Fastify, PostgreSQL na Neon e Drizzle.
 - [ ] Definir teto de orçamento, design, privacidade e fornecedores restantes de tempo real/voz/mídias.
-- [ ] Abrir issues específicas, definir testes e criar a primeira estrutura executável.
+- [x] Publicar a estrutura inicial de desenvolvimento React/Tailwind, Fastify e Drizzle.
+- [ ] Validar builds, abrir issues, decidir autenticação e criar o banco Neon de desenvolvimento.
 
 **Critério:** interesse real de comunidades-piloto, escopo e limites operacionais definidos.
 

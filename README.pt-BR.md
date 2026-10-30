@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Status: planejamento / pré-MVP.** O Uorqui é um novo projeto construído do zero. Este repositório contém a documentação inicial, não uma aplicação pronta para produção.
+> **Status: estrutura de desenvolvimento / pré-MVP.** O Uorqui está sendo criado do zero. Há uma base local com React/Fastify, mas as funcionalidades sociais e o banco ainda não foram implementados ou publicados.
 
 ## O que é o Uorqui?
 
@@ -26,6 +26,7 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 
 | Tema | Português | English |
 | --- | --- | --- |
+| Rodar localmente | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | [Getting started](docs/en/getting-started.md) |
 | Visão e princípios | [Visão](docs/pt-BR/visao.md) | [Vision](docs/en/vision.md) |
 | Requisitos do produto | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
 | Arquitetura proposta | [Arquitetura](docs/pt-BR/arquitetura.md) | [Architecture](docs/en/architecture.md) |
@@ -37,10 +38,21 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 ## Situação atual
 
 - **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
-- **Ainda não implementado:** base da aplicação, API, banco de dados, mensagens em tempo real, vídeos, salas de voz, deploy e validação com usuários.
-- **Próximo:** entrevistar comunidades, planejar as demais integrações, abrir tarefas e desenvolver um MVP utilizável.
+- **Ainda não implementado:** provisionamento e migrações do banco, autenticação, API funcional de produto, mensagens em tempo real, vídeos, salas de voz, deploy e validação com usuários.
+- **Próximo:** configurar a Neon, revisar/aplicar o schema, definir autenticação, validar o build e implementar gradualmente um MVP utilizável.
 
 A documentação técnica distingue **tecnologias principais aprovadas** de **integrações ainda propostas**, sem declarar funcionalidades implementadas. O planejamento comercial, as hipóteses de preço e as projeções financeiras ficam separados deste repositório público.
+
+## Desenvolvimento
+
+Os workspaces npm iniciais contêm uma **interface React + Tailwind**, um **endpoint de saúde Fastify** e um **schema Drizzle ainda não aplicado**. Com Node.js 22+:
+
+```sh
+npm install
+npm run dev
+```
+
+Interface: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. Não é necessário banco para visualizar esta estrutura. Veja [Primeiros passos](docs/pt-BR/primeiros-passos.md) para configurar a Neon com segurança.
 
 ## Código aberto
 

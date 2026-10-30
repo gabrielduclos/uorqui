@@ -12,7 +12,8 @@
 - [ ] Verify trademark strategy and plan isolation from the legacy production domain.
 - [x] Decide core stack: React, TypeScript, Tailwind CSS, Node.js, Fastify, Neon PostgreSQL and Drizzle.
 - [ ] Set operating budget, design conventions, data privacy principles and remaining realtime/voice/media providers.
-- [ ] Create scoped implementation issues, test approach and first runnable application scaffold.
+- [x] Commit the initial React/Tailwind, Fastify and Drizzle development scaffold.
+- [ ] Validate builds, create implementation issues, decide authentication and provision a Neon development database.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
 

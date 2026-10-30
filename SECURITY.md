@@ -4,7 +4,7 @@
 
 ## Project status
 
-Uorqui is currently **pre-MVP**. No new Uorqui service or executable application is published from this repository. The legacy business messenger is a separate product; this document does not describe its security practices.
+Uorqui is currently **pre-MVP**. No new Uorqui service has been deployed from this repository. A development scaffold is present. The legacy business messenger is a separate product; this document does not describe its security practices.
 
 ## Reporting a vulnerability
 

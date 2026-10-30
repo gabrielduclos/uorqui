@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Status: planning / pre-MVP.** Uorqui is a new project built from scratch. This repository currently contains foundational documentation, not a production-ready application.
+> **Status: development scaffold / pre-MVP.** Uorqui is a new project built from scratch. A local React/Fastify starter exists, but the social platform and database have not been implemented or deployed.
 
 ## What is Uorqui?
 
@@ -26,6 +26,7 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 
 | Topic | English | Português |
 | --- | --- | --- |
+| Run locally | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
 | Vision and principles | [Vision](docs/en/vision.md) | [Visão](docs/pt-BR/visao.md) |
 | Product requirements | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
 | Proposed architecture | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
@@ -37,10 +38,21 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 ## Current state
 
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
-- **Not done:** application scaffold, backend, database, real-time messaging, video delivery, voice infrastructure, deployment, and user validation.
-- **Next:** interview early communities, plan the remaining integrations, open implementation issues, and ship a small usable MVP.
+- **Not done:** database provisioning/migrations, authentication, production API, real-time messaging, video delivery, voice infrastructure, deployment, and user validation.
+- **Next:** set up Neon, review/apply the database schema, choose authentication, validate the starter build, and incrementally implement a usable MVP.
 
 The architecture documents distinguish **confirmed core stack decisions** from **proposed integrations**; neither implies working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
+
+## Development
+
+The initial npm workspaces contain a **React + Tailwind landing page**, a **Fastify health endpoint** and an **unapplied Drizzle schema**. With Node.js 22+:
+
+```sh
+npm install
+npm run dev
+```
+
+Web: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. The database is not required to see this starter. See [Getting started](docs/en/getting-started.md) for secure Neon configuration.
 
 ## Open source
 

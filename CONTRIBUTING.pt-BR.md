@@ -4,7 +4,7 @@
 
 Obrigado pelo interesse em contribuir com o Uorqui.
 
-> **Situação atual:** pré-MVP. O repositório começa pela documentação; ainda não existem aplicativo executável, ferramentas de desenvolvimento configuradas ou testes automatizados. Não presumir comandos ou deploys disponíveis.
+> **Situação atual:** pré-MVP. Já existe uma estrutura inicial de interface/API para desenvolvimento local, mas a rede social, o banco e o deploy ainda não estão prontos. Veja [Primeiros passos](docs/pt-BR/primeiros-passos.md).
 
 ## Antes de começar
 
