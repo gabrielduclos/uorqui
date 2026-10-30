@@ -15,7 +15,10 @@
 - [x] Commit the initial React/Tailwind, Fastify and Drizzle development scaffold.
 - [x] Create and verify a Neon PostgreSQL development database (schema still empty).
 - [x] Validate the initial scaffold with GitHub Actions typechecks and build.
-- [ ] Create implementation issues, decide authentication and review/apply schema migrations.
+- [x] Generate and commit initial Drizzle SQL migration and schema snapshot.
+- [x] Verify the SQL creates tables, enums, foreign keys and indexes on a temporary Neon branch.
+- [ ] Request approval and apply the initial migration with Drizzle tracking to main.
+- [ ] Create implementation issues and decide authentication.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
 

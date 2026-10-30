@@ -19,3 +19,12 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Check Drizzle migration files for schema drift
+        shell: bash
+        run: |
+          npm run db:generate
+          if [[ -n "$(git status --porcelain -- apps/api/drizzle)" ]]; then
+            echo 'Drizzle schema changed without committed migration artifacts' >&2
+            git status --short -- apps/api/drizzle
+            exit 1
+          fi

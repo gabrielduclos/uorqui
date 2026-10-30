@@ -7,7 +7,7 @@
 ## Requisitos
 
 - Node.js 22 ou superior e npm.
-- Banco PostgreSQL na Neon é **opcional para abrir a interface inicial e testar a API**. Será necessário para migrações e operações reais de dados.
+- Banco PostgreSQL na Neon é **opcional para abrir a interface inicial e testar a API**. Será necessário para aplicar migrações e realizar consultas reais; gerar migrações não exige acesso ao banco.
 
 ## Executar localmente
 
@@ -29,8 +29,9 @@ O endpoint `/health` confirma **somente o processo da API**, não a conexão do 
 1. No painel da Neon, abra o projeto `uorqui` já existente (região São Paulo); o PostgreSQL `uorqui` foi provisionado e testado com uma consulta SQL somente de leitura. As tabelas **ainda não foram criadas**.
 2. Copie `apps/api/.env.example` para `apps/api/.env`.
 3. Defina `DATABASE_URL` usando a URI completa de conexão fornecida pela Neon.
-4. Gere uma migração local **para revisão**: `npm run db:generate`.
-5. Revise o SQL gerado antes de executar `npm run db:migrate` no banco correto.
+4. Revise a migração inicial **já gerada** em `apps/api/drizzle/0000_nice_machine_man.sql` e seus metadados em `apps/api/drizzle/meta/`. Use `npm run db:generate` somente quando o schema Drizzle mudar.
+5. A migração passou no teste de criação de tabelas em **branch temporária da Neon**. O banco principal `main` continua vazio. **Não aplicar em main sem revisão e autorização explícita.**
+6. Após aprovação, aplicar via `npm run db:migrate` com `DATABASE_URL` privada, preservando o histórico do Drizzle; não aplicar manualmente o mesmo SQL e depois rodar `db:migrate`.
 
 Migrações **alteram a estrutura do banco**, e não são executadas automaticamente ao iniciar a aplicação. O schema atual descreve usuários, perfis, conversas individuais/mensagens, comunidades e membros, sem endpoints nem autenticação.
 

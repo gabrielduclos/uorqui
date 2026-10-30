@@ -15,7 +15,10 @@
 - [x] Publicar a estrutura inicial de desenvolvimento React/Tailwind, Fastify e Drizzle.
 - [x] Criar e verificar PostgreSQL na Neon para desenvolvimento (schema ainda vazio).
 - [x] Validar tipagem e compilação da estrutura inicial pelo GitHub Actions.
-- [ ] Abrir issues, definir autenticação e revisar/aplicar migrações do schema.
+- [x] Gerar e versionar SQL inicial e snapshot de migração do Drizzle.
+- [x] Testar tabelas, enums, chaves estrangeiras e índices em branch temporária da Neon.
+- [ ] Solicitar autorização e aplicar a primeira migração em main com rastreamento do Drizzle.
+- [ ] Abrir issues e definir autenticação.
 
 **Critério:** interesse real de comunidades-piloto, escopo e limites operacionais definidos.
 

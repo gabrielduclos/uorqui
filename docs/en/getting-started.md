@@ -7,7 +7,7 @@
 ## Requirements
 
 - Node.js 22 or later and npm.
-- A Neon PostgreSQL database is **optional for the initial UI and API health check**. Required when generating migrations, applying them or querying data.
+- A Neon PostgreSQL database is **optional for the initial UI and API health check**. Required when applying migrations or querying data; generating migrations works offline.
 
 ## Run locally
 
@@ -29,8 +29,9 @@ npm run dev
 1. In your Neon console, open the existing `uorqui` project (São Paulo region); the PostgreSQL database `uorqui` has been provisioned and verified with a read-only SQL query. Its tables have **not** been created.
 2. Copy `apps/api/.env.example` to `apps/api/.env`.
 3. Set `DATABASE_URL` to the full database connection URI from Neon.
-4. Generate a **reviewable local migration**: `npm run db:generate`.
-5. Review the generated SQL before running `npm run db:migrate` on the intended database.
+4. Review the **already generated** initial migration at `apps/api/drizzle/0000_nice_machine_man.sql` and its tracking metadata under `apps/api/drizzle/meta/`. Use `npm run db:generate` only when the Drizzle schema changes.
+5. The migration passed SQL schema creation checks on a **temporary Neon branch**. The default `main` database is still empty. **Do not apply the migration to main until reviewed and explicitly approved.**
+6. After approval, apply via `npm run db:migrate` with a private `DATABASE_URL` to preserve Drizzle's migration history; never use both manual SQL application and `db:migrate` for the same migration.
 
 Migrations **change database structure** and are not run automatically during normal application startup. The schema currently describes users, profiles, direct conversations/messages, communities and members, without API or authentication implementations.
 
