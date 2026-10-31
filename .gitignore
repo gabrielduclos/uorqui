@@ -19,3 +19,6 @@ coverage/
 .wrangler/
 .dev.vars*
 !**/.dev.vars.example
+
+# Neon CLI project-local context
+.neon/
