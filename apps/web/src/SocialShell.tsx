@@ -20,6 +20,7 @@ import { PreferencesControls } from './PreferencesControls';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { useVisualViewportFrame } from './useVisualViewportFrame';
 import { ProfileEditor, type UserProfileData } from './UserProfiles';
+import { useCachedProfileImage } from './profileImageCache';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -72,7 +73,8 @@ const demoCommunities = [
 
 function ProfileAvatar({ name, image, className }: { name: string; image?: string | null; className?: string }) {
   const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
-  return <Avatar className={cn('size-9', className)}>{image && <AvatarImage src={image} alt={name} referrerPolicy="no-referrer" className="object-cover" />}<AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
+  const source = useCachedProfileImage(image);
+  return <Avatar className={cn('size-9', className)}>{source && <AvatarImage src={source} alt={name} referrerPolicy="no-referrer" className="object-cover" />}<AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
 }
 
 function DemoNotice({ children }: { children?: ReactNode }) {
