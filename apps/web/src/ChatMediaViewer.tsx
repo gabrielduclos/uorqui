@@ -57,7 +57,7 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, locale }
             aria-label={pt?'Fechar visualizador':'Close viewer'}><X className="size-5"/></button>
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-between gap-1 py-4 sm:gap-4">
-          <button type="button" onClick={()=>onSelect(items[index-1]?.id)} disabled={index<=0}
+          <button type="button" onClick={()=>{if(index>0)onSelect(items[index-1].id);}} disabled={index<=0}
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"
             aria-label={pt?'Mídia anterior':'Previous media'}><ChevronLeft className="size-6"/></button>
           <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
@@ -66,7 +66,7 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, locale }
               <video key={active.id} src={url} controls playsInline preload="metadata"
                 className="max-h-[76dvh] max-w-full" aria-label={active.attachment.name}/>}
           </div>
-          <button type="button" onClick={()=>onSelect(items[index+1]?.id)} disabled={index>=items.length-1}
+          <button type="button" onClick={()=>{if(index<items.length-1)onSelect(items[index+1].id);}} disabled={index>=items.length-1}
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"
             aria-label={pt?'Próxima mídia':'Next media'}><ChevronRight className="size-6"/></button>
         </div>
