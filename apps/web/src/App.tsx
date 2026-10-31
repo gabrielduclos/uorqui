@@ -1,68 +1,97 @@
-import AuthPanel from './AuthPanel';
+import { useCallback, useEffect, useState } from 'react';
+import { motion, MotionConfig } from 'motion/react';
+import { Github, MessageCircle, Users, Newspaper } from 'lucide-react';
+import AuthPanel, { type Account } from './AuthPanel';
+import SocialShell from './SocialShell';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+
+function StartupSplash() {
+  return (
+    <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-background p-6" role="status" aria-live="polite" aria-label="Iniciando Uorqui">
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="text-center">
+        <div className="text-5xl font-bold tracking-tight">uorqui<span className="text-primary">.</span></div>
+        <p className="mt-3 text-sm text-muted-foreground">Preparando sua experiência…</p>
+        <div className="mt-6 h-1 w-52 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
+          <motion.div className="h-full w-1/3 rounded-full bg-primary" initial={{ x: '-100%' }} animate={{ x: '310%' }} transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }} />
+        </div>
+      </motion.div>
+    </main>
+  );
+}
 
 const areas = [
-  {
-    number: '01',
-    title: 'Conversas',
-    description: 'Mensagens individuais para criar conexões mais próximas. Sem grupos de chat tradicionais.',
-  },
-  {
-    number: '02',
-    title: 'Feed',
-    description: 'Textos, fotos, carrosséis e vídeos em um feed contínuo, com um modo de vídeos imersivo separado.',
-  },
-  {
-    number: '03',
-    title: 'Comunidades',
-    description: 'Espaços públicos e privados, canais organizados e salas de voz para compartilhar interesses.',
-  },
+  { title: 'Conversas', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
+  { title: 'Feed', icon: Newspaper, description: 'Um espaço contínuo para textos, fotos e vídeos da sua rede.' },
+  { title: 'Comunidades', icon: Users, description: 'Grupos com canais de texto e salas de voz organizados por assunto.' },
 ] as const;
 
-export default function App() {
+function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => void }) {
   return (
-    <main className="relative min-h-screen overflow-x-clip bg-[#080e1b] text-slate-100">
-      <div aria-hidden="true" className="pointer-events-none absolute -top-48 left-1/2 h-120 w-120 -translate-x-1/2 rounded-full bg-indigo-600/20 blur-[100px]" />
-      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8 sm:px-10">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/10 bg-[#080e1b]/95 py-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur">
-          <div className="text-2xl font-bold tracking-tight">uorqui<span className="text-indigo-400">.</span></div>
-          <span className="rounded-full border border-slate-600/70 px-3 py-1.5 text-xs text-slate-300">
-            Projeto open source · Pré-MVP
-          </span>
+    <main className="relative min-h-[100dvh] overflow-x-clip bg-background">
+      <div aria-hidden="true" className="pointer-events-none absolute -top-48 left-1/2 size-120 -translate-x-1/2 rounded-full bg-primary/15 blur-[100px]" />
+      <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col px-5 sm:px-10">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 py-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur">
+          <span className="text-2xl font-bold tracking-tight">uorqui<span className="text-primary">.</span></span>
+          <Badge variant="outline">Open source · MIT</Badge>
         </header>
 
-        <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1fr_380px] lg:py-24">
+        <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1fr_390px] lg:py-20">
           <div>
-            <p className="mb-5 text-sm font-semibold uppercase tracking-[0.22em] text-indigo-300">Uma nova forma de se conectar</p>
-            <h1 className="max-w-3xl text-5xl font-semibold leading-[1.12] tracking-tight sm:text-7xl">
-              Descubra. Converse. <span className="text-indigo-400">Participe.</span>
-            </h1>
-            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
-              Uma plataforma social aberta que conecta pessoas, conteúdos e comunidades em um só lugar.
-            </p>
-            <a
-              className="mt-9 inline-flex w-fit items-center rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-300"
-              href="https://github.com/gabrielduclos/uorqui"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Conheça o projeto no GitHub
-            </a>
+            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-primary">Conecte pessoas e interesses</p>
+            <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">Descubra. Converse. <span className="text-primary">Participe.</span></h1>
+            <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg">Uma plataforma social que reúne conversas individuais, comunidades e conteúdo em um só lugar.</p>
+            <Button variant="outline" className="mt-8" asChild><a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noreferrer"><Github className="size-4" /> Conheça o projeto</a></Button>
           </div>
-          <AuthPanel />
+          <AuthPanel onAuthenticated={onAuthenticated} />
         </section>
 
-        <section aria-label="Pilares do projeto" className="grid gap-4 border-t border-white/10 pt-8 pb-10 md:grid-cols-3">
-          {areas.map((area) => (
-            <article key={area.number} className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <div className="mb-5 text-xs font-semibold tracking-[0.16em] text-indigo-300">{area.number}</div>
-              <h2 className="text-xl font-semibold">{area.title}</h2>
-              <p className="mt-3 text-sm leading-7 text-slate-300">{area.description}</p>
-            </article>
-          ))}
+        <section aria-label="O que você encontra no Uorqui" className="grid gap-3 border-t border-border py-8 md:grid-cols-3">
+          {areas.map(item => <article key={item.title} className="rounded-xl border border-border bg-card/65 p-5">
+            <item.icon aria-hidden="true" className="mb-3 size-5 text-primary" />
+            <h2 className="font-semibold">{item.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.description}</p>
+          </article>)}
         </section>
-
-        <footer className="pb-4 text-xs text-slate-400">Em desenvolvimento · Funcionalidades sociais não estão disponíveis nesta versão.</footer>
+        <footer className="pb-6 text-xs text-muted-foreground">Uorqui · Construído em código aberto · Funcionalidades sociais em desenvolvimento</footer>
       </div>
     </main>
+  );
+}
+
+export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [account, setAccount] = useState<Account | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch('/api/v1/me', { credentials: 'same-origin', signal: controller.signal });
+        if (response.ok && !controller.signal.aborted) setAccount(await response.json() as Account);
+      } catch { /* Landing handles unavailable API and login errors. */ }
+      finally { if (!controller.signal.aborted) setLoading(false); }
+    })();
+    return () => controller.abort();
+  }, []);
+
+  const onAuthenticated = useCallback((next: Account) => setAccount(next), []);
+  const signOut = useCallback(async () => {
+    const response = await fetch('/api/auth/sign-out', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!response.ok) throw new Error('Logout failed');
+    setAccount(null);
+  }, []);
+
+  return (
+    <MotionConfig reducedMotion="user">
+      {loading ? <StartupSplash /> : account?.profile ? (
+        <SocialShell account={account} onLogout={signOut} />
+      ) : <Landing onAuthenticated={onAuthenticated} />}
+    </MotionConfig>
   );
 }

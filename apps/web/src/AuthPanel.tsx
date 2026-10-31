@@ -9,7 +9,7 @@ type ApiStatus = {
   passwordRecoveryAvailable?: boolean;
   turnstileSiteKey?: string | null;
 };
-type Account = {
+export type Account = {
   user: { id: string; email: string; name: string };
   profile: { handle: string; displayName: string; bio: string | null } | null;
 };
@@ -53,7 +53,7 @@ function Spinner() {
   );
 }
 
-export default function AuthPanel() {
+export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (account: Account) => void }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [view, setView] = useState<AuthView>(() => new URLSearchParams(window.location.search).has('token') ? 'reset' : 'welcome');
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
@@ -92,6 +92,7 @@ export default function AuthPanel() {
         setAccount(data);
         setDisplayName(data.user.name);
         setMessage('');
+        if (data.profile) onAuthenticated?.(data);
       } else setAccount(null);
     } catch {
       setAccount(null);
@@ -99,7 +100,7 @@ export default function AuthPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onAuthenticated]);
 
   const checkApi = useCallback(async () => {
     setApiChecked(false);
