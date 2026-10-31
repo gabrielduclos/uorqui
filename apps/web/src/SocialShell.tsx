@@ -4,7 +4,7 @@ import {
   ArrowLeft, Bell, Compass, Hash, Headphones, Home, LogOut, MessageCircle,
   Plus, Search, Users, Video, Volume2,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,10 +19,11 @@ import { DemoMediaViewer, type PreviewMediaItem } from './DemoChatMedia';
 import { PreferencesControls } from './PreferencesControls';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { useVisualViewportFrame } from './useVisualViewportFrame';
+import { ProfileEditor, type UserProfileData } from './UserProfiles';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
-  profile: { handle: string; displayName: string; bio: string | null } | null;
+  profile: UserProfileData | null;
 };
 type Area = 'feed' | 'conversations' | 'communities' | 'profile';
 
@@ -69,9 +70,9 @@ const demoCommunities = [
   },
 ] as const;
 
-function ProfileAvatar({ name, className }: { name: string; className?: string }) {
+function ProfileAvatar({ name, image, className }: { name: string; image?: string | null; className?: string }) {
   const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
-  return <Avatar className={cn('size-9', className)}><AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
+  return <Avatar className={cn('size-9', className)}>{image && <AvatarImage src={image} alt={name} referrerPolicy="no-referrer" className="object-cover" />}<AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
 }
 
 function DemoNotice({ children }: { children?: ReactNode }) {
@@ -94,9 +95,10 @@ function EmptyState({ icon: Icon, title, description }: { icon: typeof Home; tit
   );
 }
 
-export default function SocialShell({ account, onLogout }: {
+export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   account: SignedInAccount;
   onLogout: () => Promise<void>;
+  onAccountUpdate: (next: SignedInAccount) => void;
 }) {
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
@@ -295,7 +297,7 @@ export default function SocialShell({ account, onLogout }: {
         </nav>
         <div className="mt-auto space-y-3 border-t border-border p-3">
           <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
-            <ProfileAvatar name={account.profile?.displayName ?? account.user.name} />
+            <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} />
             <span className="min-w-0"><span className="block truncate text-sm font-medium">{account.profile?.displayName ?? account.user.name}</span><span className="block truncate text-xs text-muted-foreground">{account.profile ? '@' + account.profile.handle : t('Conta Uorqui')}</span></span>
           </button>
           <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>
@@ -316,7 +318,7 @@ export default function SocialShell({ account, onLogout }: {
              <PreferencesControls />
             <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label={t("Notificações indisponíveis")} title={t("Notificações chegam em uma próxima etapa")} disabled><Bell className="size-4" /></Button>
             <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-              <ProfileAvatar name={account.profile?.displayName ?? account.user.name} className="size-8" />
+              <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} className="size-8" />
             </button>
           </div>
         </header>
@@ -457,22 +459,9 @@ export default function SocialShell({ account, onLogout }: {
               </div>
             )}
 
-            {area === 'profile' && (
+            {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
-                <div className="mx-auto max-w-2xl space-y-5 p-5 pb-24 sm:p-8">
-                  <Card>
-                    <CardHeader className="flex flex-row items-center gap-4">
-                      <ProfileAvatar name={account.profile?.displayName ?? account.user.name} className="size-16 text-xl" />
-                      <div className="min-w-0"><CardTitle className="truncate text-xl">{account.profile?.displayName ?? account.user.name}</CardTitle><CardDescription className="mt-2">{account.profile ? '@' + account.profile.handle : t("Perfil sem nome de usuário")}</CardDescription></div>
-                    </CardHeader>
-                    <CardContent><p className="text-sm leading-6 text-muted-foreground">{account.profile?.bio || t("Seu espaço para apresentar quem você é. A edição do perfil será adicionada em breve.")}</p></CardContent>
-                  </Card>
-                  <Card className="gap-4">
-                    <CardHeader><CardTitle className="text-base">{t('Sua conta')}</CardTitle><CardDescription>{t("Informações privadas, visíveis apenas para você nesta página.")}</CardDescription></CardHeader>
-                    <CardContent className="space-y-3"><div className="text-sm"><span className="text-muted-foreground">{t("E-mail")}</span><p className="mt-1 break-all font-medium">{account.user.email}</p></div><Separator /><div className="flex items-center gap-2"><Badge variant="outline">{t('Conta ativa')}</Badge><span className="text-xs text-muted-foreground">{t("Edição de perfil em desenvolvimento")}</span></div></CardContent>
-                  </Card>
-                  <Button className="w-full md:hidden" variant="outline" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>{loggingOut ? <Spinner /> : <LogOut className="size-4" />}{loggingOut ? t("Saindo…") : t("Sair da conta")}</Button>
-                </div>
+                <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })} />
               </ScrollArea>
             )}
           </motion.div>
