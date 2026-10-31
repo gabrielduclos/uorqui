@@ -38,7 +38,7 @@ function buildAuth() {
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => {
         await sendAccountEmail(user.email, 'Uorqui — redefinição de senha',
-          `Para redefinir sua senha, abra este link: ${url}\n\nSe não foi você, ignore esta mensagem.`);
+          `Para redefinir sua senha, abra este link: ${url}\n\nSe não foi você, ignore esta mensagem.`, 'reset_password');
       },
     },
     emailVerification: {
@@ -46,7 +46,7 @@ function buildAuth() {
       autoSignInAfterVerification: false,
       sendVerificationEmail: async ({ user, url }) => {
         await sendAccountEmail(user.email, 'Uorqui — confirme seu e-mail',
-          `Confirme seu endereço de e-mail para acessar o Uorqui: ${url}\n\nSe não criou esta conta, ignore esta mensagem.`);
+          `Confirme seu endereço de e-mail para acessar o Uorqui: ${url}\n\nSe não criou esta conta, ignore esta mensagem.`, 'verify_email');
       },
     },
     session: {
