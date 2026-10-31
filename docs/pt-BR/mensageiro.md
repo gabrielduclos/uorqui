@@ -107,3 +107,12 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 - API de amizades: `GET /api/v1/friends`, `GET /api/v1/friends/relationship/:handle`, `POST /api/v1/friends/requests`, `POST /api/v1/friends/requests/:handle/accept`, `POST /api/v1/friends/requests/:handle/decline`, `DELETE /api/v1/friends/:handle`. Todas autenticadas; escritas com proteção Origin. Eventos de atualização de amizade são enviados via SSE sem conteúdo sensível.
 - Proteção inicial contra spam de solicitações: até 10 solicitações por 24 h, 25 pendentes, intervalo de 24 h após cancelar e 7 dias após recusa. Isso não constitui ainda um sistema completo de bloqueio/denúncia nem push com aplicativo fechado.
 - Migração **`0009_mutual_friendships`** cria a tabela `user_friendships` (pares canônicos, estado e solicitante). **Aplicar na Neon de produção antes de publicar a API/web.** A migração anterior de contatos unilaterais foi substituída ainda na PR, sem aplicação no banco principal.
+
+### Bloqueio de contas e ocultação de fotos
+
+- Em um perfil público ou no cabeçalho da conversa, use **Bloquear** e confirme. Em **Amigos → Bloqueados**, veja sua lista privativa e escolha **Desbloquear**. Há interface em português/inglês, mobile e desktop.
+- O bloqueio é unilateral, mas **impede contato nos dois sentidos**: não se iniciam conversas, mensagens, edições, reações, encaminhamentos, anexos ou novas solicitações entre as duas contas. Bloquear encerra amizades/solicitações pendentes; desbloquear **não** restaura a amizade. O histórico existente é preservado.
+- Fotos de perfil **e capas** são ocultadas entre ambas as contas. A API deixa de incluir URL de avatar na listagem de conversas; o perfil e a busca deixam de expor os dados; a autorização do Worker para **R2** recusa também links diretos de avatar/capa de perfis públicos. O cache tab-local de fotos é esvaziado ao bloquear e nas notificações SSE de alteração. As fotos dos bloqueados não são exibidas na lista de bloqueios.
+- Endpoints autenticados: `GET /api/v1/blocks` (lista privativa), `POST /api/v1/blocks` (handle; idempotente) e `DELETE /api/v1/blocks/:handle` (idempotente). Escritas verificam Origin; transação revoga a amizade e registra o bloqueio.
+- Limitação: uma foto já copiada ou disponibilizada externamente não pode ser apagada retroativamente pelo bloqueio. URLs externas cadastradas pelo usuário não estão sob controle do R2.
+- Migração Drizzle `0010_user_blocks` cria `user_blocks`. **Aplicar em Neon antes do deploy da versão que usa essa tabela**.
