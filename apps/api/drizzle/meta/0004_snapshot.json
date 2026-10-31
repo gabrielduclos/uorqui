@@ -328,6 +328,12 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
