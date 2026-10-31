@@ -40,7 +40,7 @@ All routes require a valid session; message endpoints validate membership. Write
 - Safety polling remains at around 25–30 seconds when SSE is connected and resumes the existing 3/4-second cadence if the stream fails. This does **not** include offline push notifications.
 
 ### Database rollout
-Migration `0003_live_direct_messages` adds unique `client_id` and `read_at` to direct messages. Migration `0004_dm_actions` adds `delivered_at`, `edited_at`, `deleted_at`, `forwarded_from_id`, and `direct_message_reactions`. Migration `0005_dm_replies` adds a nullable, self-referencing `reply_to_id` to real DMs. Apply **before deploying** the API/frontend.
+Migration `0003_live_direct_messages` adds unique `client_id` and `read_at` to direct messages. Migration `0004_dm_actions` adds `delivered_at`, `edited_at`, `deleted_at`, `forwarded_from_id`, and `direct_message_reactions`. Migration `0005_dm_replies` adds a nullable, self-referencing `reply_to_id` to real DMs. Migration `0006_dm_reaction_notifications` adds `notified_at` and `read_at` to reactions; older reactions do not generate retroactive alerts. Apply **before deploying** the API/frontend.
 
 ### Not included yet
 Older-message pagination, R2 attachments, push, presence, anti-spam and moderation.
@@ -49,6 +49,6 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 
 - `DELETE /api/v1/dm/conversations/:id/messages/:messageId` cancels a user's own **unread** message, permanently and without a placeholder. Already-read messages return HTTP 409 without mutation.
 - `GET /api/v1/dm/conversations/:id/messages?around=<uuid>` returns an authorized segment centered around the original for reply navigation/highlighting.
-- Reactions appear as their own optimistic chat bubbles next to their source, with Undo.
-- The chat icon shows the aggregate number of unread messages account-wide via SSE/polling on mobile and desktop.
+- Reactions are attached to their original message as compact optimistic chips, with Undo; they never create an extra chat message or timeline row.
+- The inbox preview shows a recent reaction (e.g. “Alex reacted ❤️ to your message”) if it is the newest event, and notifies the message author as **one unread reaction**. Only an open, visible conversation can acknowledge it. The navigation badge adds unread messages **and reactions**, updated via SSE/polling.
 - Visual identity: square chat message bubbles.
