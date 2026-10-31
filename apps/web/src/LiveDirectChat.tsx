@@ -50,6 +50,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [error,setError] = useState('');
   const [searching,setSearching] = useState(false);
   const [chatError,setChatError] = useState('');
+  const [live,setLive] = useState(false);
+  const realtimeConnected = useRef(false);
+  const lastThreadFallback = useRef(0);
+  const lastMessageFallback = useRef(0);
   const scrollBox = useRef<HTMLDivElement>(null);
   const sendId = useRef<string | null>(null);
   const reading = useRef(false);
@@ -70,7 +74,11 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     let mounted=true;
     void loadThreads().catch(() => { if(mounted){setLoading(false);setError(pt?'Não foi possível carregar suas conversas.':'Could not load your conversations.');}});
     const interval=window.setInterval(() => {
-      if(document.visibilityState==='visible') void loadThreads().catch(()=>{});
+      if(document.visibilityState!=='visible') return;
+      if(!realtimeConnected.current || Date.now()-lastThreadFallback.current>=25_000) {
+        lastThreadFallback.current=Date.now();
+        void loadThreads().catch(()=>{});
+      }
     },4000);
     return () => {mounted=false;window.clearInterval(interval);};
   },[loadThreads,pt]);
@@ -139,9 +147,63 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       });
     };
     refresh();
-    const timer=window.setInterval(refresh,3000);
+    const timer=window.setInterval(() => {
+      if(!realtimeConnected.current || Date.now()-lastMessageFallback.current>=25_000) {
+        lastMessageFallback.current=Date.now();
+        refresh();
+      }
+    },3000);
     return()=>{active=false;window.clearInterval(timer);};
   },[activeId,loadMessages,pt]);
+
+  // One authenticated EventSource per visible tab. PostgreSQL NOTIFY carries only
+  // change hints; message bodies are loaded through the usual authorized API.
+  // Automatic EventSource reconnection plus periodic fetching cover missed events,
+  // brief network outages, and proxies that do not support long-lived streams.
+  useEffect(() => {
+    let stream: EventSource | null=null;
+    let disposed=false;
+    const updateConnected=(connected:boolean)=>{
+      realtimeConnected.current=connected;
+      if(!disposed)setLive(connected);
+    };
+    const onReady=()=>{
+      void loadThreads().catch(()=>{});
+      if(activeIdRef.current)void loadMessages(activeIdRef.current).catch(()=>{});
+    };
+    const onDmUpdate=(event:Event)=>{
+      try {
+        const data=JSON.parse((event as MessageEvent<string>).data) as {conversationId?:string;kind?:string};
+        if(!data.conversationId || !['message','read','conversation'].includes(data.kind??''))return;
+        void loadThreads().catch(()=>{});
+        if(activeIdRef.current===data.conversationId)void loadMessages(data.conversationId).catch(()=>{});
+      }catch{/* Ignore malformed notifications. */}
+    };
+    const connect=()=>{
+      if(disposed || document.visibilityState==='hidden' || stream || typeof EventSource==='undefined')return;
+      stream=new EventSource('/api/v1/dm/events', {withCredentials:true});
+      stream.addEventListener('ready',onReady);
+      stream.addEventListener('dm-update',onDmUpdate);
+      stream.onopen=()=>updateConnected(true);
+      stream.onerror=()=>updateConnected(false); // Browser retries automatically.
+    };
+    const disconnect=()=>{
+      updateConnected(false);
+      if(!stream)return;
+      stream.removeEventListener('ready',onReady);
+      stream.removeEventListener('dm-update',onDmUpdate);
+      stream.close();
+      stream=null;
+    };
+    const visibility=()=>{
+      if(document.visibilityState==='hidden'){disconnect();return;}
+      connect();
+      onReady(); // Reconcile notifications missed while in the background.
+    };
+    document.addEventListener('visibilitychange',visibility);
+    connect();
+    return()=>{disposed=true;document.removeEventListener('visibilitychange',visibility);disconnect();};
+  },[loadThreads,loadMessages]);
 
   // Scroll only when a new message arrives, not on every periodic read receipt.
   const lastId=messages[messages.length-1]?.id ?? '';
@@ -190,7 +252,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       <div className="shrink-0 space-y-3 border-b border-border p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-semibold">{pt?'Conversas':'Messages'}</h2>
-          <span className="rounded-md border border-border px-2 py-1 text-xs">1:1</span>
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs" title={live ? (pt?'Mensagens em tempo real':'Live messaging') : (pt?'Sincronização automática':'Automatic syncing')}><span aria-hidden="true" className={cn('size-1.5 rounded-full',live?'bg-emerald-500':'bg-muted-foreground')}/>{live ? (pt?'Ao vivo':'Live') : '1:1'}</span>
         </div>
         <div className="relative"><Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"/>
           <Input value={search} onChange={e=>setSearch(e.target.value)} aria-label={pt?'Buscar pessoas e conversas':'Search people and chats'}
