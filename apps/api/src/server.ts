@@ -59,6 +59,22 @@ app.get('/health/db', async (_request, reply) => {
   }
 });
 
+app.get('/health/ready', async (request, reply) => {
+  // Readiness verifies BOTH identity configuration and the migrated database.
+  // No secrets, connection details or stack traces are exposed to callers.
+  try {
+    getAuth(); // checks AUTH_SECRET and production HTTPS origins.
+    const db = await app.inject({ method: 'GET', url: '/health/db' });
+    if (db.statusCode !== 200) {
+      return reply.status(503).send({ ok: false, status: 'unavailable' });
+    }
+    return { ok: true, service: 'uorqui-api', status: 'ready' };
+  } catch (error) {
+    request.log.error({ err: error }, 'API readiness failed');
+    return reply.status(503).send({ ok: false, status: 'unavailable' });
+  }
+});
+
 app.get('/api/v1/status', async () => ({
   project: 'uorqui',
   stage: 'auth-development',

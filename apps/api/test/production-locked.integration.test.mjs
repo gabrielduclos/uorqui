@@ -39,6 +39,8 @@ test('production never allows self-registration, even when dev flag is true', as
 
     const db = await fetch(base + '/health/db');
     assert.equal(db.status, 200, 'production API should connect to test PostgreSQL');
+    const readiness = await fetch(base + '/health/ready');
+    assert.equal(readiness.status, 200, 'production readiness requires auth config and a ready database');
 
     const signup = await fetch(base + '/api/auth/sign-up/email', {
       method: 'POST',

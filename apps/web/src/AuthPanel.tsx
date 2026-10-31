@@ -61,9 +61,13 @@ export default function AuthPanel() {
 
   useEffect(() => {
     void refresh();
-    void requestJson('/api/v1/status').then(({ response, body }) => {
-      setApiReady(response.ok);
-      setCanRegister(response.ok && (body as ApiStatus).developmentRegistrationEnabled === true);
+    void Promise.all([
+      requestJson('/api/v1/status'),
+      requestJson('/health/ready'),
+    ]).then(([status, readiness]) => {
+      const available = status.response.ok && readiness.response.ok;
+      setApiReady(available);
+      setCanRegister(available && (status.body as ApiStatus).developmentRegistrationEnabled === true);
     }).catch(() => {
       setApiReady(false);
       setCanRegister(false);

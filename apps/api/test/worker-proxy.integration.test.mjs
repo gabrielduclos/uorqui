@@ -81,6 +81,10 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
       return { response, body: await response.json().catch(() => null) };
     }
 
+    const readiness = await request('/health/ready');
+    assert.equal(readiness.response.status, 200, JSON.stringify(readiness.body));
+    assert.equal(readiness.body.status, 'ready');
+
     const status = await request('/api/v1/status');
     assert.equal(status.response.status, 200);
     assert.equal(status.body.project, 'uorqui');
