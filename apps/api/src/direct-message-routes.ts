@@ -100,6 +100,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl",',
         'm.body AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",',
         '(COALESCE(unread.n,0)+COALESCE(unread_reactions.n,0))::int AS "unreadCount",',
+        'COALESCE(unread.n,0)::int AS "unreadMessageCount",',
         'COALESCE(unread_reactions.n,0)::int AS "unreadReactionCount",',
         'CASE WHEN recent_reaction.updated_at IS NOT NULL AND (m.created_at IS NULL OR recent_reaction.updated_at > m.created_at)',
         'THEN \'reaction\' ELSE \'message\' END AS "previewKind",',
