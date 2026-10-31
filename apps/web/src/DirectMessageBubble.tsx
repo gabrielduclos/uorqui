@@ -48,8 +48,8 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, onReply, onEdit, onDelete, onForward, onReact, onRetry, disabled }: {
-  message: DirectChatMessage; mine: boolean; locale: string;
+export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onEdit, onDelete, onForward, onReact, onRetry, disabled }: {
+  message: DirectChatMessage; mine: boolean; locale: string; myId: string; peerName: string;
   onReply: (message: DirectChatMessage) => void;
   onEdit: (message: DirectChatMessage) => void;
   onDelete: (message: DirectChatMessage) => void;
@@ -122,7 +122,7 @@ export function DirectMessageBubble({ message, mine, locale, onReply, onEdit, on
         mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
         {message.forwarded && !message.deletedAt && <span className="mb-1 flex items-center gap-1 text-[11px] opacity-75"><Forward className="size-3"/> {pt ? 'Encaminhada' : 'Forwarded'}</span>}
         {message.replyTo && !message.deletedAt && <div className={cn('mb-2 rounded-sm border-l-2 px-2 py-1 text-xs',mine?'border-white/60 bg-white/10':'border-primary/70 bg-background/60')}>
-          <span className="block font-semibold">{pt ? 'Em resposta a' : 'Reply to'}</span>
+          <span className="block font-semibold">{pt ? 'Resposta a ' : 'Reply to '}{message.replyTo.authorId === myId ? (pt ? 'você' : 'you') : peerName}</span>
           <span className="mt-0.5 block max-w-full truncate opacity-80">
             {message.replyTo.deleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : message.replyTo.body}
           </span>
