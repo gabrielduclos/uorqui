@@ -264,7 +264,7 @@ export default function AuthPanel() {
         setMessage('O envio de e-mails ainda não está disponível.');
         return;
       }
-      if (!email.trim() || !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email.trim())) {
+      if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
         setMessage('Digite um e-mail válido para receber a confirmação.');
         return;
       }
