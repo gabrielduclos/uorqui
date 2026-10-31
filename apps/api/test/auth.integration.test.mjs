@@ -109,6 +109,62 @@ test('Auth + social profile local integration', async () => {
   assert.equal(profileRead.response.status, 200);
   assert.equal(profileRead.data.profile.handle, 'uorqui_tester');
 
+  // Public profiles must be accessible without cookies but never expose email.
+  const publicRead = await send('/api/v1/profiles/uorqui_tester', { useCookie: false });
+  assert.equal(publicRead.response.status, 200, JSON.stringify(publicRead.data));
+  assert.equal(publicRead.data.profile.handle, 'uorqui_tester');
+  assert.equal(publicRead.data.profile.displayName, 'Test User');
+  assert.equal(publicRead.data.profile.email, undefined);
+
+  const search = await send('/api/v1/profiles/search?q=tester', { useCookie: false });
+  assert.equal(search.response.status, 200);
+  assert.ok(search.data.results.some(person => person.handle === 'uorqui_tester'));
+  assert.equal(search.data.results[0].email, undefined);
+
+  const unauthorizedUpdate = await send('/api/v1/me/profile', {
+    method: 'PATCH', useCookie: false, body: { bio: 'Not authorized' },
+  });
+  assert.equal(unauthorizedUpdate.response.status, 401);
+
+  const badAvatar = await send('/api/v1/me/profile', {
+    method: 'PATCH', body: { avatarUrl: 'javascript:alert(1)' },
+  });
+  assert.equal(badAvatar.response.status, 400, 'reject non-HTTPS images');
+
+  const update = await send('/api/v1/me/profile', {
+    method: 'PATCH',
+    body: {
+      displayName: 'Changed Name', bio: 'Playing games and building tools.',
+      avatarUrl: 'https://example.com/photo.png',
+      coverUrl: 'https://example.com/cover.png',
+      isPublic: false,
+    },
+  });
+  assert.equal(update.response.status, 200, JSON.stringify(update.data));
+  assert.equal(update.data.profile.isPublic, false);
+  assert.equal(update.data.profile.bio, 'Playing games and building tools.');
+
+  const hidden = await send('/api/v1/profiles/uorqui_tester', { useCookie: false });
+  assert.equal(hidden.response.status, 404, 'private profile must not be public');
+  const hiddenSearch = await send('/api/v1/profiles/search?q=tester', { useCookie: false });
+  assert.ok(!hiddenSearch.data.results.some(person => person.handle === 'uorqui_tester'));
+
+  const ownerRead = await send('/api/v1/me');
+  assert.equal(ownerRead.response.status, 200);
+  assert.equal(ownerRead.data.profile.avatarUrl, 'https://example.com/photo.png');
+  assert.equal(ownerRead.data.profile.isPublic, false);
+
+  const visibleAgain = await send('/api/v1/me/profile', {
+    method: 'PATCH', body: { isPublic: true, handle: 'new_tester' },
+  });
+  assert.equal(visibleAgain.response.status, 200, JSON.stringify(visibleAgain.data));
+  assert.equal(visibleAgain.data.profile.handle, 'new_tester');
+
+  const oldLink = await send('/api/v1/profiles/uorqui_tester', { useCookie: false });
+  assert.equal(oldLink.response.status, 404);
+  const newLink = await send('/api/v1/profiles/new_tester', { useCookie: false });
+  assert.equal(newLink.response.status, 200);
+
   const duplicate = await send('/api/v1/onboarding', {
     method: 'POST',
     body: { handle: 'uorqui_tester', displayName: 'Again' },
