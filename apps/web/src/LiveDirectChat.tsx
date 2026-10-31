@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
   lastBody: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
-  unreadReactionCount: number; lastReactionEmoji: string | null; lastReactionAt: string | null; lastReactionMessageId: string | null;
+  unreadReactionCount: number; lastReactionEmoji: string | null; lastReactionAt: string | null; lastReactionMessageId: string | null; lastReactionAuthorId: string | null;
   pendingReceivedAt: string | null;
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
@@ -555,7 +555,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         method: emoji ? 'PUT' : 'DELETE',
         ...(emoji ? { headers:{'Content-Type':'application/json'}, body:JSON.stringify({emoji}) } : {}),
       });
-      await loadMessages(id);
+      await Promise.all([loadMessages(id), loadThreads()]);
     } catch {
       setChatError(pt ? 'Não foi possível atualizar a reação.' : 'Could not update reaction.');
     } finally {
@@ -702,7 +702,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             <span className="mt-1 flex items-center justify-between gap-2">
               <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', thread.unreadCount > 0 && 'font-medium text-foreground/75')}>
                 {thread.lastReactionEmoji && thread.lastReactionAt && (!thread.lastAt || thread.lastReactionAt > thread.lastAt)
-                  ? (pt ? thread.peerName + ' reagiu ' + thread.lastReactionEmoji + ' à sua mensagem' : thread.peerName + ' reacted ' + thread.lastReactionEmoji + ' to your message')
+                  ? (thread.lastReactionAuthorId === myId
+                      ? (pt ? 'Você reagiu ' + thread.lastReactionEmoji + ' à mensagem' : 'You reacted ' + thread.lastReactionEmoji + ' to a message')
+                      : (pt ? thread.peerName + ' reagiu ' + thread.lastReactionEmoji + ' à sua mensagem' : thread.peerName + ' reacted ' + thread.lastReactionEmoji + ' to your message'))
                   : thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : thread.lastBody ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '') + thread.lastBody : '@' + thread.peerHandle}
               </span>
               {thread.unreadCount > 0 && <span aria-label={String(thread.unreadCount) + (pt ? ' não lidas' : ' unread')}
