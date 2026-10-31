@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, Camera, Check, ExternalLink, Globe, LockKeyhole, MessageCircle, Search, UserRound, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ProfilePhotoCropper, type ProfileImageKind } from './ProfilePhotoCropper';
+import { ArrowLeft, Camera, Check, ExternalLink, Globe, LockKeyhole, MessageCircle, Search, UserRound, ImagePlus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -91,11 +93,44 @@ export function ProfileEditor({ initial, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [selected, setSelected] = useState<{ kind: ProfileImageKind; file: File } | null>(null);
+  const [mediaBusy, setMediaBusy] = useState(false);
   useEffect(() => setProfile(initial), [initial.handle, initial.displayName, initial.bio, initial.avatarUrl, initial.coverUrl, initial.isPublic]);
 
   function update<K extends keyof UserProfileData>(key: K, value: UserProfileData[K]) {
     setProfile(prev => ({ ...prev, [key]: value }));
     setNotice(''); setError('');
+  }
+
+  function choosePhoto(kind: ProfileImageKind, file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 15 * 1024 * 1024) {
+      setError(pt ? 'Selecione uma imagem de até 15 MB.' : 'Choose an image up to 15 MB.');
+      return;
+    }
+    setSelected({ kind, file }); setError(''); setNotice('');
+  }
+
+  async function changePhoto(kind: ProfileImageKind, image: Blob | null) {
+    if (mediaBusy || saving) return;
+    setMediaBusy(true); setError(''); setNotice('');
+    try {
+      const response = await fetch('/api/media/profile/' + kind, {
+        method: image ? 'POST' : 'DELETE', credentials: 'same-origin',
+        ...(image ? { headers: { 'Content-Type': image.type }, body: image } : {}),
+      });
+      const result = await response.json().catch(() => ({})) as { profile?: UserProfileData; url?: string | null };
+      if (!response.ok || !result.profile) {
+        throw new Error(pt ? 'Falha no armazenamento da imagem. Tente novamente.' : 'Photo storage failed. Please try again.');
+      }
+      onSaved(result.profile);
+      setProfile(prev => ({ ...prev, [kind === 'avatar' ? 'avatarUrl' : 'coverUrl']: result.url ?? null }));
+      setSelected(null);
+      setNotice(pt ? 'Imagem atualizada com sucesso.' : 'Image updated successfully.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : pt ? 'Falha no envio.' : 'Upload failed.');
+      throw err;
+    } finally { setMediaBusy(false); }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -160,13 +195,26 @@ export function ProfileEditor({ initial, onSaved }: {
           </label>
           <Separator />
           <div className="flex items-center gap-2"><Camera className="size-4 text-primary" /><h3 className="text-sm font-semibold">{pt ? 'Fotos do perfil' : 'Profile images'}</h3></div>
-          <p className="text-xs leading-5 text-muted-foreground">{pt
-            ? 'Nesta etapa, use links HTTPS para imagens que você já hospedou. O upload direto de fotos será conectado ao armazenamento de mídia depois.'
-            : 'For now, use HTTPS links to images you already host. Direct image uploads will be added with media storage later.'}</p>
-          <label className="block space-y-1.5 text-sm"><span>{pt ? 'URL da foto de perfil (HTTPS)' : 'Profile photo URL (HTTPS)'}</span>
-            <Input type="url" maxLength={2000} placeholder="https://…" value={profile.avatarUrl ?? ''} onChange={e => update('avatarUrl', e.target.value)} /></label>
-          <label className="block space-y-1.5 text-sm"><span>{pt ? 'URL da capa (HTTPS)' : 'Cover URL (HTTPS)'}</span>
-            <Input type="url" maxLength={2000} placeholder="https://…" value={profile.coverUrl ?? ''} onChange={e => update('coverUrl', e.target.value)} /></label>
+          <p className="text-xs text-muted-foreground">{pt ? 'Selecione uma foto do dispositivo, ajuste o recorte e salve. O upload é privado e automático.' : 'Choose a photo, adjust the crop, and save. Upload is private and automatic.'}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(['avatar', 'cover'] as const).map(kind => <div key={kind} className="space-y-2 rounded-lg border border-border p-3">
+              <p className="text-sm font-semibold">{kind === 'avatar' ? pt ? 'Foto de perfil' : 'Profile photo' : pt ? 'Foto de capa' : 'Cover photo'}</p>
+              <div className="flex min-h-24 items-center justify-center overflow-hidden rounded-md bg-muted/60">
+                {kind === 'avatar' ? <UserAvatar name={profile.displayName} image={profile.avatarUrl} size="lg" /> :
+                  <div className="h-24 w-full">{profile.coverUrl ? <img src={profile.coverUrl} alt={pt ? 'Capa atual' : 'Current cover'} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-r from-primary/35 to-muted" />}</div>}
+              </div>
+              <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-accent focus-within:outline-2 focus-within:outline-ring">
+                <ImagePlus className="size-4" />{pt ? 'Escolher foto' : 'Choose photo'}
+                <input className="sr-only" type="file" accept="image/*" disabled={saving || mediaBusy}
+                  onChange={event => { choosePhoto(kind, event.target.files?.[0]); event.target.value = ''; }} />
+              </label>
+              {(kind === 'avatar' ? profile.avatarUrl : profile.coverUrl) &&
+                <button type="button" disabled={saving || mediaBusy} onClick={() => { void changePhoto(kind, null).catch(() => {}); }}
+                  className="ml-2 inline-flex min-h-10 items-center gap-1 text-xs text-destructive hover:underline disabled:opacity-50">
+                  <Trash2 className="size-4" />{pt ? 'Remover' : 'Remove'}
+                </button>}
+            </div>)}
+          </div>
           <Separator />
           <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border p-4">
             <span className="flex items-start gap-3">{profile.isPublic ? <Globe className="mt-0.5 size-5 shrink-0 text-primary" /> : <LockKeyhole className="mt-0.5 size-5 shrink-0 text-muted-foreground" />}
@@ -182,6 +230,10 @@ export function ProfileEditor({ initial, onSaved }: {
       </CardContent>
     </Card>
     <UserDirectory currentHandle={profile.handle} />
+    {selected && typeof document !== 'undefined' && createPortal(
+      <ProfilePhotoCropper key={selected.kind + selected.file.name + selected.file.size}
+        kind={selected.kind} file={selected.file} onCancel={() => { if (!mediaBusy) setSelected(null); }}
+        onSave={async blob => changePhoto(selected.kind, blob)} />, document.body)}
   </div>;
 }
 
