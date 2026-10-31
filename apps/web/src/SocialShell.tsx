@@ -22,6 +22,7 @@ import { useVisualViewportFrame } from './useVisualViewportFrame';
 import { ProfileEditor, type UserProfileData } from './UserProfiles';
 import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
+import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -90,6 +91,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
   const [area, setArea] = useState<Area>('feed');
+  const unreadMessageCount = useUnreadDirectMessages();
+  const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -198,8 +201,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
             const Icon = item.icon;
-            return <Button type="button" key={item.id} variant={area === item.id ? 'secondary' : 'ghost'} onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('h-11 justify-start gap-3 text-sm', area === item.id && 'text-primary')}>
+            return <Button type="button" key={item.id} variant={area === item.id ? 'secondary' : 'ghost'} onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('h-11 justify-start gap-3 text-sm', area === item.id && 'text-primary')}
+              aria-label={item.id === 'conversations' && unreadMessageCount ? t(item.label) + ': ' + unreadMessageCount + (locale === 'pt-BR' ? ' mensagens não lidas' : ' unread messages') : t(item.label)}>
               <Icon aria-hidden="true" className="size-4" />{t(item.label)}
+              {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
+                className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unreadLabel}</span>}
             </Button>;
           })}
         </nav>
@@ -333,8 +339,13 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
         {!showSubpage && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
             const Icon = item.icon;
-            return <Button key={item.id} variant="ghost" onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('flex h-16 min-w-0 flex-1 flex-col gap-1 rounded-none px-1 text-[11px] font-medium', area === item.id ? 'text-primary' : 'text-muted-foreground')}>
-              <Icon aria-hidden="true" className="size-5" />{t(item.label)}
+            return <Button key={item.id} variant="ghost" onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('flex h-16 min-w-0 flex-1 flex-col gap-1 rounded-none px-1 text-[11px] font-medium', area === item.id ? 'text-primary' : 'text-muted-foreground')}
+              aria-label={item.id === 'conversations' && unreadMessageCount ? t(item.label) + ': ' + unreadMessageCount + (locale === 'pt-BR' ? ' mensagens não lidas' : ' unread messages') : t(item.label)}>
+              <span className="relative inline-flex">
+                <Icon aria-hidden="true" className="size-5" />
+                {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
+                  className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{unreadLabel}</span>}
+              </span>{t(item.label)}
             </Button>;
           })}
         </nav>}
