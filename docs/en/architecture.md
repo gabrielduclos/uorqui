@@ -23,7 +23,7 @@ These choices are **approved for the new Uorqui project**, but **the Neon databa
 
 **Chosen:** Better Auth (email/password and cookie sessions), using Fastify and the Drizzle PostgreSQL adapter. The auth schema has separate `user`, `account`, `session` and `verification` tables, while the social schema keeps `users`, `profiles`, direct messages and communities. Social user UUIDs are created from the authenticated account's UUID during the protected onboarding flow.
 
-- Auth tables are versioned in migration `0001`, tested in a temporary Neon branch; **not yet applied to main**.
+- Auth tables are versioned in migration `0001`, **applied and verified on Neon main**, with two migration entries in Drizzle.
 - Fastify uses a PostgreSQL connection pool; Better Auth has a dedicated configuration, strict trusted origins, secure-cookie behavior, server-side session checks and 12-character minimum passwords.
 - No runtime credentials are in the public repository; `AUTH_SECRET` and `DATABASE_URL` must stay private.
 - Signup is disabled by default and disabled unconditionally in production until email verification, password reset, durable abuse controls, and security tests are completed.

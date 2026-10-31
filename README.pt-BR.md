@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Status: desenvolvimento pré-MVP.** A base React/Fastify já contém telas e endpoints de autenticação. A rede social ainda não foi lançada, e a segunda migração (tabelas de autenticação) aguarda aprovação.
+> **Status: desenvolvimento pré-MVP.** A base React/Fastify já contém telas e endpoints de autenticação. A rede social ainda não foi lançada, e as duas migrações iniciais do banco já foram aplicadas à Neon.
 
 ## O que é o Uorqui?
 
@@ -20,7 +20,7 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 
 ## Tecnologias principais definidas
 
-**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API) e **PostgreSQL na Neon + Drizzle ORM** (banco, consultas e migrações). O **banco Neon e a primeira migração Drizzle, com seis tabelas, já foram aplicados e verificados**; os endpoints de dados ainda não foram implementados. Tempo real, voz, mídias e hospedagem continuam em avaliação.
+**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API) e **PostgreSQL na Neon + Drizzle ORM** (banco, consultas e migrações). O **banco Neon e as duas migrações Drizzle, com dez tabelas da aplicação, já foram aplicados e verificados**. Endpoints de autenticação e perfil existem, mas a conexão do aplicativo com a Neon ainda precisa de teste real. Tempo real, voz, mídias e hospedagem continuam em avaliação.
 
 ## Documentação
 
@@ -38,15 +38,15 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 ## Situação atual
 
 - **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
-- **Validado no PostgreSQL temporário do CI:** Better Auth com e-mail/senha, sessões por cookie, endpoints protegidos de perfil, onboarding e logout. Ainda não foi testado ponta a ponta na Neon main; requer segredos privados e migração autorizada.
+- **Validado no PostgreSQL temporário do CI:** Better Auth com e-mail/senha, sessões por cookie, endpoints protegidos de perfil, onboarding e logout. Ainda não foi testado ponta a ponta na Neon main; requer configurar segredos privados e testar a conexão real com a Neon.
 - **Pendentes:** verificação de e-mail, recuperação de senha, mensagens, feed, vídeos, voz, deploy em produção e validação com usuários.
-- **Próximo:** aprovar/aplicar a migração das quatro tabelas de autenticação, configurar credenciais locais em segredo, testar cadastro/login/sessão e implementar verificação de e-mail antes de abrir inscrições.
+- **Próximo:** configurar credenciais privadas, verificar cadastro/login/sessão na Neon e implementar confirmação de e-mail antes de abrir inscrições.
 
 A documentação técnica distingue **tecnologias principais aprovadas** de **integrações ainda propostas**, sem declarar funcionalidades implementadas. O planejamento comercial, as hipóteses de preço e as projeções financeiras ficam separados deste repositório público.
 
 ## Desenvolvimento
 
-Os workspaces npm iniciais contêm uma **interface React + Tailwind**, um **endpoint de saúde Fastify** e um **schema Drizzle ainda não aplicado**. Com Node.js 22+:
+Os workspaces npm iniciais contêm uma **interface React + Tailwind**, um **endpoint de saúde Fastify** e um **schema Drizzle já aplicado à Neon**. Com Node.js 22+:
 
 ```sh
 npm install

@@ -23,7 +23,7 @@ Essas escolhas estão **aprovadas para o novo Uorqui**, mas **banco Neon, migra�
 
 **Escolhido:** Better Auth (e-mail/senha e sessões por cookies), integrado ao Fastify e ao Drizzle PostgreSQL. A autenticação usa tabelas próprias `user`, `account`, `session` e `verification`; o esquema social mantém `users`, `profiles`, conversas e comunidades. O ID UUID da conta autenticada passa a identificar o perfil social quando o onboarding protegido é concluído.
 
-- As tabelas de autenticação estão versionadas na migração `0001`, testada em uma branch temporária da Neon; **ainda não aplicada em main**.
+- As tabelas de autenticação estão versionadas na migração `0001`, **aplicada e verificada na Neon main**, com dois registros no histórico do Drizzle.
 - A API usa pool PostgreSQL, origem confiável restrita, cookies de sessão, validação no servidor e mínimo de 12 caracteres para senhas.
 - `AUTH_SECRET` e `DATABASE_URL` não entram no repositório público.
 - Novos cadastros ficam desabilitados por padrão e **sempre bloqueados em produção** até existir verificação de e-mail, recuperação de senha, proteção contra abuso e testes de segurança.

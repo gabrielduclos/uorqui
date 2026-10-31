@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Status: pre-MVP development.** The React/Fastify app now includes authentication screens and server endpoints. The social product is not launched, and the second database migration (authentication tables) is pending approval.
+> **Status: pre-MVP development.** The React/Fastify app now includes authentication screens and server endpoints. The social product is not launched, and both initial database migrations are applied to Neon main.
 
 ## What is Uorqui?
 
@@ -20,7 +20,7 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 
 ## Confirmed core technology
 
-**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). The initial **Neon database and six-table Drizzle migration are deployed and verified**, but application data endpoints are not yet implemented. Realtime, voice, media and deployment integrations remain under evaluation.
+**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). The **Neon database and both Drizzle migrations (10 application tables) are applied and verified**. Authentication and profile API endpoints exist, but they have not been tested with the production Neon connection. Realtime, voice, media and deployment integrations remain under evaluation.
 
 ## Documentation
 
@@ -38,9 +38,9 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 ## Current state
 
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
-- **Validated in temporary PostgreSQL CI:** Better Auth email/password, cookie sessions, protected profile endpoints, handle onboarding and logout. Not yet connected end-to-end to Neon main; requires private settings and approval of the second migration.
+- **Validated in temporary PostgreSQL CI:** Better Auth email/password, cookie sessions, protected profile endpoints, handle onboarding and logout. Not yet connected end-to-end to Neon main; requires private settings and real Neon connectivity testing.
 - **Not done:** production-ready email verification, password recovery, social messaging, feed, video, voice, production deployment and user validation.
-- **Next:** approve/apply the four-table authentication migration, set private local credentials, verify login/session behavior, then add email verification and abuse protection before opening registration.
+- **Next:** set private credentials, verify live Neon connectivity and sessions, then add email verification and abuse protection before enabling public registration.
 
 The architecture documents distinguish **confirmed core stack decisions** from **proposed integrations**; neither implies working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
 

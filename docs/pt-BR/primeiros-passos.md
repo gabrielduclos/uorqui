@@ -2,7 +2,7 @@
 
 [Português](primeiros-passos.md) · [English](../en/getting-started.md)
 
-> Este é um protótipo de desenvolvimento, **ainda não é uma rede social funcional**. O código de autenticação existe, mas exige configuração e a migração pendente. Voz, mensagens e feed não foram implementados.
+> Este é um protótipo de desenvolvimento, **ainda não é uma rede social funcional**. O código de autenticação e as migrações já existem; faltam configuração privada e teste da API diretamente com a Neon. Voz, mensagens e feed não foram implementados.
 
 ## Requisitos
 
@@ -26,12 +26,12 @@ O endpoint `/health` confirma **somente o processo da API**, não a conexão do 
 
 ## Conectar à Neon e à autenticação (somente desenvolvimento local)
 
-O projeto Neon `uorqui` já tem **seis tabelas sociais** e a migração `0000` aplicadas na branch principal. As quatro tabelas do **Better Auth** (`user`, `session`, `account`, `verification`) estão na migração `0001`, **testada apenas numa branch temporária**. **Não aplicar manualmente a 0001 nem executar `db:migrate` em main** sem autorização e conferência, e não iniciar cadastros reais antes disso.
+O projeto Neon `uorqui` já tem **dez tabelas da aplicação**, sendo seis sociais e quatro do Better Auth (`user`, `session`, `account`, `verification`). As migrações `0000` e `0001` foram **aplicadas à main e registradas no histórico Drizzle**. Não reaplicar seus comandos SQL nem habilitar cadastro público antes dos testes de segurança.
 
 1. Copie `apps/api/.env.example` para `apps/api/.env`.
 2. Informe `DATABASE_URL` usando a conexão privada do painel Neon. Nunca publique em código, logs ou issues.
 3. Gere `AUTH_SECRET` com `openssl rand -base64 48`, mantenha em segredo e configure `AUTH_BASE_URL=http://localhost:3001` e `WEB_ORIGIN=http://localhost:5173`.
-4. **Depois de a migração 0001 ser aprovada e confirmada em main**, use `ENABLE_DEV_SIGNUP=true` apenas no desenvolvimento local e execute `npm run dev`.
+4. As duas migrações já foram verificadas em main. Para testar somente no ambiente local, configure `ENABLE_DEV_SIGNUP=true` e execute `npm run dev`, sem expor o servidor à internet.
 5. Acesse `http://localhost:5173`; teste cadastro, login, sessão, nome de usuário e saída. Antes, confirme `http://localhost:3001/health/db` com resposta `connected`.
 
 Endpoints de autenticação sem configuração retornam 503. O cadastro vem desabilitado por padrão e **fica sempre bloqueado quando `NODE_ENV=production`**. Este protótipo **ainda não envia/verifica e-mails nem recupera senha**, funcionalidades obrigatórias antes de liberar usuários publicamente. O Better Auth cuida das senhas e cookies, e a API exige sessão antes de criar perfis.
@@ -42,7 +42,7 @@ Para futuras alterações, gere uma nova migração com `npm run db:generate`, r
 
 ## Teste automático de integração
 
-Um workflow do GitHub Actions inicia **PostgreSQL temporário**, executa as migrações 0000 e 0001 e testa cadastro, sessão e onboarding com credenciais descartáveis. O teste passou, sem usar segredos da Neon e **sem aplicar a migração 0001 à Neon main**. Veja [integração de autenticação](https://github.com/gabrielduclos/uorqui/actions/workflows/auth-integration.yml).
+Um workflow do GitHub Actions inicia **PostgreSQL temporário**, executa as migrações 0000 e 0001 e testa cadastro, sessão e onboarding com credenciais descartáveis. O teste passou sem usar segredos da Neon. A migração `0001` foi aplicada separadamente à Neon main após autorização. Veja [integração de autenticação](https://github.com/gabrielduclos/uorqui/actions/workflows/auth-integration.yml).
 
 ## Verificações
 
