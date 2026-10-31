@@ -164,7 +164,8 @@ export function ProfileEditor({ initial, onSaved }: {
     } finally { setSaving(false); }
   }
 
-  const url = '/@' + profile.handle;
+  // Always navigate to the last saved handle, not an unsaved edit in the form.
+  const url = '/@' + initial.handle;
   return <div className="mx-auto w-full max-w-3xl space-y-5 p-4 pb-20 sm:p-7">
     <div><h2 className="text-2xl font-bold">{pt ? 'Meu perfil' : 'My profile'}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{pt ? 'Edite seus dados e escolha o que ficará público.' : 'Edit your information and choose what is public.'}</p></div>
@@ -174,8 +175,8 @@ export function ProfileEditor({ initial, onSaved }: {
         <UserAvatar name={profile.displayName} image={profile.avatarUrl} size="lg" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h3 className="text-xl font-bold">{profile.displayName}</h3><p className="text-sm text-muted-foreground">@{profile.handle}</p></div>
-          {profile.isPublic
-            ? <a href={url} onClick={event => navigateToPublicProfile(event, profile.handle)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-accent"><ExternalLink className="size-4" />{pt ? 'Ver perfil público' : 'View public profile'}</a>
+          {initial.isPublic
+            ? <a href={url} onClick={event => navigateToPublicProfile(event, initial.handle)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-accent"><ExternalLink className="size-4" />{pt ? 'Ver perfil público' : 'View public profile'}</a>
             : <span className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground"><LockKeyhole className="size-4" />{pt ? 'Perfil privado' : 'Private profile'}</span>}
         </div>
       </div>
