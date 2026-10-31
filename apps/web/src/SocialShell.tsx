@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft, Bell, Compass, Hash, Headphones, Home, LogOut, MessageCircle,
-  Plus, Search, Users, Video, Volume2, Palette,
+  Plus, Search, Users, Video, Volume2,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -310,7 +310,6 @@ export default function SocialShell({ account, onLogout }: {
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <a href="/?ui-kit=1" aria-label={t('Abrir UI Kit')} className="grid size-9 shrink-0 place-items-center rounded-md border border-border hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring lg:flex lg:w-auto lg:gap-2 lg:px-3"><Palette className="size-4" /><span className="hidden text-xs font-medium lg:inline">UI Kit</span></a>
              <Badge variant="secondary" className="hidden gap-1.5 font-normal xl:inline-flex">{t('Prévia do MVP')}</Badge>
              <PreferencesControls />
             <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label={t("Notificações indisponíveis")} title={t("Notificações chegam em uma próxima etapa")} disabled><Bell className="size-4" /></Button>

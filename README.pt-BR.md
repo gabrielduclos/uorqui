@@ -24,6 +24,10 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 
 ## Documentação
 
+**UI Kit / Design System:** [Português (Brasil)](docs/pt-BR/ui-kit.md) · [English](docs/en/ui-kit.md) — somente documentação; sem página no aplicativo.
+
+
+
 | Tema | Português | English |
 | --- | --- | --- |
 | Rodar localmente | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | [Getting started](docs/en/getting-started.md) |
