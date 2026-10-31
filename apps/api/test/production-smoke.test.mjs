@@ -73,11 +73,16 @@ test('production signup configuration and anonymous profile', { timeout: 120_000
 test('fake Turnstile tokens cannot create accounts or request emails', { timeout: 120_000 }, async () => {
   const status = await request(frontend, '/api/v1/status');
   assert.equal(status.status, 200);
-  for (const [path, payload] of [
-    ['/api/auth/sign-up/email', invalidChallenge],
-    ['/api/auth/request-password-reset', { email: invalidChallenge.email, captchaToken: invalidChallenge.captchaToken }],
-    ['/api/auth/send-verification-email', { email: invalidChallenge.email, captchaToken: invalidChallenge.captchaToken }],
-  ]) {
+  // Password recovery may return a generic 200 for unknown users while signup
+  // remains closed. Check its CAPTCHA only when public-registration gate is on.
+  const flows = [['/api/auth/sign-up/email', invalidChallenge]];
+  if (status.data.publicRegistration) {
+    flows.push(
+      ['/api/auth/request-password-reset', { email: invalidChallenge.email, captchaToken: invalidChallenge.captchaToken }],
+      ['/api/auth/send-verification-email', { email: invalidChallenge.email, captchaToken: invalidChallenge.captchaToken }],
+    );
+  }
+  for (const [path, payload] of flows) {
     const result = await post(path, payload);
     if (status.data.publicRegistration) assert.equal(result.status, 403, path + ': ' + JSON.stringify(result.data));
     else assert.ok(result.status >= 400 && result.status < 500, path + ': ' + JSON.stringify(result.data));
