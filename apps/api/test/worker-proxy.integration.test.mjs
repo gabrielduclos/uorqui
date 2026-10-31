@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
@@ -102,6 +103,50 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     });
     assert.equal(signup.response.status, 200, JSON.stringify(signup.body));
     assert.ok(cookie, 'proxy must forward the Better Auth Set-Cookie header');
+
+    // Verification links sent before the fix used callbackURL=/ and hid the result.
+    // Verify that both old and new links redirect to the dedicated result screen,
+    // without exposing the verification token in the callback URL.
+    const failed = await request('/api/auth/verify-email?token=not-a-jwt&callbackURL=' +
+      encodeURIComponent(browserOrigin), { method: 'GET' });
+    assert.ok([302, 303, 307].includes(failed.response.status),
+      'invalid verification token must redirect to the result page');
+    const failedLocation = new URL(failed.response.headers.get('location'));
+    assert.equal(failedLocation.origin + failedLocation.pathname,
+      browserOrigin + '/auth/email-verification');
+    assert.ok(failedLocation.searchParams.has('error'), 'invalid token must show an error');
+    assert.equal(failedLocation.searchParams.has('token'), false, 'never expose token in result URL');
+
+    // Generate a local-only signed test token; no real confirmation email or
+    // production account is used by the integration environment.
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const enc = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const unsigned = enc({ alg: 'HS256', typ: 'JWT' }) + '.' +
+      enc({ email: 'worker-proxy-ci@example.invalid', iat: issuedAt, exp: issuedAt + 3600 });
+    const signature = createHmac('sha256', process.env.AUTH_SECRET).update(unsigned).digest('base64url');
+    const verification = unsigned + '.' + signature;
+    const verified = await request('/api/auth/verify-email?token=' +
+      encodeURIComponent(verification) + '&callbackURL=' + encodeURIComponent(browserOrigin),
+      { method: 'GET' });
+    assert.ok([302, 303, 307].includes(verified.response.status),
+      'verified email must redirect, not silently load the home page');
+    const verifiedLocation = new URL(verified.response.headers.get('location'));
+    assert.equal(verifiedLocation.origin + verifiedLocation.pathname,
+      browserOrigin + '/auth/email-verification');
+    assert.equal(verifiedLocation.searchParams.get('result'), 'success');
+    assert.equal(verifiedLocation.searchParams.has('error'), false);
+    assert.equal(verifiedLocation.searchParams.has('token'), false);
+
+    const session = await request('/api/auth/get-session');
+    assert.equal(session.response.status, 200);
+    assert.equal(session.body?.user?.emailVerified, true, 'email was actually confirmed in the database');
+
+    const resultPage = await fetch(browserOrigin + '/auth/email-verification?result=success', {
+      headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' }, redirect: 'manual',
+    });
+    assert.equal(resultPage.status, 200, 'verification result must render directly');
+    assert.equal(resultPage.headers.get('location'), null, 'result must not redirect to home');
+    assert.match(await resultPage.text(), /<div id="root">/i);
 
     const me = await request('/api/v1/me');
     assert.equal(me.response.status, 200, JSON.stringify(me.body));
