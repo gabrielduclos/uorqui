@@ -286,16 +286,17 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       try {
         const data = JSON.parse((event as MessageEvent<string>).data) as { conversationId?: string; kind?: string };
         if (!data.conversationId || !['message', 'read', 'conversation'].includes(data.kind ?? '')) return;
-        const isOpen = isConversationVisible(data.conversationId);
+        const conversationId = data.conversationId;
+        const isOpen = isConversationVisible(conversationId);
         void loadThreads().then(next => {
-          if (data.kind !== 'message' || isConversationVisible(data.conversationId)) return;
-          const peer = next.find(thread => thread.id === data.conversationId);
+          if (data.kind !== 'message' || isConversationVisible(conversationId)) return;
+          const peer = next.find(thread => thread.id === conversationId);
           if (peer && peer.lastAuthorId !== myId) setIncoming({
             id: peer.id, name: peer.peerName,
             preview: peer.lastBody ?? (pt ? 'Nova mensagem' : 'New message'),
           });
         }).catch(() => {});
-        if (isOpen) void loadMessages(data.conversationId).catch(() => {});
+        if (isOpen) void loadMessages(conversationId).catch(() => {});
       } catch { /* malformed event cannot change state */ }
     };
     const connect = () => {
