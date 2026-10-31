@@ -76,6 +76,7 @@ export const directMessages = pgTable('direct_messages', {
   body: text('body').notNull(),
   clientId: uuid('client_id'),
   readAt: timestamp('read_at', { withTimezone: true }),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
   editedAt: timestamp('edited_at', { withTimezone: true }),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   forwardedFromId: uuid('forwarded_from_id'),
