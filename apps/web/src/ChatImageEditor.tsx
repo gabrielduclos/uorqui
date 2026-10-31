@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
-import { ArrowUpRight, Check, Circle, Pencil, RotateCcw, Square, Undo2, X } from 'lucide-react';
+import { ArrowUpRight, Check, Circle, Minus, Pencil, RotateCcw, Square, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type Tool = 'pen' | 'rectangle' | 'ellipse' | 'arrow';
+type Tool = 'pen' | 'line' | 'rectangle' | 'ellipse' | 'arrow';
 type Point = { x: number; y: number };
-type Mark = { tool: Tool; color: string; points: Point[] };
+type Mark = { tool: Tool; color: string; thickness: number; points: Point[] };
 const COLORS = ['#ff4646', '#ffb32c', '#2ccf83', '#32a9ff', '#ffffff', '#111111'] as const;
 const MAX_DIMENSION = 1800;
 
@@ -13,13 +13,16 @@ function drawMark(ctx: CanvasRenderingContext2D, mark: Mark, width: number) {
   if (!first || !last) return;
   ctx.beginPath();
   ctx.strokeStyle = mark.color;
-  ctx.lineWidth = Math.max(3, width / 260);
+  ctx.lineWidth = Math.max(3, width / 260) * mark.thickness;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   if (mark.tool === 'pen') {
     ctx.moveTo(first.x, first.y);
     for (const point of mark.points.slice(1)) ctx.lineTo(point.x, point.y);
     if (mark.points.length === 1) ctx.lineTo(first.x + 0.01, first.y);
+  } else if (mark.tool === 'line') {
+    ctx.moveTo(first.x, first.y);
+    ctx.lineTo(last.x, last.y);
   } else if (mark.tool === 'rectangle') {
     ctx.rect(first.x, first.y, last.x - first.x, last.y - first.y);
   } else if (mark.tool === 'ellipse') {
@@ -52,6 +55,7 @@ export function ChatImageEditor({ src, onCancel, onSave }: {
   const [ready, setReady] = useState(false);
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState<string>(COLORS[0]);
+  const [thickness, setThickness] = useState(1);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [working, setWorking] = useState<Mark | null>(null);
   const [saving, setSaving] = useState(false);
@@ -108,7 +112,7 @@ export function ChatImageEditor({ src, onCancel, onSave }: {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = position(event);
-    const mark = { tool, color, points: [point] };
+    const mark: Mark = { tool, color, thickness, points: [point] };
     activeMark.current = mark;
     setWorking(mark);
   }
@@ -151,6 +155,7 @@ export function ChatImageEditor({ src, onCancel, onSave }: {
 
   const tools = [
     { id: 'pen' as Tool, Icon: Pencil, label: 'Desenhar à mão livre' },
+    { id: 'line' as Tool, Icon: Minus, label: 'Linha' },
     { id: 'rectangle' as Tool, Icon: Square, label: 'Retângulo' },
     { id: 'ellipse' as Tool, Icon: Circle, label: 'Círculo' },
     { id: 'arrow' as Tool, Icon: ArrowUpRight, label: 'Seta' },
@@ -161,6 +166,14 @@ export function ChatImageEditor({ src, onCancel, onSave }: {
       {tools.map(item => <Button key={item.id} type="button" size="sm" variant={tool === item.id ? 'default' : 'outline'} aria-label={item.label} aria-pressed={tool === item.id} onClick={() => setTool(item.id)} className="size-10 shrink-0 rounded-none p-0"><item.Icon className="size-4" /></Button>)}
       <span className="mx-1 h-7 w-px bg-white/25" />
       {COLORS.map(item => <button key={item} type="button" aria-label={'Cor ' + item} aria-pressed={color === item} title={item} onClick={() => setColor(item)} className="size-7 shrink-0 rounded-full border-2 border-white/50 outline-offset-2 focus-visible:outline-2 focus-visible:outline-white" style={{ backgroundColor: item, outline: color === item ? '2px solid white' : undefined }} />)}
+      <label className="flex min-w-[155px] shrink-0 items-center gap-2 text-xs font-medium text-white/90">
+        <span>Espessura</span>
+        <input type="range" min={1} max={6} step={0.5} value={thickness} disabled={saving}
+          onChange={event => setThickness(Number(event.target.value))}
+          aria-label="Espessura do pincel e das formas"
+          className="h-8 w-24 cursor-pointer accent-white" />
+        <span className="w-7 text-right tabular-nums">{thickness}×</span>
+      </label>
       <span className="flex-1" />
       <Button type="button" variant="outline" size="sm" onClick={undo} disabled={!marks.length || saving}><Undo2 className="size-4" />Desfazer</Button>
       <Button type="button" variant="outline" size="sm" onClick={() => { setMarks([]); setWorking(null); }} disabled={!marks.length || saving}><RotateCcw className="size-4" />Limpar</Button>
