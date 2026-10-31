@@ -155,7 +155,7 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
     if (!message.text.trim()) return;
     try {
       await navigator.clipboard.writeText(message.text);
-      setFeedback('Mensagem copiada');
+      setFeedback(t("Mensagem copiada"));
     } catch {
       setFeedback(t("Não foi possível copiar"));
     }
@@ -176,7 +176,7 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
           {message.edited && <span>{t("editada ·")}</span>}
           <time>{message.time}</time>
         </div>
-        {message.myReaction && !message.mine && <button type="button" onClick={() => onReact?.(message.myReaction!)} aria-label={t('Remover minha reação') + ' ' + message.myReaction} title="Remover minha reação" className="mt-2 inline-flex items-center border border-border/50 bg-background/80 px-2 py-0.5 text-sm text-foreground hover:bg-accent">
+        {message.myReaction && !message.mine && <button type="button" onClick={() => onReact?.(message.myReaction!)} aria-label={t('Remover minha reação') + ' ' + message.myReaction} title={t("Remover minha reação")} className="mt-2 inline-flex items-center border border-border/50 bg-background/80 px-2 py-0.5 text-sm text-foreground hover:bg-accent">
           {message.myReaction}<span className="ml-1 text-[10px] opacity-70">1</span>
         </button>}
       </div>
@@ -198,9 +198,9 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
             </button>)}
           </div>
         </div>}
-        {message.text.trim() && <button type="button" role="menuitem" onClick={() => void copy()} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Copy className="size-4" />Copiar texto</button>}
+        {message.text.trim() && <button type="button" role="menuitem" onClick={() => void copy()} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Copy className="size-4" />{t("Copiar texto")}</button>}
         {message.mine && !!message.text && !message.attachment && <button type="button" role="menuitem" onClick={() => { setOpen(false); onEdit(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Pencil className="size-4" />{t("Editar")}</button>}
-        {message.mine && <button type="button" role="menuitem" onClick={() => { setOpen(false); onDelete(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-destructive hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Trash2 className="size-4" />Excluir</button>}
+        {message.mine && <button type="button" role="menuitem" onClick={() => { setOpen(false); onDelete(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-destructive hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Trash2 className="size-4" />{t("Excluir")}</button>}
         </div>
       </>, document.body)}
     </div>
