@@ -6,6 +6,7 @@ import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
 import { clearProfileImageCache } from './profileImageCache';
+import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
 import { Badge } from '@/components/ui/badge';
@@ -69,12 +70,16 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
 }
 
 function AppContent() {
+  const [isVerificationResult, setIsVerificationResult] = useState(() => /^\/auth\/email-verification\/?$/.test(window.location.pathname));
   const [publicHandle, setPublicHandle] = useState<string | null>(() => publicProfileHandle(window.location.pathname));
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
 
   useEffect(() => {
-    const onNavigation = () => setPublicHandle(publicProfileHandle(window.location.pathname));
+    const onNavigation = () => {
+      setPublicHandle(publicProfileHandle(window.location.pathname));
+      setIsVerificationResult(/^\/auth\/email-verification\/?$/.test(window.location.pathname));
+    };
     window.addEventListener('popstate', onNavigation);
     return () => window.removeEventListener('popstate', onNavigation);
   }, []);
@@ -114,10 +119,10 @@ function AppContent() {
 
   return (
     <MotionConfig reducedMotion="user">
-      {account?.profile ? (
+      {isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
         <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
-      {publicHandle && (
+      {!isVerificationResult && publicHandle && (
         <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-background">
           <PublicProfilePage handle={publicHandle} onMessage={account?.profile && account.profile.handle !== publicHandle ? onPublicProfileMessage : undefined} />
         </div>
