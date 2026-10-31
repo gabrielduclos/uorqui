@@ -20,7 +20,7 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 
 ## Confirmed core technology
 
-**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). These technologies are selected but **provisioned in Neon, but schema migrations and application data access are not yet implemented**. Realtime, voice, media and deployment integrations remain under evaluation.
+**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). The initial **Neon database and six-table Drizzle migration are deployed and verified**, but application data endpoints are not yet implemented. Realtime, voice, media and deployment integrations remain under evaluation.
 
 ## Documentation
 
@@ -38,8 +38,8 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 ## Current state
 
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
-- **Not done:** database schema migrations, authentication, production API, real-time messaging, video delivery, voice infrastructure, deployment, and user validation.
-- **Next:** review/apply the database schema to the existing Neon project, choose authentication, validate the starter build, and incrementally implement a usable MVP.
+- **Not done:** authentication, application data endpoints, real-time messaging, video delivery, voice infrastructure, application deployment, and user validation.
+- **Next:** decide authentication, implement secure API data access and incrementally build a usable MVP.
 
 The architecture documents distinguish **confirmed core stack decisions** from **proposed integrations**; neither implies working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
 

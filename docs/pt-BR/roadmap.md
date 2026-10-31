@@ -13,11 +13,11 @@
 - [x] Definir stack principal: React, TypeScript, Tailwind CSS, Node.js, Fastify, PostgreSQL na Neon e Drizzle.
 - [ ] Definir teto de orçamento, design, privacidade e fornecedores restantes de tempo real/voz/mídias.
 - [x] Publicar a estrutura inicial de desenvolvimento React/Tailwind, Fastify e Drizzle.
-- [x] Criar e verificar PostgreSQL na Neon para desenvolvimento (schema ainda vazio).
+- [x] Criar e verificar PostgreSQL na Neon para desenvolvimento.
 - [x] Validar tipagem e compilação da estrutura inicial pelo GitHub Actions.
 - [x] Gerar e versionar SQL inicial e snapshot de migração do Drizzle.
 - [x] Testar tabelas, enums, chaves estrangeiras e índices em branch temporária da Neon.
-- [ ] Solicitar autorização e aplicar a primeira migração em main com rastreamento do Drizzle.
+- [x] Aplicar primeira migração na branch Neon `main`; verificar seis tabelas, chaves, índices e histórico do Drizzle.
 - [ ] Abrir issues e definir autenticação.
 
 **Critério:** interesse real de comunidades-piloto, escopo e limites operacionais definidos.

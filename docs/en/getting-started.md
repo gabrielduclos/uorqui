@@ -26,12 +26,12 @@ npm run dev
 
 ## Connect to the existing Neon database
 
-1. In your Neon console, open the existing `uorqui` project (São Paulo region); the PostgreSQL database `uorqui` has been provisioned and verified with a read-only SQL query. Its tables have **not** been created.
+1. In your Neon console, open the existing `uorqui` project (São Paulo region); the PostgreSQL database `uorqui` has been provisioned and verified with a read-only SQL query. The initial six application tables and the Drizzle migration journal **have been applied to main and verified**.
 2. Copy `apps/api/.env.example` to `apps/api/.env`.
 3. Set `DATABASE_URL` to the full database connection URI from Neon.
 4. Review the **already generated** initial migration at `apps/api/drizzle/0000_nice_machine_man.sql` and its tracking metadata under `apps/api/drizzle/meta/`. Use `npm run db:generate` only when the Drizzle schema changes.
-5. The migration passed SQL schema creation checks on a **temporary Neon branch**. The default `main` database is still empty. **Do not apply the migration to main until reviewed and explicitly approved.**
-6. After approval, apply via `npm run db:migrate` with a private `DATABASE_URL` to preserve Drizzle's migration history; never use both manual SQL application and `db:migrate` for the same migration.
+5. The initial migration **has already been applied** to Neon `main` and recorded in `drizzle.__drizzle_migrations` (verified). **Do not run the initial SQL manually again.**
+6. For future schema changes, generate a new migration with `npm run db:generate`, review the new SQL and run `npm run db:migrate` with a private `DATABASE_URL` on the intended environment.
 
 Migrations **change database structure** and are not run automatically during normal application startup. The schema currently describes users, profiles, direct conversations/messages, communities and members, without API or authentication implementations.
 

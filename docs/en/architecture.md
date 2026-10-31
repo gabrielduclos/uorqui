@@ -2,7 +2,7 @@
 
 [English](architecture.md) · [Português](../pt-BR/arquitetura.md)
 
-> An initial local React/Fastify scaffold and Drizzle schema exist. **Neon PostgreSQL has been provisioned and verified; no tables/migrations or production app have been deployed.**
+> An initial local React/Fastify scaffold and Drizzle schema exist. **Neon PostgreSQL and the initial six-table Drizzle migration are applied and verified; the application is not deployed.**
 
 ## Design approach
 
@@ -17,7 +17,7 @@ Start with a **modular monolith**: one API deployment with clear bounded modules
 | Database | **PostgreSQL hosted on Neon** | Relational storage for users, posts, communities, conversations and permissions |
 | Database access | **Drizzle ORM + Drizzle Kit** | Type-safe SQL queries, schema and versioned migrations |
 
-These choices are **approved for the new Uorqui project**, but **the Neon database and the application scaffold have since been created; no schema migration or production deployment is completed**.
+These choices are **approved for the new Uorqui project**, but **the Neon database, initial schema migration and development scaffold are ready; production app deployment is still pending**.
 
 ### Remaining technical evaluations
 

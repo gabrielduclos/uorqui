@@ -2,7 +2,7 @@
 
 [Português](arquitetura.md) · [English](../en/architecture.md)
 
-> Existe uma estrutura local inicial React/Fastify e um schema Drizzle. **PostgreSQL provisionado e testado na Neon; não existem tabelas/migrações nem aplicação publicada.**
+> Existe uma estrutura local inicial React/Fastify e um schema Drizzle. **PostgreSQL e primeira migração Drizzle com seis tabelas aplicados e verificados na Neon; a aplicação ainda não foi publicada.**
 
 ## Abordagem
 
@@ -17,7 +17,7 @@ Começar com um **monólito modular**: uma API implantada com módulos e limites
 | Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de usuários, publicações, comunidades, conversas e permissões |
 | Acesso ao banco | **Drizzle ORM + Drizzle Kit** | Consultas SQL tipadas, schema e migrações versionadas |
 
-Essas escolhas estão **aprovadas para o novo Uorqui**, mas **o projeto Neon e o scaffold já foram criados; migrações e deploy de produção ainda não foram executados**.
+Essas escolhas estão **aprovadas para o novo Uorqui**, mas **banco Neon, migração inicial e estrutura de desenvolvimento estão prontos; ainda não há deploy da aplicação em produção**.
 
 ### Integrações ainda em avaliação
 

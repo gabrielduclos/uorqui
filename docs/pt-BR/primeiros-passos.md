@@ -26,12 +26,12 @@ O endpoint `/health` confirma **somente o processo da API**, não a conexão do 
 
 ## Conectar ao banco Neon existente
 
-1. No painel da Neon, abra o projeto `uorqui` já existente (região São Paulo); o PostgreSQL `uorqui` foi provisionado e testado com uma consulta SQL somente de leitura. As tabelas **ainda não foram criadas**.
+1. No painel da Neon, abra o projeto `uorqui` já existente (região São Paulo); o PostgreSQL `uorqui` foi provisionado e testado com uma consulta SQL somente de leitura. As seis tabelas iniciais e o histórico do Drizzle **já foram aplicados e verificados na branch main**.
 2. Copie `apps/api/.env.example` para `apps/api/.env`.
 3. Defina `DATABASE_URL` usando a URI completa de conexão fornecida pela Neon.
 4. Revise a migração inicial **já gerada** em `apps/api/drizzle/0000_nice_machine_man.sql` e seus metadados em `apps/api/drizzle/meta/`. Use `npm run db:generate` somente quando o schema Drizzle mudar.
-5. A migração passou no teste de criação de tabelas em **branch temporária da Neon**. O banco principal `main` continua vazio. **Não aplicar em main sem revisão e autorização explícita.**
-6. Após aprovação, aplicar via `npm run db:migrate` com `DATABASE_URL` privada, preservando o histórico do Drizzle; não aplicar manualmente o mesmo SQL e depois rodar `db:migrate`.
+5. A primeira migração **já foi aplicada** à branch principal `main` da Neon, com registro conferido em `drizzle.__drizzle_migrations`. **Não executar novamente o SQL inicial manualmente.**
+6. Para próximas mudanças no schema, gerar uma nova migração com `npm run db:generate`, revisar o SQL e aplicar usando `npm run db:migrate` com a `DATABASE_URL` privada do ambiente correto.
 
 Migrações **alteram a estrutura do banco**, e não são executadas automaticamente ao iniciar a aplicação. O schema atual descreve usuários, perfis, conversas individuais/mensagens, comunidades e membros, sem endpoints nem autenticação.
 
