@@ -189,7 +189,7 @@ export default function SocialShell({ account, onLogout }: {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="relative z-30 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/80 px-4 pt-[env(safe-area-inset-top)] sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="shrink-0 text-xl font-bold tracking-tight md:hidden">uorqui<span className="text-primary">.</span></span>
+            <button type="button" onClick={() => move('feed')} aria-label="Uorqui — voltar ao início" className="shrink-0 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">uorqui<span className="text-primary">.</span></button>
             <Separator orientation="vertical" className="h-5 md:hidden" />
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
           </div>

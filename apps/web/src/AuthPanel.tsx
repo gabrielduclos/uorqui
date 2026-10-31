@@ -1,3 +1,6 @@
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify' | 'reset';
@@ -352,64 +355,64 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
           {!account.profile && (
             <form onSubmit={completeProfile} className="space-y-3">
               <p className="text-sm text-slate-300">Escolha um nome de usuário para concluir seu perfil.</p>
-              <label className="block text-sm font-medium" htmlFor="handle">Nome de usuário</label>
-              <input id="handle" className={inputClass} placeholder="seu_usuario" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[a-z][a-z0-9_]{2,31}" required minLength={3} maxLength={32} autoComplete="username" />
-              <label className="block text-sm font-medium" htmlFor="displayName">Nome exibido</label>
-              <input id="displayName" className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} maxLength={120} />
-              <button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Salvando…</> : 'Criar meu perfil'}</button>
+              <Label className="block text-sm font-medium" htmlFor="handle">Nome de usuário</Label>
+              <Input id="handle" className={inputClass} placeholder="seu_usuario" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[a-z][a-z0-9_]{2,31}" required minLength={3} maxLength={32} autoComplete="username" />
+              <Label className="block text-sm font-medium" htmlFor="displayName">Nome exibido</Label>
+              <Input id="displayName" className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} maxLength={120} />
+              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Salvando…</> : 'Criar meu perfil'}</Button>
             </form>
           )}
-          <button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} className={minorButton}>{busy ? <><Spinner /> Saindo…</> : 'Sair da conta'}</button>
+          <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} className={minorButton}>{busy ? <><Spinner /> Saindo…</> : 'Sair da conta'}</Button>
         </div>
       ) : view === 'welcome' ? (
         <div className="space-y-3">
-          <button type="button" onClick={() => navigate('register')} className={buttonClass}>Criar conta</button>
-          <button type="button" onClick={() => navigate('login')} className={minorButton}>Entrar com uma conta existente</button>
-          {apiChecked && !apiReady && <p role="status" className="text-sm text-amber-200">O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.</p>}
+          <Button type="button" onClick={() => navigate('register')} className={buttonClass}>Criar conta</Button>
+          <Button type="button" onClick={() => navigate('login')} className={minorButton}>Entrar com uma conta existente</Button>
+          {apiChecked && !apiReady && <div role="status" className="space-y-2 text-sm text-amber-200"><p>O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.</p><Button type="button" variant="outline" size="sm" onClick={() => void checkApi()}>Tentar novamente</Button></div>}
         </div>
       ) : (
         <div className="space-y-4">
           {view === 'verify' ? (
             <div className="space-y-3">
-              <label htmlFor="verify-email" className="block text-sm font-medium text-slate-200">E-mail da conta</label>
-              <input id="verify-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+              <Label htmlFor="verify-email" className="block text-sm font-medium text-slate-200">E-mail da conta</Label>
+              <Input id="verify-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
               {siteKey && <div ref={captchaRef} aria-label="Verificação de segurança" />}
-              <button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> Reenviando…</> : 'Reenviar confirmação'}</button>
-              <button type="button" onClick={() => navigate('login')} className={minorButton}>Já confirmei · Entrar</button>
+              <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> Reenviando…</> : 'Reenviar confirmação'}</Button>
+              <Button type="button" onClick={() => navigate('login')} className={minorButton}>Já confirmei · Entrar</Button>
             </div>
           ) : (
             <form className="space-y-3" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
               {view === 'register' && (
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">Seu nome</label>
-                  <input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" />
+                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">Seu nome</Label>
+                  <Input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" />
                 </div>
               )}
               {view !== 'reset' && <div>
-                <label className="mb-1.5 block text-sm font-medium" htmlFor="auth-email">E-mail</label>
-                <input id="auth-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+                <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-email">E-mail</Label>
+                <Input id="auth-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
               </div>}
               {view !== 'forgot' && (
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">Senha</label>
+                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">Senha</Label>
                   <div className="relative">
-                    <input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-24'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
-                    <button type="button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-indigo-200 focus-visible:outline-2 focus-visible:outline-indigo-300">{showPassword ? 'Ocultar' : 'Mostrar'}</button>
+                    <Input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-24'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
+                    <Button type="button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-indigo-200 focus-visible:outline-2 focus-visible:outline-indigo-300">{showPassword ? 'Ocultar' : 'Mostrar'}</Button>
                   </div>
                   {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-slate-300">Use pelo menos 12 caracteres.</p>}
                 </div>
               )}
               {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label="Verificação de segurança" />}
-              <button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Aguarde…</> : view === 'forgot' ? 'Enviar link de recuperação' : view === 'reset' ? 'Salvar nova senha' : submitLabel}</button>
+              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Aguarde…</> : view === 'forgot' ? 'Enviar link de recuperação' : view === 'reset' ? 'Salvar nova senha' : submitLabel}</Button>
               {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-200">Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.</p>}
               {view === 'login' && <div className="flex flex-wrap gap-x-5 gap-y-3">
-                <button type="button" onClick={() => navigate('forgot')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Esqueci minha senha</button>
-                <button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Reenviar confirmação de e-mail</button>
+                <Button type="button" onClick={() => navigate('forgot')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Esqueci minha senha</Button>
+                <Button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Reenviar confirmação de e-mail</Button>
               </div>}
             </form>
           )}
-          <button type="button" onClick={() => navigate('welcome')} className={minorButton}>Voltar às boas-vindas</button>
-          {view === 'register' && <button type="button" onClick={() => navigate('login')} className="w-full text-sm font-medium text-indigo-200 underline underline-offset-4">Já tenho uma conta · Entrar</button>}
+          <Button type="button" onClick={() => navigate('welcome')} className={minorButton}>Voltar às boas-vindas</Button>
+          {view === 'register' && <Button type="button" onClick={() => navigate('login')} className="w-full text-sm font-medium text-indigo-200 underline underline-offset-4">Já tenho uma conta · Entrar</Button>}
         </div>
       )}
       {message && <p role={view === 'verify' && message.startsWith('Conta criada') ? 'status' : 'alert'} className="mt-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">{message}</p>}

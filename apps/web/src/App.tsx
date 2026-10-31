@@ -65,14 +65,16 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let mounted = true;
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
     void (async () => {
       try {
         const response = await fetch('/api/v1/me', { credentials: 'same-origin', signal: controller.signal });
         if (response.ok && !controller.signal.aborted) setAccount(await response.json() as Account);
       } catch { /* Landing handles unavailable API and login errors. */ }
-      finally { if (!controller.signal.aborted) setLoading(false); }
+      finally { window.clearTimeout(timeout); if (mounted) setLoading(false); }
     })();
-    return () => controller.abort();
+    return () => { mounted = false; window.clearTimeout(timeout); controller.abort(); };
   }, []);
 
   const onAuthenticated = useCallback((next: Account) => setAccount(next), []);
