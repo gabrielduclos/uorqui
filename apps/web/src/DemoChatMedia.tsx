@@ -49,7 +49,7 @@ export function DemoAudioPlayer({ src }: { src: string; name?: string }) {
     catch { setError(true); setPlaying(false); }
   }
 
-  return <div className="mt-1 flex w-full max-w-[340px] min-w-[min(280px,100%)] flex-col gap-1 border border-current/15 bg-black/10 px-2.5 py-2 text-current" aria-label="Mensagem de áudio">
+  return <div className="mt-1 flex w-full max-w-[340px] min-w-[min(280px,100%)] flex-col gap-1 border border-current/15 bg-black/10 px-2.5 py-2 text-current" aria-label={t('Mensagem de áudio')}>
     <audio ref={player} src={src} preload="metadata"
       onLoadedMetadata={event => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0); event.currentTarget.playbackRate = rate; }}
       onDurationChange={event => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }}
@@ -59,12 +59,12 @@ export function DemoAudioPlayer({ src }: { src: string; name?: string }) {
       onEnded={() => setPlaying(false)}
       onError={() => { setError(true); setPlaying(false); }} />
     <div className="flex min-w-0 items-center gap-2">
-      <button type="button" onClick={() => void toggle()} aria-label={playing ? t("Pausar áudio") : 'Reproduzir áudio'} className="grid size-9 shrink-0 place-items-center border border-current/15 bg-current/10 hover:bg-current/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+      <button type="button" onClick={() => void toggle()} aria-label={playing ? t('Pausar áudio') : t('Reproduzir áudio')} className="grid size-9 shrink-0 place-items-center border border-current/15 bg-current/10 hover:bg-current/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         {playing ? <Pause className="size-4" fill="currentColor" /> : <Play className="size-4" fill="currentColor" />}
       </button>
       <div className="min-w-0 flex-1">
         <input type="range" min={0} max={Math.max(duration, 0.1)} step={0.1} value={Math.min(currentTime, duration || 0)}
-          aria-label="Posição do áudio" onChange={event => { const value = Number(event.target.value); if (player.current) player.current.currentTime = value; setCurrentTime(value); }}
+          aria-label={t('Posição do áudio')} onChange={event => { const value = Number(event.target.value); if (player.current) player.current.currentTime = value; setCurrentTime(value); }}
           className="block h-5 w-full cursor-pointer accent-current" />
         <div className="flex justify-between gap-1 text-[10px] tabular-nums opacity-75">
           <span>{audioTime(currentTime)}</span><span>{audioTime(duration)}</span>
@@ -128,9 +128,9 @@ export function DemoMediaViewer({ items, selectedId, onSelect, onClose, onImageE
       <div className="flex shrink-0 items-center gap-3 border-b border-white/15 pb-3">
         <p className="min-w-0 flex-1 truncate text-sm">{active.attachment.kind === 'image' ? (editing ? 'Editar foto' : t("Foto")) : 'Vídeo'}</p>
         <span className="shrink-0 text-xs text-white/70">{index + 1} de {items.length}</span>
-        {active.attachment.kind === 'image' && !!onImageEdited && !editing && <button type="button" onClick={() => setEditing(true)} aria-label="Editar foto" className="flex min-h-10 items-center gap-2 border border-white/20 px-3 text-xs hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><Pencil className="size-4" /><span className="hidden sm:inline">Editar foto</span></button>}
+        {active.attachment.kind === 'image' && !!onImageEdited && !editing && <button type="button" onClick={() => setEditing(true)} aria-label={t('Editar foto')} className="flex min-h-10 items-center gap-2 border border-white/20 px-3 text-xs hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><Pencil className="size-4" /><span className="hidden sm:inline">Editar foto</span></button>}
         <a href={active.attachment.url} download={active.attachment.name} aria-label={t("Baixar mídia")} className="grid size-10 shrink-0 place-items-center rounded-md hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><Download className="size-5" /></a>
-        <button ref={closeRef} type="button" onClick={onClose} aria-label="Fechar visualizador" className="grid size-10 shrink-0 place-items-center rounded-md hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><X className="size-5" /></button>
+        <button ref={closeRef} type="button" onClick={onClose} aria-label={t('Fechar visualizador')} className="grid size-10 shrink-0 place-items-center rounded-md hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><X className="size-5" /></button>
       </div>
       {editing && active.attachment.kind === 'image' && onImageEdited
         ? <DemoImageEditor key={active.attachment.url} src={active.attachment.url} onCancel={() => setEditing(false)} onSave={image => { onImageEdited(active.id, image); setEditing(false); }} />
@@ -141,7 +141,7 @@ export function DemoMediaViewer({ items, selectedId, onSelect, onClose, onImageE
               ? <img key={active.id} src={active.attachment.url} alt={t("Foto compartilhada")} className="max-h-[76dvh] max-w-full object-contain" />
               : <video key={active.id} src={active.attachment.url} controls playsInline preload="metadata" aria-label={t("Vídeo compartilhado")} className="max-h-[76dvh] max-w-full" />}
           </div>
-          <button type="button" aria-label="Próxima mídia" onClick={() => index < items.length - 1 && onSelect(items[index + 1].id)} disabled={index === items.length - 1} className="grid size-9 shrink-0 place-items-center rounded-md hover:bg-white/15 disabled:opacity-25 sm:size-11"><ChevronRight className="size-6" /></button>
+          <button type="button" aria-label={t('Próxima mídia')} onClick={() => index < items.length - 1 && onSelect(items[index + 1].id)} disabled={index === items.length - 1} className="grid size-9 shrink-0 place-items-center rounded-md hover:bg-white/15 disabled:opacity-25 sm:size-11"><ChevronRight className="size-6" /></button>
         </div>}
       {!editing && <p className="hidden shrink-0 text-center text-xs text-white/60 sm:block">{t("Use ← → para navegar · Esc para fechar")}</p>}
     </div>
