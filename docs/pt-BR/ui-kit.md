@@ -90,6 +90,17 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 
 ## Anexos do mensageiro
 
-- O menu **+** mantém o padrão semântica Light/Dark e PT/EN; Galeria, Câmera, Vídeo e Arquivo abrem seletores nativos. Localização permanece claramente indisponível.
-- Uma mensagem pode ter texto ou **um anexo privado** (até 20 MB). Balões mantêm **cantos retos** e oferecem miniatura de imagem com ampliação, vídeo inline ou cartão de arquivo; status e timestamp seguem os mesmos padrões do chat.
+- O menu **+** mantém o padrão semântica Light/Dark e PT/EN; Galeria, Câmera, Vídeo e Arquivo abrem seletores nativos. Localização solicita permissão somente ao tocar na opção e permite confirmar/remover a prévia antes de compartilhar.
+- Uma mensagem pode ter texto ou **um anexo privado** (até 50 MB). Balões mantêm **cantos retos** e oferecem miniatura de imagem com ampliação, vídeo inline ou cartão de arquivo; status e timestamp seguem os mesmos padrões do chat.
 - O anexo otimista tem miniatura local enquanto envia; falhas permitem **Reenviar** sem duplicar o ID. O R2 e o PostgreSQL devem preservar autorização por conversa; nem URL pública nem tokens nos links.
+
+
+### Paridade de mídia com a versão demo (PR #31)
+
+- Anexos agora ficam **em prévia antes do envio**, com nome, tamanho e ação para remover. Texto digitado pode acompanhar o anexo como legenda. Colar imagem do clipboard abre a mesma prévia.
+- Câmera: escolha **Tirar foto** ou **Gravar vídeo** no seletor nativo. Galeria, vídeo e documentos continuam com entradas nativas.
+- Microfone: gravar, pausar, retomar, finalizar, descartar e **ouvir antes de enviar**. Player do áudio com seek, duração e velocidades **1×, 1,5×, 2×**; formatos WebM/MP4/OGG/MP3/WAV/AAC conforme suporte do navegador.
+- Editor de fotos **antes de enviar**: desenho, retângulo, círculo, seta, cores, desfazer e limpar. Salvar gera um PNG novo sem alterar o original.
+- Visualizador de foto/vídeo com rolagem por mídias da conversa, botões anterior/próxima, teclado (←, → e Esc) e opção de salvar; vídeo tem controles nativos.
+- O limite é restaurado para **50 MB** com migração Drizzle `0008_dm_attachment_50mb`, trocando somente a restrição `dm_attachment_consistency`. A mudança requer migração no Neon principal antes de publicar o Worker/API do PR #31; nenhum arquivo existente é apagado.
+- Localização é enviada como texto especial com link OpenStreetMap depois da permissão e confirmação da prévia; não existe rastreamento contínuo.
