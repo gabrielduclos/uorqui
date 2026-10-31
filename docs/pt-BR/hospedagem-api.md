@@ -8,7 +8,7 @@ O arquivo `render.yaml` na raiz prepara apenas a API como serviço `uorqui-socia
 
 Após conectar o Render ao GitHub, importe o Blueprint para o repositório `gabrielduclos/uorqui`. A compilação ocorre na raiz para manter os workspaces npm:
 
-- **Build:** `npm install --no-audit --no-fund && npm run build -w @uorqui/api`
+- **Build:** `npm install --include=dev --no-audit --no-fund && npm run build -w @uorqui/api`
 - **Start:** `node apps/api/dist/server.js`
 - **Health:** `/health/db` — exige conexão Neon e as duas migrações; nunca declara o banco pronto apenas pelo processo Node
 - **Node:** versão 22; `NODE_ENV=production`

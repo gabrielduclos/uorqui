@@ -28,6 +28,7 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 | --- | --- | --- |
 | Rodar localmente | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | [Getting started](docs/en/getting-started.md) |
 | Hospedagem Cloudflare Workers | [Guia Workers](docs/pt-BR/cloudflare-workers.md) | [Workers guide](docs/en/cloudflare-workers.md) |
+| Hospedagem API Node.js | [Guia da API](docs/pt-BR/hospedagem-api.md) | [API hosting](docs/en/api-hosting.md) |
 | Visão e princípios | [Visão](docs/pt-BR/visao.md) | [Vision](docs/en/vision.md) |
 | Requisitos do produto | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
 | Arquitetura proposta | [Arquitetura](docs/pt-BR/arquitetura.md) | [Architecture](docs/en/architecture.md) |
@@ -41,7 +42,7 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 - **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
 - **Validado no PostgreSQL temporário do CI:** Better Auth com e-mail/senha, sessões por cookie, endpoints protegidos de perfil, onboarding e logout. Ainda não foi testado ponta a ponta na Neon main; requer configurar segredos privados e testar a conexão real com a Neon.
 - **Pendentes:** verificação de e-mail, recuperação de senha, mensagens, feed, vídeos, voz, deploy em produção e validação com usuários.
-- **Próximo:** configurar credenciais privadas, verificar cadastro/login/sessão na Neon e implementar confirmação de e-mail antes de abrir inscrições.
+- **Próximo:** vincular uma hospedagem Node.js à API (Blueprint Render opcional versionado em `render.yaml`), configurar segredos privados, validar login com a Neon e implementar confirmação de e-mail antes de abrir inscrições.
 
 A documentação técnica distingue **tecnologias principais aprovadas** de **integrações ainda propostas**, sem declarar funcionalidades implementadas. O planejamento comercial, as hipóteses de preço e as projeções financeiras ficam separados deste repositório público.
 

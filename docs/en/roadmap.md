@@ -13,7 +13,9 @@
 - [x] Decide core stack: React, TypeScript, Tailwind CSS, Node.js, Fastify, Neon PostgreSQL and Drizzle.
 - [x] Choose Cloudflare Workers Static Assets for the frontend, prepare Wrangler/SPA routing and an isolated future API proxy.
 - [x] Connect Cloudflare Worker `main` to the GitHub repository, configure Cloudflare Builds root `/apps/web` and web build/deploy commands, and limit GitHub Actions to API checks.
-- [ ] Select API hosting, configure `API_ORIGIN` and private auth secrets, validate the Worker and backend together before any public deployment.
+- [x] Prepare Fastify for external Node.js hosting with production network binding, an optional Render Blueprint and uncommitted secrets.
+- [x] Show a helpful API-offline message in the frontend until backend setup is complete.
+- [ ] Connect the Node.js hosting provider, deploy the API and configure Worker runtime `API_ORIGIN`; validate real login and Neon connectivity before opening access.
 - [ ] Set operating budget, design conventions, data privacy principles and remaining realtime/voice/media providers.
 - [x] Commit the initial React/Tailwind, Fastify and Drizzle development scaffold.
 - [x] Create and verify a Neon PostgreSQL development database.

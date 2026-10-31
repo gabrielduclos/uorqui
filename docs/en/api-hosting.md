@@ -6,7 +6,7 @@ The React UI is deployed by **Cloudflare Builds** to Worker `main` at https://ma
 
 Root-level `render.yaml` describes a **separate** `uorqui-social-api` Node service. Its proposed `free` plan is for development only and depends on Render availability, limits and spin-down policies; choose a paid plan as needed before real users. Connecting Render and approving any charges remain separate account actions.
 
-- Build: `npm install --no-audit --no-fund && npm run build -w @uorqui/api`
+- Build: `npm install --include=dev --no-audit --no-fund && npm run build -w @uorqui/api`
 - Start: `node apps/api/dist/server.js`
 - Health check: `/health/db`; requires Neon access and both Drizzle migrations.
 - Node 22, `NODE_ENV=production`, `ENABLE_DEV_SIGNUP=false`.

@@ -13,7 +13,9 @@
 - [x] Definir stack principal: React, TypeScript, Tailwind CSS, Node.js, Fastify, PostgreSQL na Neon e Drizzle.
 - [x] Escolher Cloudflare Workers Static Assets para o front-end e preparar Wrangler, SPA e proxy separado da API.
 - [x] Integrar Worker `main` com o repositório no Cloudflare Builds, ajustar root `/apps/web`, build `npm run build` e deploy `npx wrangler deploy`; transferir o build/deploy web do GitHub Actions para a Cloudflare.
-- [ ] Escolher hospedagem da API, configurar `API_ORIGIN` e segredos de autenticação e validar front-end e backend antes de publicar.
+- [x] Preparar API Fastify para hospedagem externa com bind de rede em produção, Blueprint Render opcional e segredos não versionados.
+- [x] Mostrar aviso de API indisponível na interface web até a conexão estar pronta.
+- [ ] Conectar provedor de hospedagem Node.js, provisionar a API e adicionar `API_ORIGIN` no Worker; validar login e Neon antes de abrir acesso.
 - [ ] Definir teto de orçamento, design, privacidade e fornecedores restantes de tempo real/voz/mídias.
 - [x] Publicar a estrutura inicial de desenvolvimento React/Tailwind, Fastify e Drizzle.
 - [x] Criar e verificar PostgreSQL na Neon para desenvolvimento.

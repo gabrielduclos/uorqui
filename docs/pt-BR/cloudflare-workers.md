@@ -50,6 +50,6 @@ O Cloudflare instala as dependências do workspace web, compila React/Vite e exe
 
 **Atenção:** o nome técnico `main` corresponde ao Worker já conectado; é diferente da branch Git `main`. Não apontar este projeto para o Worker legado `uorqui-chat` ou para o domínio `uorqui.app` sem migração aprovada.
 
-A aplicação está em pré-MVP. Sem `API_ORIGIN` configurada para uma API Fastify independente e segura, `/api/*` retorna 503. No futuro, configure `API_ORIGIN` nas variáveis **de runtime** do Worker, e configure os segredos de banco/autenticação apenas no host da API. Para cookies no mesmo domínio, `AUTH_BASE_URL` e `WEB_ORIGIN` da API precisarão corresponder à origem pública do novo front-end. Cadastro público continua bloqueado até os requisitos de segurança estarem completos.
+A API Node.js possui um [guia de deploy independente](../pt-BR/hospedagem-api.md), com um Blueprint Render opcional na raiz do repositório. A aplicação está em pré-MVP. Sem `API_ORIGIN` configurada para uma API Fastify independente e segura, `/api/*` retorna 503. No futuro, configure `API_ORIGIN` nas variáveis **de runtime** do Worker, e configure os segredos de banco/autenticação apenas no host da API. Para cookies no mesmo domínio, `AUTH_BASE_URL` e `WEB_ORIGIN` da API precisarão corresponder à origem pública do novo front-end. Cadastro público continua bloqueado até os requisitos de segurança estarem completos.
 
 Acompanhe a execução de cada build no painel **Workers & Pages → main → Builds**. Não confundir um build concluído com funcionalidade social pronta.

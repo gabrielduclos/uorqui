@@ -50,6 +50,6 @@ Cloudflare installs the web workspace dependencies, builds the React SPA, then u
 
 **Important:** the Cloudflare Worker named `main` is not the Git branch `main`. Do not use the legacy `uorqui-chat` Worker or point this project at `uorqui.app` without separately authorizing a migration.
 
-The product is a pre-MVP. Until a separate secure Fastify origin is set as **runtime** `API_ORIGIN`, `/api/*` returns 503. Later, configure database/auth credentials only on the Fastify API host. To retain first-party cookies, the backend `AUTH_BASE_URL` and `WEB_ORIGIN` must match the public origin of the new frontend. Public registration remains disabled pending email verification and abuse controls.
+The Node.js API has a [separate deployment guide](api-hosting.md), including an optional root-level Render Blueprint. The product is a pre-MVP. Until a separate secure Fastify origin is set as **runtime** `API_ORIGIN`, `/api/*` returns 503. Later, configure database/auth credentials only on the Fastify API host. To retain first-party cookies, the backend `AUTH_BASE_URL` and `WEB_ORIGIN` must match the public origin of the new frontend. Public registration remains disabled pending email verification and abuse controls.
 
 Track builds at **Workers & Pages → main → Builds**. A successful deployment is not proof that social features are finished.

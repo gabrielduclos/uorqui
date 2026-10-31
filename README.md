@@ -28,6 +28,7 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 | --- | --- | --- |
 | Run locally | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
 | Cloudflare Workers web hosting | [Workers guide](docs/en/cloudflare-workers.md) | [Guia Workers](docs/pt-BR/cloudflare-workers.md) |
+| Node.js API hosting | [API hosting](docs/en/api-hosting.md) | [Guia da API](docs/pt-BR/hospedagem-api.md) |
 | Vision and principles | [Vision](docs/en/vision.md) | [Visão](docs/pt-BR/visao.md) |
 | Product requirements | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
 | Proposed architecture | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
@@ -41,7 +42,7 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
 - **Validated in temporary PostgreSQL CI:** Better Auth email/password, cookie sessions, protected profile endpoints, handle onboarding and logout. Not yet connected end-to-end to Neon main; requires private settings and real Neon connectivity testing.
 - **Not done:** production-ready email verification, password recovery, social messaging, feed, video, voice, production deployment and user validation.
-- **Next:** set private credentials, verify live Neon connectivity and sessions, then add email verification and abuse protection before enabling public registration.
+- **Next:** connect a Node.js API host (optional Render Blueprint in `render.yaml`), set private secrets, validate sessions with Neon and add email verification/abuse protection before opening registration.
 
 The architecture documents distinguish **confirmed core stack decisions** from **proposed integrations**; neither implies working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
 
