@@ -3,7 +3,7 @@ import { getPool } from './db/client.js';
 
 const { Client } = pg;
 const CHANNEL = 'uorqui_dm_events';
-export type DmEventKind = 'message' | 'read' | 'conversation' | 'update' | 'received';
+export type DmEventKind = 'message' | 'read' | 'conversation' | 'update' | 'received' | 'friendship-update';
 export type DmEvent = { userId: string; conversationId: string; kind: DmEventKind };
 type Subscriber = (event: Omit<DmEvent, 'userId'>) => void;
 
@@ -46,7 +46,7 @@ async function ensureListener(): Promise<void> {
           const event = JSON.parse(packet.payload) as DmEvent;
           if (!event || typeof event.userId !== 'string' ||
               typeof event.conversationId !== 'string' ||
-              !['message', 'read', 'conversation', 'update', 'received'].includes(event.kind)) return;
+              !['message', 'read', 'conversation', 'update', 'received', 'friendship-update'].includes(event.kind)) return;
           for (const subscriber of subscribers.get(event.userId) ?? []) {
             try { subscriber({ kind: event.kind, conversationId: event.conversationId }); }
             catch { /* ignore disconnected browser writer */ }
@@ -105,4 +105,11 @@ export async function closeDmEvents(): Promise<void> {
   const current = listener;
   listener = null;
   if (current) await current.end().catch(() => {});
+}
+
+/** Send a signal only (no names, content or profile data) to the affected account. */
+export async function publishDmUserEvent(userId: string, kind: DmEventKind): Promise<void> {
+  await getPool().query('SELECT pg_notify($1, $2)', [
+    CHANNEL, JSON.stringify({ userId, conversationId: '', kind } satisfies DmEvent),
+  ]);
 }
