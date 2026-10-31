@@ -18,11 +18,12 @@ interface Env {
 }
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
-const MAX_DM_BYTES = 20 * 1024 * 1024;
+const MAX_DM_BYTES = 50 * 1024 * 1024;
 const DM_UPLOAD_PATH = /^\/api\/media\/dm\/([0-9a-f-]{36})$/;
 const DM_MEDIA_PATH = /^\/media\/dm\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
 const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
-const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream']);
+const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream',
+  'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
 const MEDIA_PATH = /^\/media\/profile\/([0-9a-f-]{36})\/(avatar|cover)\/([0-9a-f-]{36})\.(webp|jpg|png)$/;
 const UPLOAD_PATH = /^\/api\/media\/profile\/(avatar|cover)$/;
 const TYPE_EXTENSION: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
@@ -200,10 +201,15 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
   if (!name || name.length > 180 || name !== name.trim() || /[\\/\r\n\u0000-\u001f]/.test(name)) return jsonError(400, 'Invalid filename');
   const type = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   if (!DM_TYPES.has(type)) return jsonError(415, 'Unsupported attachment type');
+  const rawCaption=request.headers.get('x-uorqui-caption')??'';
+  let caption='';
+  try{caption=decodeURIComponent(rawCaption);}catch{return jsonError(400,'Invalid message caption');}
+  if(caption.length>4000)return jsonError(400,'Invalid message caption');
+  caption=caption.trim();
   const replyToId = request.headers.get('x-uorqui-reply-to-id');
   if (replyToId && !/^[0-9a-f-]{36}$/.test(replyToId)) return jsonError(400, 'Invalid reply');
   const contentLength = Number(request.headers.get('content-length') ?? 0);
-  if (contentLength > MAX_DM_BYTES) return jsonError(413, 'Attachment exceeds 20 MB');
+  if (contentLength > MAX_DM_BYTES) return jsonError(413, 'Attachment exceeds 50 MB');
 
   try {
     const auth = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/attachments/allowed');
@@ -211,15 +217,18 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
   } catch { return jsonError(503, 'Attachment authentication unavailable'); }
 
   const bytes = await boundedBody(request, MAX_DM_BYTES);
-  if (!bytes) return jsonError(413, 'Attachment must be between 1 byte and 20 MB');
+  if (!bytes) return jsonError(413, 'Attachment must be between 1 byte and 50 MB');
   const signature = new Uint8Array(bytes.slice(0, 16));
   const magic = String.fromCharCode(...signature);
   if ((type === 'image/jpeg' || type === 'image/png' || type === 'image/webp') && !validImage(new Uint8Array(bytes), type) ||
       (type === 'image/gif' && !magic.startsWith('GIF8')) ||
       (type === 'application/pdf' && !magic.startsWith('%PDF-')) ||
       (type === 'application/zip' && !magic.startsWith('PK')) ||
-      (type === 'video/webm' && !(signature[0] === 0x1a && signature[1] === 0x45 && signature[2] === 0xdf && signature[3] === 0xa3)) ||
-      ((type === 'video/mp4' || type === 'video/quicktime' || type === 'image/heic' || type === 'image/heif') && magic.slice(4, 8) !== 'ftyp')) return jsonError(415, 'Invalid attachment format');
+      ((type === 'video/webm' || type === 'audio/webm') && !(signature[0] === 0x1a && signature[1] === 0x45 && signature[2] === 0xdf && signature[3] === 0xa3)) ||
+      (type === 'audio/ogg' && !magic.startsWith('OggS')) ||
+      (type === 'audio/wav' && !(magic.startsWith('RIFF') && magic.slice(8,12)==='WAVE')) ||
+      (type === 'audio/mpeg' && !(magic.startsWith('ID3') || (signature[0]===0xff && (signature[1] & 0xe0)===0xe0))) ||
+      ((type === 'video/mp4' || type === 'video/quicktime' || type === 'image/heic' || type === 'image/heif' || type === 'audio/mp4' || type === 'audio/x-m4a') && magic.slice(4, 8) !== 'ftyp')) return jsonError(415, 'Invalid attachment format');
 
   const attachmentId = crypto.randomUUID();
   const proofContent=JSON.stringify([conversationId,clientId,attachmentId,name,type,bytes.byteLength]);
@@ -233,7 +242,7 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
 
   try {
     const saved = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/messages','POST',{
-      body:'',clientId,...(replyToId ? {replyToId} : {}),
+      body:caption,clientId,...(replyToId ? {replyToId} : {}),
       attachment:{id:attachmentId,name,type,size:bytes.byteLength},
     },{'x-uorqui-attachment-proof':proof});
     if (!saved.ok) {
@@ -271,7 +280,7 @@ async function handleDmDownload(request: Request, env: Env, origin: URL, convers
       request.headers.has('range') ? {range:request.headers} : undefined);
     if (!object) return jsonError(404,'Attachment unavailable');
     const partial=!!request.headers.get('range') && !!object.range;
-    const inline = access.type.startsWith('image/') || access.type.startsWith('video/') || access.type === 'application/pdf';
+    const inline = access.type.startsWith('image/') || access.type.startsWith('video/') || access.type.startsWith('audio/') || access.type === 'application/pdf';
     const fallback = access.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120) || 'attachment';
     return new Response(request.method === 'HEAD' ? null : object.body,{
       status:partial ? 206 : 200,headers:{
