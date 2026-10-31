@@ -325,6 +325,11 @@ test('real DM replies: referenced originals, conversation isolation, idempotency
   assert.equal(replyAfter.replyTo.id,source.id);
   assert.equal(replyAfter.replyTo.deleted,true);
   assert.equal(replyAfter.replyTo.body,'','deleted source text must not leak');
+  const retryAfterDeletion=await bob(path+'/messages','POST',{
+    body:'Esta é uma resposta real.',clientId:messageId,replyToId:source.id,
+  });
+  assert.equal(retryAfterDeletion.status,200,'retry should remain idempotent after source deletion');
+  assert.equal(retryAfterDeletion.data.message.id,reply.id);
 
   const replyToDeleted=await bob(path+'/messages','POST',{
     body:'Invalid reply',clientId:crypto.randomUUID(),replyToId:source.id,
