@@ -1,3 +1,4 @@
+import { useUorquiPreferences } from './UorquiPreferences';
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { ArrowUpRight, Check, Circle, Pencil, RotateCcw, Square, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
   onCancel: () => void;
   onSave: (image: Blob) => void;
 }) {
+  const { t } = useUorquiPreferences();
   const canvas = useRef<HTMLCanvasElement>(null);
   const sourceImage = useRef<HTMLImageElement | null>(null);
   const activeMark = useRef<Mark | null>(null);
@@ -77,7 +79,7 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
     img.onload = () => {
       if (!active || !canvas.current) return;
       const naturalWidth = img.naturalWidth, naturalHeight = img.naturalHeight;
-      if (!naturalWidth || !naturalHeight) { setError('Não foi possível abrir esta foto.'); return; }
+      if (!naturalWidth || !naturalHeight) { setError(t("Não foi possível abrir esta foto.")); return; }
       const scale = Math.min(1, MAX_DIMENSION / Math.max(naturalWidth, naturalHeight));
       canvas.current.width = Math.max(1, Math.round(naturalWidth * scale));
       canvas.current.height = Math.max(1, Math.round(naturalHeight * scale));
@@ -87,7 +89,7 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
       const context = canvas.current.getContext('2d');
       context?.drawImage(img, 0, 0, canvas.current.width, canvas.current.height);
     };
-    img.onerror = () => { if (active) setError('Não foi possível abrir esta foto para edição.'); };
+    img.onerror = () => { if (active) setError(t("Não foi possível abrir esta foto para edição.")); };
     img.src = src;
     return () => { active = false; img.onload = null; img.onerror = null; sourceImage.current = null; };
   }, [src]);
@@ -143,36 +145,36 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
     setError('');
     render(marks, null);
     canvas.current.toBlob(blob => {
-      if (!blob) { setSaving(false); setError('Não foi possível salvar a edição.'); return; }
+      if (!blob) { setSaving(false); setError(t("Não foi possível salvar a edição.")); return; }
       onSave(blob);
       setSaving(false);
     }, 'image/png');
   }
 
   const tools = [
-    { id: 'pen' as Tool, Icon: Pencil, label: 'Desenhar à mão livre' },
-    { id: 'rectangle' as Tool, Icon: Square, label: 'Retângulo' },
-    { id: 'ellipse' as Tool, Icon: Circle, label: 'Círculo' },
-    { id: 'arrow' as Tool, Icon: ArrowUpRight, label: 'Seta' },
+    { id: 'pen' as Tool, Icon: Pencil, label: t("Desenhar à mão livre") },
+    { id: 'rectangle' as Tool, Icon: Square, label: t("Retângulo") },
+    { id: 'ellipse' as Tool, Icon: Circle, label: t("Círculo") },
+    { id: 'arrow' as Tool, Icon: ArrowUpRight, label: t("Seta") },
   ];
 
-  return <section aria-label="Editor de foto" className="flex min-h-0 flex-1 flex-col gap-3 py-3">
+  return <section aria-label={t("Editor de foto")} className="flex min-h-0 flex-1 flex-col gap-3 py-3">
     <div className="flex flex-wrap items-center gap-2">
-      {tools.map(item => <Button key={item.id} type="button" size="sm" variant={tool === item.id ? 'default' : 'outline'} aria-label={item.label} aria-pressed={tool === item.id} onClick={() => setTool(item.id)} className="size-10 shrink-0 rounded-none p-0"><item.Icon className="size-4" /></Button>)}
+      {tools.map(item => <Button key={item.id} type="button" size="sm" variant={tool === item.id ? 'default' : 'outline'} aria-label={t(item.label)} aria-pressed={tool === item.id} onClick={() => setTool(item.id)} className="size-10 shrink-0 rounded-none p-0"><item.Icon className="size-4" /></Button>)}
       <span className="mx-1 h-7 w-px bg-white/25" />
-      {COLORS.map(item => <button key={item} type="button" aria-label={'Cor ' + item} aria-pressed={color === item} title={item} onClick={() => setColor(item)} className="size-7 shrink-0 rounded-full border-2 border-white/50 outline-offset-2 focus-visible:outline-2 focus-visible:outline-white" style={{ backgroundColor: item, outline: color === item ? '2px solid white' : undefined }} />)}
+      {COLORS.map(item => <button key={item} type="button" aria-label={t('Cor ') + item} aria-pressed={color === item} title={item} onClick={() => setColor(item)} className="size-7 shrink-0 rounded-full border-2 border-white/50 outline-offset-2 focus-visible:outline-2 focus-visible:outline-white" style={{ backgroundColor: item, outline: color === item ? '2px solid white' : undefined }} />)}
       <span className="flex-1" />
-      <Button type="button" variant="outline" size="sm" onClick={undo} disabled={!marks.length || saving}><Undo2 className="size-4" />Desfazer</Button>
-      <Button type="button" variant="outline" size="sm" onClick={() => { setMarks([]); setWorking(null); }} disabled={!marks.length || saving}><RotateCcw className="size-4" />Limpar</Button>
+      <Button type="button" variant="outline" size="sm" onClick={undo} disabled={!marks.length || saving}><Undo2 className="size-4" />{t("Desfazer")}</Button>
+      <Button type="button" variant="outline" size="sm" onClick={() => { setMarks([]); setWorking(null); }} disabled={!marks.length || saving}><RotateCcw className="size-4" />{t("Limpar")}</Button>
     </div>
     <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/40">
-      <canvas ref={canvas} onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} style={{ touchAction: 'none', maxHeight: '65dvh', maxWidth: '100%', width: 'auto', height: 'auto', cursor: 'crosshair' }} aria-label="Área de desenho sobre a foto" />
+      <canvas ref={canvas} onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} style={{ touchAction: 'none', maxHeight: '65dvh', maxWidth: '100%', width: 'auto', height: 'auto', cursor: 'crosshair' }} aria-label={t('Área de desenho sobre a foto')} />
     </div>
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
     <div className="flex shrink-0 justify-end gap-2">
-      <Button type="button" variant="outline" onClick={onCancel} disabled={saving}><X className="size-4" />Cancelar</Button>
-      <Button type="button" onClick={save} disabled={!ready || saving}><Check className="size-4" />{saving ? 'Salvando…' : 'Salvar edição'}</Button>
+      <Button type="button" variant="outline" onClick={onCancel} disabled={saving}><X className="size-4" />{t("Cancelar")}</Button>
+      <Button type="button" onClick={save} disabled={!ready || saving}><Check className="size-4" />{saving ? t("Salvando…") : t("Salvar edição")}</Button>
     </div>
-    <p className="text-center text-xs text-white/60">Desenhe com o mouse ou toque; a foto original só é substituída após salvar nesta prévia.</p>
+    <p className="text-center text-xs text-white/60">{t("Desenhe com o mouse ou toque; a foto original só é substituída após salvar nesta prévia.")}</p>
   </section>;
 }

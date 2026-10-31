@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useUorquiPreferences } from './UorquiPreferences';
 
 type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 type ApiStatus = {
@@ -57,6 +58,7 @@ function Spinner() {
 }
 
 export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (account: Account) => void }) {
+  const { t, theme } = useUorquiPreferences();
   const [account, setAccount] = useState<Account | null>(null);
   const [view, setView] = useState<AuthView>(() => new URLSearchParams(window.location.search).has('token') ? 'reset' : 'welcome');
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
@@ -99,11 +101,11 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       } else setAccount(null);
     } catch {
       setAccount(null);
-      setMessage('Não foi possível acessar a API. Tente novamente mais tarde.');
+      setMessage(t("Não foi possível acessar a API. Tente novamente mais tarde."));
     } finally {
       setLoading(false);
     }
-  }, [onAuthenticated]);
+  }, [onAuthenticated, t]);
 
   const checkApi = useCallback(async () => {
     setApiChecked(false);
@@ -139,7 +141,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         callback: (token: string) => setCaptchaToken(token),
         'expired-callback': () => setCaptchaToken(''),
         'error-callback': () => setCaptchaToken(''),
-        theme: 'dark',
+        theme,
       });
       captchaWidgetId.current = widgetId;
     };
@@ -166,7 +168,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       disposed = true;
       if (widgetId) window.turnstile?.remove(widgetId);
     };
-  }, [view, siteKey]);
+  }, [view, siteKey, theme]);
 
   const doAction = async (action: () => Promise<void>) => {
     if (busyRef.current) return;
@@ -176,7 +178,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     try {
       await action();
     } catch {
-      setMessage('Não foi possível conectar ao servidor. Tente novamente.');
+      setMessage(t("Não foi possível conectar ao servidor. Tente novamente."));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -191,7 +193,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const challenge = (): string | null => {
     if (!siteKey) return '';
     if (!captchaToken) {
-      setMessage('Conclua a verificação de segurança antes de continuar.');
+      setMessage(t("Conclua a verificação de segurança antes de continuar."));
       return null;
     }
     return captchaToken;
@@ -201,11 +203,11 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     event.preventDefault();
     await doAction(async () => {
       if (!apiReady) {
-        setMessage('A API está indisponível. Verifique a conexão e tente novamente.');
+        setMessage(t("A API está indisponível. Verifique a conexão e tente novamente."));
         return;
       }
       if (view === 'register' && !canRegister) {
-        setMessage('O cadastro público está sendo preparado. A verificação por e-mail e a proteção contra abuso ainda precisam ser ativadas.');
+        setMessage(t("O cadastro público está sendo preparado. A verificação por e-mail e a proteção contra abuso ainda precisam ser ativadas."));
         return;
       }
       const token = view === 'register' ? challenge() : '';
@@ -225,17 +227,17 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         const errorCode = body && typeof body === 'object' && 'code' in body ? String(body.code) : '';
         if (!signup && errorCode === 'EMAIL_NOT_VERIFIED') {
           navigate('verify');
-          setMessage('Sua conta está aguardando confirmação. Você pode solicitar um novo e-mail abaixo.');
+          setMessage(t("Sua conta está aguardando confirmação. Você pode solicitar um novo e-mail abaixo."));
           return;
         }
-        setMessage(readableError(body, signup ? 'Não foi possível criar sua conta.' : 'E-mail ou senha inválidos.'));
+        setMessage(readableError(body, signup ? t("Não foi possível criar sua conta.") : t("E-mail ou senha inválidos.")));
         return;
       }
       setPassword('');
       setCaptchaToken('');
       if (signup && requiresVerification) {
         navigate('verify');
-        setMessage('Conta criada! Enviamos um link de confirmação para seu e-mail.');
+        setMessage(t("Conta criada! Enviamos um link de confirmação para seu e-mail."));
       } else await refresh();
     });
   }
@@ -244,7 +246,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     event.preventDefault();
     await doAction(async () => {
       if (!apiReady || !status.passwordRecoveryAvailable) {
-        setMessage('A recuperação por e-mail ainda não está disponível.');
+        setMessage(t("A recuperação por e-mail ainda não está disponível."));
         return;
       }
       const token = challenge();
@@ -255,21 +257,21 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       });
       resetChallenge();
       if (!response.ok) {
-        setMessage('Não foi possível solicitar a redefinição. Tente novamente.');
+        setMessage(t("Não foi possível solicitar a redefinição. Tente novamente."));
         return;
       }
-      setMessage('Se esse e-mail estiver cadastrado, você receberá um link para redefinir a senha.');
+      setMessage(t("Se esse e-mail estiver cadastrado, você receberá um link para redefinir a senha."));
     });
   }
 
   async function resendVerification() {
     await doAction(async () => {
       if (!apiReady || !requiresVerification) {
-        setMessage('O envio de e-mails ainda não está disponível.');
+        setMessage(t("O envio de e-mails ainda não está disponível."));
         return;
       }
       if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-        setMessage('Digite um e-mail válido para receber a confirmação.');
+        setMessage(t("Digite um e-mail válido para receber a confirmação."));
         return;
       }
       const token = challenge();
@@ -279,7 +281,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         body: JSON.stringify({ email: email.trim(), callbackURL: window.location.origin, ...(token ? { captchaToken: token } : {}) }),
       });
       resetChallenge();
-      setMessage(response.ok ? 'Se a conta estiver pendente, enviaremos um novo link de confirmação.' : 'Não foi possível reenviar o e-mail. Tente novamente.');
+      setMessage(response.ok ? t("Se a conta estiver pendente, enviaremos um novo link de confirmação.") : t("Não foi possível reenviar o e-mail. Tente novamente."));
     });
   }
 
@@ -287,7 +289,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     event.preventDefault();
     await doAction(async () => {
       if (!resetToken) {
-        setMessage('Link inválido. Solicite uma nova recuperação de senha.');
+        setMessage(t("Link inválido. Solicite uma nova recuperação de senha."));
         return;
       }
       const { response, body } = await requestJson('/api/auth/reset-password', {
@@ -295,13 +297,13 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         body: JSON.stringify({ newPassword: password, token: resetToken }),
       });
       if (!response.ok) {
-        setMessage(readableError(body, 'Link inválido ou expirado. Solicite outro.'));
+        setMessage(readableError(body, t("Link inválido ou expirado. Solicite outro.")));
         return;
       }
       setPassword('');
       window.history.replaceState({}, '', window.location.pathname);
       navigate('login');
-      setMessage('Senha redefinida com sucesso. Entre com a nova senha.');
+      setMessage(t("Senha redefinida com sucesso. Entre com a nova senha."));
     });
   }
 
@@ -313,7 +315,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         body: JSON.stringify({ handle: handle.trim().toLowerCase(), displayName: displayName.trim() }),
       });
       if (response.ok) await refresh();
-      else setMessage(readableError(body, 'Não foi possível salvar o perfil.'));
+      else setMessage(readableError(body, t("Não foi possível salvar o perfil.")));
     });
   }
 
@@ -327,95 +329,95 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     });
   }
 
-  const inputClass = 'w-full rounded-xl border border-white/20 bg-slate-900/90 px-4 py-3 text-base text-white outline-none transition-colors placeholder:text-slate-400 focus-visible:border-indigo-300 focus-visible:ring-2 focus-visible:ring-indigo-400/50';
-  const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none';
-  const minorButton = 'w-full min-h-11 rounded-xl border border-white/20 px-4 py-2.5 text-base font-medium text-slate-100 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300';
-  const submitLabel = busy ? <><Spinner /> Aguarde…</> : view === 'register' ? 'Criar minha conta' : 'Entrar';
+  const inputClass = 'w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40';
+  const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
+  const minorButton = 'w-full min-h-11 rounded-xl border border-border px-4 py-2.5 text-base font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const submitLabel = busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'register' ? t("Criar minha conta") : t("Entrar");
 
   return (
-    <section aria-label="Acesso à conta" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
+    <section aria-label={t('Acesso à conta')} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <div className="mb-5">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Identidade Uorqui</div>
-        <h2 className="mt-2 text-2xl font-semibold">{account ? 'Sua conta' : view === 'welcome' ? 'Bem-vindo ao Uorqui' : view === 'register' ? 'Criar sua conta' : view === 'forgot' ? 'Recuperar acesso' : view === 'verify' ? 'Confirme seu e-mail' : view === 'reset' ? 'Definir nova senha' : 'Entrar'}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-300">{account ? 'Seu perfil no Uorqui.' : view === 'welcome' ? 'Comece sua jornada. O feed e as comunidades ainda estão em desenvolvimento.' : view === 'register' ? 'Cadastre-se para criar sua identidade no Uorqui.' : view === 'verify' ? 'Verifique a caixa de entrada e o spam do endereço informado.' : 'Use seu e-mail para acessar sua conta.'}</p>
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t("Identidade Uorqui")}</div>
+        <h2 className="mt-2 text-2xl font-semibold">{account ? t('Sua conta') : view === 'welcome' ? t("Bem-vindo ao Uorqui") : view === 'register' ? t("Criar sua conta") : view === 'forgot' ? t('Recuperar acesso') : view === 'verify' ? t("Confirme seu e-mail") : view === 'reset' ? t('Definir nova senha') : t("Entrar")}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? t('Seu perfil no Uorqui.') : view === 'welcome' ? t("Comece sua jornada. O feed e as comunidades ainda estão em desenvolvimento.") : view === 'register' ? t("Cadastre-se para criar sua identidade no Uorqui.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
       </div>
 
       {loading ? (
-        <div role="status" aria-label="Verificando sessão" className="space-y-3">
-          <div aria-hidden="true" className="h-12 animate-pulse rounded-xl bg-white/10 motion-reduce:animate-none" />
-          <div aria-hidden="true" className="h-12 animate-pulse rounded-xl bg-white/10 motion-reduce:animate-none" />
-          <span className="sr-only">Verificando sessão…</span>
+        <div role="status" aria-label={t("Verificando sessão")} className="space-y-3">
+          <div aria-hidden="true" className="h-12 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
+          <div aria-hidden="true" className="h-12 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
+          <span className="sr-only">{t('Verificando sessão…')}</span>
         </div>
       ) : account ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-white/10 bg-slate-900/80 p-4">
+          <div className="rounded-xl border border-border bg-muted/40 p-4">
             <p className="font-semibold">{account.profile?.displayName ?? account.user.name}</p>
-            <p className="mt-1 break-all text-sm text-slate-300">{account.profile ? '@' + account.profile.handle : account.user.email}</p>
+            <p className="mt-1 break-all text-sm text-muted-foreground">{account.profile ? '@' + account.profile.handle : account.user.email}</p>
           </div>
           {!account.profile && (
             <form onSubmit={completeProfile} className="space-y-3">
-              <p className="text-sm text-slate-300">Escolha um nome de usuário para concluir seu perfil.</p>
-              <Label className="block text-sm font-medium" htmlFor="handle">Nome de usuário</Label>
+              <p className="text-sm text-muted-foreground">{t("Escolha um nome de usuário para concluir seu perfil.")}</p>
+              <Label className="block text-sm font-medium" htmlFor="handle">{t("Nome de usuário")}</Label>
               <Input id="handle" className={inputClass} placeholder="seu_usuario" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[a-z][a-z0-9_]{2,31}" required minLength={3} maxLength={32} autoComplete="username" />
-              <Label className="block text-sm font-medium" htmlFor="displayName">Nome exibido</Label>
+              <Label className="block text-sm font-medium" htmlFor="displayName">{t('Nome exibido')}</Label>
               <Input id="displayName" className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} maxLength={120} />
-              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Salvando…</> : 'Criar meu perfil'}</Button>
+              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Salvando…')}</> : t("Criar meu perfil")}</Button>
             </form>
           )}
-          <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} className={minorButton}>{busy ? <><Spinner /> Saindo…</> : 'Sair da conta'}</Button>
+          <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} className={minorButton}>{busy ? <><Spinner /> {t("Saindo…")}</> : t('Sair da conta')}</Button>
         </div>
       ) : view === 'welcome' ? (
         <div className="space-y-3">
-          <Button type="button" onClick={() => navigate('register')} className={buttonClass}>Criar conta</Button>
-          <Button type="button" onClick={() => navigate('login')} className={minorButton}>Entrar com uma conta existente</Button>
-          {apiChecked && !apiReady && <div role="status" className="space-y-2 text-sm text-amber-200"><p>O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.</p><Button type="button" variant="outline" size="sm" onClick={() => void checkApi()}>Tentar novamente</Button></div>}
+          <Button type="button" onClick={() => navigate('register')} className={buttonClass}>{t('Criar conta')}</Button>
+          <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Entrar com uma conta existente")}</Button>
+          {apiChecked && !apiReady && <div role="status" className="space-y-2 text-sm text-amber-600 dark:text-amber-200"><p>{t("O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.")}</p><Button type="button" variant="outline" size="sm" onClick={() => void checkApi()}>{t("Tentar novamente")}</Button></div>}
         </div>
       ) : (
         <div className="space-y-4">
           {view === 'verify' ? (
             <div className="space-y-3">
-              <Label htmlFor="verify-email" className="block text-sm font-medium text-slate-200">E-mail da conta</Label>
+              <Label htmlFor="verify-email" className="block text-sm font-medium text-foreground">{t('E-mail da conta')}</Label>
               <Input id="verify-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
-              {siteKey && <div ref={captchaRef} aria-label="Verificação de segurança" />}
-              <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> Reenviando…</> : 'Reenviar confirmação'}</Button>
-              <Button type="button" onClick={() => navigate('login')} className={minorButton}>Já confirmei · Entrar</Button>
+              {siteKey && <div ref={captchaRef} aria-label={t("Verificação de segurança")} />}
+              <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> {t("Reenviando…")}</> : t('Reenviar confirmação')}</Button>
+              <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Já confirmei · Entrar")}</Button>
             </div>
           ) : (
             <form className="space-y-3" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
               {view === 'register' && (
                 <div>
-                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">Seu nome</Label>
+                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">{t('Seu nome')}</Label>
                   <Input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" />
                 </div>
               )}
               {view !== 'reset' && <div>
-                <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-email">E-mail</Label>
+                <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-email">{t("E-mail")}</Label>
                 <Input id="auth-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
               </div>}
               {view !== 'forgot' && (
                 <div>
-                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">Senha</Label>
+                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">{t('Senha')}</Label>
                   <div className="relative">
                     <Input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-24'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
-                    <Button type="button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-indigo-200 focus-visible:outline-2 focus-visible:outline-indigo-300">{showPassword ? 'Ocultar' : 'Mostrar'}</Button>
+                    <Button type="button" aria-label={showPassword ? t("Ocultar senha") : t('Mostrar senha')} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-ring">{showPassword ? t("Ocultar") : t('Mostrar')}</Button>
                   </div>
-                  {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-slate-300">Use pelo menos 12 caracteres.</p>}
+                  {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-muted-foreground">{t("Use pelo menos 12 caracteres.")}</p>}
                 </div>
               )}
-              {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label="Verificação de segurança" />}
-              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Aguarde…</> : view === 'forgot' ? 'Enviar link de recuperação' : view === 'reset' ? 'Salvar nova senha' : submitLabel}</Button>
-              {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-200">Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.</p>}
+              {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label={t("Verificação de segurança")} />}
+              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'forgot' ? t("Enviar link de recuperação") : view === 'reset' ? t('Salvar nova senha') : submitLabel}</Button>
+              {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-600 dark:text-amber-200">{t("Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.")}</p>}
               {view === 'login' && <div className="flex flex-wrap gap-x-5 gap-y-3">
-                <Button type="button" onClick={() => navigate('forgot')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Esqueci minha senha</Button>
-                <Button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Reenviar confirmação de e-mail</Button>
+                <Button type="button" onClick={() => navigate('forgot')} className="text-sm font-medium text-primary underline underline-offset-4">{t("Esqueci minha senha")}</Button>
+                <Button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-primary underline underline-offset-4">{t('Reenviar confirmação de e-mail')}</Button>
               </div>}
             </form>
           )}
-          <Button type="button" onClick={() => navigate('welcome')} className={minorButton}>Voltar às boas-vindas</Button>
-          {view === 'register' && <Button type="button" onClick={() => navigate('login')} className="w-full text-sm font-medium text-indigo-200 underline underline-offset-4">Já tenho uma conta · Entrar</Button>}
+          <Button type="button" onClick={() => navigate('welcome')} className={minorButton}>{t("Voltar às boas-vindas")}</Button>
+          {view === 'register' && <Button type="button" onClick={() => navigate('login')} className="w-full text-sm font-medium text-primary underline underline-offset-4">{t('Já tenho uma conta · Entrar')}</Button>}
         </div>
       )}
-      {message && <p role={view === 'verify' && message.startsWith('Conta criada') ? 'status' : 'alert'} className="mt-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">{message}</p>}
+      {message && <p role={view === 'verify' && message.startsWith('Conta criada') ? 'status' : 'alert'} className="mt-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-foreground">{message}</p>}
     </section>
   );
 }
