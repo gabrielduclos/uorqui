@@ -57,9 +57,9 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       try { response.write(chunk); } catch { finish(); }
     };
     const unsubscribe = subscribeDmEvents(me, event => {
-      write('event: dm-update\\ndata: ' + JSON.stringify(event) + '\\n\\n');
+      write('event: dm-update\ndata: ' + JSON.stringify(event) + '\n\n');
     });
-    const heartbeat = setInterval(() => write(': heartbeat\\n\\n'), 15_000);
+    const heartbeat = setInterval(() => write(': heartbeat\n\n'), 15_000);
     const expires = setTimeout(() => finish(), 5 * 60_000);
     function finish() {
       if (ended) return;
@@ -70,8 +70,8 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if (!response.writableEnded) response.end();
     }
     response.once('close', finish);
-    write('retry: 2000\\n\\n');
-    write('event: ready\\ndata: {}\\n\\n');
+    write('retry: 2000\n\n');
+    write('event: ready\ndata: {}\n\n');
   });
 
   app.get('/api/v1/dm/people', {
