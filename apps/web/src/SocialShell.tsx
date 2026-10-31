@@ -13,14 +13,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import DemoMessageComposer, { DemoAttachmentView, type ComposePayload, type DemoAttachment } from './DemoMessageComposer';
+import DemoMessageComposer, { DemoAttachmentView, type ComposePayload } from './DemoMessageComposer';
+import { DemoChatBubble, messagePreview, type DemoMessage } from './DemoChatBubble';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: { handle: string; displayName: string; bio: string | null } | null;
 };
 type Area = 'feed' | 'conversations' | 'communities' | 'profile';
-type DemoMessage = { id: number; mine: boolean; text: string; time: string; attachment?: DemoAttachment };
 
 const navigation = [
   { id: 'feed', label: 'Início', icon: Home },
@@ -98,6 +98,8 @@ export default function SocialShell({ account, onLogout }: {
   const [conversationId, setConversationId] = useState<string>('lia');
   const [conversationOpened, setConversationOpened] = useState(false);
   const [conversations, setConversations] = useState<Record<string, DemoMessage[]>>(exampleMessages);
+  const [replyTarget, setReplyTarget] = useState<DemoMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<DemoMessage | null>(null);
   const [communityId, setCommunityId] = useState<string>('estudio');
   const [channelId, setChannelId] = useState<string>('geral');
   const [channelOpened, setChannelOpened] = useState(false);
@@ -127,18 +129,49 @@ export default function SocialShell({ account, onLogout }: {
     setSearch('');
     setConversationOpened(false);
     setChannelOpened(false);
+    setReplyTarget(null);
+    setEditingMessage(null);
   }
 
   function sendDemoMessage({ text, attachment }: ComposePayload) {
+    if (editingMessage) {
+      if (!text) return;
+      setConversations(previous => ({
+        ...previous,
+        [conversationId]: (previous[conversationId] ?? []).map(message =>
+          message.id === editingMessage.id && message.mine && !message.attachment
+            ? { ...message, text, edited: true }
+            : message
+        ),
+      }));
+      setEditingMessage(null);
+      return;
+    }
     if (!text && !attachment) return;
     if (attachment) attachmentUrls.current.add(attachment.url);
     setConversations(previous => ({
       ...previous,
       [conversationId]: [...(previous[conversationId] ?? []), {
         id: Date.now() + Math.random(), mine: true, text, attachment,
+        replyTo: replyTarget?.id,
         time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       }],
     }));
+    setReplyTarget(null);
+  }
+
+  function deleteDemoMessage(message: DemoMessage) {
+    if (!message.mine) return;
+    if (message.attachment) {
+      URL.revokeObjectURL(message.attachment.url);
+      attachmentUrls.current.delete(message.attachment.url);
+    }
+    setConversations(previous => ({
+      ...previous,
+      [conversationId]: (previous[conversationId] ?? []).filter(item => item.id !== message.id),
+    }));
+    if (replyTarget?.id === message.id) setReplyTarget(null);
+    if (editingMessage?.id === message.id) setEditingMessage(null);
   }
 
   function sendDemoChannel({ text, attachment }: ComposePayload) {
@@ -242,7 +275,7 @@ export default function SocialShell({ account, onLogout }: {
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="p-2">
                       {visibleContacts.map(contact => (
-                        <Button key={contact.id} type="button" variant={contact.id === conversationId && conversationOpened ? 'secondary' : 'ghost'} onClick={() => { setConversationId(contact.id); setConversationOpened(true); }} className={cn('h-auto w-full justify-start gap-3 rounded-xl px-3 py-3 text-left md:py-4', contact.id === conversationId && 'md:bg-accent/40')}>
+                        <Button key={contact.id} type="button" variant={contact.id === conversationId && conversationOpened ? 'secondary' : 'ghost'} onClick={() => { setConversationId(contact.id); setConversationOpened(true); setReplyTarget(null); setEditingMessage(null); }} className={cn('h-auto w-full justify-start gap-3 rounded-xl px-3 py-3 text-left md:py-4', contact.id === conversationId && 'md:bg-accent/40')}>
                           <Avatar className="size-11"><AvatarFallback className={cn('text-white', contact.color)}>{contact.initials}</AvatarFallback></Avatar>
                           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{contact.name} <span className="font-normal text-muted-foreground">(exemplo)</span></span><span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">{contact.topic}</span></span>
                         </Button>
@@ -253,7 +286,7 @@ export default function SocialShell({ account, onLogout }: {
                 </section>
                 <section aria-label="Conversa demonstrativa" className={cn('min-w-0 flex-1 flex-col', conversationOpened ? 'flex' : 'hidden md:flex')}>
                   <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-                    <Button variant="ghost" size="icon" aria-label="Voltar às conversas" onClick={() => setConversationOpened(false)} className="md:hidden"><ArrowLeft className="size-5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Voltar às conversas" onClick={() => { setConversationOpened(false); setReplyTarget(null); setEditingMessage(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
                     <Avatar className="size-9"><AvatarFallback className={cn('text-white',activeContact.color)}>{activeContact.initials}</AvatarFallback></Avatar>
                     <div className="min-w-0"><div className="truncate text-sm font-semibold">{activeContact.name} <span className="font-normal text-muted-foreground">· exemplo</span></div><p className="text-xs text-muted-foreground">Conversa individual</p></div>
                   </div>
@@ -261,17 +294,19 @@ export default function SocialShell({ account, onLogout }: {
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="flex w-full min-w-0 flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">
                       {(conversations[conversationId] ?? []).map(message => (
-                        <div key={message.id} className={cn('flex', message.mine ? 'justify-end' : 'justify-start')}>
-                          <div className={cn('max-w-[85%] rounded-none px-3.5 py-2.5 sm:max-w-[72%]', message.mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
-                            {message.text && <p className="wrap-break-word whitespace-pre-wrap text-sm leading-6">{message.text}</p>}
-                            {message.attachment && <DemoAttachmentView attachment={message.attachment} />}
-                            <time className={cn('mt-1 block text-right text-[11px]', message.mine ? 'text-white/75' : 'text-muted-foreground')}>{message.time}</time>
-                          </div>
-                        </div>
+                        <DemoChatBubble key={message.id} message={message} quoted={(conversations[conversationId] ?? []).find(item => item.id === message.replyTo)}
+                          onReply={() => { setEditingMessage(null); setReplyTarget(message); }}
+                          onEdit={() => { if (message.mine && !message.attachment) { setReplyTarget(null); setEditingMessage(message); } }}
+                          onDelete={() => deleteDemoMessage(message)}
+                          onLocateReply={id => { document.getElementById('dm-message-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
                       ))}
                     </div>
                   </ScrollArea>
-                  <DemoMessageComposer key={'dm-' + conversationId + '-' + conversationOpened} onSend={sendDemoMessage} ariaLabel="Mensagem de demonstração" placeholder="Digite uma mensagem…" />
+                  <DemoMessageComposer key={'dm-' + conversationId + '-' + conversationOpened} onSend={sendDemoMessage} ariaLabel="Mensagem de demonstração" placeholder="Digite uma mensagem…"
+                    replyPreview={replyTarget ? { author: replyTarget.mine ? 'Você' : activeContact.name, text: messagePreview(replyTarget) } : null}
+                    onCancelReply={() => setReplyTarget(null)}
+                    editing={editingMessage}
+                    onCancelEditing={() => setEditingMessage(null)} />
                 </section>
               </div>
             )}
