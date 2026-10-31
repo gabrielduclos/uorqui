@@ -19,8 +19,10 @@ const ATTACHMENTS = [
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
 
-export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sending, locale, textareaRef, editing = false }: {
-  value: string; onChange: (text: string) => void; onSubmit: () => void; onAttach: (file: File, caption: string) => void;
+export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false }: {
+  value: string; onChange: (text: string) => void; onSubmit: () => void;
+  onAttach: (file: File, caption: string) => void;
+  onShareLocation: (latitude:number,longitude:number,caption:string) => void;
   sending: boolean; locale: string; textareaRef: RefObject<HTMLTextAreaElement | null>; editing?: boolean;
 }) {
   const pt = locale === 'pt-BR';
@@ -37,6 +39,8 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
   const [pendingUrl,setPendingUrl] = useState<string | null>(null);
   const localUrl = useRef<string | null>(null);
   const [editorOpen,setEditorOpen] = useState(false);
+  const [pendingLocation,setPendingLocation] = useState<{latitude:number;longitude:number}|null>(null);
+  const [locating,setLocating] = useState(false);
   const [recording,setRecording] = useState<'idle'|'recording'|'paused'>('idle');
   const [recordSeconds,setRecordSeconds] = useState(0);
   const [error,setError] = useState('');
@@ -45,7 +49,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
   const recordingChunks = useRef<Blob[]>([]);
   const discardRecording = useRef(false);
   const mounted = useRef(true);
-  const canSend = (!!value.trim() || !!pending) && !sending && recording==='idle';
+  const canSend = (!!value.trim() || !!pending || !!pendingLocation) && !sending && !locating && recording==='idle';
   const maxHeight = 208;
   useEffect(()=>{
     mounted.current = true;
@@ -68,6 +72,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
     setPending(null); setPendingUrl(null); setEditorOpen(false);
   }
   function stageFile(file:File) {
+    setPendingLocation(null);
     const mime=file.type || 'application/octet-stream';
     const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif',
       'video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream',
@@ -126,7 +131,22 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
   function sendSelected(){
     if(!canSend)return;
     if(pending){const file=pending;const caption=value.trim();clearPending();onChange('');onAttach(file,caption);}
+    else if(pendingLocation){const {latitude,longitude}=pendingLocation;setPendingLocation(null);const caption=value.trim();onChange('');onShareLocation(latitude,longitude,caption);}
     else onSubmit();
+  }
+  function chooseLocation(){
+    setAttachmentsOpen(false);
+    if(!navigator.geolocation){setError(pt?'Este dispositivo não oferece localização.':'Location is unavailable.');return;}
+    setLocating(true);setError('');
+    navigator.geolocation.getCurrentPosition(pos=>{
+      if(!mounted.current)return;
+      clearPending();
+      setPendingLocation({latitude:pos.coords.latitude,longitude:pos.coords.longitude});
+      setLocating(false);
+    },()=>{
+      if(!mounted.current)return;
+      setLocating(false);setError(pt?'Não foi possível obter sua localização. Verifique a permissão.':'Could not get your location. Check permissions.');
+    },{enableHighAccuracy:false,timeout:12000,maximumAge:30000});
   }
   function chosenFile(file?:File){if(file && !editing)stageFile(file);}
   
@@ -191,6 +211,12 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
       <button type="button" aria-label={pt?'Remover anexo':'Remove attachment'} onClick={clearPending}
         className="grid size-9 shrink-0 place-items-center hover:bg-accent"><X className="size-4"/></button>
     </div>}
+    {pendingLocation && <div className="flex w-full items-center gap-2 border border-border bg-muted/60 p-2 text-xs">
+      <MapPin className="size-5 text-primary"/>
+      <span className="min-w-0 flex-1 truncate">{pt?'Localização pronta para enviar':'Location ready to send'} · {pendingLocation.latitude.toFixed(4)}, {pendingLocation.longitude.toFixed(4)}</span>
+      <button type="button" onClick={()=>setPendingLocation(null)} aria-label={pt?'Remover localização':'Remove location'} className="grid size-9 place-items-center"><X className="size-4"/></button>
+    </div>}
+    {locating && <p className="w-full text-xs text-muted-foreground" role="status">{pt?'Obtendo localização…':'Getting location…'}</p>}
     {recording!=='idle' && <div className="flex w-full items-center gap-2 border border-destructive/40 bg-destructive/5 p-2 text-xs" role="status">
       <span className="size-2 animate-pulse rounded-full bg-destructive"/>
       <span className="flex-1">{recording==='paused'?(pt?'Gravação pausada':'Recording paused'):(pt?'Gravando áudio':'Recording audio')} · {Math.floor(recordSeconds/60)}:{String(recordSeconds%60).padStart(2,'0')}</span>
@@ -227,13 +253,14 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
           <button type="button" onClick={()=>setCameraOptions(false)} className="col-span-2 text-xs hover:bg-accent">{pt?'Voltar':'Back'}</button>
         </div> : <div className="grid grid-cols-4 gap-1">
           {ATTACHMENTS.map(({icon: Icon,pt:labelPt,en},index) => <button key={en} type="button"
-            disabled={index===4 || sending || editing || recording!=='idle'}
+            disabled={sending || editing || recording!=='idle'}
             onClick={() => {
               if(index===1){setCameraOptions(true);return;}
+              if(index===4){chooseLocation();return;}
               [galleryRef,cameraRef,videoRef,fileRef][index]?.current?.click();
               setAttachmentsOpen(false);
             }}
-            title={index===4 ? (pt ? 'Compartilhar localização em etapa futura' : 'Location sharing coming later') : undefined}
+            title={index===4 ? (pt ? 'Compartilhar localização atual' : 'Share current location') : undefined}
             className="flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 border border-border/70 px-0.5 text-[10px] hover:bg-accent disabled:opacity-40"
             aria-label={pt ? labelPt : en}>
             <Icon className="size-5 text-primary"/><span className="truncate">{pt ? labelPt : en}</span>
