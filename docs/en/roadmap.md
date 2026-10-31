@@ -11,6 +11,8 @@
 - [ ] Conduct user discovery with prospective communities; document validated product needs.
 - [ ] Verify trademark strategy and plan isolation from the legacy production domain.
 - [x] Decide core stack: React, TypeScript, Tailwind CSS, Node.js, Fastify, Neon PostgreSQL and Drizzle.
+- [x] Choose Cloudflare Workers Static Assets for the frontend, prepare Wrangler/SPA routing and an isolated future API proxy.
+- [ ] Select API hosting, configure `API_ORIGIN` and private auth secrets, validate the Worker and backend together before any public deployment.
 - [ ] Set operating budget, design conventions, data privacy principles and remaining realtime/voice/media providers.
 - [x] Commit the initial React/Tailwind, Fastify and Drizzle development scaffold.
 - [x] Create and verify a Neon PostgreSQL development database.

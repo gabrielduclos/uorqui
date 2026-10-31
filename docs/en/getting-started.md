@@ -44,6 +44,10 @@ For future schema changes, run `npm run db:generate`, review and commit SQL plus
 
 A separate GitHub Actions job spins up an **ephemeral PostgreSQL container**, applies migrations 0000 and 0001 and exercises authentication and profile onboarding with disposable credentials. This job passed without Neon database secrets; migration `0001` was then separately applied to main with approval. See [API auth integration](https://github.com/gabrielduclos/uorqui/actions/workflows/auth-integration.yml).
 
+## Cloudflare Workers preview
+
+The Vite development server remains unchanged for local development. The frontend also has a Worker bundle/preview configuration; see [Cloudflare Workers hosting](cloudflare-workers.md). The web Worker and the Fastify API are separate services.
+
 ## Checks
 
 ```sh

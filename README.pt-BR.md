@@ -20,13 +20,14 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 
 ## Tecnologias principais definidas
 
-**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API) e **PostgreSQL na Neon + Drizzle ORM** (banco, consultas e migrações). O **banco Neon e as duas migrações Drizzle, com dez tabelas da aplicação, já foram aplicados e verificados**. Endpoints de autenticação e perfil existem, mas a conexão do aplicativo com a Neon ainda precisa de teste real. Tempo real, voz, mídias e hospedagem continuam em avaliação.
+**React + TypeScript + Tailwind CSS em Cloudflare Workers Static Assets** (web/PWA), **Node.js + Fastify** (API hospedada separadamente) e **PostgreSQL na Neon + Drizzle ORM** (banco, consultas e migrações). O **banco Neon e as duas migrações Drizzle, com dez tabelas da aplicação, já foram aplicados e verificados**. Endpoints de autenticação e perfil existem, mas a conexão do aplicativo com a Neon ainda precisa de teste real. Tempo real, voz, mídias e hospedagem continuam em avaliação.
 
 ## Documentação
 
 | Tema | Português | English |
 | --- | --- | --- |
 | Rodar localmente | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | [Getting started](docs/en/getting-started.md) |
+| Hospedagem Cloudflare Workers | [Guia Workers](docs/pt-BR/cloudflare-workers.md) | [Workers guide](docs/en/cloudflare-workers.md) |
 | Visão e princípios | [Visão](docs/pt-BR/visao.md) | [Vision](docs/en/vision.md) |
 | Requisitos do produto | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
 | Arquitetura proposta | [Arquitetura](docs/pt-BR/arquitetura.md) | [Architecture](docs/en/architecture.md) |
@@ -54,6 +55,10 @@ npm run dev
 ```
 
 Interface: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. Não é necessário banco para visualizar esta estrutura. Veja [Primeiros passos](docs/pt-BR/primeiros-passos.md) para configurar a Neon com segurança.
+
+## Front-end no Cloudflare Workers
+
+O React está preparado para **Workers Static Assets** no arquivo `apps/web/wrangler.jsonc`. O Worker encaminha `/api/*` à API Fastify separada quando ela existir; sem `API_ORIGIN`, as rotas retornam HTTP 503. **Ainda não houve deploy do novo Worker.** Consulte o [guia de hospedagem](docs/pt-BR/cloudflare-workers.md).
 
 ## Código aberto
 

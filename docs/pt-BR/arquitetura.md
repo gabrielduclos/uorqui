@@ -12,12 +12,18 @@ Começar com um **monólito modular**: uma API implantada com módulos e limites
 
 | Camada | Decisão | Função |
 | --- | --- | --- |
-| Web/PWA | **React + TypeScript + Tailwind CSS** | Interface responsiva, acessível, componentes e estilização |
+| Web/PWA | **React + TypeScript + Tailwind CSS no Cloudflare Workers Static Assets** | SPA distribuída por CDN, interface responsiva e gateway de API no mesmo domínio |
 | API | **Node.js + Fastify + TypeScript** | Endpoints HTTP, validação e autorização |
 | Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de usuários, publicações, comunidades, conversas e permissões |
 | Acesso ao banco | **Drizzle ORM + Drizzle Kit** | Consultas SQL tipadas, schema e migrações versionadas |
 
 Essas escolhas estão **aprovadas para o novo Uorqui**, mas **banco Neon, migração inicial e estrutura de desenvolvimento estão prontos; ainda não há deploy da aplicação em produção**.
+
+## Hospedagem web e fronteira com a API
+
+O **React está configurado para Cloudflare Workers Static Assets** (`apps/web/wrangler.jsonc`), com fallback SPA e um pequeno Worker que encaminha `/api/*` e `/health*` à API Fastify. As chamadas continuam no mesmo domínio do front-end, facilitando cookies de sessão de primeira parte. A API Node.js/Fastify permanece separada, com conexão PostgreSQL Neon; o Worker não executa o servidor Fastify nem contém credenciais do banco.
+
+O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de API retornam 503, não o HTML da SPA. Para login real, `AUTH_BASE_URL` e `WEB_ORIGIN` devem coincidir com a origem pública do novo Worker. **Nenhum Worker foi publicado, a hospedagem da API não foi escolhida e o domínio legado não foi migrado.** [Guia Workers](cloudflare-workers.md).
 
 ## Decisões de autenticação
 
@@ -37,7 +43,8 @@ Essas escolhas estão **aprovadas para o novo Uorqui**, mas **banco Neon, migra�
 | Salas de voz | WebRTC + LiveKit ou equivalente | Proposta; validar custos, hospedagem e suporte mobile |
 | Mídias/vídeos | Armazenamento de objetos, transcodificação e CDN | Proposta; escolher fornecedores e cotas |
 | Presença e distribuição de eventos | Redis | Opcional, quando houver necessidade |
-| Hospedagem | A definir | Deve ficar separada da produção do Uorqui legado |
+| Hospedagem do front-end | **Cloudflare Workers Static Assets (configurado, sem deploy)** | Novo Worker independente e sem alterar o domínio legado |
+| Hospedagem da API Fastify | A definir | Runtime Node.js separado, acessado pelo proxy do Worker |
 
 PostgreSQL e Drizzle armazenam **dados estruturados**, não os arquivos originais de fotos/vídeos. Mídias terão armazenamento próprio, com referências e permissões no PostgreSQL. As cotas e possíveis cobranças da hospedagem devem ser acompanhadas durante a evolução do projeto.
 

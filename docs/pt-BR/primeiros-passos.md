@@ -44,6 +44,10 @@ Para futuras alterações, gere uma nova migração com `npm run db:generate`, r
 
 Um workflow do GitHub Actions inicia **PostgreSQL temporário**, executa as migrações 0000 e 0001 e testa cadastro, sessão e onboarding com credenciais descartáveis. O teste passou sem usar segredos da Neon. A migração `0001` foi aplicada separadamente à Neon main após autorização. Veja [integração de autenticação](https://github.com/gabrielduclos/uorqui/actions/workflows/auth-integration.yml).
 
+## Prévia no Cloudflare Workers
+
+O servidor Vite permanece disponível para desenvolvimento local. O front-end também possui configuração para build e prévia no Worker; veja [Cloudflare Workers](cloudflare-workers.md). O Worker do front-end e a API Fastify são serviços separados.
+
 ## Verificações
 
 ```sh

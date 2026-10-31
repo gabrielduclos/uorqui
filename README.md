@@ -20,13 +20,14 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 
 ## Confirmed core technology
 
-**React + TypeScript + Tailwind CSS** (web/PWA), **Node.js + Fastify** (API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). The **Neon database and both Drizzle migrations (10 application tables) are applied and verified**. Authentication and profile API endpoints exist, but they have not been tested with the production Neon connection. Realtime, voice, media and deployment integrations remain under evaluation.
+**React + TypeScript + Tailwind CSS on Cloudflare Workers Static Assets** (web/PWA), **Node.js + Fastify** (separately hosted API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). The **Neon database and both Drizzle migrations (10 application tables) are applied and verified**. Authentication and profile API endpoints exist, but they have not been tested with the production Neon connection. Realtime, voice, media and deployment integrations remain under evaluation.
 
 ## Documentation
 
 | Topic | English | Português |
 | --- | --- | --- |
 | Run locally | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
+| Cloudflare Workers web hosting | [Workers guide](docs/en/cloudflare-workers.md) | [Guia Workers](docs/pt-BR/cloudflare-workers.md) |
 | Vision and principles | [Vision](docs/en/vision.md) | [Visão](docs/pt-BR/visao.md) |
 | Product requirements | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
 | Proposed architecture | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
@@ -54,6 +55,10 @@ npm run dev
 ```
 
 Web: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. The database is not required to see this starter. See [Getting started](docs/en/getting-started.md) for secure Neon configuration.
+
+## Cloudflare Workers web hosting
+
+The React SPA has a **Cloudflare Workers Static Assets** configuration under `apps/web/wrangler.jsonc`. The Worker handles `/api/*` as a reverse proxy when a separate Fastify API is available; without `API_ORIGIN`, API requests correctly return HTTP 503. **No Worker has been deployed.** See the [Workers setup](docs/en/cloudflare-workers.md).
 
 ## Open source
 

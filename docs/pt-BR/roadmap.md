@@ -11,6 +11,8 @@
 - [ ] Realizar descoberta com usuários de comunidades interessadas e documentar requisitos validados.
 - [ ] Verificar estratégia de marca e isolamento do domínio em produção do legado.
 - [x] Definir stack principal: React, TypeScript, Tailwind CSS, Node.js, Fastify, PostgreSQL na Neon e Drizzle.
+- [x] Escolher Cloudflare Workers Static Assets para o front-end e preparar Wrangler, SPA e proxy separado da API.
+- [ ] Escolher hospedagem da API, configurar `API_ORIGIN` e segredos de autenticação e validar front-end e backend antes de publicar.
 - [ ] Definir teto de orçamento, design, privacidade e fornecedores restantes de tempo real/voz/mídias.
 - [x] Publicar a estrutura inicial de desenvolvimento React/Tailwind, Fastify e Drizzle.
 - [x] Criar e verificar PostgreSQL na Neon para desenvolvimento.
