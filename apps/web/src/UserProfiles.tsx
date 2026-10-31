@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ProfilePhotoCropper, type ProfileImageKind } from './ProfilePhotoCropper';
+import { clearProfileImageCache, invalidateProfileImage, useCachedProfileImage } from './profileImageCache';
 import { ArrowLeft, Camera, Check, ExternalLink, Globe, LockKeyhole, MessageCircle, Search, UserRound, ImagePlus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,15 +26,17 @@ export function UserAvatar({ name, image, size = 'md' }: { name: string; image?:
   const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0] ?? '').join('').toUpperCase() || 'U';
   const dimensions = size === 'lg' ? 'size-24 text-2xl sm:size-28' : size === 'sm' ? 'size-10 text-sm' : 'size-12 text-base';
   const [broken, setBroken] = useState(false);
-  useEffect(() => setBroken(false), [image]);
+  const cached = useCachedProfileImage(image);
+  useEffect(() => setBroken(false), [image, cached]);
   return <span aria-label={name} className={'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-background bg-primary/15 font-semibold text-primary ' + dimensions}>
-    {image && !broken ? <img src={image} alt={name} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="h-full w-full object-cover" /> : initials}
+    {cached && !broken ? <img src={cached} alt={name} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="h-full w-full object-cover" /> : initials}
   </span>;
 }
 
 function Cover({ url, name }: { url?: string | null; name: string }) {
+  const cached = useCachedProfileImage(url);
   return <div className="relative h-40 w-full overflow-hidden bg-gradient-to-r from-primary/35 via-primary/15 to-muted sm:h-56">
-    {url && <img src={url} alt={name} referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
+    {cached && <img src={cached} alt={name} referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/30 to-transparent" />
   </div>;
 }
@@ -124,6 +127,7 @@ export function ProfileEditor({ initial, onSaved }: {
       if (!response.ok || !result.profile) {
         throw new Error(pt ? 'Falha no armazenamento da imagem. Tente novamente.' : 'Photo storage failed. Please try again.');
       }
+      invalidateProfileImage(kind === 'avatar' ? initial.avatarUrl : initial.coverUrl);
       onSaved(result.profile);
       setProfile(prev => ({ ...prev, [kind === 'avatar' ? 'avatarUrl' : 'coverUrl']: result.url ?? null }));
       setSelected(null);
@@ -156,6 +160,7 @@ export function ProfileEditor({ initial, onSaved }: {
         if (response.status === 401) throw new Error(pt ? 'Sua sessão expirou. Entre novamente.' : 'Your session expired. Sign in again.');
         throw new Error(pt ? 'Não foi possível salvar o perfil. Confira os campos e a conexão.' : 'Could not save your profile. Check the fields and your connection.');
       }
+      if (result.profile.isPublic !== initial.isPublic || result.profile.avatarUrl !== initial.avatarUrl || result.profile.coverUrl !== initial.coverUrl) clearProfileImageCache();
       setProfile(result.profile);
       onSaved(result.profile);
       setNotice(pt ? 'Perfil salvo com sucesso.' : 'Profile saved successfully.');
@@ -203,7 +208,7 @@ export function ProfileEditor({ initial, onSaved }: {
               <p className="text-sm font-semibold">{kind === 'avatar' ? pt ? 'Foto de perfil' : 'Profile photo' : pt ? 'Foto de capa' : 'Cover photo'}</p>
               <div className="flex min-h-24 items-center justify-center overflow-hidden rounded-md bg-muted/60">
                 {kind === 'avatar' ? <UserAvatar name={profile.displayName} image={profile.avatarUrl} size="lg" /> :
-                  <div className="h-24 w-full">{profile.coverUrl ? <img src={profile.coverUrl} alt={pt ? 'Capa atual' : 'Current cover'} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-gradient-to-r from-primary/35 to-muted" />}</div>}
+                  <div className="h-24 w-full overflow-hidden"><Cover url={profile.coverUrl} name={pt ? 'Capa atual' : 'Current cover'} /></div>}
               </div>
               <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-accent focus-within:outline-2 focus-within:outline-ring">
                 <ImagePlus className="size-4" />{pt ? 'Escolher foto' : 'Choose photo'}
