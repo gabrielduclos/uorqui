@@ -43,5 +43,10 @@ Migração Drizzle `0002_profile_visibility_media` adiciona `avatar_url`, `cover
 - A configuração R2 exige vínculo no Cloudflare Worker em produção. A interface deve informar erros quando indisponível.
 - Links HTTPS externos antigos ainda são aceitos pela API para compatibilidade com perfis existentes.
 
+
+### Cache das imagens durante a sessão
+
+Avatares e capas no R2 privado são reutilizados em **cache limitado na memória da aba** (até 48 imagens, com verificação de expiração em 5 minutos). Isso reduz downloads repetidos e evita fotos piscando ao navegar por conversas, busca e perfis. O cache **não** é persistido em Cache Storage, IndexedDB, localStorage ou CDN público. Cada acesso de rede continua sendo autorizado pelo Worker com cabeçalhos HTTP `no-store`. O cache é limpo ao sair da conta, substituir/remover imagens ou alterar a visibilidade do próprio perfil. Esta regra vale para fotos de perfil e capa; anexos do futuro chat real terão política específica.
+
 ## Próximas melhorias
 Moderação de imagens, segurança de links externos antigos e integração real do botão Conversar ao sistema de mensagens.

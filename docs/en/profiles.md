@@ -44,5 +44,10 @@ Drizzle migration `0002_profile_visibility_media` adds `avatar_url`, `cover_url`
 - Production requires the Cloudflare Worker R2 binding; failures must show an error.
 - Existing external HTTPS links are supported for backwards compatibility.
 
+
+### Session image caching
+
+Profile avatars and cover images stored in private R2 are reused through a **bounded in-memory cache** in the current browser tab (up to 48 images, with a 5-minute expiry check). This stops repeated downloads and visual flashing when navigating between conversations, user lists, and profile pages. The cache does not persist in Cache Storage, IndexedDB, localStorage, or a public CDN. The Worker continues authorizing each network request, with `no-store` HTTP headers. Clear cached images on logout, image replacement/removal and when the owner changes profile visibility. This safety-first policy applies to R2 profile images; the future chat attachments pipeline will need its own cache rules.
+
 ## Later
 Media safety, legacy external image privacy and real DM integration.

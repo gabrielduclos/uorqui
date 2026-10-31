@@ -117,6 +117,19 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     assert.equal(read.response.status, 200);
     assert.equal(read.body.profile.handle, 'worker_ci');
 
+    // Deep links must render the React SPA shell, not redirect to the home route.
+    // Browsers send Sec-Fetch-Mode: navigate for a link opened in a new tab or after reload.
+    for (const path of ['/@worker_ci', '/%40worker_ci']) {
+      const deepLink = await fetch(browserOrigin + path, {
+        headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
+        redirect: 'manual',
+      });
+      assert.equal(deepLink.status, 200, 'Public profile deep link must be served directly: ' + path);
+      assert.equal(deepLink.headers.get('location'), null, 'Deep link must not redirect to /');
+      const html = await deepLink.text();
+      assert.match(html, /<div id="root">/i, 'Deep link must serve the React entry point');
+    }
+
     // Simulates direct image upload through a local R2 binding in Wrangler.
     // A tiny valid PNG signature is sufficient for storage tests.
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+VypcAAAAASUVORK5CYII=', 'base64');
