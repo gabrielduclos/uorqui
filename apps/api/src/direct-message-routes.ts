@@ -99,14 +99,24 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'SELECT c.id, c.created_at AS "createdAt", u.handle AS "peerHandle",',
         'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl",',
         'm.body AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",',
-        'COALESCE(unread.n,0)::int AS "unreadCount"',
+        '(COALESCE(unread.n,0)+COALESCE(unread_reactions.n,0))::int AS "unreadCount",',
+        'COALESCE(unread_reactions.n,0)::int AS "unreadReactionCount",',
+        'CASE WHEN recent_reaction.updated_at IS NOT NULL AND (m.created_at IS NULL OR recent_reaction.updated_at > m.created_at)',
+        'THEN \'reaction\' ELSE \'message\' END AS "previewKind",',
+        'recent_reaction.emoji AS "previewReactionEmoji", recent_reaction.body AS "previewReactionBody",',
+        'recent_reaction.updated_at AS "previewReactionAt"',
         'FROM direct_conversations c',
         'JOIN users u ON u.id=CASE WHEN c.participant_a_id=$1 THEN c.participant_b_id ELSE c.participant_a_id END',
         'JOIN profiles p ON p.user_id=u.id',
         'LEFT JOIN LATERAL (SELECT body,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
         'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND read_at IS NULL AND deleted_at IS NULL) unread ON true',
+        'LEFT JOIN LATERAL (SELECT r.emoji,r.updated_at,dm.body FROM direct_message_reactions r',
+        'JOIN direct_messages dm ON dm.id=r.message_id WHERE dm.conversation_id=c.id AND dm.author_id=$1',
+        'AND r.user_id<>$1 AND dm.deleted_at IS NULL ORDER BY r.updated_at DESC LIMIT 1) recent_reaction ON true',
+        'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_message_reactions r JOIN direct_messages dm ON dm.id=r.message_id',
+        'WHERE dm.conversation_id=c.id AND dm.author_id=$1 AND r.user_id<>$1 AND r.read_at IS NULL AND dm.deleted_at IS NULL) unread_reactions ON true',
         'WHERE c.participant_a_id=$1 OR c.participant_b_id=$1',
-        'ORDER BY COALESCE(m.created_at,c.created_at) DESC LIMIT 100'
+        'ORDER BY GREATEST(COALESCE(m.created_at,c.created_at),COALESCE(recent_reaction.updated_at,c.created_at)) DESC LIMIT 100'
       ].join(' ');
       const r=await getPool().query(query,[me]);
       return reply.header('Cache-Control',noCache).send({conversations:r.rows});
@@ -211,9 +221,22 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET read_at=now(), delivered_at=COALESCE(delivered_at,now()) WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
-      if(r.rowCount) await publishDmConversationEvent(id,'read').catch(error=>request.log.warn({err:error},'DM read notification failed'));
-      return reply.header('Cache-Control',noCache).send({read:r.rowCount??0});
+      const r=await getPool().query(`
+        WITH messages_read AS (
+          UPDATE direct_messages SET read_at=now(),delivered_at=COALESCE(delivered_at,now())
+          WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL AND deleted_at IS NULL RETURNING id
+        ), reactions_read AS (
+          UPDATE direct_message_reactions r SET read_at=now() FROM direct_messages dm
+          WHERE r.message_id=dm.id AND dm.conversation_id=$1 AND dm.author_id=$2
+            AND r.user_id<>$2 AND r.read_at IS NULL AND dm.deleted_at IS NULL RETURNING r.message_id
+        )
+        SELECT (SELECT COUNT(*)::int FROM messages_read) AS messages,
+               (SELECT COUNT(*)::int FROM reactions_read) AS reactions
+      `,[id,me]);
+      const counts=r.rows[0] as {messages:number;reactions:number};
+      const total=counts.messages+counts.reactions;
+      if(total)await publishDmConversationEvent(id,'read').catch(error=>request.log.warn({err:error},'DM read notification failed'));
+      return reply.header('Cache-Control',noCache).send({read:total,messagesRead:counts.messages,reactionsRead:counts.reactions});
     }catch(e){request.log.error({err:e},'DM read');return reply.code(503).send({error:'Unavailable'});}
   });
 
@@ -266,7 +289,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
       const emoji=(request.body as {emoji:string}).emoji;
       const r=await getPool().query(
-        'INSERT INTO direct_message_reactions (message_id,user_id,emoji) SELECT m.id,$1,$2 FROM direct_messages m WHERE m.id=$3 AND m.conversation_id=$4 AND m.author_id<>$1 AND m.deleted_at IS NULL ON CONFLICT (message_id,user_id) DO UPDATE SET emoji=EXCLUDED.emoji RETURNING message_id',
+        'INSERT INTO direct_message_reactions (message_id,user_id,emoji,read_at,updated_at) SELECT m.id,$1,$2,NULL,now() FROM direct_messages m WHERE m.id=$3 AND m.conversation_id=$4 AND m.author_id<>$1 AND m.deleted_at IS NULL ON CONFLICT (message_id,user_id) DO UPDATE SET emoji=EXCLUDED.emoji,read_at=NULL,updated_at=now() RETURNING message_id',
         [me,emoji,messageId,id]);
       if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
       await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM reaction notification failed'));
