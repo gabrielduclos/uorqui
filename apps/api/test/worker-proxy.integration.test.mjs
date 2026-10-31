@@ -65,10 +65,10 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
         method: options.method ?? 'GET',
         headers: {
           origin: browserOrigin,
-          ...(options.body ? { 'content-type': 'application/json' } : {}),
+          ...(options.rawBody ? { 'content-type': options.contentType } : options.body ? { 'content-type': 'application/json' } : {}),
           ...(cookie ? { cookie } : {}),
         },
-        ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+        ...(options.rawBody ? { body: options.rawBody } : options.body ? { body: JSON.stringify(options.body) } : {}),
         redirect: 'manual',
       });
       const newCookies = response.headers.getSetCookie()
@@ -116,6 +116,34 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     const read = await request('/api/v1/me');
     assert.equal(read.response.status, 200);
     assert.equal(read.body.profile.handle, 'worker_ci');
+
+    // Simulates direct image upload through a local R2 binding in Wrangler.
+    // A tiny valid PNG signature is sufficient for storage tests.
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+VypcAAAAASUVORK5CYII=', 'base64');
+    const uploaded = await request('/api/media/profile/avatar', {
+      method: 'POST', rawBody: png, contentType: 'image/png',
+    });
+    assert.equal(uploaded.response.status, 200, JSON.stringify(uploaded.body));
+    assert.match(uploaded.body.url, /^\/media\/profile\/[0-9a-f-]{36}\/avatar\/[0-9a-f-]{36}\.png$/);
+
+    const imagePath = uploaded.body.url;
+    const ownerImage = await fetch(browserOrigin + imagePath, { headers: { cookie } });
+    assert.equal(ownerImage.status, 200);
+    assert.equal(ownerImage.headers.get('content-type'), 'image/png');
+    assert.deepEqual(Buffer.from(await ownerImage.arrayBuffer()), png);
+
+    const privacy = await request('/api/v1/me/profile', { method: 'PATCH', body: { isPublic: false } });
+    assert.equal(privacy.response.status, 200);
+    const anonymousImage = await fetch(browserOrigin + imagePath);
+    assert.equal(anonymousImage.status, 404, 'private profile image requires the owner session');
+    const privateOwnerImage = await fetch(browserOrigin + imagePath, { headers: { cookie } });
+    assert.equal(privateOwnerImage.status, 200);
+
+    const removed = await request('/api/media/profile/avatar', { method: 'DELETE' });
+    assert.equal(removed.response.status, 200, JSON.stringify(removed.body));
+    assert.equal(removed.body.profile.avatarUrl, null);
+    const staleImage = await fetch(browserOrigin + imagePath, { headers: { cookie } });
+    assert.equal(staleImage.status, 404, 'removed photo must be invalidated');
 
     const logout = await request('/api/auth/sign-out', { method: 'POST', body: {} });
     assert.equal(logout.response.status, 200, JSON.stringify(logout.body));
