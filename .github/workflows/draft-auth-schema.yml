@@ -1,0 +1,30 @@
+name: Draft Better Auth schema (one-time)
+on:
+  push:
+    paths:
+      - 'apps/api/src/auth/auth.cli.ts'
+      - 'apps/api/src/auth/auth-policy.ts'
+      - '.github/workflows/draft-auth-schema.yml'
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - name: Generate offline Better Auth schema
+        working-directory: apps/api
+        run: npx --yes auth@1.7.14 generate --config ./src/auth/auth.cli.ts --adapter drizzle --dialect postgresql --output ./src/db/auth-schema.ts --yes
+      - name: Print generated schema for versioning
+        shell: bash
+        run: |
+          file=apps/api/src/db/auth-schema.ts
+          test -s "$file"
+          echo "AUTH_SCHEMA_BEGIN"
+          base64 -w0 "$file"
+          echo
+          echo "AUTH_SCHEMA_END"
