@@ -83,5 +83,5 @@ When changing UI, review dark/light × Portuguese/English × desktop/mobile, upd
 - Actual chat bubbles retain the **square-corner** identity (`rounded-none`).
 - Reply previews are clickable, navigate to and temporarily highlight the source, fetching `?around=id` when outside the latest window.
 - **Cancel message** replaces delete: available only for own unread messages, permanently removes the message without a placeholder; the API atomically rejects cancellation after read (HTTP 409).
-- Reactions render as separate chat event bubbles and stay optimistic, with an Undo action.
+- Reactions **never create timeline messages or extra bubbles**; they remain small optimistic chips attached to the original message. Reactions received on one's own messages update the **conversation-list preview** with emoji and excerpt and increment unread badges until the conversation is actually read.
 - The mobile/desktop conversation icon shows the **sum of unread messages**, kept current via SSE with polling fallback.
