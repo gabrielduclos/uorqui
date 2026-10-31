@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Check, CheckCheck, Copy, MoreHorizontal, Quote, X } from 'lucide-react';
+import { Check, CheckCheck, Copy, MoreHorizontal, Reply, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type DirectChatMessage = {
@@ -8,15 +9,49 @@ export type DirectChatMessage = {
   clientId: string | null; createdAt: string; readAt: string | null;
 };
 
+function SwipeToQuote({ children, onQuote }: { children: ReactNode; onQuote: () => void }) {
+  const controls = useDragControls();
+  const x = useMotionValue(0);
+  const visible = useTransform(x, [12, 55], [0, 1]);
+  const dragged = useRef(false);
+  return <div className="relative min-w-0">
+    <motion.span aria-hidden="true" style={{ opacity: visible }}
+      className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-primary">
+      <Reply className="size-5"/>
+    </motion.span>
+    <motion.div drag="x" dragControls={controls} dragListener={false}
+      dragConstraints={{ left: 0, right: 72 }} dragElastic={0.04} dragMomentum={false}
+      dragSnapToOrigin style={{ x, touchAction: 'pan-y' }}
+      onPointerDown={event => {
+        dragged.current = false;
+        if (event.pointerType === 'mouse') return;
+        const element = event.target as HTMLElement;
+        if (element.closest('button, a, input, textarea, audio, video, [role="slider"]')) return;
+        controls.start(event);
+      }}
+      onClickCapture={event => {
+        if (dragged.current) { event.preventDefault(); event.stopPropagation(); dragged.current = false; }
+      }}
+      onDragEnd={(_event, info) => {
+        dragged.current = Math.abs(info.offset.x) > 8;
+        if (info.offset.x > 56) onQuote();
+      }}>
+      {children}
+    </motion.div>
+  </div>;
+}
+
 export function DirectMessageBubble({ message, mine, locale, onQuote }: {
   message: DirectChatMessage; mine: boolean; locale: string; onQuote: (message: DirectChatMessage) => void;
 }) {
   const pt = locale === 'pt-BR';
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [conversationBounds, setConversationBounds] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const time = new Date(message.createdAt);
+  const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
   const timeLabel = Number.isFinite(time.getTime())
     ? time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -30,15 +65,20 @@ export function DirectMessageBubble({ message, mine, locale, onQuote }: {
       const leftEdge = vp?.offsetLeft ?? 0, topEdge = vp?.offsetTop ?? 0;
       const viewportWidth = vp?.width ?? window.innerWidth;
       const viewportHeight = vp?.height ?? window.innerHeight;
-      const width = Math.min(212, viewportWidth - 16);
+      const width = Math.min(264, viewportWidth - 16);
       const height = menu.current?.offsetHeight ?? 105;
       const preferredLeft = mine ? rect.right - width : rect.left;
       const left = Math.min(Math.max(preferredLeft, leftEdge + 8), leftEdge + viewportWidth - width - 8);
       const top = rect.bottom + height + 8 < topEdge + viewportHeight
         ? rect.bottom + 6 : rect.top - height - 6;
       setPosition({ left, top: Math.min(Math.max(topEdge + 8, top), topEdge + viewportHeight - height - 8), width });
+      const room = node.closest('section[data-chat-conversation]')?.getBoundingClientRect();
+      setConversationBounds(room
+        ? { left: room.left, top: room.top, width: room.width, height: room.height }
+        : { left: leftEdge, top: topEdge, width: viewportWidth, height: viewportHeight });
     }
     place();
+    menu.current?.querySelector<HTMLButtonElement>('button')?.focus();
     const dismiss = (event: PointerEvent) => {
       if (trigger.current?.contains(event.target as Node) || menu.current?.contains(event.target as Node)) return;
       setOpen(false);
@@ -47,11 +87,13 @@ export function DirectMessageBubble({ message, mine, locale, onQuote }: {
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
     return () => {
       document.removeEventListener('pointerdown', dismiss, true);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
       window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
     };
   }, [open, mine]);
 
@@ -61,30 +103,35 @@ export function DirectMessageBubble({ message, mine, locale, onQuote }: {
   }
 
   return <div data-direct-message-id={message.id} className={cn('group relative flex min-w-0 items-start gap-1.5', mine ? 'justify-end' : 'justify-start')}>
-    <div className={cn('max-w-[calc(100vw-105px)] min-w-0 px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72%,660px)]',
-      mine ? 'rounded-[1.1rem] rounded-br-[0.3rem] bg-primary text-primary-foreground' :
-        'rounded-[1.1rem] rounded-bl-[0.3rem] border border-border/80 bg-card text-foreground')}>
-      <p className="whitespace-pre-wrap break-words">{message.body}</p>
-      <div className={cn('mt-1 flex items-center justify-end gap-1.5 text-[10px]', mine ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-        <time dateTime={message.createdAt}>{timeLabel}</time>
-        {mine && (message.readAt
-          ? <CheckCheck className="size-3.5 text-sky-300" aria-label={pt ? 'Lida' : 'Read'}/>
-          : <Check className="size-3.5" aria-label={pt ? 'Enviada' : 'Sent'}/>)}
+    <SwipeToQuote onQuote={() => onQuote(message)}>
+      <div className={cn('min-w-0 max-w-[calc(100vw-108px)] rounded-none px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]',
+        mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
+        {quote && <blockquote className={cn('mb-2 border-l-2 px-2 py-1 text-xs',mine?'border-white/60 bg-white/10':'border-primary/70 bg-background/60')}>
+          <span className="block font-semibold">{pt ? 'Mensagem citada' : 'Quoted message'}</span>
+          <span className="mt-0.5 block max-w-full truncate opacity-80">{quote[1]}</span>
+        </blockquote>}
+        <p className="whitespace-pre-wrap break-words">{quote ? quote[2] : message.body}</p>
+        <div className={cn('mt-1 flex items-center justify-end gap-1.5 text-[11px]', mine ? 'text-primary-foreground/75' : 'text-muted-foreground')}>
+          <time dateTime={message.createdAt}>{timeLabel}</time>
+          {mine && (message.readAt
+            ? <CheckCheck className="size-3.5 text-sky-300" aria-label={pt ? 'Lida' : 'Read'}/>
+            : <Check className="size-3.5" aria-label={pt ? 'Enviada' : 'Sent'}/>)}
+        </div>
       </div>
-    </div>
+    </SwipeToQuote>
     <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
       aria-label={pt ? 'Opções da mensagem' : 'Message options'} aria-haspopup="menu" aria-expanded={open}
       className={cn('grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-opacity hover:bg-accent focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100',mine && 'order-first')}>
       <MoreHorizontal className="size-[18px]"/>
     </button>
     {open && typeof document !== 'undefined' && createPortal(<>
-      <div aria-hidden="true" className="fixed inset-0 z-[90] bg-background/10 backdrop-blur-[3px]" onClick={() => setOpen(false)}/>
+      <div aria-hidden="true" className="fixed z-[90] bg-background/15 backdrop-blur-[4px]" style={conversationBounds ?? { inset: 0 }} onClick={() => setOpen(false)}/>
       <div ref={menu} role="menu" aria-label={pt ? 'Ações da mensagem' : 'Message actions'}
         onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); trigger.current?.focus(); } }}
-        className="fixed z-[91] max-h-[calc(100dvh-16px)] overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-2xl"
-        style={{ left: position?.left ?? -9999, top: position?.top ?? -9999, width: position?.width ?? 212, visibility: position ? 'visible' : 'hidden' }}>
+        className="fixed z-[91] max-h-[calc(100dvh-16px)] overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-2xl"
+        style={{ left: position?.left ?? -9999, top: position?.top ?? -9999, width: position?.width ?? 264, visibility: position ? 'visible' : 'hidden' }}>
         <button role="menuitem" type="button" onClick={() => { setOpen(false); onQuote(message); }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Quote className="size-4"/>{pt ? 'Citar texto' : 'Quote text'}</button>
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Reply className="size-4"/>{pt ? 'Citar texto' : 'Quote text'}</button>
         <button role="menuitem" type="button" onClick={() => void copyText()}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Copy className="size-4"/>{pt ? 'Copiar' : 'Copy'}</button>
         <button role="menuitem" type="button" onClick={() => setOpen(false)}

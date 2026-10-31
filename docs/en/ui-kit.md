@@ -48,7 +48,7 @@ Use semantic Tailwind classes instead of hardcoded dark-only colors. Component s
 | DemoAudioPlayer, DemoMediaViewer | Audio and shared image/video viewer |
 | DemoImageEditor | Draw and mark up images before sending and in the viewer |
 
-The current social messaging experience remains a local MVP preview, not a real messaging backend.
+The one-to-one messenger **is connected** to the API and Neon. Community channels still use local previews. The live chat must retain this UI Kit; unimplemented backend actions must never simulate persistence.
 
 ## Languages
 
@@ -67,3 +67,13 @@ The current social messaging experience remains a local MVP preview, not a real 
 - apps/web/src/Demo*.tsx — messaging examples
 
 When changing UI, review dark/light × Portuguese/English × desktop/mobile, update this document and ensure keyboard and assistive technology support.
+
+## Required contract for the live messenger
+
+- `LiveDirectChat` handles inbox, fixed conversation header, scroll, messages, and realtime updates. The message surface fills available desktop width and only the message panel scrolls.
+- `DirectMessageBubble` has **square corners** (`rounded-none`), semantic palette, swipe-to-reply and a viewport-safe context menu with blur restricted to the conversation.
+- `LiveMessageComposer` preserves **+ attachments | expanding text | emoji | shared mic/send** with a horizontal attachment menu and right-side emoji picker.
+- Text messages persist through the API. Audio, attachments, persisted reactions, editing/deleting, and structured reply references still need dedicated endpoints; unsupported actions remain visibly disabled, not simulated locally.
+- Browsing the inbox **must never mark a conversation read**; only an opened, visible conversation with a focused browser window may acknowledge messages.
+- Start at the latest message, preserve position while reading older ones, and show a down arrow and incoming-message notice instead of forcing scroll.
+- Validate desktop/mobile, Dark/Light, and Portuguese/English before merging. Backend migrations must reuse these UI components rather than introducing generic replacements.

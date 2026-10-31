@@ -48,7 +48,7 @@ Use classes Tailwind semânticas, não cores fixas que só funcionem no dark. Ve
 | DemoAudioPlayer, DemoMediaViewer | Áudio e visualização de fotos/vídeos |
 | DemoImageEditor | Desenhos e formas em fotos antes de enviar e no visualizador |
 
-Por enquanto, o mensageiro e os canais seguem como **prévia local**, sem sincronização real com o servidor.
+O mensageiro 1:1 **já está conectado** à API e ao Neon. Os canais comunitários ainda usam prévias locais. O layout do chat real deve manter paridade com este UI Kit; funções que dependem de novas APIs não podem fingir persistência.
 
 ## Idiomas
 
@@ -67,3 +67,13 @@ Por enquanto, o mensageiro e os canais seguem como **prévia local**, sem sincro
 - apps/web/src/Demo*.tsx — componentes do chat
 
 A cada mudança, conferir dark/light × português/inglês × desktop/mobile, acessibilidade e documentação.
+
+## Contrato obrigatório do chat real
+
+- `LiveDirectChat` é responsável pela lista, cabeçalho fixo, rolagem, mensagens e recebimento de eventos. A área de mensagens usa a **largura disponível do desktop** e rolagem somente no painel.
+- `DirectMessageBubble` usa **cantos retos** (`rounded-none`), cores semânticas, resposta por swipe e menu com blur limitado ao painel da conversa, sem sair do viewport.
+- `LiveMessageComposer` preserva a ordem **+ anexos | texto expansível | emoji | mic/enviar**, com menu de anexo horizontal e seletor de emojis à direita. Um único botão mostra microfone quando o campo está vazio e envio quando há texto.
+- O texto enviado é persistido na API. **Áudios, anexos, reações persistentes, edição/exclusão e respostas estruturadas** ainda dependem de endpoints específicos. Controles sem backend ficam desabilitados e identificados; não enviar conteúdo apenas na interface local.
+- A lista de conversas **não pode confirmar leitura**. Apenas uma conversa aberta, com janela e painel visíveis, pode emitir confirmação.
+- Abrir chat rola até a última mensagem; ler mensagens antigas não desloca a rolagem. Novas mensagens fora da área visível usam aviso e seta para o final.
+- Verificar desktop/mobile, Light/Dark e PT/EN antes de publicar. Qualquer migração futura deve reutilizar estes componentes em vez de substituí-los por telas genéricas.
