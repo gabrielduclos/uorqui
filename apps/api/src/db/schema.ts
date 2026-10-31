@@ -120,3 +120,13 @@ export const userFriendships = pgTable('user_friendships', {
   check('user_friendships_requester_member', sql`${table.requestedById} = ${table.userAId} OR ${table.requestedById} = ${table.userBId}`),
   check('user_friendships_valid_status', sql`${table.status} IN ('pending', 'accepted', 'declined', 'canceled')`),
 ]);
+/** Directional account blocking: either direction disables messages and friend requests. */
+export const userBlocks = pgTable('user_blocks', {
+  blockerId: uuid('blocker_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  blockedId: uuid('blocked_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  primaryKey({ columns: [table.blockerId, table.blockedId] }),
+  index('user_blocks_blocked_idx').on(table.blockedId),
+  check('user_blocks_not_self', sql`${table.blockerId} <> ${table.blockedId}`),
+]);
