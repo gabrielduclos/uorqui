@@ -64,6 +64,13 @@
       "when": 1793486500000,
       "tag": "0008_dm_attachment_50mb",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793489600000,
+      "tag": "0009_saved_contacts",
+      "breakpoints": true
     }
   ]
 }

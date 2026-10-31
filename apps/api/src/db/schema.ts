@@ -105,3 +105,13 @@ export const directMessageReactions = pgTable('direct_message_reactions', {
 }, (table) => [
   primaryKey({ columns: [table.messageId, table.userId] }),
 ]);
+
+/** Private, one-way saved contacts; never implies mutual following. */
+export const userContacts = pgTable('user_contacts', {
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  contactId: uuid('contact_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.ownerId, table.contactId] }),
+  check('user_contacts_not_self', sql`${table.ownerId} <> ${table.contactId}`),
+]);

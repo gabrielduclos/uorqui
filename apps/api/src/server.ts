@@ -9,6 +9,7 @@ import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 import { registerProfileRoutes } from './profile-routes.js';
 import { registerDirectMessageRoutes } from './direct-message-routes.js';
+import { registerContactRoutes } from './contact-routes.js';
 import { closeDmEvents } from './dm-events.js';
 
 const app = Fastify({
@@ -81,7 +82,7 @@ app.get('/health/ready', async (request, reply) => {
 app.get('/api/v1/status', async () => ({
   project: 'uorqui',
   stage: 'auth-development',
-  featuresEnabled: ['auth-scaffold', 'user-profiles', 'direct-messaging', 'realtime-dm-sse'],
+  featuresEnabled: ['auth-scaffold', 'user-profiles', 'direct-messaging', 'realtime-dm-sse', 'saved-contacts'],
   publicRegistration: isPublicSignupEnabled(),
   registrationAvailable: isRegistrationAvailable(),
   developmentRegistrationEnabled: isDevelopmentSignupEnabled(),
@@ -231,6 +232,7 @@ app.post('/api/v1/onboarding', {
 
 registerProfileRoutes(app, async request => readSession(request));
 registerDirectMessageRoutes(app, async request => readSession(request));
+registerContactRoutes(app, async request => readSession(request));
 
 const port = Number(process.env.PORT ?? 3001);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
