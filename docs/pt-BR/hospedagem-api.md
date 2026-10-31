@@ -10,7 +10,7 @@ Após conectar o Render ao GitHub, importe o Blueprint para o repositório `gabr
 
 - **Build:** `npm install --include=dev --no-audit --no-fund && npm run build -w @uorqui/api`
 - **Start:** `node apps/api/dist/server.js`
-- **Health:** `/health/db` — exige conexão Neon e as duas migrações; nunca declara o banco pronto apenas pelo processo Node
+- **Health:** `/health/ready` — exige configuração da autenticação e conexão Neon com as duas migrações. `/health/db` verifica somente o banco.
 - **Node:** versão 22; `NODE_ENV=production`
 - **Cadastro público:** `ENABLE_DEV_SIGNUP=false`, também bloqueado no código em produção
 
@@ -20,7 +20,9 @@ Configure `DATABASE_URL` **no painel privado do Render**, diretamente com a URI 
 
 A origem pública atual do front-end (`https://main.uorqui1.workers.dev`) está configurada como `AUTH_BASE_URL` e `WEB_ORIGIN` no Blueprint. Reavalie ambas se o endereço do site for alterado. O provedor da API gera seu próprio domínio HTTPS.
 
-Depois que o backend estiver publicado e `GET /health/db` retornar 200, configure **`API_ORIGIN` como variável de runtime** no Worker `main`, com a **origem HTTPS da API** (sem caminho, query ou barra extra). O Worker encaminhará `/api/*` à API e manterá a sessão no mesmo domínio público do front-end.
+Depois que o backend estiver publicado e `GET /health/ready` retornar 200, configure **`API_ORIGIN` como variável de runtime** no Worker `main`, com a **origem HTTPS da API** (sem caminho, query ou barra extra). O Worker encaminhará `/api/*` à API e manterá a sessão no mesmo domínio público do front-end.
+
+Os testes do GitHub Actions executam o Worker real por Wrangler, Fastify e PostgreSQL temporário para validar cookies, login, perfil e logout **sem usar dados da Neon principal**.
 
 ### Segurança de implantação
 

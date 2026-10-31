@@ -40,7 +40,7 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 ## Situação atual
 
 - **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
-- **Validado no PostgreSQL temporário do CI:** Better Auth com e-mail/senha, sessões por cookie, endpoints protegidos de perfil, onboarding e logout. Ainda não foi testado ponta a ponta na Neon main; requer configurar segredos privados e testar a conexão real com a Neon.
+- **Validado no CI com PostgreSQL temporário:** Worker real, proxy, API Fastify, Better Auth, cookies, endpoints protegidos, onboarding e logout. Ainda não foi testado ponta a ponta na Neon main; requer configurar segredos privados e testar a conexão real com a Neon.
 - **Pendentes:** verificação de e-mail, recuperação de senha, mensagens, feed, vídeos, voz, deploy em produção e validação com usuários.
 - **Próximo:** vincular uma hospedagem Node.js à API (Blueprint Render opcional versionado em `render.yaml`), configurar segredos privados, validar login com a Neon e implementar confirmação de e-mail antes de abrir inscrições.
 

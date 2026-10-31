@@ -26,6 +26,8 @@
 - [x] Choose Better Auth, implement Fastify/React authentication flows and commit migration 0001.
 - [x] Test auth migration on temporary Neon and pass CI type/build/schema checks.
 - [x] Pass a real signup, session, profile, duplicate protection and logout integration test using ephemeral PostgreSQL in GitHub Actions.
+- [x] Validate the real Cloudflare Worker → Fastify → temporary PostgreSQL proxy, including first-party cookies, onboarding and logout.
+- [x] Gate web login and Node.js deployment readiness on both auth configuration and migrated database with `/health/ready`.
 - [x] Apply Better Auth migration 0001 to Neon main, verify 10 application tables and the second Drizzle journal entry, and remove the temporary branch.
 - [ ] Configure private secrets and validate authentication end-to-end against Neon main.
 - [ ] Implement email verification, password recovery and production-safe signup controls before opening access.

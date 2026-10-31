@@ -26,6 +26,8 @@
 - [x] Escolher Better Auth, implementar fluxos Fastify/React e versionar migração 0001.
 - [x] Testar migração de autenticação em branch temporária Neon e passar pelo CI de tipagem/build/schema.
 - [x] Validar cadastro, sessão, perfil, proteção contra duplicidade e logout em teste real com PostgreSQL temporário no GitHub Actions.
+- [x] Validar o proxy Cloudflare Worker → Fastify → PostgreSQL em ambiente temporário, incluindo cookies, onboarding e logout.
+- [x] Adicionar endpoint `/health/ready`, exigindo tanto autenticação configurada quanto schema do banco pronto antes de habilitar o login.
 - [x] Aplicar migração 0001 na Neon main e verificar dez tabelas, dois registros Drizzle e limpeza da branch de teste.
 - [ ] Configurar segredos privados e validar a API/login diretamente com a Neon main.
 - [ ] Implementar confirmação de e-mail, recuperação de senha e controles seguros antes de abrir acesso.

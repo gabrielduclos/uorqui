@@ -40,7 +40,7 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 ## Current state
 
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
-- **Validated in temporary PostgreSQL CI:** Better Auth email/password, cookie sessions, protected profile endpoints, handle onboarding and logout. Not yet connected end-to-end to Neon main; requires private settings and real Neon connectivity testing.
+- **Validated in temporary PostgreSQL CI:** Real Cloudflare Worker proxy, Fastify API, Better Auth email/password, cookie sessions, protected profile endpoints, onboarding and logout. Not yet connected end-to-end to Neon main; requires private settings and real Neon connectivity testing.
 - **Not done:** production-ready email verification, password recovery, social messaging, feed, video, voice, production deployment and user validation.
 - **Next:** connect a Node.js API host (optional Render Blueprint in `render.yaml`), set private secrets, validate sessions with Neon and add email verification/abuse protection before opening registration.
 
@@ -48,7 +48,7 @@ The architecture documents distinguish **confirmed core stack decisions** from *
 
 ## Development
 
-The initial npm workspaces contain a **React + Tailwind landing page**, a **Fastify health endpoint** and an **unapplied Drizzle schema**. With Node.js 22+:
+The npm workspaces contain a **React + Tailwind starter**, **Fastify API and authentication endpoints**, and a **Drizzle schema applied to Neon**. With Node.js 22+:
 
 ```sh
 npm install
