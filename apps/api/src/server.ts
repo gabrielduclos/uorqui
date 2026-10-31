@@ -113,6 +113,14 @@ app.route({
         authBody = clean;
       }
       const url = new URL(request.raw.url ?? request.url, process.env.AUTH_BASE_URL ?? 'http://localhost:3001');
+      if (request.method === 'GET' && url.pathname === '/api/auth/verify-email') {
+        // Previously sent confirmation links point their callback to the homepage.
+        // Force a canonical result page for both old and new links; Better Auth
+        // still validates the original signed token and appends ?error= on failure.
+        const frontend = new URL(process.env.WEB_ORIGIN ?? 'http://localhost:5173');
+        const result = new URL('/auth/email-verification?result=success', frontend);
+        url.searchParams.set('callbackURL', result.toString());
+      }
       const headers = fromNodeHeaders(request.headers);
       const authRequest = new Request(url, {
         method: request.method,
@@ -122,6 +130,10 @@ app.route({
       const response = await getAuth().handler(authRequest);
 
       reply.status(response.status);
+      if (request.method === 'GET' && url.pathname === '/api/auth/verify-email') {
+        reply.header('Cache-Control', 'no-store');
+        reply.header('Referrer-Policy', 'no-referrer');
+      }
       for (const [name, value] of response.headers) {
         if (name.toLowerCase() !== 'set-cookie') reply.header(name, value);
       }

@@ -61,7 +61,10 @@ function Spinner() {
 export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (account: Account) => void }) {
   const { t, theme } = useUorquiPreferences();
   const [account, setAccount] = useState<Account | null>(null);
-  const [view, setView] = useState<AuthView>(() => new URLSearchParams(window.location.search).has('token') ? 'reset' : 'welcome');
+  const [view, setView] = useState<AuthView>(() => {
+    const q = new URLSearchParams(window.location.search);
+    return q.has('token') ? 'reset' : q.has('verify') ? 'verify' : q.has('login') ? 'login' : 'welcome';
+  });
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
   const [status, setStatus] = useState<ApiStatus>({});
   const [apiReady, setApiReady] = useState(false);
@@ -219,7 +222,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         {
           method: 'POST',
           body: JSON.stringify(signup
-            ? { name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin, ...(token ? { captchaToken: token } : {}) }
+            ? { name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin + '/auth/email-verification?result=success', ...(token ? { captchaToken: token } : {}) }
             : { email: email.trim(), password }),
         },
       );
@@ -279,7 +282,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       if (token === null) return;
       const { response } = await requestJson('/api/auth/send-verification-email', {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim(), callbackURL: window.location.origin, ...(token ? { captchaToken: token } : {}) }),
+        body: JSON.stringify({ email: email.trim(), callbackURL: window.location.origin + '/auth/email-verification?result=success', ...(token ? { captchaToken: token } : {}) }),
       });
       resetChallenge();
       setMessage(response.ok ? t("Se a conta estiver pendente, enviaremos um novo link de confirmação.") : t("Não foi possível reenviar o e-mail. Tente novamente."));

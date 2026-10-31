@@ -183,7 +183,8 @@ export default {
     // Explicitly return the SPA entry on public profile URLs while retaining the
     // requested /@handle in the browser for React's route parser.
     const publicProfileNavigation = /^\/(?:@|%40)[a-z][a-z0-9_]{2,31}\/?$/i.test(current.pathname);
-    if (publicProfileNavigation && (request.method === 'GET' || request.method === 'HEAD')) {
+    const emailVerificationNavigation = /^\/auth\/email-verification\/?$/.test(current.pathname);
+    if ((publicProfileNavigation || emailVerificationNavigation) && (request.method === 'GET' || request.method === 'HEAD')) {
       const response = await env.ASSETS.fetch(new Request(new URL('/index.html', current), {
         method: 'GET', headers: { accept: 'text/html' },
       }));
