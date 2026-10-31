@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion, MotionConfig } from 'motion/react';
-import { Github, MessageCircle, Users, Newspaper } from 'lucide-react';
+import { Github, MessageCircle, Users, Newspaper, Palette } from 'lucide-react';
 import AuthPanel, { type Account } from './AuthPanel';
 import SocialShell from './SocialShell';
 import UiKit from './UiKit';
@@ -39,7 +39,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 py-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur">
           <span className="text-2xl font-bold tracking-tight">uorqui<span className="text-primary">.</span></span>
           <div className="flex shrink-0 items-center gap-2">
-            <a href="/?ui-kit=1" className="hidden rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:inline-flex" aria-label={t('Abrir UI Kit')}>{t("UI Kit")}</a>
+            <a href="/?ui-kit=1" className="inline-flex size-9 shrink-0 items-center justify-center gap-2 rounded-md border border-border text-xs font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:h-auto sm:w-auto sm:px-3 sm:py-2" aria-label={t('Abrir UI Kit')}><Palette className="size-4" /><span className="hidden sm:inline">UI Kit</span></a>
             <PreferencesControls />
           </div>
         </header>
