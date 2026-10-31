@@ -604,6 +604,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             'Content-Type':pending.attachment.type,
             'x-uorqui-client-id':pending.clientId,
             'x-uorqui-filename':encodeURIComponent(pending.attachment.name),
+            ...(pending.body ? {'x-uorqui-caption':encodeURIComponent(pending.body)} : {}),
             ...(pending.replyToId ? {'x-uorqui-reply-to-id':pending.replyToId} : {}),
           },
           body:file,
@@ -625,14 +626,15 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed',statusUpdatedAt:new Date().toISOString()} : p));
     }
   }
-  function sendAttachment(file: File) {
+  function sendAttachment(file: File, caption: string) {
     const conversationId=activeIdRef.current;
     if(!conversationId || busy) return;
     const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime',
-      'application/pdf','text/plain','application/zip','application/octet-stream']);
+      'application/pdf','text/plain','application/zip','application/octet-stream',
+      'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
     const mime=file.type || 'application/octet-stream';
-    if(!file.size || file.size>20*1024*1024) {
-      setChatError(pt ? 'O anexo deve ter até 20 MB.' : 'Attachment must be 20 MB or less.'); return;
+    if(!file.size || file.size>50*1024*1024) {
+      setChatError(pt ? 'O anexo deve ter até 50 MB.' : 'Attachment must be 50 MB or less.'); return;
     }
     if (!allowed.has(mime) || !file.name || file.name.length>180 || /[\\/\r\n]/.test(file.name)) {
       setChatError(pt ? 'Tipo ou nome de arquivo não permitido.' : 'Unsupported file type or filename.'); return;
@@ -645,7 +647,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     pendingFiles.current.set(clientId,file);
     pendingBlobUrls.current.set(clientId,previewUrl);
     const pending:PendingMessage={
-      id:clientId,clientId,conversationId,authorId:myId,body:'',
+      id:clientId,clientId,conversationId,authorId:myId,body:caption.trim().slice(0,4000),
       createdAt:sentAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
       forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
       attachment:{id:clientId,name:file.name,type:mime,size:file.size},attachmentUrl:previewUrl,
