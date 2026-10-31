@@ -112,7 +112,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [reactionOverrides, setReactionOverrides] = useState<Record<string, string | null>>({});
   const reactionInFlight = useRef(new Set<string>());
   const [editing, setEditing] = useState<Message | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Message | null>(null);
+  const [jumpTarget, setJumpTarget] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimer = useRef<number | null>(null);
   const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionNotice, setActionNotice] = useState('');
@@ -191,6 +194,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setActiveId(id);
     setMobileOpened(true);
     setMessages([]);
+    setJumpTarget(null);
+    setHighlightId(null);
+    if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
     setMessagesLoading(true);
     setAtBottom(true);
     setNewBelow(0);
@@ -201,7 +207,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setIncoming(null);
     setReplySource(null);
     setReactionOverrides({});
-    setEditing(null); setDeleteTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
+    setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
   }, []);
@@ -211,12 +217,15 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setMobileOpened(false);
     mobileOpenedRef.current = false;
     setMessages([]);
+    setJumpTarget(null);
+    setHighlightId(null);
+    if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
     setMessagesLoading(false);
     setNewBelow(0);
     positionedRef.current = false;
     setReplySource(null);
     setReactionOverrides({});
-    setEditing(null); setDeleteTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
+    setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
     setDraft('');
 
   }, []);
@@ -249,8 +258,11 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     const result = await api<{ messages: Message[] }>('/api/v1/dm/conversations/' + id + '/messages');
     if (activeIdRef.current !== id) return;
     setMessages(previous => {
-      const same = JSON.stringify(previous) === JSON.stringify(result.messages);
-      return same ? previous : result.messages;
+      // Retain explicitly loaded older history while refreshing the newest 100.
+      const earliest = result.messages[0]?.createdAt;
+      const older = earliest ? previous.filter(message => message.createdAt < earliest) : [];
+      const next = [...older, ...result.messages].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+      return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
     });
     setPendingMessages(previous => previous.filter(p => p.conversationId !== id || !result.messages.some(m => m.clientId === p.clientId)));
     setMessagesLoading(false);
@@ -289,6 +301,44 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setAtBottom(near);
     if (near) setNewBelow(0);
   }
+
+
+  const jumpToRepliedMessage = useCallback(async (id: string) => {
+    const conversationId = activeIdRef.current;
+    if (!conversationId) return;
+    if (messages.some(message => message.id === id)) {
+      setJumpTarget(id);
+      return;
+    }
+    try {
+      const result = await api<{ messages: Message[] }>('/api/v1/dm/conversations/' + conversationId + '/messages?around=' + encodeURIComponent(id));
+      if (activeIdRef.current !== conversationId) return;
+      setMessages(previous => {
+        const next = new Map(previous.map(message => [message.id, message]));
+        result.messages.forEach(message => next.set(message.id, message));
+        return [...next.values()].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+      });
+      setJumpTarget(id);
+    } catch {
+      setChatError(pt ? 'A mensagem original não está mais disponível.' : 'The original message is no longer available.');
+    }
+  }, [messages, pt]);
+
+  useLayoutEffect(() => {
+    if (!jumpTarget || !scrollBox.current) return;
+    const target = [...scrollBox.current.querySelectorAll<HTMLElement>('[data-direct-message-id]')]
+      .find(element => element.dataset.directMessageId === jumpTarget);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    setHighlightId(jumpTarget);
+    setJumpTarget(null);
+    if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlightId(null), 2200);
+  }, [jumpTarget, messages]);
+
+  useEffect(() => () => {
+    if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
+  }, []);
 
   // The Uorqui-chat behavior: start at the latest message, preserve scroll when
   // reading older ones, and show a downward arrow for messages arriving below.
@@ -429,7 +479,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   useEffect(() => {
     const onEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (deleteTarget) { event.preventDefault(); setDeleteTarget(null); return; }
+      if (cancelTarget) { event.preventDefault(); setCancelTarget(null); return; }
       if (forwardTarget) { event.preventDefault(); setForwardTarget(null); forwardAttempt.current = null; return; }
       if (editing) { event.preventDefault(); cancelEdit(); return; }
       if (replySource) { setReplySource(null); return; }
@@ -437,7 +487,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     };
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
-  }, [replySource, editing, deleteTarget, forwardTarget, closeThread]);
+  }, [replySource, editing, cancelTarget, forwardTarget, closeThread]);
 
 
   function beginEdit(message: Message) {
@@ -447,18 +497,29 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
   }
   function cancelEdit() { setEditing(null); setDraft(draftBeforeEdit.current); }
-  async function deleteMessage() {
-    if (!deleteTarget || actionBusy || !activeId) return;
-    const id = activeId, message = deleteTarget;
+  async function cancelMessage() {
+    if (!cancelTarget || actionBusy || !activeId) return;
+    const id = activeId, message = cancelTarget;
+    if (messages.find(item => item.id === message.id)?.readAt) {
+      setCancelTarget(null);
+      setChatError(pt ? 'Não é possível cancelar uma mensagem já lida.' : 'A read message cannot be canceled.');
+      return;
+    }
     setActionBusy(true); setChatError('');
     try {
       await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id, { method:'DELETE' });
-      setDeleteTarget(null);
+      setCancelTarget(null);
+      setMessages(previous => previous.filter(item => item.id !== message.id));
       if (editing?.id === message.id) cancelEdit();
       if (replySource?.id === message.id) setReplySource(null);
       await Promise.all([loadMessages(id),loadThreads()]);
-    } catch { setChatError(pt ? 'Não foi possível excluir a mensagem.' : 'Could not delete message.'); }
-    finally { setActionBusy(false); }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'HTTP_409') {
+        setCancelTarget(null);
+        setChatError(pt ? 'Não é possível cancelar uma mensagem já lida.' : 'A read message cannot be canceled.');
+        void loadMessages(id).catch(() => {});
+      } else setChatError(pt ? 'Não foi possível cancelar a mensagem.' : 'Could not cancel message.');
+    } finally { setActionBusy(false); }
   }
   async function react(message: Message, emoji: string | null) {
     if (!activeId || actionBusy || message.deletedAt || message.authorId === myId ||
@@ -663,16 +724,29 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
               {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
               {renderedMessages.map(message => {
                 const status = blockReceipts.get(message.id);
+                const reactionEvent = !message.deletedAt ? message.reactions?.[0] : undefined;
+                const reactionFromMe = message.authorId !== myId;
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
-                    disabled={actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onDelete={setDeleteTarget}
+                    onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
+                    disabled={actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
                     onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
                     onReact={(message, emoji) => void react(message, emoji)}
                     onRetry={message => {
                       const pending = pendingMessages.find(p => p.clientId === message.clientId);
                       if (pending) void submitPending(pending);
                     }}/>
+                  {reactionEvent && <div className={cn('flex', reactionFromMe ? 'justify-end' : 'justify-start')} role="note">
+                    <div className="max-w-[85%] rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground shadow-sm">
+                      <span className="font-medium">{reactionFromMe ? (pt ? 'Você reagiu' : 'You reacted') : (pt ? active.peerName + ' reagiu' : active.peerName + ' reacted')}</span>
+                      {' '}<span className="text-base" aria-label={reactionEvent.emoji}>{reactionEvent.emoji}</span>
+                      {' '}<span className="text-muted-foreground">{pt ? 'à mensagem' : 'to the message'}</span>
+                      {reactionFromMe && <button type="button" onClick={() => void react(message, null)}
+                        disabled={reactionInFlight.current.has(message.id)}
+                        className="ml-2 text-primary underline underline-offset-2">{pt ? 'Desfazer' : 'Undo'}</button>}
+                    </div>
+                  </div>}
                   {status && <div role="note" className="flex justify-center py-0.5">
                     <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1.5 rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
                       <span>{status.label}</span>
@@ -720,14 +794,14 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
           <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
             sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
         </div>
-        {deleteTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
+        {cancelTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"
             className="w-full max-w-sm rounded-xl border border-border bg-popover p-5 text-popover-foreground shadow-2xl">
-            <h3 id="delete-direct-message-title" className="text-base font-semibold">{pt ? 'Excluir mensagem?' : 'Delete message?'}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{pt ? 'Esta mensagem será excluída para as duas pessoas da conversa.' : 'This message will be deleted for both people in the conversation.'}</p>
+            <h3 id="delete-direct-message-title" className="text-base font-semibold">{pt ? 'Cancelar mensagem?' : 'Cancel message?'}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{pt ? 'A mensagem será cancelada e removida por completo, sem deixar aviso na conversa. Isso só é possível antes da leitura.' : 'The message will be canceled and removed completely, with no placeholder. This is only possible before it is read.'}</p>
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" disabled={actionBusy} onClick={() => setDeleteTarget(null)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
-              <Button variant="destructive" disabled={actionBusy} onClick={() => void deleteMessage()}>{pt ? 'Excluir' : 'Delete'}</Button>
+              <Button variant="outline" disabled={actionBusy} onClick={() => setCancelTarget(null)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
+              <Button variant="destructive" disabled={actionBusy} onClick={() => void cancelMessage()}>{pt ? 'Cancelar mensagem' : 'Cancel message'}</Button>
             </div>
           </div>
         </div>}
