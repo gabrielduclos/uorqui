@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { PreferencesControls } from './PreferencesControls';
+import { navigateBackFromPublicProfile, navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 
 export type UserProfileData = {
@@ -74,7 +75,7 @@ export function UserDirectory({ currentHandle }: { currentHandle?: string }) {
       {loading && <p role="status" className="text-sm text-muted-foreground">{pt ? 'Buscando…' : 'Searching…'}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!loading && query.trim().length >= 2 && people.length === 0 && !error && <p className="text-sm text-muted-foreground">{pt ? 'Nenhum perfil público encontrado.' : 'No public profiles found.'}</p>}
-      {people.map(person => <a key={person.handle} href={'/@' + person.handle} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+      {people.map(person => <a key={person.handle} href={'/@' + person.handle} onClick={event => navigateToPublicProfile(event, person.handle)} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
         <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm" />
         <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.displayName}</span><span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
         <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
@@ -174,7 +175,7 @@ export function ProfileEditor({ initial, onSaved }: {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h3 className="text-xl font-bold">{profile.displayName}</h3><p className="text-sm text-muted-foreground">@{profile.handle}</p></div>
           {profile.isPublic
-            ? <a href={url} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-accent"><ExternalLink className="size-4" />{pt ? 'Ver perfil público' : 'View public profile'}</a>
+            ? <a href={url} onClick={event => navigateToPublicProfile(event, profile.handle)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-accent"><ExternalLink className="size-4" />{pt ? 'Ver perfil público' : 'View public profile'}</a>
             : <span className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground"><LockKeyhole className="size-4" />{pt ? 'Perfil privado' : 'Private profile'}</span>}
         </div>
       </div>
@@ -259,13 +260,13 @@ export function PublicProfilePage({ handle }: { handle: string }) {
   return <main className="min-h-dvh bg-background text-foreground">
     <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4">
-        <a href="/" className="inline-flex items-center gap-2 rounded-lg text-base font-semibold focus-visible:outline-2 focus-visible:outline-ring"><ArrowLeft className="size-5" />uorqui<span className="text-primary">.</span></a>
+        <a href="/" onClick={navigateBackFromPublicProfile} className="inline-flex items-center gap-2 rounded-lg text-base font-semibold focus-visible:outline-2 focus-visible:outline-ring"><ArrowLeft className="size-5" />uorqui<span className="text-primary">.</span></a>
         <PreferencesControls />
       </div>
     </header>
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
       {status === 'loading' && <p role="status" className="py-16 text-center text-sm text-muted-foreground">{pt ? 'Carregando perfil…' : 'Loading profile…'}</p>}
-      {status === 'missing' && <div className="flex flex-col items-center gap-3 py-16 text-center"><LockKeyhole className="size-10 text-muted-foreground" /><h1 className="text-xl font-semibold">{pt ? 'Perfil indisponível' : 'Profile unavailable'}</h1><p className="text-sm text-muted-foreground">{pt ? 'Este perfil não existe ou não é público.' : 'This profile does not exist or is not public.'}</p><Button variant="outline" asChild><a href="/">{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button></div>}
+      {status === 'missing' && <div className="flex flex-col items-center gap-3 py-16 text-center"><LockKeyhole className="size-10 text-muted-foreground" /><h1 className="text-xl font-semibold">{pt ? 'Perfil indisponível' : 'Profile unavailable'}</h1><p className="text-sm text-muted-foreground">{pt ? 'Este perfil não existe ou não é público.' : 'This profile does not exist or is not public.'}</p><Button variant="outline" asChild><a href="/" onClick={navigateBackFromPublicProfile}>{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button></div>}
       {status === 'error' && <div role="alert" className="py-16 text-center text-sm text-destructive">{pt ? 'Não foi possível carregar o perfil.' : 'Could not load profile.'}</div>}
       {status === 'ready' && profile && <Card className="gap-0 overflow-hidden p-0">
         <Cover url={profile.coverUrl} name={pt ? 'Capa do perfil' : 'Profile cover'} />
