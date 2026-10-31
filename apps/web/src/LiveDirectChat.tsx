@@ -156,6 +156,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const loadThreads = useCallback(async () => {
     const result = await api<{ conversations: Conversation[] }>('/api/v1/dm/conversations');
     setThreads(result.conversations);
+    window.dispatchEvent(new CustomEvent('uorqui:dm-unread-count', {
+      detail: result.conversations.reduce((total, thread) => total + Math.max(0, thread.unreadCount), 0),
+    }));
     setError('');
     setLoading(false);
     return result.conversations;
@@ -343,6 +346,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   // The Uorqui-chat behavior: start at the latest message, preserve scroll when
   // reading older ones, and show a downward arrow for messages arriving below.
   const renderedMessages: Message[] = [...messages, ...pendingMessages.filter(p => p.conversationId === activeId && !messages.some(m => m.clientId === p.clientId))]
+    .filter(message => !message.deletedAt) // Old tombstones never occupy a chat row.
     .sort((a,b) => a.createdAt.localeCompare(b.createdAt))
     .map(message => Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)
       ? optimisticReaction(message, reactionOverrides[message.id]) : message);
@@ -738,13 +742,17 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                       if (pending) void submitPending(pending);
                     }}/>
                   {reactionEvent && <div className={cn('flex', reactionFromMe ? 'justify-end' : 'justify-start')} role="note">
-                    <div className="max-w-[85%] rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground shadow-sm">
-                      <span className="font-medium">{reactionFromMe ? (pt ? 'Você reagiu' : 'You reacted') : (pt ? active.peerName + ' reagiu' : active.peerName + ' reacted')}</span>
-                      {' '}<span className="text-base" aria-label={reactionEvent.emoji}>{reactionEvent.emoji}</span>
-                      {' '}<span className="text-muted-foreground">{pt ? 'à mensagem' : 'to the message'}</span>
+                    <div className="max-w-[85%] border border-border bg-card px-3 py-2 text-xs text-foreground shadow-sm">
+                      <button type="button" onClick={() => void jumpToRepliedMessage(message.id)}
+                        className="block max-w-full text-left hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                        <span className="font-medium">{reactionFromMe ? (pt ? 'Você reagiu' : 'You reacted') : (pt ? active.peerName + ' reagiu' : active.peerName + ' reacted')}</span>
+                        {' '}<span className="text-base" aria-label={reactionEvent.emoji}>{reactionEvent.emoji}</span>
+                        {' '}<span className="text-muted-foreground">{pt ? 'à mensagem' : 'to the message'}</span>
+                        <span className="mt-0.5 block max-w-full truncate border-l-2 border-primary/50 pl-2 text-[11px] text-muted-foreground">{message.body}</span>
+                      </button>
                       {reactionFromMe && <button type="button" onClick={() => void react(message, null)}
                         disabled={reactionInFlight.current.has(message.id)}
-                        className="ml-2 text-primary underline underline-offset-2">{pt ? 'Desfazer' : 'Undo'}</button>}
+                        className="mt-1 text-primary underline underline-offset-2">{pt ? 'Desfazer reação' : 'Undo reaction'}</button>}
                     </div>
                   </div>}
                   {status && <div role="note" className="flex justify-center py-0.5">
