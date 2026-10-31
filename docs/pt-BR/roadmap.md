@@ -15,7 +15,7 @@
 - [x] Integrar Worker `main` com o repositório no Cloudflare Builds, ajustar root `/apps/web`, build `npm run build` e deploy `npx wrangler deploy`; transferir o build/deploy web do GitHub Actions para a Cloudflare.
 - [x] Preparar API Fastify para hospedagem externa com bind de rede em produção, Blueprint Render opcional e segredos não versionados.
 - [x] Mostrar aviso de API indisponível na interface web até a conexão estar pronta.
-- [ ] Conectar provedor de hospedagem Node.js, provisionar a API e adicionar `API_ORIGIN` no Worker; validar login e Neon antes de abrir acesso.
+- [x] Publicar API Render `uorqui-social-api`, conectar Neon e configurar `API_ORIGIN` no Worker, com health pronto.
 - [ ] Definir teto de orçamento, design, privacidade e fornecedores restantes de tempo real/voz/mídias.
 - [x] Publicar a estrutura inicial de desenvolvimento React/Tailwind, Fastify e Drizzle.
 - [x] Criar e verificar PostgreSQL na Neon para desenvolvimento.
@@ -29,8 +29,9 @@
 - [x] Validar o proxy Cloudflare Worker → Fastify → PostgreSQL em ambiente temporário, incluindo cookies, onboarding e logout.
 - [x] Adicionar endpoint `/health/ready`, exigindo tanto autenticação configurada quanto schema do banco pronto antes de habilitar o login.
 - [x] Aplicar migração 0001 na Neon main e verificar dez tabelas, dois registros Drizzle e limpeza da branch de teste.
-- [ ] Configurar segredos privados e validar a API/login diretamente com a Neon main.
-- [ ] Implementar confirmação de e-mail, recuperação de senha e controles seguros antes de abrir acesso.
+- [x] Configurar segredos privados e validar health, status e bloqueio de sessão anônima na Neon main (login de uma conta real ainda pendente).
+- [x] Versionar fluxos de e-mail, recuperação, verificação Turnstile e interface de cadastro/boas-vindas seguindo padrões globais.
+- [ ] Configurar Resend e Turnstile, testar e habilitar cadastro público com `ENABLE_PUBLIC_SIGNUP=true`.
 
 **Critério:** interesse real de comunidades-piloto, escopo e limites operacionais definidos.
 

@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'apps/api/**'
+      - 'apps/web/**'
       - '.github/workflows/auth-integration.yml'
   pull_request:
     paths:

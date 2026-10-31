@@ -15,7 +15,7 @@
 - [x] Connect Cloudflare Worker `main` to the GitHub repository, configure Cloudflare Builds root `/apps/web` and web build/deploy commands, and limit GitHub Actions to API checks.
 - [x] Prepare Fastify for external Node.js hosting with production network binding, an optional Render Blueprint and uncommitted secrets.
 - [x] Show a helpful API-offline message in the frontend until backend setup is complete.
-- [ ] Connect the Node.js hosting provider, deploy the API and configure Worker runtime `API_ORIGIN`; validate real login and Neon connectivity before opening access.
+- [x] Deploy the Render API, verify Neon health, and configure the Worker `API_ORIGIN`.
 - [ ] Set operating budget, design conventions, data privacy principles and remaining realtime/voice/media providers.
 - [x] Commit the initial React/Tailwind, Fastify and Drizzle development scaffold.
 - [x] Create and verify a Neon PostgreSQL development database.
@@ -29,8 +29,9 @@
 - [x] Validate the real Cloudflare Worker → Fastify → temporary PostgreSQL proxy, including first-party cookies, onboarding and logout.
 - [x] Gate web login and Node.js deployment readiness on both auth configuration and migrated database with `/health/ready`.
 - [x] Apply Better Auth migration 0001 to Neon main, verify 10 application tables and the second Drizzle journal entry, and remove the temporary branch.
-- [ ] Configure private secrets and validate authentication end-to-end against Neon main.
-- [ ] Implement email verification, password recovery and production-safe signup controls before opening access.
+- [x] Configure private runtime secrets and check health, status and anonymous access against Neon main (live account sign-in remains to be tested).
+- [x] Commit email verification, recovery, server-side Turnstile gating and signup-first UI.
+- [ ] Configure verified email sender and Turnstile, complete production signup E2E, and explicitly enable public registrations.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
 
