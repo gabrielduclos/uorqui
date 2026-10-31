@@ -35,7 +35,8 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
       const self = await me(request);
       if (!self) return reply.code(401).send({error:'Unauthorized'});
       const result = await getPool().query(
-        'SELECT u.handle,p.display_name AS "displayName",p.avatar_url AS "avatarUrl",' +
+        'SELECT u.handle, CASE WHEN p.is_public=true OR f.status=\'accepted\' OR f.requested_by_id<>$1 THEN p.display_name ELSE u.handle END AS "displayName",' +
+        'CASE WHEN p.is_public=true OR f.status=\'accepted\' OR f.requested_by_id<>$1 THEN p.avatar_url ELSE NULL END AS "avatarUrl",' +
         ' f.status,f.requested_by_id AS "requesterId",f.created_at AS "requestedAt" ' +
         'FROM user_friendships f JOIN users u ON u.id=CASE WHEN f.user_a_id=$1 THEN f.user_b_id ELSE f.user_a_id END ' +
         'JOIN profiles p ON p.user_id=u.id WHERE (f.user_a_id=$1 OR f.user_b_id=$1) ' +
