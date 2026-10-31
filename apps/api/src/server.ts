@@ -19,7 +19,7 @@ const app = Fastify({
 await app.register(cors, {
   origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
   credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
 });
 
@@ -79,7 +79,7 @@ app.get('/health/ready', async (request, reply) => {
 app.get('/api/v1/status', async () => ({
   project: 'uorqui',
   stage: 'auth-development',
-  featuresEnabled: ['auth-scaffold'],
+  featuresEnabled: ['auth-scaffold', 'user-profiles'],
   publicRegistration: isPublicSignupEnabled(),
   registrationAvailable: isRegistrationAvailable(),
   developmentRegistrationEnabled: isDevelopmentSignupEnabled(),
