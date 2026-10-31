@@ -13,6 +13,7 @@ type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
   lastBody: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
   unreadReactionCount: number; lastReactionEmoji: string | null; lastReactionAt: string | null; lastReactionMessageId: string | null;
+  pendingReceivedAt: string | null;
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
@@ -478,8 +479,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     if (!list || !threads.length || document.visibilityState !== 'visible' || !document.hasFocus() ||
         list.getClientRects().length === 0) return;
     for (const thread of threads) {
-      const key = thread.id + ':' + thread.lastAt;
-      if (thread.unreadCount === 0 || !thread.lastAt || receivedIds.current.has(key) || receiving.current.has(thread.id)) continue;
+      // Identify the newest pending delivery revision, not just the latest
+      // message timestamp: editing an older message must re-acknowledge delivery.
+      const key = thread.id + ':' + thread.pendingReceivedAt;
+      if (!thread.pendingReceivedAt || receivedIds.current.has(key) || receiving.current.has(thread.id)) continue;
       receiving.current.add(thread.id);
       void api('/api/v1/dm/conversations/' + thread.id + '/received', { method: 'POST' })
         .then(() => receivedIds.current.add(key))
