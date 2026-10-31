@@ -47,13 +47,24 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
     // Escape LIKE wildcard characters so search input cannot expand to an unbounded match.
     const pattern = '%' + search.replace(/[\\%_]/g, '\\$&') + '%';
     try {
+      const session = await readSession(request);
       const matches = await createDatabase()
-        .select({ handle: users.handle, displayName: profiles.displayName, avatarUrl: profiles.avatarUrl })
+        .select({ id: users.id, handle: users.handle, displayName: profiles.displayName, avatarUrl: profiles.avatarUrl })
         .from(users).innerJoin(profiles, eq(users.id, profiles.userId))
         .where(and(eq(profiles.isPublic, true),
           or(ilike(users.handle, pattern), ilike(profiles.displayName, pattern))))
         .orderBy(users.handle).limit(15);
-      return reply.header('Cache-Control', 'no-store').send({ results: matches });
+      const excluded = new Set<string>();
+      if (session) {
+        const blocked = await getPool().query(
+          'SELECT CASE WHEN blocker_id=$1 THEN blocked_id ELSE blocker_id END AS user_id FROM user_blocks WHERE blocker_id=$1 OR blocked_id=$1',
+          [session.user.id],
+        );
+        for (const row of blocked.rows) excluded.add(row.user_id as string);
+      }
+      return reply.header('Cache-Control', 'no-store').send({
+        results: matches.filter(person => !excluded.has(person.id)).map(({ id: _id, ...person }) => person),
+      });
     } catch (error) {
       request.log.error({ err: error }, 'Profile search failed');
       return reply.status(503).send({ error: 'Service unavailable' });
