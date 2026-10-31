@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
 import { Camera, FileText, Images, MapPin, Mic, Pause, Pencil, Play, Plus, Send, Smile, Square, Video, X } from 'lucide-react';
+import { attachmentLabel } from './chatAttachmentLabels';
 import { createPortal } from 'react-dom';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { ChatImageEditor } from './ChatImageEditor';
@@ -14,7 +15,6 @@ const EMOJI_GROUPS = [
 const ATTACHMENTS = [
   { icon: Images, pt: 'Galeria', en: 'Gallery' },
   { icon: Camera, pt: 'Câmera', en: 'Camera' },
-  { icon: Video, pt: 'Vídeo', en: 'Video' },
   { icon: FileText, pt: 'Arquivo', en: 'File' },
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
@@ -31,7 +31,6 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   const controls = useRef<HTMLFormElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraKindRef = useRef<'image' | 'video'>('image');
   const [cameraOptions,setCameraOptions] = useState(false);
@@ -197,9 +196,9 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     className="relative flex w-full min-w-0 flex-wrap items-end gap-1 sm:gap-2" data-live-message-composer>
     {(pending && pendingUrl) && <div className="flex w-full min-w-0 items-start gap-2 border border-border bg-muted/60 p-2 text-xs" role="status">
       <div className="min-w-0 flex-1">
-        <p className="mb-1 truncate font-semibold">{pending.name} · {(pending.size/1048576).toFixed(1)} MB</p>
+        <p className="mb-1 truncate font-semibold">{attachmentLabel(pending.type,locale)} · {(pending.size/1048576).toFixed(1)} MB</p>
         {pending.type.startsWith('image/') ? <div className="flex items-center gap-2">
-          <img src={pendingUrl} alt={pending.name} className="max-h-36 max-w-[min(55vw,220px)] object-contain" />
+          <img src={pendingUrl} alt={attachmentLabel(pending.type,locale)} className="max-h-36 max-w-[min(55vw,220px)] object-contain" />
           <button type="button" onClick={()=>setEditorOpen(true)}
             className="inline-flex items-center gap-1 border border-border px-2 py-1 hover:bg-accent">
             <Pencil className="size-4"/>{pt?'Editar imagem':'Edit image'}
@@ -256,11 +255,11 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
             disabled={sending || editing || recording!=='idle'}
             onClick={() => {
               if(index===1){setCameraOptions(true);return;}
-              if(index===4){chooseLocation();return;}
-              [galleryRef,cameraRef,videoRef,fileRef][index]?.current?.click();
+              if(index===3){chooseLocation();return;}
+              [galleryRef,cameraRef,fileRef][index]?.current?.click();
               setAttachmentsOpen(false);
             }}
-            title={index===4 ? (pt ? 'Compartilhar localização atual' : 'Share current location') : undefined}
+            title={index===3 ? (pt ? 'Compartilhar localização atual' : 'Share current location') : undefined}
             className="flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 border border-border/70 px-0.5 text-[10px] hover:bg-accent disabled:opacity-40"
             aria-label={pt ? labelPt : en}>
             <Icon className="size-5 text-primary"/><span className="truncate">{pt ? labelPt : en}</span>
@@ -274,8 +273,6 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
-      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
-    <input ref={videoRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,.mp3,.m4a,.ogg,.webm,.wav,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
