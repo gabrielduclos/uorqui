@@ -25,9 +25,9 @@ function StartupSplash() {
 }
 
 const areas = [
-  { title: 'Conversas', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
-  { title: 'Feed', icon: Newspaper, description: 'Um espaço contínuo para textos, fotos e vídeos da sua rede.' },
-  { title: 'Comunidades', icon: Users, description: 'Grupos com canais de texto e salas de voz organizados por assunto.' },
+  { title: t("Conversas"), icon: MessageCircle, description: t("Mensagens privadas entre duas pessoas, com uma interface leve e familiar.") },
+  { title: 'Feed', icon: Newspaper, description: t("Um espaço contínuo para textos, fotos e vídeos da sua rede.") },
+  { title: t("Comunidades"), icon: Users, description: t("Grupos com canais de texto e salas de voz organizados por assunto.") },
 ] as const;
 
 function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => void }) {
@@ -39,7 +39,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 py-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur">
           <span className="text-2xl font-bold tracking-tight">uorqui<span className="text-primary">.</span></span>
           <div className="flex shrink-0 items-center gap-2">
-            <a href="/?ui-kit=1" className="hidden rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:inline-flex" aria-label={t('Abrir UI Kit')}>UI Kit</a>
+            <a href="/?ui-kit=1" className="hidden rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:inline-flex" aria-label={t('Abrir UI Kit')}>{t("UI Kit")}</a>
             <PreferencesControls />
           </div>
         </header>
