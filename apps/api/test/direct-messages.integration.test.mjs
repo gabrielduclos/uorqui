@@ -272,11 +272,9 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
 
   const deleted=await bob(item,'DELETE');
   assert.equal(deleted.status,200);
-  assert.equal(deleted.data.deleted,true);
-  const tombstone=await alice(path+'/messages');
-  const erased=tombstone.data.messages.find(m=>m.id===reply.id);
-  assert.ok(erased.deletedAt);
-  assert.equal(erased.body,'','deleted text must not leak to conversation history');
+  assert.equal(deleted.data.canceled,true);
+  const afterCancel=await alice(path+'/messages');
+  assert.equal(afterCancel.data.messages.some(m=>m.id===reply.id),false,'canceled message leaves no placeholder');
   const editAfterDelete=await bob(item,'PATCH',{body:'Should not restore'});
   assert.equal(editAfterDelete.status,404);
   const reactAfterDelete=await alice(item+'/reaction','PUT',{emoji:'👍'});
@@ -289,9 +287,11 @@ test('real DM replies: referenced originals, conversation isolation, idempotency
   const otherThread=bobList.data.conversations.find(thread=>thread.peerHandle==='dm_other');
   assert.ok(aliceThread && otherThread);
   const path='/api/v1/dm/conversations/'+aliceThread.id;
-  const originals=await alice(path+'/messages');
-  const source=originals.data.messages.find(message=>message.body==='Olá, mensagem persistida!');
-  assert.ok(source);
+  const created=await alice(path+'/messages','POST',{
+    body:'Mensagem de referência ainda não lida',clientId:crypto.randomUUID(),
+  });
+  assert.equal(created.status,201);
+  const source=created.data.message;
 
   const wrongConversation=await bob('/api/v1/dm/conversations/'+otherThread.id+'/messages','POST',{
     body:'Wrong conversation',clientId:crypto.randomUUID(),replyToId:source.id,
@@ -320,11 +320,12 @@ test('real DM replies: referenced originals, conversation isolation, idempotency
 
   const removed=await alice(path+'/messages/'+source.id,'DELETE');
   assert.equal(removed.status,200);
+  assert.equal(removed.data.canceled,true);
   const afterDeletion=await bob(path+'/messages');
   const replyAfter=afterDeletion.data.messages.find(message=>message.id===reply.id);
-  assert.equal(replyAfter.replyTo.id,source.id);
-  assert.equal(replyAfter.replyTo.deleted,true);
-  assert.equal(replyAfter.replyTo.body,'','deleted source text must not leak');
+  assert.equal(replyAfter.replyToId,null,'canceled source unlinks replies');
+  assert.equal(replyAfter.replyTo,null,'no canceled message preview remains');
+  assert.equal(afterDeletion.data.messages.some(message=>message.id===source.id),false);
   const retryAfterDeletion=await bob(path+'/messages','POST',{
     body:'Esta é uma resposta real.',clientId:messageId,replyToId:source.id,
   });
@@ -335,4 +336,15 @@ test('real DM replies: referenced originals, conversation isolation, idempotency
     body:'Invalid reply',clientId:crypto.randomUUID(),replyToId:source.id,
   });
   assert.equal(replyToDeleted.status,404);
+
+  const readProtected=await alice(path+'/messages','POST',{
+    body:'Mensagem que ficará protegida depois da leitura',clientId:crypto.randomUUID(),
+  });
+  assert.equal(readProtected.status,201);
+  const markedRead=await bob(path+'/read','POST');
+  assert.equal(markedRead.status,200);
+  const blocked=await alice(path+'/messages/'+readProtected.data.message.id,'DELETE');
+  assert.equal(blocked.status,409,'read messages cannot be canceled');
+  const afterBlocked=await bob(path+'/messages');
+  assert.ok(afterBlocked.data.messages.some(message=>message.id===readProtected.data.message.id));
 });
