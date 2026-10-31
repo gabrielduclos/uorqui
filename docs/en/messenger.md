@@ -53,3 +53,14 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 - The inbox preview shows the latest reaction when newer than the last message. The message author sees “Alex reacted ❤️ to your message”, counted as **one unread reaction** until the conversation is read. The person who reacted sees “You reacted ❤️ to a message” **without incrementing their own unread count**. `lastReactionAuthorId` distinguishes perspectives. Undo removes that preview when no other later reaction remains. The global badge adds unread messages and *received* reactions via SSE/polling.
 - Visual identity: square chat message bubbles.
 - Outgoing receipt rows split whenever adjacent messages have different statuses, so Read never merges with Sent/Received. An edited message gets its own fresh Sent receipt until the recipient acknowledges that revision via `/received` and `/read`. Previous receipt timestamps remain stored and count for the revised message only if they are no older than `edited_at`; retaining the historical `read_at` also prevents previously read messages from being cancelable after editing. No new migration is needed.
+
+
+### Private individual chat attachments — first delivery
+
+- Gallery, Camera, Video and File pickers connect to the live messenger. Location awaits its own permission flow. First scope: **one attachment per message**, max **20 MB**, JPEG/PNG/WebP/GIF, MP4/WebM, PDF, TXT, ZIP or a generic download; no transcoding, audio recorder or batch uploads.
+
+- **Anti-forgery control:** the Worker signs metadata using HMAC SHA-256 and private `DM_ATTACHMENT_PROOF_SECRET`. The Fastify API verifies the signature in constant time before accepting an attachment, rejecting direct forged uploads. Configure the **same secret** (at least 32 characters) in Cloudflare Worker and Render before deployment; never commit it or put it in URLs.
+- Separate **private R2 bucket** `uorqui-dm-attachments` with no public URL. The Worker validates same-origin requests, session and conversation membership before upload; creates a real message through Fastify with an idempotent client ID and attachment metadata. PostgreSQL stores metadata **only**, never binary file bytes.
+- `GET/HEAD /media/dm/:conversationId/:attachmentId` checks session, membership and attachment association with a non-canceled message before R2 access. Private `no-store`, `nosniff` responses, safe content-disposition. Unread cancellation attempts R2 object cleanup.
+- Square chat message bubbles support enlarged image previews, inline video controls and safe file downloads. Optimistic local previews, retryable failed uploads, delivery/read receipts, replies, reactions and global unread counts continue.
+- **Migration `0007_dm_attachments`** adds four attachment metadata fields and consistency check. Test on a temporary Neon branch and obtain production migration authorization **before merge/deploy**.

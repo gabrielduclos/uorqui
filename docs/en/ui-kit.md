@@ -86,3 +86,10 @@ When changing UI, review dark/light × Portuguese/English × desktop/mobile, upd
 - Reactions remain attached to the original message as compact optimistic chips; they never create separate timeline bubbles. Recent reactions appear in the inbox preview for **both participants**. The reactor sees **“You reacted ❤️ to a message”** without an unread count; the message author sees **“Alex reacted ❤️ to your message”** with an unread notification until the conversation is read.
 - The mobile/desktop conversation icon shows the **sum of unread messages and reactions**, kept current via SSE with polling fallback. Once an unread **message** is counted, the client acknowledges **Received** independently of the open chat panel, without marking it Read; reaction notifications do not independently change message delivery status.
 - **Homogeneous receipt blocks:** consecutive outgoing messages with different receipt states never share one system-style status line (in particular Read is never mixed with Sent or Received). Edits isolate a fresh receipt block and restart the revised text at **Sent**, requiring new delivery and read acknowledgements, while retaining the original read record to keep cancellation prohibited.
+
+
+## Messenger attachments
+
+- The **+** menu retains semantic Light/Dark and PT/EN styling. Gallery, Camera, Video and File launch native pickers; Location is clearly unavailable until its permission flow exists.
+- Messages may contain text or **one private attachment** (up to 20 MB). Square bubbles show an expandable image, inline video or download card, with unchanged time and delivery receipts.
+- Pending attachments use local previews and retry without duplicate client IDs. R2 and PostgreSQL enforce conversation authorization; no public URLs or tokens embedded in links.

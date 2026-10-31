@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getPool } from './db/client.js';
 import { subscribeDmEvents, publishDmConversationEvent } from './dm-events.js';
 
@@ -20,7 +21,21 @@ async function belongs(conversationId: string, userId: string): Promise<boolean>
     [conversationId,userId]);
   return r.rowCount === 1;
 }
-const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded", reply_to_id AS "replyToId"';
+const attachmentProjection = 'CASE WHEN attachment_id IS NULL THEN NULL ELSE json_build_object(\'id\',attachment_id,\'name\',attachment_name,\'type\',attachment_type,\'size\',attachment_size) END AS "attachment"';
+const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded", reply_to_id AS "replyToId", '+attachmentProjection;
+const allowedAttachmentTypes = new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream']);
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+function verifiedAttachmentUpload(request:FastifyRequest, conversationId:string, clientId:string,
+  attachment:{id:string;name:string;type:string;size:number}) {
+  // Server-to-server proof: the public Fastify endpoint must not accept fake
+  // R2 attachment metadata posted directly by a browser or another client.
+  const secret=process.env.DM_ATTACHMENT_PROOF_SECRET;
+  const proof=request.headers['x-uorqui-attachment-proof'];
+  if(!secret || secret.length<32 || typeof proof!=='string' || !/^[0-9a-f]{64}$/.test(proof))return false;
+  const canonical=JSON.stringify([conversationId,clientId,attachment.id,attachment.name,attachment.type,attachment.size]);
+  const expected=createHmac('sha256',secret).update(canonical).digest('hex');
+  return timingSafeEqual(Buffer.from(proof,'hex'),Buffer.from(expected,'hex'));
+}
 const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam } };
 const noCache = 'no-store';
 
@@ -98,7 +113,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const query=[
         'SELECT c.id, c.created_at AS "createdAt", u.handle AS "peerHandle",',
         'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl",',
-        'm.body AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",',
+        `COALESCE(NULLIF(m.body,''), CASE WHEN m.attachment_name IS NOT NULL THEN '📎 ' || m.attachment_name END) AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",`,
         'reaction.emoji AS "lastReactionEmoji", reaction.notified_at AS "lastReactionAt", reaction.message_id AS "lastReactionMessageId",',
         'reaction.user_id AS "lastReactionAuthorId",',
         '(COALESCE(unread.n,0) + COALESCE(unread_reactions.n,0))::int AS "unreadCount",',
@@ -107,7 +122,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'FROM direct_conversations c',
         'JOIN users u ON u.id=CASE WHEN c.participant_a_id=$1 THEN c.participant_b_id ELSE c.participant_a_id END',
         'JOIN profiles p ON p.user_id=u.id',
-        'LEFT JOIN LATERAL (SELECT body,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
+        'LEFT JOIN LATERAL (SELECT body,attachment_name,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
         'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL) unread ON true',
         'LEFT JOIN LATERAL (SELECT MAX(COALESCE(edited_at,created_at)) AS pending_received_at FROM direct_messages',
         ' WHERE conversation_id=c.id AND author_id<>$1 AND deleted_at IS NULL AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at))) incoming ON true',
@@ -159,7 +174,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         (SELECT emoji, COUNT(*)::int AS n FROM direct_message_reactions WHERE message_id=dm.id GROUP BY emoji ORDER BY emoji) grouped), '[]'::json) AS reactions`;
       const query='SELECT '+messageColumns+', '+reactions+
         ', (SELECT emoji FROM direct_message_reactions WHERE message_id=dm.id AND user_id=$2) AS "myReaction"'+
-        ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN original.body ELSE \'\' END,'+
+        ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN COALESCE(NULLIF(original.body,\'\'),\'📎 \' || original.attachment_name) ELSE \'\' END,'+
         '\'authorId\',original.author_id,\'deleted\',original.deleted_at IS NOT NULL) FROM direct_messages original'+
         ' WHERE original.id=dm.reply_to_id AND original.conversation_id=dm.conversation_id) AS "replyTo"'+
         (anchor
@@ -169,9 +184,38 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       return reply.header('Cache-Control',noCache).send({messages:r.rows});
     }catch(e){request.log.error({err:e},'DM messages');return reply.code(503).send({error:'Unavailable'});}
   });
+  // The Worker owns private R2 uploads. Its upload request is checked here
+  // before bytes enter the bucket, and downloads are authorized per message.
+  app.get('/api/v1/dm/conversations/:id/attachments/allowed',{schema:{params:pathParams}},async(request,reply)=>{
+    try {
+      const me=await identity(request,getSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      return reply.header('Cache-Control',noCache).send({allowed:true});
+    }catch(e){request.log.error({err:e},'DM attachment upload access');return reply.code(503).send({error:'Unavailable'});}
+  });
+  const attachmentParams={type:'object',required:['id','attachmentId'],additionalProperties:false,properties:{id:uuidParam,attachmentId:uuidParam}};
+  app.get('/api/v1/dm/conversations/:id/attachments/:attachmentId/access',{schema:{params:attachmentParams}},async(request,reply)=>{
+    try {
+      const me=await identity(request,getSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,attachmentId}=request.params as {id:string;attachmentId:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const r=await getPool().query(
+        'SELECT attachment_name AS name,attachment_type AS type,attachment_size AS size FROM direct_messages WHERE conversation_id=$1 AND attachment_id=$2 AND deleted_at IS NULL',
+        [id,attachmentId]);
+      if(!r.rowCount)return reply.code(404).send({error:'Not found'});
+      return reply.header('Cache-Control',noCache).send({allowed:true,...r.rows[0]});
+    }catch(e){request.log.error({err:e},'DM attachment download access');return reply.code(503).send({error:'Unavailable'});}
+  });
   app.post('/api/v1/dm/conversations/:id/messages',{
     schema:{params:pathParams,body:{type:'object',additionalProperties:false,required:['body','clientId'],
-      properties:{body:{type:'string',minLength:1,maxLength:4000},clientId:uuidParam,replyToId:uuidParam}}}
+      properties:{body:{type:'string',maxLength:4000},clientId:uuidParam,replyToId:uuidParam,attachment:{
+        type:'object',additionalProperties:false,required:['id','name','type','size'],
+        properties:{id:uuidParam,name:{type:'string',minLength:1,maxLength:180},
+          type:{type:'string',maxLength:100},size:{type:'integer',minimum:1,maximum:20971520}}
+      }}}}
   },async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
@@ -179,9 +223,14 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const {body,clientId,replyToId}=request.body as {body:string;clientId:string;replyToId?:string};
+      const {body,clientId,replyToId,attachment}=request.body as {body:string;clientId:string;replyToId?:string;attachment?:{id:string;name:string;type:string;size:number}};
       const text=body.trim();
-      if(!text||text.length>4000)return reply.code(400).send({error:'Invalid message'});
+      if((!text&&!attachment)||text.length>4000)return reply.code(400).send({error:'Invalid message'});
+      if(attachment && !verifiedAttachmentUpload(request,id,clientId,attachment))
+        return reply.code(403).send({error:'Invalid attachment upload proof'});
+      if(attachment && (!allowedAttachmentTypes.has(attachment.type) ||
+        attachment.name.trim()!==attachment.name || /[\\/\r\n\u0000-\u001f]/.test(attachment.name) ||
+        attachment.size>MAX_ATTACHMENT_BYTES)) return reply.code(400).send({error:'Invalid attachment'});
       // An already-persisted retry must remain idempotent even if its reply source was deleted later.
       const existing=await getPool().query('SELECT '+messageColumns+' FROM direct_messages WHERE client_id=$1 AND conversation_id=$2 AND author_id=$3',[clientId,id,me]);
       if(existing.rowCount)return reply.header('Cache-Control',noCache).send({message:existing.rows[0]});
@@ -189,8 +238,8 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         const source=await getPool().query('SELECT id FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL',[replyToId,id]);
         if(!source.rowCount)return reply.code(404).send({error:'Reply target unavailable'});
       }
-      const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id,reply_to_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
-      const r=await getPool().query(q,[id,me,text,clientId,replyToId??null]);
+      const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id,reply_to_id,attachment_id,attachment_name,attachment_type,attachment_size) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
+      const r=await getPool().query(q,[id,me,text,clientId,replyToId??null,attachment?.id??null,attachment?.name??null,attachment?.type??null,attachment?.size??null]);
       if(r.rowCount){
         await publishDmConversationEvent(id,'message').catch(error=>request.log.warn({err:error},'DM notification failed'));
         return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
@@ -262,7 +311,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
       // Atomic unread-only cancel: the message vanishes from history entirely.
       // Concurrent read receipts cannot race past this WHERE predicate.
-      const r=await getPool().query('DELETE FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND read_at IS NULL RETURNING id',[messageId,id,me]);
+      const r=await getPool().query('DELETE FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND read_at IS NULL RETURNING id,attachment_id',[messageId,id,me]);
       if(!r.rowCount){
         const existing=await getPool().query('SELECT read_at FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND author_id=$3',[messageId,id,me]);
         if(existing.rowCount && existing.rows[0].read_at)return reply.code(409).send({error:'Message already read'});
@@ -270,7 +319,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       }
       // Reactions cascade and reply references become null through their foreign keys.
       await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM cancel notification failed'));
-      return reply.header('Cache-Control',noCache).send({canceled:true});
+      return reply.header('Cache-Control',noCache).send({canceled:true,attachmentId:r.rows[0].attachment_id??null});
     }catch(e){request.log.error({err:e},'DM delete');return reply.code(503).send({error:'Unavailable'});}
   });
   const reactionsPath = messagePath + '/reaction';

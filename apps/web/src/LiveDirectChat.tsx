@@ -17,7 +17,7 @@ type Conversation = {
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
-type PendingMessage = Message & { pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
+type PendingMessage = Message & { clientId: string; pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
 type IncomingNotice = { id: string; name: string; preview: string };
 function optimisticReaction(message: Message, next: string | null): Message {
   const prior = message.myReaction;
@@ -116,6 +116,13 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [replySource, setReplySource] = useState<Message | null>(null);
   const [reactionOverrides, setReactionOverrides] = useState<Record<string, string | null>>({});
   const reactionInFlight = useRef(new Set<string>());
+  const pendingFiles = useRef(new Map<string, File>());
+  const pendingBlobUrls = useRef(new Map<string, string>());
+  useEffect(() => () => {
+    for (const url of pendingBlobUrls.current.values()) URL.revokeObjectURL(url);
+    pendingBlobUrls.current.clear();
+    pendingFiles.current.clear();
+  }, []);
   const [editing, setEditing] = useState<Message | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Message | null>(null);
   const [jumpTarget, setJumpTarget] = useState<string | null>(null);
@@ -588,16 +595,67 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   async function submitPending(pending: PendingMessage) {
     setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'sending',statusUpdatedAt:new Date().toISOString()} : p));
     try {
-      await api('/api/v1/dm/conversations/' + pending.conversationId + '/messages', {
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({body:pending.body,clientId:pending.clientId,...(pending.replyToId ? {replyToId:pending.replyToId} : {})}),
-      });
+      if (pending.attachment) {
+        const file = pendingFiles.current.get(pending.clientId);
+        if (!file) throw new Error('MISSING_FILE');
+        const response = await fetch('/api/media/dm/' + pending.conversationId,{
+          method:'POST',credentials:'same-origin',cache:'no-store',
+          headers:{
+            'Content-Type':pending.attachment.type,
+            'x-uorqui-client-id':pending.clientId,
+            'x-uorqui-filename':encodeURIComponent(pending.attachment.name),
+            ...(pending.replyToId ? {'x-uorqui-reply-to-id':pending.replyToId} : {}),
+          },
+          body:file,
+        });
+        if (!response.ok) throw new Error('UPLOAD_' + response.status);
+      } else {
+        await api('/api/v1/dm/conversations/' + pending.conversationId + '/messages', {
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({body:pending.body,clientId:pending.clientId,...(pending.replyToId ? {replyToId:pending.replyToId} : {})}),
+        });
+      }
       if (activeIdRef.current === pending.conversationId) await loadMessages(pending.conversationId);
       void loadThreads().catch(() => {});
       setPendingMessages(prev => prev.filter(p => p.clientId !== pending.clientId));
+      pendingFiles.current.delete(pending.clientId);
+      const localUrl=pendingBlobUrls.current.get(pending.clientId);
+      if(localUrl) { pendingBlobUrls.current.delete(pending.clientId); URL.revokeObjectURL(localUrl); }
     } catch {
       setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed',statusUpdatedAt:new Date().toISOString()} : p));
     }
+  }
+  function sendAttachment(file: File) {
+    const conversationId=activeIdRef.current;
+    if(!conversationId || busy) return;
+    const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime',
+      'application/pdf','text/plain','application/zip','application/octet-stream']);
+    const mime=file.type || 'application/octet-stream';
+    if(!file.size || file.size>20*1024*1024) {
+      setChatError(pt ? 'O anexo deve ter até 20 MB.' : 'Attachment must be 20 MB or less.'); return;
+    }
+    if (!allowed.has(mime) || !file.name || file.name.length>180 || /[\\/\r\n]/.test(file.name)) {
+      setChatError(pt ? 'Tipo ou nome de arquivo não permitido.' : 'Unsupported file type or filename.'); return;
+    }
+    if(editing) cancelEdit();
+    setChatError('');
+    const clientId=crypto.randomUUID();
+    const sentAt=new Date().toISOString();
+    const previewUrl=URL.createObjectURL(file);
+    pendingFiles.current.set(clientId,file);
+    pendingBlobUrls.current.set(clientId,previewUrl);
+    const pending:PendingMessage={
+      id:clientId,clientId,conversationId,authorId:myId,body:'',
+      createdAt:sentAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
+      forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
+      attachment:{id:clientId,name:file.name,type:mime,size:file.size},attachmentUrl:previewUrl,
+      replyToId:replySource?.id??null,
+      replyTo:replySource ? {id:replySource.id,body:replySource.body || ('📎 ' + (replySource.attachment?.name ?? '')),authorId:replySource.authorId,deleted:false} : null,
+    };
+    setPendingMessages(prev=>[...prev,pending]);
+    setReplySource(null);
+    jumpToLast('smooth');
+    void submitPending(pending);
   }
   async function send() {
     const id = activeId;
@@ -805,7 +863,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             </button>
           </div>}
           <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
-            sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
+            onAttach={sendAttachment} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
         </div>
         {cancelTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"

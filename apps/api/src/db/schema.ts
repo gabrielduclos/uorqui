@@ -4,6 +4,7 @@ import {
   check,
   boolean,
   index,
+  integer,
   pgEnum,
   pgTable,
   primaryKey,
@@ -82,10 +83,17 @@ export const directMessages = pgTable('direct_messages', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   forwardedFromId: uuid('forwarded_from_id'),
   replyToId: uuid('reply_to_id').references((): AnyPgColumn => directMessages.id, { onDelete: 'set null' }),
+  attachmentId: uuid('attachment_id'),
+  attachmentName: varchar('attachment_name', { length: 180 }),
+  attachmentType: varchar('attachment_type', { length: 100 }),
+  attachmentSize: integer('attachment_size'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
   uniqueIndex('direct_messages_client_id_idx').on(table.clientId),
+  check('dm_attachment_consistency', sql.raw(
+    '((attachment_id IS NULL AND attachment_name IS NULL AND attachment_type IS NULL AND attachment_size IS NULL) OR (attachment_id IS NOT NULL AND attachment_name IS NOT NULL AND attachment_type IS NOT NULL AND attachment_size > 0 AND attachment_size <= 20971520))'
+  )),
 ]);
 
 export const directMessageReactions = pgTable('direct_message_reactions', {

@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const origin = 'http://localhost:5173';
 const base = 'http://127.0.0.1:3049';
+const ATTACHMENT_SECRET='test-only-attachment-hmac-secret-a7e012739318ee99';
+function proof(conversationId,clientId,a){
+  const canonical=JSON.stringify([conversationId,clientId,a.id,a.name,a.type,a.size]);
+  return createHmac('sha256',ATTACHMENT_SECRET).update(canonical).digest('hex');
+}
 let server;
 before(async () => {
   server=spawn(process.execPath,['apps/api/dist/server.js'],{
     cwd:process.cwd(), stdio:'ignore',
     env:{...process.env,NODE_ENV:'test',ENABLE_DEV_SIGNUP:'true',
-      AUTH_BASE_URL:base,WEB_ORIGIN:origin,PORT:'3049',HOST:'127.0.0.1'},
+      AUTH_BASE_URL:base,WEB_ORIGIN:origin,PORT:'3049',HOST:'127.0.0.1',
+      DM_ATTACHMENT_PROOF_SECRET:ATTACHMENT_SECRET},
   });
   for(let i=0;i<90;i++){
     if(server.exitCode!==null)throw new Error('API process exited');
@@ -23,13 +30,14 @@ after(async()=>{if(server && server.exitCode===null){server.kill('SIGTERM');awai
 
 function visitor(){
   let cookie='';
-  const send = async(path,method='GET',body,withOrigin=true)=>{
+  const send = async(path,method='GET',body,withOrigin=true,extraHeaders={})=>{
     const response=await fetch(base+path,{
       method,redirect:'manual',
       headers:{
         ...(withOrigin?{origin}:{}),
         ...(body?{'Content-Type':'application/json'}:{}),
         ...(cookie?{cookie}:{}),
+        ...extraHeaders,
       },
       ...(body?{body:JSON.stringify(body)}:{}),
     });
@@ -510,4 +518,53 @@ test('edited DMs restart sent/received/read without erasing the original read pr
   assert.ok(finalRead.data.read>=1);
   const finalInbox=await bob('/api/v1/dm/conversations');
   assert.equal(finalInbox.data.conversations.find(c=>c.id===thread.id).unreadCount,0);
+});
+
+
+test('private DM attachment metadata is scoped to both participants and canceled with the message',async()=>{
+  const me=await alice('/api/v1/dm/conversations');
+  const thread=me.data.conversations.find(t=>t.peerHandle==='dm_bob');
+  assert.ok(thread);
+  const path='/api/v1/dm/conversations/'+thread.id;
+  const permitted=await alice(path+'/attachments/allowed');
+  assert.equal(permitted.status,200);
+  assert.equal(permitted.data.allowed,true);
+  const forbidden=await other(path+'/attachments/allowed');
+  assert.equal(forbidden.status,404);
+  const uploadId=crypto.randomUUID(), clientId=crypto.randomUUID();
+  const unsupported=await alice(path+'/messages','POST',{
+    body:'',clientId:crypto.randomUUID(),attachment:{id:crypto.randomUUID(),name:'bad.html',type:'text/html',size:50},
+  });
+  assert.equal(unsupported.status,403,'invalid direct upload proof must fail before any attachment mutation');
+  const empty=await alice(path+'/messages','POST',{body:'',clientId:crypto.randomUUID()});
+  assert.equal(empty.status,400);
+  const validAttachment={id:uploadId,name:'imagem de exemplo.png',type:'image/png',size:1024};
+  const fake=await alice(path+'/messages','POST',{body:'',clientId,attachment:validAttachment});
+  assert.equal(fake.status,403,'direct API callers cannot forge R2 uploaded objects');
+  const sent=await alice(path+'/messages','POST',{
+    body:'',clientId,attachment:validAttachment,
+  },true,{'x-uorqui-attachment-proof':proof(thread.id,clientId,validAttachment)});
+  assert.equal(sent.status,201,JSON.stringify(sent.data));
+  assert.deepEqual(sent.data.message.attachment,{id:uploadId,name:'imagem de exemplo.png',type:'image/png',size:1024});
+  const bobMessages=await bob(path+'/messages');
+  assert.deepEqual(bobMessages.data.messages.find(m=>m.id===sent.data.message.id).attachment,sent.data.message.attachment);
+  const access=await bob(path+'/attachments/'+uploadId+'/access');
+  assert.equal(access.status,200);
+  assert.equal(access.data.allowed,true);
+  assert.equal(access.data.name,'imagem de exemplo.png');
+  const privateAccess=await other(path+'/attachments/'+uploadId+'/access');
+  assert.equal(privateAccess.status,404);
+  const unknown=await alice(path+'/attachments/'+crypto.randomUUID()+'/access');
+  assert.equal(unknown.status,404);
+  const retryAttachment={id:crypto.randomUUID(),name:'different.png',type:'image/png',size:42};
+  const retried=await alice(path+'/messages','POST',{
+    body:'',clientId,attachment:retryAttachment,
+  },true,{'x-uorqui-attachment-proof':proof(thread.id,clientId,retryAttachment)});
+  assert.equal(retried.status,200);
+  assert.equal(retried.data.message.attachment.id,uploadId,'idempotency must preserve original attachment');
+  const canceled=await alice(path+'/messages/'+sent.data.message.id,'DELETE');
+  assert.equal(canceled.status,200);
+  assert.equal(canceled.data.attachmentId,uploadId,'worker can reclaim R2 object after cancel');
+  const afterCancel=await bob(path+'/attachments/'+uploadId+'/access');
+  assert.equal(afterCancel.status,404,'canceled attachment must be inaccessible');
 });

@@ -16,14 +16,18 @@ const ATTACHMENTS = [
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
 
-export function LiveMessageComposer({ value, onChange, onSubmit, sending, locale, textareaRef, editing = false }: {
-  value: string; onChange: (text: string) => void; onSubmit: () => void;
+export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sending, locale, textareaRef, editing = false }: {
+  value: string; onChange: (text: string) => void; onSubmit: () => void; onAttach: (file: File) => void;
   sending: boolean; locale: string; textareaRef: RefObject<HTMLTextAreaElement | null>; editing?: boolean;
 }) {
   const pt = locale === 'pt-BR';
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const controls = useRef<HTMLFormElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const canSend = !!value.trim() && !sending;
   const maxHeight = 208;
 
@@ -88,18 +92,31 @@ export function LiveMessageComposer({ value, onChange, onSubmit, sending, locale
           </button>
         </div>
         <div className="grid grid-cols-5 gap-1">
-          {ATTACHMENTS.map(({icon: Icon,pt:labelPt,en}) => <button key={en} type="button" disabled
-            title={pt ? 'O envio de anexos será conectado ao R2 em uma próxima etapa.' : 'Attachment uploads will be connected to R2 in a future release.'}
-            className="flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 border border-border/70 px-0.5 text-[10px] opacity-60"
-            aria-label={(pt ? labelPt : en) + (pt ? ' (indisponível)' : ' (not available)')}>
+          {ATTACHMENTS.map(({icon: Icon,pt:labelPt,en},index) => <button key={en} type="button"
+            disabled={index===4 || sending || editing}
+            onClick={() => {
+              [galleryRef,cameraRef,videoRef,fileRef][index]?.current?.click();
+              setAttachmentsOpen(false);
+            }}
+            title={index===4 ? (pt ? 'Compartilhar localização em etapa futura' : 'Location sharing coming later') : undefined}
+            className="flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 border border-border/70 px-0.5 text-[10px] hover:bg-accent disabled:opacity-40"
+            aria-label={pt ? labelPt : en}>
             <Icon className="size-5 text-primary"/><span className="truncate">{pt ? labelPt : en}</span>
           </button>)}
         </div>
         <p className="px-2 pt-2 text-[11px] text-muted-foreground">
-          {pt ? 'Anexos ainda não estão conectados ao chat real.' : 'Attachments are not connected to live messaging yet.'}
+          {pt ? 'Imagens, vídeos e arquivos de até 20 MB. O anexo é enviado como mensagem própria.' : 'Images, videos and files up to 20 MB. Each attachment sends as its own message.'}
         </p>
       </div>}
     </div>
+    <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only"
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
+    <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
+    <input ref={videoRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="sr-only"
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
+    <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
     <textarea ref={textareaRef} rows={1} value={value}
       onChange={event => onChange(event.target.value)} onKeyDown={keyDown} maxLength={4000}
       aria-label={pt ? 'Escrever mensagem' : 'Write a message'}

@@ -1,20 +1,28 @@
 interface ProfileMediaObject {
   body: ReadableStream;
   size: number;
+  range?: { offset: number; length: number };
   httpMetadata?: { contentType?: string };
 }
 interface ProfileMediaBucket {
   put(key: string, body: ArrayBuffer, options: { httpMetadata: { contentType: string } }): Promise<unknown>;
-  get(key: string): Promise<ProfileMediaObject | null>;
+  get(key: string, options?: { range?: Headers }): Promise<ProfileMediaObject | null>;
   delete(key: string): Promise<void>;
 }
 interface Env {
   API_ORIGIN?: string;
   PROFILE_MEDIA?: ProfileMediaBucket;
+  DM_ATTACHMENTS?: ProfileMediaBucket;
+  DM_ATTACHMENT_PROOF_SECRET?: string;
   ASSETS: { fetch(input: Request | URL | string): Promise<Response> };
 }
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+const MAX_DM_BYTES = 20 * 1024 * 1024;
+const DM_UPLOAD_PATH = /^\/api\/media\/dm\/([0-9a-f-]{36})$/;
+const DM_MEDIA_PATH = /^\/media\/dm\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
+const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
+const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream']);
 const MEDIA_PATH = /^\/media\/profile\/([0-9a-f-]{36})\/(avatar|cover)\/([0-9a-f-]{36})\.(webp|jpg|png)$/;
 const UPLOAD_PATH = /^\/api\/media\/profile\/(avatar|cover)$/;
 const TYPE_EXTENSION: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
@@ -42,9 +50,11 @@ function apiHeaders(request: Request): Headers {
   return headers;
 }
 
-async function callApi(request: Request, origin: URL, path: string, method: 'GET' | 'PATCH' = 'GET', body?: object): Promise<Response> {
+async function callApi(request: Request, origin: URL, path: string, method: 'GET' | 'PATCH' | 'POST' | 'DELETE' = 'GET', body?: object, extraHeaders?: Record<string,string>): Promise<Response> {
   const headers = apiHeaders(request);
   if (body) headers.set('content-type', 'application/json');
+  if(extraHeaders) for(const [name,value] of Object.entries(extraHeaders))headers.set(name,value);
+  if (method !== 'GET' && request.headers.get('origin')) headers.set('origin', request.headers.get('origin')!);
   return fetch(new URL(path, origin), {
     method, headers,
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -174,11 +184,117 @@ async function handleMediaRead(request: Request, env: Env, origin: URL, matched:
   } catch { return jsonError(503, 'Image storage unavailable'); }
 }
 
+
+// Attachments are private objects under a conversation-scoped, random key.
+// The API performs both upload membership and live message download authorization.
+async function handleDmUpload(request: Request, env: Env, current: URL, origin: URL, conversationId: string): Promise<Response> {
+  if (!env.DM_ATTACHMENTS) return jsonError(503, 'Attachment storage is not configured');
+  if(!env.DM_ATTACHMENT_PROOF_SECRET || env.DM_ATTACHMENT_PROOF_SECRET.length<32)
+    return jsonError(503,'Attachment signing is not configured');
+  if (!validWriteOrigin(request, current)) return jsonError(403, 'Invalid upload origin');
+  const clientId = request.headers.get('x-uorqui-client-id') ?? '';
+  if (!/^[0-9a-f-]{36}$/.test(clientId)) return jsonError(400, 'Invalid message id');
+  const rawName = request.headers.get('x-uorqui-filename') ?? '';
+  let name: string;
+  try { name = decodeURIComponent(rawName); } catch { return jsonError(400, 'Invalid filename'); }
+  if (!name || name.length > 180 || name !== name.trim() || /[\\/\r\n\u0000-\u001f]/.test(name)) return jsonError(400, 'Invalid filename');
+  const type = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (!DM_TYPES.has(type)) return jsonError(415, 'Unsupported attachment type');
+  const replyToId = request.headers.get('x-uorqui-reply-to-id');
+  if (replyToId && !/^[0-9a-f-]{36}$/.test(replyToId)) return jsonError(400, 'Invalid reply');
+  const contentLength = Number(request.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_DM_BYTES) return jsonError(413, 'Attachment exceeds 20 MB');
+
+  try {
+    const auth = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/attachments/allowed');
+    if (!auth.ok) return jsonError(auth.status === 401 ? 401 : auth.status === 404 ? 404 : 503, 'Attachment upload not authorized');
+  } catch { return jsonError(503, 'Attachment authentication unavailable'); }
+
+  const bytes = await boundedBody(request, MAX_DM_BYTES);
+  if (!bytes) return jsonError(413, 'Attachment must be between 1 byte and 20 MB');
+  const signature = new Uint8Array(bytes.slice(0, 16));
+  const magic = String.fromCharCode(...signature);
+  if ((type === 'image/jpeg' || type === 'image/png' || type === 'image/webp') && !validImage(new Uint8Array(bytes), type) ||
+      (type === 'image/gif' && !magic.startsWith('GIF8')) ||
+      (type === 'application/pdf' && !magic.startsWith('%PDF-')) ||
+      (type === 'application/zip' && !magic.startsWith('PK')) ||
+      (type === 'video/webm' && !(signature[0] === 0x1a && signature[1] === 0x45 && signature[2] === 0xdf && signature[3] === 0xa3)) ||
+      ((type === 'video/mp4' || type === 'video/quicktime' || type === 'image/heic' || type === 'image/heif') && magic.slice(4, 8) !== 'ftyp')) return jsonError(415, 'Invalid attachment format');
+
+  const attachmentId = crypto.randomUUID();
+  const proofContent=JSON.stringify([conversationId,clientId,attachmentId,name,type,bytes.byteLength]);
+  const hmacKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.DM_ATTACHMENT_PROOF_SECRET),
+    {name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const proofSignature=await crypto.subtle.sign('HMAC',hmacKey,new TextEncoder().encode(proofContent));
+  const proof=Array.from(new Uint8Array(proofSignature),byte=>byte.toString(16).padStart(2,'0')).join('');
+  const key = 'dm/' + conversationId + '/' + attachmentId;
+  try { await env.DM_ATTACHMENTS.put(key, bytes, { httpMetadata: { contentType: type } }); }
+  catch { return jsonError(503, 'Attachment storage unavailable'); }
+
+  try {
+    const saved = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/messages','POST',{
+      body:'',clientId,...(replyToId ? {replyToId} : {}),
+      attachment:{id:attachmentId,name,type,size:bytes.byteLength},
+    },{'x-uorqui-attachment-proof':proof});
+    if (!saved.ok) {
+      await env.DM_ATTACHMENTS.delete(key).catch(() => {});
+      return jsonError(saved.status === 401 ? 401 : saved.status === 404 ? 404 : saved.status === 400 ? 400 : 503,
+        'Could not attach file to a message');
+    }
+    const result = await saved.json() as {message?:{attachment?:{id?:string}}};
+    if (result.message?.attachment?.id !== attachmentId) {
+      // An idempotent retry might have already created the message with
+      // the old object's UUID. Delete the duplicate upload.
+      await env.DM_ATTACHMENTS.delete(key).catch(() => {});
+    }
+    return Response.json(result, { status:saved.status,headers:{'Cache-Control':'no-store'} });
+  } catch {
+    // The API may have committed the message before a network failure. Keep
+    // its object so a retry with the same clientId can recover it; deleting
+    // it here could permanently break a successfully sent attachment.
+    return jsonError(503,'Could not confirm attachment message');
+  }
+}
+
+async function handleDmDownload(request: Request, env: Env, origin: URL, conversationId: string, attachmentId: string): Promise<Response> {
+  if (!env.DM_ATTACHMENTS) return jsonError(503, 'Attachment storage is not configured');
+  let access: { allowed?: boolean; name?: string; type?: string; size?: number };
+  try {
+    const response = await callApi(request, origin,
+      '/api/v1/dm/conversations/' + conversationId + '/attachments/' + attachmentId + '/access');
+    if (!response.ok) return jsonError(response.status === 503 ? 503 : 404,'Attachment unavailable');
+    access = await response.json() as typeof access;
+    if (!access.allowed || !access.name || !access.type) return jsonError(404, 'Attachment unavailable');
+  } catch { return jsonError(503,'Attachment authorization unavailable'); }
+  try {
+    const object = await env.DM_ATTACHMENTS.get('dm/' + conversationId + '/' + attachmentId,
+      request.headers.has('range') ? {range:request.headers} : undefined);
+    if (!object) return jsonError(404,'Attachment unavailable');
+    const partial=!!request.headers.get('range') && !!object.range;
+    const inline = access.type.startsWith('image/') || access.type.startsWith('video/') || access.type === 'application/pdf';
+    const fallback = access.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120) || 'attachment';
+    return new Response(request.method === 'HEAD' ? null : object.body,{
+      status:partial ? 206 : 200,headers:{
+        'content-type':access.type,
+        'content-length':String(partial ? object.range!.length : object.size),
+        'accept-ranges':'bytes',
+        ...(partial ? {'content-range':'bytes '+object.range!.offset+'-'+(object.range!.offset+object.range!.length-1)+'/'+object.size} : {}),
+        'content-disposition':(inline ? 'inline' : 'attachment') + '; filename="' + fallback + '"; filename*=UTF-8\'\'' + encodeURIComponent(access.name),
+        'cache-control':'private, no-store',
+        'x-content-type-options':'nosniff',
+        'content-security-policy':"default-src 'none'; sandbox",
+      },
+    });
+  } catch { return jsonError(503,'Attachment storage unavailable'); }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const current = new URL(request.url);
     const media = MEDIA_PATH.exec(current.pathname);
     const write = UPLOAD_PATH.exec(current.pathname);
+    const dmUpload = DM_UPLOAD_PATH.exec(current.pathname);
+    const dmMedia = DM_MEDIA_PATH.exec(current.pathname);
     // Worker Static Assets normalizes unknown navigations (sometimes 307 to '/').
     // Explicitly return the SPA entry on public profile URLs while retaining the
     // requested /@handle in the browser for React's route parser.
@@ -195,7 +311,7 @@ export default {
     const apiPath = current.pathname.startsWith('/api/');
     const healthPath = current.pathname === '/health' || current.pathname.startsWith('/health/');
 
-    if (!media && !write && !apiPath && !healthPath) return jsonError(404, 'Not found');
+    if (!media && !write && !dmUpload && !dmMedia && !apiPath && !healthPath) return jsonError(404, 'Not found');
     const origin = apiOrigin(env.API_ORIGIN, current);
     if (!origin) return jsonError(503, 'API unavailable');
 
@@ -203,9 +319,33 @@ export default {
       if (!['GET', 'HEAD'].includes(request.method)) return jsonError(405, 'Method not allowed');
       return handleMediaRead(request, env, origin, media);
     }
+    if (dmMedia) {
+      if (!['GET','HEAD'].includes(request.method)) return jsonError(405,'Method not allowed');
+      return handleDmDownload(request,env,origin,dmMedia[1],dmMedia[2]);
+    }
+    if (dmUpload) {
+      if (request.method !== 'POST') return jsonError(405,'Method not allowed');
+      return handleDmUpload(request,env,current,origin,dmUpload[1]);
+    }
     if (write) {
       if (!['POST', 'DELETE'].includes(request.method)) return jsonError(405, 'Method not allowed');
       return handleMediaWrite(request, env, current, origin, write[1] as 'avatar' | 'cover');
+    }
+
+    const dmCancel=DM_CANCEL_PATH.exec(current.pathname);
+    if (dmCancel && request.method === 'DELETE') {
+      try {
+        const response=await callApi(request,origin,current.pathname,'DELETE');
+        if(response.ok && env.DM_ATTACHMENTS){
+          const data=await response.clone().json() as {attachmentId?:string|null};
+          if(data.attachmentId && /^[0-9a-f-]{36}$/.test(data.attachmentId)){
+            await env.DM_ATTACHMENTS.delete('dm/'+dmCancel[1]+'/'+data.attachmentId).catch(() => {});
+          }
+        }
+        const headers=new Headers(response.headers);
+        headers.set('cache-control','no-store');
+        return new Response(response.body,{status:response.status,headers});
+      }catch{return jsonError(502,'Could not cancel message');}
     }
 
     const upstream = new URL(current.pathname + current.search, origin);
