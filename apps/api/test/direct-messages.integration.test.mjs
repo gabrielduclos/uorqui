@@ -292,6 +292,13 @@ test('real DM replies: referenced originals, conversation isolation, idempotency
   });
   assert.equal(created.status,201);
   const source=created.data.message;
+  const around=await bob(path+'/messages?around='+source.id);
+  assert.equal(around.status,200,JSON.stringify(around.data));
+  assert.ok(around.data.messages.some(message=>message.id===source.id),'anchored history must include the source');
+  const forbiddenAnchor=await other(path+'/messages?around='+source.id);
+  assert.equal(forbiddenAnchor.status,404,'anchored history remains participant-private');
+  const invalidAnchor=await bob(path+'/messages?around='+crypto.randomUUID());
+  assert.equal(invalidAnchor.status,404,'unknown anchor should be unavailable');
 
   const wrongConversation=await bob('/api/v1/dm/conversations/'+otherThread.id+'/messages','POST',{
     body:'Wrong conversation',clientId:crypto.randomUUID(),replyToId:source.id,
