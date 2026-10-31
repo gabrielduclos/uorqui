@@ -91,6 +91,11 @@ export const directMessages = pgTable('direct_messages', {
 }, (table) => [
   index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
   uniqueIndex('direct_messages_client_id_idx').on(table.clientId),
+  check('dm_attachment_consistency', sql`(
+    (${table.attachmentId} IS NULL AND ${table.attachmentName} IS NULL AND ${table.attachmentType} IS NULL AND ${table.attachmentSize} IS NULL)
+    OR
+    (${table.attachmentId} IS NOT NULL AND ${table.attachmentName} IS NOT NULL AND ${table.attachmentType} IS NOT NULL AND ${table.attachmentSize} > 0 AND ${table.attachmentSize} <= 20971520)
+  )`),
 ]);
 
 export const directMessageReactions = pgTable('direct_message_reactions', {
