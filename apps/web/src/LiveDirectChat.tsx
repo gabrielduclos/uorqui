@@ -451,6 +451,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     const onDmUpdate = (event: Event) => {
       try {
         const data = JSON.parse((event as MessageEvent<string>).data) as { conversationId?: string; kind?: string };
+        if (data.kind === 'friendship-update') { void loadThreads().catch(() => {}); return; }
         if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind ?? '')) return;
         const conversationId = data.conversationId;
         const isOpen = isConversationVisible(conversationId);
@@ -486,8 +487,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       connect(); onReady();
     };
     document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('uorqui:friends-updated', onReady);
     connect();
-    return () => { disposed = true; document.removeEventListener('visibilitychange', visibility); disconnect(); };
+    return () => { disposed = true; document.removeEventListener('visibilitychange', visibility); window.removeEventListener('uorqui:friends-updated', onReady); disconnect(); };
   }, [loadThreads, loadMessages, isConversationVisible, myId, pt]);
   // Delivery is not reading: receiving an inbox update never clears the unread badge.
   const receiving = useRef(new Set<string>());
