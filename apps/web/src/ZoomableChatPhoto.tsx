@@ -24,6 +24,7 @@ export function ZoomableChatPhoto({ src, alt, locale = 'pt-BR' }: {
   const moved = useRef(false);
   const usedPinch = useRef(false);
   const lastTap = useRef<{ at: number; point: Point } | null>(null);
+  const lastTouchZoomAt = useRef(0);
   const scaleRef = useRef(1);
   const offsetRef = useRef<Point>({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
@@ -132,6 +133,7 @@ export function ZoomableChatPhoto({ src, alt, locale = 'pt-BR' }: {
       const now = Date.now();
       if (lastTap.current && now - lastTap.current.at < 320 && distance(point, lastTap.current.point) < 36) {
         zoomTo(scaleRef.current > 1 ? 1 : 2.5, point);
+        lastTouchZoomAt.current = now;
         lastTap.current = null;
       } else lastTap.current = { at: now, point };
     }
@@ -146,7 +148,7 @@ export function ZoomableChatPhoto({ src, alt, locale = 'pt-BR' }: {
     <div ref={stageRef} className="flex h-full w-full touch-none select-none items-center justify-center overflow-hidden"
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
       onWheel={onWheel}
-      onDoubleClick={event => { if (event.detail >= 2) zoomTo(scaleRef.current > 1 ? 1 : 2.5, { x: event.clientX, y: event.clientY }); }}>
+      onDoubleClick={event => { if (event.detail >= 2 && Date.now() - lastTouchZoomAt.current > 450) zoomTo(scaleRef.current > 1 ? 1 : 2.5, { x: event.clientX, y: event.clientY }); }}>
       <img ref={imageRef} src={src} alt={alt} draggable={false}
         className="max-h-[76dvh] max-w-full select-none object-contain"
         style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`, transformOrigin: 'center center', willChange: 'transform' }} />
