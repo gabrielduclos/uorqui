@@ -117,6 +117,29 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     assert.equal(read.response.status, 200);
     assert.equal(read.body.profile.handle, 'worker_ci');
 
+    // SSE must stream through the production-shaped Cloudflare Worker proxy.
+    const anonEvents = await fetch(browserOrigin + '/api/v1/dm/events', {
+      headers: { accept: 'text/event-stream' }, redirect: 'manual',
+    });
+    assert.equal(anonEvents.status, 401, 'anonymous SSE access is denied');
+    const sseAbort = new AbortController();
+    const sseTimeout = setTimeout(() => sseAbort.abort(), 15_000);
+    try {
+      const stream = await fetch(browserOrigin + '/api/v1/dm/events', {
+        headers: { accept: 'text/event-stream', cookie }, signal: sseAbort.signal,
+      });
+      assert.equal(stream.status, 200);
+      assert.match(stream.headers.get('content-type') ?? '', /text\/event-stream/);
+      const reader = stream.body.getReader();
+      const initial = await reader.read();
+      assert.ok(!initial.done && initial.value, 'SSE sends initial frames immediately');
+      assert.match(new TextDecoder().decode(initial.value), /retry: 2000|event: ready/);
+      await reader.cancel();
+    } finally {
+      clearTimeout(sseTimeout);
+      sseAbort.abort();
+    }
+
     // Deep links must render the React SPA shell, not redirect to the home route.
     // Browsers send Sec-Fetch-Mode: navigate for a link opened in a new tab or after reload.
     for (const path of ['/@worker_ci', '/%40worker_ci']) {
