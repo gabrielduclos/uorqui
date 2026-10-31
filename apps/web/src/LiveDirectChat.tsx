@@ -17,6 +17,22 @@ type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
 type PendingMessage = Message & { pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
 type IncomingNotice = { id: string; name: string; preview: string };
+function optimisticReaction(message: Message, next: string | null): Message {
+  const prior = message.myReaction;
+  if (prior === next) return message;
+  const counts = message.reactions.map(reaction => ({ ...reaction }));
+  if (prior) {
+    const existing = counts.find(reaction => reaction.emoji === prior);
+    if (existing) existing.count--;
+  }
+  if (next) {
+    const existing = counts.find(reaction => reaction.emoji === next);
+    if (existing) existing.count++;
+    else counts.push({ emoji: next, count: 1 });
+  }
+  return { ...message, myReaction: next, reactions: counts.filter(reaction => reaction.count > 0) };
+}
+
 const NEAR_BOTTOM_PX = 96;
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
@@ -92,7 +108,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(0);
   const [incoming, setIncoming] = useState<IncomingNotice | null>(null);
-  const [quoteSource, setQuoteSource] = useState<Message | null>(null);
+  const [replySource, setReplySource] = useState<Message | null>(null);
+  const [reactionOverrides, setReactionOverrides] = useState<Record<string, string | null>>({});
+  const reactionInFlight = useRef(new Set<string>());
   const [editing, setEditing] = useState<Message | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
@@ -104,6 +122,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const lastThreadFallback = useRef(0);
   const lastMessageFallback = useRef(0);
   const scrollBox = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const reading = useRef<string | null>(null);
@@ -180,7 +199,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     previousLastRef.current = '';
     setChatError('');
     setIncoming(null);
-    setQuoteSource(null);
+    setReplySource(null);
+    setReactionOverrides({});
     setEditing(null); setDeleteTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
@@ -194,7 +214,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setMessagesLoading(false);
     setNewBelow(0);
     positionedRef.current = false;
-    setQuoteSource(null);
+    setReplySource(null);
+    setReactionOverrides({});
     setEditing(null); setDeleteTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
     setDraft('');
 
@@ -271,7 +292,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
 
   // The Uorqui-chat behavior: start at the latest message, preserve scroll when
   // reading older ones, and show a downward arrow for messages arriving below.
-  const renderedMessages: Message[] = [...messages, ...pendingMessages.filter(p => p.conversationId === activeId && !messages.some(m => m.clientId === p.clientId))].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+  const renderedMessages: Message[] = [...messages, ...pendingMessages.filter(p => p.conversationId === activeId && !messages.some(m => m.clientId === p.clientId))]
+    .sort((a,b) => a.createdAt.localeCompare(b.createdAt))
+    .map(message => Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)
+      ? optimisticReaction(message, reactionOverrides[message.id]) : message);
   const blockReceipts = new Map<string, BlockReceipt>();
   let outgoingBlock: Message[] = [];
   renderedMessages.forEach((message, index) => {
@@ -380,15 +404,21 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const receiving = useRef(new Set<string>());
   const receivedIds = useRef(new Set<string>());
   useEffect(() => {
-    if (!threads.length || document.visibilityState !== 'visible') return;
+    // Only the visible, focused inbox (or visible desktop sidebar) confirms delivery.
+    // Simply mounting the messenger elsewhere must not emit acknowledgements.
+    const list = listRef.current;
+    if (!list || !threads.length || document.visibilityState !== 'visible' || !document.hasFocus() ||
+        list.getClientRects().length === 0) return;
     for (const thread of threads) {
-      if (thread.lastAuthorId === myId || !thread.lastAt || receivedIds.current.has(thread.id + ':' + thread.lastAt) || receiving.current.has(thread.id)) continue;
+      const key = thread.id + ':' + thread.lastAt;
+      if (thread.lastAuthorId === myId || !thread.lastAt || receivedIds.current.has(key) || receiving.current.has(thread.id)) continue;
       receiving.current.add(thread.id);
       void api('/api/v1/dm/conversations/' + thread.id + '/received', { method: 'POST' })
-        .then(() => receivedIds.current.add(thread.id + ':' + thread.lastAt))
-        .catch(() => {}).finally(() => receiving.current.delete(thread.id));
+        .then(() => receivedIds.current.add(key))
+        .catch(() => {})
+        .finally(() => receiving.current.delete(thread.id));
     }
-  }, [threads, myId]);
+  }, [threads, myId, mobileOpened, visibilityTick]);
 
   useEffect(() => {
     if (!incoming) return;
@@ -402,18 +432,18 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       if (deleteTarget) { event.preventDefault(); setDeleteTarget(null); return; }
       if (forwardTarget) { event.preventDefault(); setForwardTarget(null); forwardAttempt.current = null; return; }
       if (editing) { event.preventDefault(); cancelEdit(); return; }
-      if (quoteSource) { setQuoteSource(null); return; }
+      if (replySource) { setReplySource(null); return; }
       if (activeIdRef.current) { event.preventDefault(); closeThread(); }
     };
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
-  }, [quoteSource, editing, deleteTarget, forwardTarget, closeThread]);
+  }, [replySource, editing, deleteTarget, forwardTarget, closeThread]);
 
 
   function beginEdit(message: Message) {
     if (actionBusy || busy || message.deletedAt) return;
     draftBeforeEdit.current = draft;
-    setQuoteSource(null); setEditing(message); setDraft(message.body); setActionNotice('');
+    setReplySource(null); setEditing(message); setDraft(message.body); setActionNotice('');
     requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
   }
   function cancelEdit() { setEditing(null); setDraft(draftBeforeEdit.current); }
@@ -425,23 +455,36 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id, { method:'DELETE' });
       setDeleteTarget(null);
       if (editing?.id === message.id) cancelEdit();
-      if (quoteSource?.id === message.id) setQuoteSource(null);
+      if (replySource?.id === message.id) setReplySource(null);
       await Promise.all([loadMessages(id),loadThreads()]);
     } catch { setChatError(pt ? 'Não foi possível excluir a mensagem.' : 'Could not delete message.'); }
     finally { setActionBusy(false); }
   }
   async function react(message: Message, emoji: string | null) {
-    if (!activeId || actionBusy || message.deletedAt) return;
+    if (!activeId || actionBusy || message.deletedAt || message.authorId === myId ||
+        reactionInFlight.current.has(message.id)) return;
     const id = activeId;
-    setActionBusy(true); setChatError('');
+    reactionInFlight.current.add(message.id);
+    // Hold the local choice over incoming SSE/poll refreshes until the write finishes.
+    setReactionOverrides(previous => ({ ...previous, [message.id]: emoji }));
+    setChatError('');
     try {
       await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id + '/reaction', {
         method: emoji ? 'PUT' : 'DELETE',
         ...(emoji ? { headers:{'Content-Type':'application/json'}, body:JSON.stringify({emoji}) } : {}),
       });
       await loadMessages(id);
-    } catch { setChatError(pt ? 'Não foi possível atualizar a reação.' : 'Could not update reaction.'); }
-    finally { setActionBusy(false); }
+    } catch {
+      setChatError(pt ? 'Não foi possível atualizar a reação.' : 'Could not update reaction.');
+    } finally {
+      reactionInFlight.current.delete(message.id);
+      // Roll back on failure; on success the refreshed server state takes over.
+      setReactionOverrides(previous => {
+        const next = { ...previous };
+        delete next[message.id];
+        return next;
+      });
+    }
   }
   async function forward(targetId: string) {
     if (!forwardTarget || !activeId || targetId === activeId || actionBusy) return;
@@ -465,7 +508,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     try {
       await api('/api/v1/dm/conversations/' + pending.conversationId + '/messages', {
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({body:pending.body,clientId:pending.clientId}),
+        body:JSON.stringify({body:pending.body,clientId:pending.clientId,...(pending.replyToId ? {replyToId:pending.replyToId} : {})}),
       });
       if (activeIdRef.current === pending.conversationId) await loadMessages(pending.conversationId);
       void loadThreads().catch(() => {});
@@ -476,7 +519,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   }
   async function send() {
     const id = activeId;
-    const body = (quoteSource && !editing ? '> '+ quoteSource.body.replace(/\s+/g,' ').slice(0,160)+'\n\n' : '') + draft.trim();
+    const body = draft.trim();
     if (!id || !draft.trim() || busy || body.length > 4000) return;
     setChatError(''); setActionNotice('');
     if (editing) {
@@ -497,17 +540,19 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       id:clientId, clientId,conversationId:id,authorId:myId,body,
       createdAt:sentAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
       forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
+      replyToId:replySource?.id??null,
+      replyTo:replySource ? {id:replySource.id,body:replySource.body,authorId:replySource.authorId,deleted:false} : null,
     };
     setPendingMessages(prev => [...prev,pending]);
-    setDraft(''); setQuoteSource(null);
+    setDraft(''); setReplySource(null);
     jumpToLast('smooth');
     textareaRef.current?.focus({preventScroll:true});
     void submitPending(pending);
   }
   function onDraftChange(value: string) { setDraft(value); }
-  function quote(message: Message) {
+  function respond(message: Message) {
     if (editing) cancelEdit();
-    setQuoteSource(message);
+    setReplySource(message);
     textareaRef.current?.focus({ preventScroll: true });
   }
   const active = threads.find(c => c.id === activeId);
@@ -518,7 +563,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const unreadThreads = threads.filter(c => c.unreadCount > 0).length;
 
   return <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-    <section aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
+    <section ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
       'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card md:flex md:w-[336px] md:shrink-0 xl:w-[370px]',
       mobileOpened ? 'hidden' : 'flex'
     )}>
@@ -620,8 +665,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                 const status = blockReceipts.get(message.id);
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message}
-                    mine={message.authorId === myId} locale={locale} onQuote={quote}
-                    disabled={actionBusy || busy} onEdit={beginEdit} onDelete={setDeleteTarget}
+                    mine={message.authorId === myId} locale={locale} onReply={respond}
+                    disabled={actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onDelete={setDeleteTarget}
                     onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
                     onReact={(message, emoji) => void react(message, emoji)}
                     onRetry={message => {
@@ -662,13 +707,13 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             <button type="button" onClick={cancelEdit} aria-label={pt ? 'Cancelar edição' : 'Cancel edit'}
               className="grid size-9 place-items-center hover:bg-accent"><X className="size-4"/></button>
           </div>}
-          {quoteSource && !editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
+          {replySource && !editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
             <div className="min-w-0 flex-1">
-              <span className="block font-semibold">{pt ? 'Respondendo com citação' : 'Quoting message'}</span>
-              <span className="mt-0.5 block truncate text-muted-foreground">{quoteSource.body}</span>
+              <span className="block font-semibold">{pt ? 'Respondendo à mensagem' : 'Replying to message'}</span>
+              <span className="mt-0.5 block truncate text-muted-foreground">{replySource.body}</span>
             </div>
-            <button type="button" onClick={() => setQuoteSource(null)}
-              aria-label={pt ? 'Cancelar citação' : 'Cancel quote'} className="grid size-9 place-items-center hover:bg-accent">
+            <button type="button" onClick={() => setReplySource(null)}
+              aria-label={pt ? 'Cancelar resposta' : 'Cancel reply'} className="grid size-9 place-items-center hover:bg-accent">
               <X className="size-4"/>
             </button>
           </div>}
