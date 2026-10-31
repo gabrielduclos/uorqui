@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  ArrowLeft, Bell, Compass, Hash, Headphones, Home, LogOut, MessageCircle,
-  Plus, Search, Users, Video, Volume2,
+  Bell, Compass, Home, LogOut, MessageCircle, Users, Video,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -13,15 +12,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import DemoMessageComposer, { DemoAttachmentView, type ComposePayload } from './DemoMessageComposer';
-import { DemoChatBubble, DemoLocationCard, type DemoMessage } from './DemoChatBubble';
-import { DemoMediaViewer, type PreviewMediaItem } from './DemoChatMedia';
 import { PreferencesControls } from './PreferencesControls';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { useVisualViewportFrame } from './useVisualViewportFrame';
 import { ProfileEditor, type UserProfileData } from './UserProfiles';
 import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
+import LiveCommunities from './LiveCommunities';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 
 export type SignedInAccount = {
@@ -36,41 +33,10 @@ const navigation = [
   { id: 'communities', label: 'Comunidades', icon: Users },
 ] as const;
 
-const demoCommunities = [
-  {
-    id: 'estudio', name: 'Estúdio', monogram: 'E', className: 'bg-indigo-600',
-    description: 'Um espaço de exemplo para projetos e ideias.',
-    channels: [
-      { id: 'geral', label: 'geral', kind: 'text' },
-      { id: 'projetos', label: 'projetos', kind: 'text' },
-      { id: 'sala', label: 'Sala de conversa', kind: 'voice' },
-    ],
-  },
-  {
-    id: 'arena', name: 'Arena', monogram: 'A', className: 'bg-emerald-700',
-    description: 'Uma comunidade de demonstração para jogos.',
-    channels: [
-      { id: 'boas-vindas', label: 'boas-vindas', kind: 'text' },
-      { id: 'partidas', label: 'partidas', kind: 'text' },
-      { id: 'voz', label: 'Squad', kind: 'voice' },
-    ],
-  },
-] as const;
-
 function ProfileAvatar({ name, image, className }: { name: string; image?: string | null; className?: string }) {
   const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
   const source = useCachedProfileImage(image);
   return <Avatar className={cn('size-9', className)}>{source && <AvatarImage src={source} alt={name} referrerPolicy="no-referrer" className="object-cover" />}<AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
-}
-
-function DemoNotice({ children }: { children?: ReactNode }) {
-  const { t } = useUorquiPreferences();
-  return (
-    <div role="note" className="flex items-center gap-2 border-b border-border bg-primary/5 px-4 py-2 text-xs text-muted-foreground">
-      <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-      {children ?? t('Prévia de interface: os dados abaixo são fictícios e não são salvos.')}
-    </div>
-  );
 }
 
 function EmptyState({ icon: Icon, title, description }: { icon: typeof Home; title: string; description: string }) {
@@ -95,20 +61,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [mediaViewerId, setMediaViewerId] = useState<number | null>(null);
-  const [communityId, setCommunityId] = useState<string>('estudio');
-  const [channelId, setChannelId] = useState<string>(t("geral"));
   const [channelOpened, setChannelOpened] = useState(false);
-  const [channelExamples, setChannelExamples] = useState<Record<string, DemoMessage[]>>({});
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState('');
-  const attachmentUrls = useRef(new Set<string>());
-
-  useEffect(() => {
-    const urls = attachmentUrls.current;
-    return () => { urls.forEach(url => URL.revokeObjectURL(url)); };
-  }, []);
 
   useEffect(() => {
     const listener = (event: Event) => {
@@ -121,64 +76,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
     return () => window.removeEventListener('uorqui:open-dm', listener);
   }, []);
 
-  const activeCommunity = demoCommunities.find(group => group.id === communityId) ?? demoCommunities[0];
-  const activeChannel = activeCommunity.channels.find(ch => ch.id === channelId) ?? activeCommunity.channels[0];
-  const communityKey = communityId + '/' + channelId;
-  const visibleChannelMessages: DemoMessage[] = channelExamples[communityKey] ?? [
-    { id: 100, mine: false, text: 'Este canal demonstra como os bate-papos de comunidades serão organizados.', time: 'Exemplo' },
-  ];
-  const mediaItems: PreviewMediaItem[] = visibleChannelMessages.flatMap(message =>
-    message.attachment && (message.attachment.kind === 'image' || message.attachment.kind === 'video')
-      ? [{ id: message.id, attachment: message.attachment }]
-      : []
-  );
-
-  function updateDraft(key: string, value: string) {
-    setDrafts(previous => ({ ...previous, [key]: value }));
-  }
-
   function move(next: Area) {
     setArea(next);
     setConversationOpened(false);
     setChannelOpened(false);
-    setMediaViewerId(null);
-  }
-
-  function sendDemoChannel({ text, attachment, location }: ComposePayload) {
-    if (!text && !attachment && !location) return;
-    if (attachment) attachmentUrls.current.add(attachment.url);
-    setChannelExamples(previous => ({
-      ...previous,
-      [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
-        id: Date.now() + Math.random(), mine: true, text, attachment, location,
-        time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-      }],
-    }));
-  }
-
-  function saveEditedImage(id: number, image: Blob) {
-    const current = visibleChannelMessages.find(message => message.id === id);
-    if (!current?.attachment || current.attachment.kind !== 'image' || activeChannel.kind !== 'text') return;
-    const url = URL.createObjectURL(image);
-    attachmentUrls.current.add(url);
-    const attachment = { kind: 'image' as const, name: 'foto-editada.png',
-      url, size: image.size, mimeType: 'image/png' };
-    if (current.mine) {
-      setChannelExamples(previous => ({
-        ...previous,
-        [communityKey]: (previous[communityKey] ?? visibleChannelMessages).map(message =>
-          message.id === id ? { ...message, attachment, edited: true } : message),
-      }));
-    } else {
-      const newId = Date.now() + Math.random();
-      setChannelExamples(previous => ({
-        ...previous,
-        [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
-          id: newId, mine: true, text: '', attachment, time: 'Agora',
-        }],
-      }));
-      setMediaViewerId(newId);
-    }
   }
 
   async function logout() {
@@ -269,62 +170,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
 
-            {area === 'communities' && (
-              <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
-                <div data-uorqui-community-rail className="relative z-20 flex h-full min-h-0 w-16 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-card/95 py-4" aria-label={t("Comunidades de demonstração")}>
-                  {demoCommunities.map(group => <Button key={group.id} type="button" size="icon" variant={communityId === group.id ? 'secondary' : 'ghost'} className={cn('size-11 rounded-2xl text-lg font-bold', communityId === group.id && 'ring-2 ring-primary/70')} onClick={() => { setCommunityId(group.id); setChannelId(group.channels[0].id); setChannelOpened(false); setMediaViewerId(null); }} aria-label={'Comunidade ' + group.name} aria-pressed={communityId === group.id}>
-                    <span className={cn('flex size-9 items-center justify-center rounded-xl text-white',group.className)}>{group.monogram}</span>
-                  </Button>)}
-                  <Separator className="w-7" />
-                  <Button size="icon" variant="outline" disabled title={t('Criação de comunidades em desenvolvimento')} aria-label={t("Criar comunidade indisponível")} className="size-10 rounded-2xl"><Plus className="size-4" /></Button>
-                </div>
-                <section aria-label={t('Lista de canais')} className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-border bg-card/25 md:flex md:w-65 md:shrink-0 md:flex-none', channelOpened ? 'hidden' : 'flex')}>
-                  <div className="relative z-10 shrink-0 border-b border-border bg-card/95 px-4 py-4">
-                    <div className="truncate font-semibold">{t(activeCommunity.name)}</div>
-                    <p className="mt-1 text-xs text-muted-foreground">{t(activeCommunity.description)}</p>
-                  </div>
-                  <DemoNotice>{t("Canais ilustrativos, sem membros reais.")}</DemoNotice>
-                  <ScrollArea className="min-h-0 flex-1">
-                    <div className="space-y-4 p-3">
-                      <div><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Canais de texto")}</p>
-                        {activeCommunity.channels.filter(ch => ch.kind === 'text').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); setMediaViewerId(null); }}><Hash className="size-4 text-muted-foreground" />{t(ch.label)}</Button>)}
-                      </div>
-                      <div><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('Canais de voz')}</p>
-                        {activeCommunity.channels.filter(ch => ch.kind === 'voice').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); setMediaViewerId(null); }}><Volume2 className="size-4 text-muted-foreground" />{ch.label}</Button>)}
-                      </div>
-                    </div>
-                  </ScrollArea>
-                </section>
-                <section aria-label={t("Conteúdo do canal")} className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden', channelOpened ? 'flex' : 'hidden md:flex')}>
-                  <div data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur">
-                    <Button size="icon" variant="ghost" aria-label={t('Voltar aos canais')} onClick={() => { setChannelOpened(false); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
-                    {activeChannel.kind === 'voice' ? <Volume2 className="size-5 text-muted-foreground" /> : <Hash className="size-5 text-muted-foreground" />}
-                    <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{t(activeChannel.label)}</h2><p className="text-xs text-muted-foreground">{t(activeCommunity.name)} {t('· exemplo')}</p></div>
-                  </div>
-                  <DemoNotice>{t("Comunidade demonstrativa. Nenhuma conversa é publicada.")}</DemoNotice>
-                  {activeChannel.kind === 'voice' ? (
-                    <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto">
-                      <div className="px-6 text-center"><Headphones aria-hidden="true" className="mx-auto mb-4 size-11 text-primary" /><h3 className="font-semibold">{t('Sala de voz')}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{t("Aqui você poderá conversar por áudio com os membros da comunidade. Conexão de voz ainda não está disponível.")}</p><Button className="mt-5" disabled>{t("Conectar à voz (em breve)")}</Button></div>
-                    </div>
-                  ) : (
-                    <>
-                      <ScrollArea className="min-h-0 flex-1">
-                        <div className="w-full min-w-0 space-y-5 px-4 py-6 sm:px-6 lg:px-8">
-                          <EmptyState icon={Hash} title={t("Bem-vindo a #") + t(activeChannel.label)} description={t("Os canais de texto organizam conversas públicas ou privadas conforme as permissões de cada comunidade.")} />
-                          {visibleChannelMessages.map(message => <div className="flex gap-3" key={message.id}>
-                            <ProfileAvatar name={message.mine ? account.user.name : t("Equipe")} className="size-8" />
-                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? t('Você (prévia)') : t('Equipe Uorqui (exemplo)')} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{t(message.text)}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={message.attachment.kind === 'image' || message.attachment.kind === 'video' ? () => setMediaViewerId(message.id) : undefined} />}{message.location && <DemoLocationCard location={message.location} />}</div>
-                          </div>)}
-                        </div>
-                      </ScrollArea>
-                      <DemoMessageComposer key={'channel-' + communityKey + '-' + channelOpened} onSend={sendDemoChannel} ariaLabel={t('Mensagem de canal de exemplo')} placeholder={t("Mensagem em #") + t(activeChannel.label) + t(' (prévia)')}
-                        draftText={drafts['channel/' + communityKey] ?? ''}
-                        onDraftChange={next => updateDraft('channel/' + communityKey, next)} />
-                    </>
-                  )}
-                </section>
-              </div>
-            )}
+            {area === 'communities' && <LiveCommunities myId={account.user.id} onMobileOpenChange={setChannelOpened} />}
 
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
@@ -350,7 +196,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
           })}
         </nav>}
       </div>
-      <DemoMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId} onClose={() => setMediaViewerId(null)} onImageEdited={saveEditedImage} />
     </div>
   );
 }
