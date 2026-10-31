@@ -101,12 +101,15 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'm.body AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",',
         'reaction.emoji AS "lastReactionEmoji", reaction.notified_at AS "lastReactionAt", reaction.message_id AS "lastReactionMessageId",',
         '(COALESCE(unread.n,0) + COALESCE(unread_reactions.n,0))::int AS "unreadCount",',
-        'COALESCE(unread_reactions.n,0)::int AS "unreadReactionCount"',
+        'COALESCE(unread_reactions.n,0)::int AS "unreadReactionCount",',
+        'incoming.pending_received_at AS "pendingReceivedAt"',
         'FROM direct_conversations c',
         'JOIN users u ON u.id=CASE WHEN c.participant_a_id=$1 THEN c.participant_b_id ELSE c.participant_a_id END',
         'JOIN profiles p ON p.user_id=u.id',
         'LEFT JOIN LATERAL (SELECT body,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
-        'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND read_at IS NULL AND deleted_at IS NULL) unread ON true',
+        'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL) unread ON true',
+        'LEFT JOIN LATERAL (SELECT MAX(COALESCE(edited_at,created_at)) AS pending_received_at FROM direct_messages',
+        ' WHERE conversation_id=c.id AND author_id<>$1 AND deleted_at IS NULL AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at))) incoming ON true',
         'LEFT JOIN LATERAL (SELECT r.emoji,r.notified_at,r.message_id FROM direct_message_reactions r JOIN direct_messages dm ON dm.id=r.message_id',
         '  WHERE dm.conversation_id=c.id AND dm.author_id=$1 AND dm.deleted_at IS NULL AND r.notified_at IS NOT NULL ORDER BY r.notified_at DESC,r.message_id DESC LIMIT 1) reaction ON true',
         'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_message_reactions r JOIN direct_messages dm ON dm.id=r.message_id',
@@ -196,6 +199,10 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       return reply.header('Cache-Control',noCache).send({message:prev.rows[0]});
     }catch(e){request.log.error({err:e},'DM send');return reply.code(503).send({error:'Unavailable'});}
   });
+  // Edited text is a new content revision for receipts: read_at and delivered_at
+  // keep the previous revision's timestamps until the recipient acknowledges
+  // the edit. A client considers receipts older than edited_at stale.
+  // read_at itself is retained so canceling a previously read message stays blocked.
   // Delivery is separate from reading. Receiving the message in an active client
   // acknowledges delivery even when the conversation is only in the inbox.
   app.post('/api/v1/dm/conversations/:id/received',{schema:{params:pathParams}},async(request,reply)=>{
@@ -205,7 +212,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET delivered_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND delivered_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
+      const r=await getPool().query('UPDATE direct_messages SET delivered_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at)) AND deleted_at IS NULL RETURNING id',[id,me]);
       if(r.rowCount)await publishDmConversationEvent(id,'received').catch(error=>request.log.warn({err:error},'DM delivery notification failed'));
       return reply.header('Cache-Control',noCache).send({received:r.rowCount??0});
     }catch(e){request.log.error({err:e},'DM received');return reply.code(503).send({error:'Unavailable'});}
@@ -217,7 +224,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET read_at=now(), delivered_at=COALESCE(delivered_at,now()) WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
+      const r=await getPool().query('UPDATE direct_messages SET read_at=now(), delivered_at=CASE WHEN delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at) THEN now() ELSE delivered_at END WHERE conversation_id=$1 AND author_id<>$2 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL RETURNING id',[id,me]);
       // Only the original author can acknowledge reactions, and only from the opened conversation.
       const reactions=await getPool().query(
         'UPDATE direct_message_reactions reaction SET read_at=now() FROM direct_messages m WHERE reaction.message_id=m.id AND m.conversation_id=$1 AND m.author_id=$2 AND m.deleted_at IS NULL AND reaction.notified_at IS NOT NULL AND reaction.read_at IS NULL RETURNING reaction.message_id',[id,me]);
