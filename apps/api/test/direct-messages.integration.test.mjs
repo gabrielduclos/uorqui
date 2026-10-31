@@ -282,3 +282,57 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
   const reactAfterDelete=await alice(item+'/reaction','PUT',{emoji:'👍'});
   assert.equal(reactAfterDelete.status,404);
 });
+
+test('real DM replies: referenced originals, conversation isolation, idempotency and deleted previews',async()=>{
+  const bobList=await bob('/api/v1/dm/conversations');
+  const aliceThread=bobList.data.conversations.find(thread=>thread.peerHandle==='dm_alice');
+  const otherThread=bobList.data.conversations.find(thread=>thread.peerHandle==='dm_other');
+  assert.ok(aliceThread && otherThread);
+  const path='/api/v1/dm/conversations/'+aliceThread.id;
+  const originals=await alice(path+'/messages');
+  const source=originals.data.messages.find(message=>message.body==='Olá, mensagem persistida!');
+  assert.ok(source);
+
+  const wrongConversation=await bob('/api/v1/dm/conversations/'+otherThread.id+'/messages','POST',{
+    body:'Wrong conversation',clientId:crypto.randomUUID(),replyToId:source.id,
+  });
+  assert.equal(wrongConversation.status,404,'a reply cannot reference another conversation');
+
+  const messageId=crypto.randomUUID();
+  const send=await bob(path+'/messages','POST',{
+    body:'Esta é uma resposta real.',clientId:messageId,replyToId:source.id,
+  });
+  assert.equal(send.status,201,JSON.stringify(send.data));
+  assert.equal(send.data.message.replyToId,source.id);
+  const repeat=await bob(path+'/messages','POST',{
+    body:'Esta é uma resposta real.',clientId:messageId,replyToId:source.id,
+  });
+  assert.equal(repeat.status,200);
+  assert.equal(repeat.data.message.id,send.data.message.id);
+
+  const history=await alice(path+'/messages');
+  const reply=history.data.messages.find(message=>message.id===send.data.message.id);
+  assert.equal(reply.body,'Esta é uma resposta real.');
+  assert.equal(reply.replyToId,source.id);
+  assert.deepEqual(reply.replyTo,{
+    id:source.id,body:source.body,authorId:source.authorId,deleted:false,
+  });
+
+  const removed=await alice(path+'/messages/'+source.id,'DELETE');
+  assert.equal(removed.status,200);
+  const afterDeletion=await bob(path+'/messages');
+  const replyAfter=afterDeletion.data.messages.find(message=>message.id===reply.id);
+  assert.equal(replyAfter.replyTo.id,source.id);
+  assert.equal(replyAfter.replyTo.deleted,true);
+  assert.equal(replyAfter.replyTo.body,'','deleted source text must not leak');
+  const retryAfterDeletion=await bob(path+'/messages','POST',{
+    body:'Esta é uma resposta real.',clientId:messageId,replyToId:source.id,
+  });
+  assert.equal(retryAfterDeletion.status,200,'retry should remain idempotent after source deletion');
+  assert.equal(retryAfterDeletion.data.message.id,reply.id);
+
+  const replyToDeleted=await bob(path+'/messages','POST',{
+    body:'Invalid reply',clientId:crypto.randomUUID(),replyToId:source.id,
+  });
+  assert.equal(replyToDeleted.status,404);
+});

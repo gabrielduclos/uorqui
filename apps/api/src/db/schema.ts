@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   check,
   boolean,
@@ -80,6 +81,7 @@ export const directMessages = pgTable('direct_messages', {
   editedAt: timestamp('edited_at', { withTimezone: true }),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   forwardedFromId: uuid('forwarded_from_id'),
+  replyToId: uuid('reply_to_id').references((): AnyPgColumn => directMessages.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
