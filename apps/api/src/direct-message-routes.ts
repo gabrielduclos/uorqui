@@ -47,7 +47,7 @@ async function canMessage(conversationId: string, me: string): Promise<boolean> 
     'CASE WHEN c.participant_a_id=$2 THEN c.participant_b_id ELSE c.participant_a_id END ' +
     'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(c.participant_a_id,c.participant_b_id) ' +
     'AND f.user_b_id=GREATEST(c.participant_a_id,c.participant_b_id) ' +
-    "WHERE c.id=$1 AND (c.participant_a_id=$2 OR c.participant_b_id=$2) AND (p.is_public=true OR f.status='accepted')",
+    "WHERE c.id=$1 AND (c.participant_a_id=$2 OR c.participant_b_id=$2) AND (p.is_public=true OR f.status='accepted') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id))",
     [conversationId,me],
   );
   return result.rowCount === 1;
@@ -55,7 +55,7 @@ async function canMessage(conversationId: string, me: string): Promise<boolean> 
 const mayPostSql =
   "EXISTS (SELECT 1 FROM direct_conversations c JOIN profiles p ON p.user_id = CASE WHEN c.participant_a_id=$2 THEN c.participant_b_id ELSE c.participant_a_id END " +
   "LEFT JOIN user_friendships f ON f.user_a_id=LEAST(c.participant_a_id,c.participant_b_id) AND f.user_b_id=GREATEST(c.participant_a_id,c.participant_b_id) " +
-  "WHERE c.id=$1 AND (c.participant_a_id=$2 OR c.participant_b_id=$2) AND (p.is_public=true OR f.status='accepted'))";
+  "WHERE c.id=$1 AND (c.participant_a_id=$2 OR c.participant_b_id=$2) AND (p.is_public=true OR f.status='accepted') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id)))";
 
 
 export function registerDirectMessageRoutes(app:FastifyInstance, getSession: SessionReader) {
@@ -120,7 +120,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(q.length<2) return reply.code(400).send({error:'Search too short'});
       const escaped = '%' + q.replace(/[\\%_]/g,'\\$&') + '%';
       const r=await getPool().query(
-        'SELECT u.handle, p.display_name AS "displayName", p.avatar_url AS "avatarUrl" FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.id<>$1 AND p.is_public=true AND (u.handle ILIKE $2 OR p.display_name ILIKE $2) ORDER BY u.handle LIMIT 20',
+        'SELECT u.handle, p.display_name AS "displayName", p.avatar_url AS "avatarUrl" FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.id<>$1 AND p.is_public=true AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=$1 AND bl.blocked_id=u.id) OR (bl.blocker_id=u.id AND bl.blocked_id=$1)) AND (u.handle ILIKE $2 OR p.display_name ILIKE $2) ORDER BY u.handle LIMIT 20',
         [me,escaped]);
       return reply.header('Cache-Control',noCache).send({people:r.rows});
     } catch(e){request.log.error({err:e},'DM people search');return reply.code(503).send({error:'Unavailable'});}
@@ -131,9 +131,9 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me) return reply.code(401).send({error:'Unauthorized'});
       const query=[
         'SELECT c.id, c.created_at AS "createdAt", u.handle AS "peerHandle",',
-        'CASE WHEN p.is_public=true OR f.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "peerName",',
-        'CASE WHEN p.is_public=true OR f.status=\'accepted\' THEN p.avatar_url ELSE NULL END AS "peerAvatarUrl",',
-        '(p.is_public=true OR COALESCE(f.status=\'accepted\',false)) AS "canMessage",',
+        'CASE WHEN (p.is_public=true OR f.status=\'accepted\') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id)) THEN p.display_name ELSE u.handle END AS "peerName",',
+        'CASE WHEN (p.is_public=true OR f.status=\'accepted\') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id)) THEN p.avatar_url ELSE NULL END AS "peerAvatarUrl",',
+        '((p.is_public=true OR COALESCE(f.status=\'accepted\',false)) AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id))) AS "canMessage",',
         `NULLIF(m.body,'') AS "lastBody", m.attachment_type AS "lastAttachmentType", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",`,
         'reaction.emoji AS "lastReactionEmoji", reaction.notified_at AS "lastReactionAt", reaction.message_id AS "lastReactionMessageId",',
         'reaction.user_id AS "lastReactionAuthorId",',
@@ -169,7 +169,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const me=await identity(request,getSession);
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {handle}=request.body as {handle:string};
-      const match=await getPool().query('SELECT u.id FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.handle=$1 AND u.id<>$2 AND (p.is_public=true OR EXISTS(SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(u.id,$2::uuid) AND f.user_b_id=GREATEST(u.id,$2::uuid) AND f.status=\'accepted\')) LIMIT 1',[handle,me]);
+      const match=await getPool().query('SELECT u.id FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.handle=$1 AND u.id<>$2 AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=$1 AND bl.blocked_id=u.id) OR (bl.blocker_id=u.id AND bl.blocked_id=$1)) AND (p.is_public=true OR EXISTS(SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(u.id,$2::uuid) AND f.user_b_id=GREATEST(u.id,$2::uuid) AND f.status=\'accepted\')) LIMIT 1',[handle,me]);
       if(!match.rowCount)return reply.code(404).send({error:'User unavailable'});
       const [a,b]=[me,match.rows[0].id as string].sort();
       const r=await getPool().query('INSERT INTO direct_conversations(participant_a_id,participant_b_id) VALUES($1,$2) ON CONFLICT(participant_a_id,participant_b_id) DO UPDATE SET participant_a_id=EXCLUDED.participant_a_id RETURNING id',[a,b]);

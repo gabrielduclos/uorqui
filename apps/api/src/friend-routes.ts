@@ -40,7 +40,9 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
         ' f.status,f.requested_by_id AS "requesterId",f.created_at AS "requestedAt" ' +
         'FROM user_friendships f JOIN users u ON u.id=CASE WHEN f.user_a_id=$1 THEN f.user_b_id ELSE f.user_a_id END ' +
         'JOIN profiles p ON p.user_id=u.id WHERE (f.user_a_id=$1 OR f.user_b_id=$1) ' +
-        'AND f.status IN (\'pending\',\'accepted\') ORDER BY lower(p.display_name),u.handle LIMIT 600',
+        'AND f.status IN (\'pending\',\'accepted\') AND NOT EXISTS (SELECT 1 FROM user_blocks bl '+
+        'WHERE (bl.blocker_id=f.user_a_id AND bl.blocked_id=f.user_b_id) OR (bl.blocker_id=f.user_b_id AND bl.blocked_id=f.user_a_id)) '+
+        'ORDER BY lower(p.display_name),u.handle LIMIT 600',
         [self]);
       const friends: unknown[] = [], received: unknown[] = [], sent: unknown[] = [];
       for (const entry of result.rows) {
@@ -64,6 +66,8 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
       const other=await lookup(handle,false);
       if(!other || other===self)return reply.header('Cache-Control',noCache).send({status:'none'});
       const [a,b]=pair(self,other);
+      const blocked=await getPool().query('SELECT blocker_id FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',[self,other]);
+      if(blocked.rowCount)return reply.header('Cache-Control',noCache).send({status:blocked.rows.some(row=>row.blocker_id===self)?'blocked':'none'});
       const found=await getPool().query('SELECT status,requested_by_id FROM user_friendships WHERE user_a_id=$1 AND user_b_id=$2',[a,b]);
       if(!found.rowCount || !['accepted','pending'].includes(found.rows[0].status))return reply.header('Cache-Control',noCache).send({status:'none'});
       const status=found.rows[0].status==='accepted'?'friends':found.rows[0].requested_by_id===self?'sent':'received';
@@ -84,6 +88,8 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
       const other=await lookup(handle,false);
       if(!other || other===self)return reply.code(404).send({error:'Profile unavailable'});
       const [a,b]=pair(self,other);
+      const blocked=await getPool().query('SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',[self,other]);
+      if(blocked.rowCount)return reply.code(404).send({error:'Profile unavailable'});
       const current=await getPool().query('SELECT status,requested_by_id,updated_at FROM user_friendships WHERE user_a_id=$1 AND user_b_id=$2',[a,b]);
       if(current.rowCount){
         const row=current.rows[0];
@@ -106,6 +112,7 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
         'ON CONFLICT(user_a_id,user_b_id) DO UPDATE SET requested_by_id=EXCLUDED.requested_by_id,' +
         ' status=\'pending\',created_at=now(),updated_at=now() ' +
         'WHERE user_friendships.status IN (\'canceled\',\'declined\') ' +
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=EXCLUDED.user_a_id AND bl.blocked_id=EXCLUDED.user_b_id) OR (bl.blocker_id=EXCLUDED.user_b_id AND bl.blocked_id=EXCLUDED.user_a_id)) '+
         'AND user_friendships.updated_at <= now() - ' +
         '(CASE WHEN user_friendships.status=\'declined\' THEN interval \'7 days\' ELSE interval \'24 hours\' END) ' +
         'RETURNING user_a_id',[a,b,self]);
@@ -130,7 +137,8 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
       if(Number(count.rows[0].n)>=500)return reply.code(409).send({error:'Friends limit reached'});
       const result=await getPool().query(
         'UPDATE user_friendships SET status=\'accepted\',updated_at=now() ' +
-        'WHERE user_a_id=$1 AND user_b_id=$2 AND requested_by_id=$3 AND status=\'pending\' RETURNING user_a_id',
+        'WHERE user_a_id=$1 AND user_b_id=$2 AND requested_by_id=$3 AND status=\'pending\' '+
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=$1 AND bl.blocked_id=$2) OR (bl.blocker_id=$2 AND bl.blocked_id=$1)) RETURNING user_a_id',
         [a,b,other]);
       if(!result.rowCount)return reply.code(404).send({error:'Request unavailable'});
       await notify(self,other);

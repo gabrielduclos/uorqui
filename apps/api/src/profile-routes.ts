@@ -77,8 +77,16 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
         .where(eq(users.handle, handle.replace(/^@/, '').toLowerCase()))
         .limit(1);
       if (!record) return reply.status(404).send({ error: 'Profile not found' });
+      // A block always overrides public visibility, profile URLs and friendship.
+      const requester = await readSession(request);
+      if (requester && requester.user.id !== record.id) {
+        const blocked = await getPool().query(
+          'SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',
+          [requester.user.id,record.id]);
+        if (blocked.rowCount) return reply.status(404).send({ error: 'Profile not found' });
+      }
       if (!record.isPublic) {
-        const session = await readSession(request);
+        const session = requester;
         if (!session) return reply.status(404).send({ error: 'Profile not found' });
         const friendship = await getPool().query(
           "SELECT 1 FROM user_friendships WHERE user_a_id=LEAST($1::uuid,$2::uuid) " +
@@ -116,8 +124,16 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
       if (!record || (kind === 'avatar' ? record.avatarUrl : record.coverUrl) !== expected) {
         return reply.status(404).send({ allowed: false });
       }
+      const requester = await readSession(request);
+      // Even images of publicly visible profiles are restricted after blocking.
+      if (requester && requester.user.id !== userId) {
+        const blocked = await getPool().query(
+          'SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',
+          [requester.user.id,userId]);
+        if (blocked.rowCount) return reply.status(404).send({ allowed: false });
+      }
       if (!record.isPublic) {
-        const session = await readSession(request);
+        const session = requester;
         if (!session) return reply.status(404).send({ allowed: false });
         if (session.user.id !== userId) {
           const friendship = await getPool().query(
