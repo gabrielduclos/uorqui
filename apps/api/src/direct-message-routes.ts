@@ -290,7 +290,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
       const emoji=(request.body as {emoji:string}).emoji;
       const r=await getPool().query(
-        'INSERT INTO direct_message_reactions (message_id,user_id,emoji,read_at,updated_at) SELECT m.id,$1,$2,NULL,now() FROM direct_messages m WHERE m.id=$3 AND m.conversation_id=$4 AND m.author_id<>$1 AND m.deleted_at IS NULL ON CONFLICT (message_id,user_id) DO UPDATE SET emoji=EXCLUDED.emoji,read_at=NULL,updated_at=now() RETURNING message_id',
+        'INSERT INTO direct_message_reactions (message_id,user_id,emoji,read_at,updated_at) SELECT m.id,$1,$2,NULL,now() FROM direct_messages m WHERE m.id=$3 AND m.conversation_id=$4 AND m.author_id<>$1 AND m.deleted_at IS NULL ON CONFLICT (message_id,user_id) DO UPDATE SET emoji=EXCLUDED.emoji,read_at=CASE WHEN direct_message_reactions.emoji IS DISTINCT FROM EXCLUDED.emoji THEN NULL ELSE direct_message_reactions.read_at END,updated_at=CASE WHEN direct_message_reactions.emoji IS DISTINCT FROM EXCLUDED.emoji THEN now() ELSE direct_message_reactions.updated_at END RETURNING message_id',
         [me,emoji,messageId,id]);
       if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
       await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM reaction notification failed'));
