@@ -93,6 +93,12 @@ function AppContent() {
     return () => { mounted = false; window.clearTimeout(timeout); controller.abort(); };
   }, []);
 
+  const onPublicProfileMessage = useCallback((handle: string) => {
+    window.history.replaceState(null, '', '/');
+    setPublicHandle(null);
+    window.dispatchEvent(new CustomEvent<string>('uorqui:open-dm', { detail: handle }));
+  }, []);
+
   const onAuthenticated = useCallback((next: Account) => setAccount(next), []);
   const signOut = useCallback(async () => {
     const response = await fetch('/api/auth/sign-out', {
@@ -113,7 +119,7 @@ function AppContent() {
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
       {publicHandle && (
         <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-background">
-          <PublicProfilePage handle={publicHandle} />
+          <PublicProfilePage handle={publicHandle} onMessage={account?.profile && account.profile.handle !== publicHandle ? onPublicProfileMessage : undefined} />
         </div>
       )}
     </MotionConfig>
