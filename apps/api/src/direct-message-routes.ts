@@ -20,7 +20,7 @@ async function belongs(conversationId: string, userId: string): Promise<boolean>
     [conversationId,userId]);
   return r.rowCount === 1;
 }
-const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded"';
+const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded"';
 const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam } };
 const noCache = 'no-store';
 
@@ -171,6 +171,20 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       return reply.header('Cache-Control',noCache).send({message:prev.rows[0]});
     }catch(e){request.log.error({err:e},'DM send');return reply.code(503).send({error:'Unavailable'});}
   });
+  // Delivery is separate from reading. Receiving the message in an active client
+  // acknowledges delivery even when the conversation is only in the inbox.
+  app.post('/api/v1/dm/conversations/:id/received',{schema:{params:pathParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await identity(request,getSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const r=await getPool().query('UPDATE direct_messages SET delivered_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND delivered_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
+      if(r.rowCount)await publishDmConversationEvent(id,'received').catch(error=>request.log.warn({err:error},'DM delivery notification failed'));
+      return reply.header('Cache-Control',noCache).send({received:r.rowCount??0});
+    }catch(e){request.log.error({err:e},'DM received');return reply.code(503).send({error:'Unavailable'});}
+  });
   app.post('/api/v1/dm/conversations/:id/read',{schema:{params:pathParams}},async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
@@ -178,7 +192,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET read_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
+      const r=await getPool().query('UPDATE direct_messages SET read_at=now(), delivered_at=COALESCE(delivered_at,now()) WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
       if(r.rowCount) await publishDmConversationEvent(id,'read').catch(error=>request.log.warn({err:error},'DM read notification failed'));
       return reply.header('Cache-Control',noCache).send({read:r.rowCount??0});
     }catch(e){request.log.error({err:e},'DM read');return reply.code(503).send({error:'Unavailable'});}
