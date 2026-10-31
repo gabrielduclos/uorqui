@@ -229,8 +229,8 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
     }
   }
 
-  return <form onSubmit={submit} className="shrink-0 border-t border-border bg-card/60 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+  return <form onSubmit={submit} className="shrink-0 border-t border-border bg-card/60 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4 lg:px-8">
+    <div className="flex w-full min-w-0 flex-col gap-2">
       {pending && <div className="flex max-w-full items-start gap-3 rounded-xl border border-border bg-muted/60 p-3">
         <div className="min-w-0 flex-1">
           <p className="mb-2 truncate text-xs font-medium">{pending.name} · {formatSize(pending.size)}</p>
