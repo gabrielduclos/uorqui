@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Download, FileText, Forward, LoaderCircle, MoreHorizontal, Pencil, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Forward, LoaderCircle, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
+import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { cn } from '@/lib/utils';
 
 export type DirectChatMessage = {
@@ -50,7 +51,7 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onRetry, disabled, highlighted }: {
+export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onRetry, onOpenMedia, disabled, highlighted }: {
   message: DirectChatMessage; mine: boolean; locale: string; myId: string; peerName: string;
   onReply: (message: DirectChatMessage) => void;
   onJumpToReply: (messageId: string) => void;
@@ -59,6 +60,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   onForward: (message: DirectChatMessage) => void;
   onReact: (message: DirectChatMessage, emoji: string | null) => void;
   onRetry: (message: DirectChatMessage) => void;
+  onOpenMedia?: (messageId:string)=>void;
   disabled?: boolean;
   highlighted?: boolean;
 }) {
@@ -73,6 +75,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   const assetUrl = asset && (message.attachmentUrl || '/media/dm/' + message.conversationId + '/' + asset.id);
   const isImage = !!asset?.type.startsWith('image/');
   const isVideo = !!asset?.type.startsWith('video/');
+  const isAudio = !!asset?.type.startsWith('audio/');
   const time = new Date(message.createdAt);
   const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
   const timeLabel = Number.isFinite(time.getTime())
@@ -145,13 +148,17 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         </blockquote>}
 
         {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0">
-          {isImage ? <button type="button" onClick={() => setPreviewOpen(true)}
+          {isImage ? <button type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
             aria-label={pt ? 'Ampliar imagem' : 'Open image'}
             className="block max-w-full focus-visible:outline-2 focus-visible:outline-current">
             <img src={assetUrl} alt={asset.name} loading="lazy" decoding="async"
               className="max-h-[360px] w-auto max-w-full object-contain" />
-          </button> : isVideo ? <video src={assetUrl} controls playsInline preload="metadata"
-            className="max-h-[320px] max-w-full" aria-label={asset.name}/> :
+          </button> : isVideo ? <button type="button" onClick={() => onOpenMedia?.(message.id)}
+              aria-label={pt?'Abrir vídeo':'Open video'}
+              className="relative block max-w-full bg-black focus-visible:outline-2 focus-visible:outline-current">
+              <video src={assetUrl} muted playsInline preload="metadata" className="pointer-events-none max-h-[320px] max-w-full"/>
+              <span className="absolute inset-0 grid place-items-center bg-black/20"><Play className="size-10 text-white" fill="currentColor"/></span>
+            </button> : isAudio ? <ChatAudioPlayer src={assetUrl}/> :
             <a href={assetUrl} download={asset.name}
               className="flex min-w-0 items-center gap-2 border border-current/20 px-2 py-2 hover:underline">
               <FileText className="size-5 shrink-0"/><span className="min-w-0 flex-1 truncate text-xs">{asset.name}</span>
