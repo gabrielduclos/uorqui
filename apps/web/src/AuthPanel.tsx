@@ -29,6 +29,8 @@ export default function AuthPanel() {
   const [account, setAccount] = useState<Account | null>(null);
   const [view, setView] = useState<'login' | 'register'>('login');
   const [canRegister, setCanRegister] = useState(false);
+  const [apiReady, setApiReady] = useState(false);
+  const [apiChecked, setApiChecked] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,14 +62,17 @@ export default function AuthPanel() {
   useEffect(() => {
     void refresh();
     void requestJson('/api/v1/status').then(({ response, body }) => {
-      if (response.ok) {
-        setCanRegister((body as ApiStatus).developmentRegistrationEnabled === true);
-      }
-    }).catch(() => setCanRegister(false));
+      setApiReady(response.ok);
+      setCanRegister(response.ok && (body as ApiStatus).developmentRegistrationEnabled === true);
+    }).catch(() => {
+      setApiReady(false);
+      setCanRegister(false);
+    }).finally(() => setApiChecked(true));
   }, [refresh]);
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!apiReady) return;
     setBusy(true);
     setMessage('');
     try {
@@ -168,7 +173,12 @@ export default function AuthPanel() {
             <button type="button" aria-pressed={view === 'login'} onClick={() => { setView('login'); setMessage(''); }} className={view === 'login' ? 'rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold' : 'rounded-lg px-3 py-2 text-sm text-slate-300'}>Entrar</button>
             <button type="button" disabled={!canRegister} aria-pressed={view === 'register'} onClick={() => { if (canRegister) { setView('register'); setMessage(''); } }} className={view === 'register' ? 'rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold' : 'rounded-lg px-3 py-2 text-sm text-slate-300 disabled:cursor-not-allowed disabled:opacity-40'}>Criar conta</button>
           </div>
-          {!canRegister && <p className="mb-4 text-xs text-slate-400">Novas inscrições estão fechadas. O acesso está reservado aos testes de desenvolvimento.</p>}
+          {apiChecked && !apiReady && (
+            <p role="status" className="mb-4 rounded-xl border border-indigo-400/20 bg-indigo-400/10 p-3 text-sm text-slate-200">
+              A interface já está online. O login estará disponível quando a API Uorqui estiver conectada.
+            </p>
+          )}
+          {apiReady && !canRegister && <p className="mb-4 text-xs text-slate-400">Novas inscrições estão fechadas. O acesso está reservado aos testes de desenvolvimento.</p>}
           <form className="space-y-3" onSubmit={authenticate}>
             {view === 'register' && (
               <div>
@@ -185,7 +195,7 @@ export default function AuthPanel() {
               <input id="auth-password" type="password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} maxLength={128} autoComplete={view === 'register' ? 'new-password' : 'current-password'} />
               {view === 'register' && <p className="mt-1 text-xs text-slate-400">Mínimo de 12 caracteres. Cadastro restrito ao ambiente de desenvolvimento.</p>}
             </div>
-            <button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Aguarde…' : view === 'login' ? 'Entrar' : 'Criar conta'}</button>
+            <button type="submit" disabled={busy || !apiReady} className={buttonClass}>{busy ? 'Aguarde…' : view === 'login' ? 'Entrar' : 'Criar conta'}</button>
           </form>
         </>
       )}
