@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  boolean,
   index,
   pgEnum,
   pgTable,
@@ -24,6 +25,9 @@ export const profiles = pgTable('profiles', {
   displayName: varchar('display_name', { length: 120 }).notNull(),
   bio: text('bio'),
   avatarKey: text('avatar_key'),
+  avatarUrl: text('avatar_url'),
+  coverUrl: text('cover_url'),
+  isPublic: boolean('is_public').default(true).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
