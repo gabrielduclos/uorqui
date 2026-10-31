@@ -300,7 +300,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
           {isRecording ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-5" />}
         </Button>
         <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => editing ? setEditText(event.target.value) : setText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
-        <Button type="submit" aria-label={editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração'} size="icon" disabled={isRecording || (!activeText.trim() && (editing || !pending))} className="size-11 shrink-0"><Send className="size-4" /></Button>
+        <Button type="submit" aria-label={editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração'} size="icon" disabled={isRecording || (!activeText.trim() && (!!editing || !pending))} className="size-11 shrink-0"><Send className="size-4" /></Button>
       </div>
       <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>
     </div>
