@@ -37,5 +37,11 @@ jobs:
           if [[ -n "$(git status --porcelain -- apps/api/drizzle)" ]]; then
             echo 'Drizzle schema changed without committed migration artifacts' >&2
             git status --short -- apps/api/drizzle
+            for file in apps/api/drizzle/0012*.sql; do
+              if [[ -f "$file" ]]; then
+                echo '--- Generated migration SQL diagnostics ---'
+                cat "$file"
+              fi
+            done
             exit 1
           fi
