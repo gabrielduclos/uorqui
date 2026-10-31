@@ -79,6 +79,22 @@
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; }
 }
+/* Only the interior message/feed scroll areas may scroll in the signed-in app.
+   This prevents iOS Safari from panning the fixed headers above the keyboard. */
+body.uorqui-app-active {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+[data-uorqui-app-shell] {
+  isolation: isolate;
+}
+
+[data-uorqui-app-shell] [data-uorqui-context-header],
+[data-uorqui-app-shell] [data-uorqui-main-header] {
+  flex-shrink: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
 }

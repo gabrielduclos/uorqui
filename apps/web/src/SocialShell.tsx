@@ -18,6 +18,7 @@ import { DemoChatBubble, DemoLocationCard, messagePreview, type DemoMessage } fr
 import { DemoMediaViewer, type PreviewMediaItem } from './DemoChatMedia';
 import { PreferencesControls } from './PreferencesControls';
 import { useUorquiPreferences } from './UorquiPreferences';
+import { useVisualViewportFrame } from './useVisualViewportFrame';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -98,6 +99,7 @@ export default function SocialShell({ account, onLogout }: {
   onLogout: () => Promise<void>;
 }) {
   const { t, locale } = useUorquiPreferences();
+  useVisualViewportFrame();
   const [area, setArea] = useState<Area>('feed');
   const [search, setSearch] = useState('');
   const [conversationId, setConversationId] = useState<string>('lia');
@@ -278,12 +280,12 @@ export default function SocialShell({ account, onLogout }: {
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
-    <div className="flex h-[100dvh] min-h-[380px] w-full overflow-hidden bg-background text-foreground">
-      <aside className="hidden w-55 shrink-0 flex-col border-r border-border bg-card/65 md:flex">
+    <div data-uorqui-app-shell className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
+      <aside className="hidden h-full min-h-0 w-55 shrink-0 flex-col overflow-hidden border-r border-border bg-card/65 md:flex">
         <button className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('feed')} aria-label={t('Uorqui — ir para o início')}>
           uorqui<span className="text-primary">.</span>
         </button>
-        <nav className="flex flex-col gap-1 p-3" aria-label={t("Navegação principal")}>
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
             const Icon = item.icon;
             return <Button type="button" key={item.id} variant={area === item.id ? 'secondary' : 'ghost'} onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('h-11 justify-start gap-3 text-sm', area === item.id && 'text-primary')}>
@@ -302,8 +304,8 @@ export default function SocialShell({ account, onLogout }: {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card/80 px-4 pt-[env(safe-area-inset-top)] sm:px-6 md:h-16 md:pt-0">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6 md:h-16 md:min-h-16 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => move('feed')} aria-label={t('Uorqui — voltar ao início')} className="shrink-0 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">uorqui<span className="text-primary">.</span></button>
             <Separator orientation="vertical" className="h-5 md:hidden" />
@@ -319,8 +321,8 @@ export default function SocialShell({ account, onLogout }: {
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <motion.div key={area} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }} className="h-full">
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <motion.div key={area} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }} className="h-full min-h-0 overflow-hidden">
             {area === 'feed' && (
               <ScrollArea className="h-full">
                 <div className="mx-auto max-w-3xl space-y-5 p-4 pb-24 sm:p-7">
@@ -346,8 +348,8 @@ export default function SocialShell({ account, onLogout }: {
             )}
 
             {area === 'conversations' && (
-              <div className="flex h-full min-w-0">
-                <section aria-label={t("Lista de conversas")} className={cn('w-full min-w-0 flex-col border-r border-border bg-card/30 md:flex md:w-82 md:shrink-0', conversationOpened ? 'hidden' : 'flex')}>
+              <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
+                <section aria-label={t("Lista de conversas")} className={cn('h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/30 md:flex md:w-82 md:shrink-0', conversationOpened ? 'hidden' : 'flex')}>
                   <div className="shrink-0 space-y-3 border-b border-border p-4">
                     <div className="flex items-center justify-between gap-2"><h2 className="text-base font-semibold">{t('Conversas')}</h2><Badge variant="outline">1:1</Badge></div>
                     <div className="relative"><Search aria-hidden="true" className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label={t('Buscar conversas de exemplo')} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Buscar conversas")} className="h-11 pl-9 text-base" /></div>
@@ -367,8 +369,8 @@ export default function SocialShell({ account, onLogout }: {
                     </div>
                   </ScrollArea>
                 </section>
-                <section data-chat-conversation aria-label={t("Conversa demonstrativa")} className={cn('min-w-0 flex-1 flex-col', conversationOpened ? 'flex' : 'hidden md:flex')}>
-                  <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
+                <section data-chat-conversation aria-label={t("Conversa demonstrativa")} className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden', conversationOpened ? 'flex' : 'hidden md:flex')}>
+                  <div data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur">
                     <Button variant="ghost" size="icon" aria-label={t('Voltar às conversas')} onClick={() => { setConversationOpened(false); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
                     <Avatar className="size-9"><AvatarFallback className={cn('text-white',activeContact.color)}>{activeContact.initials}</AvatarFallback></Avatar>
                     <div className="min-w-0"><div className="truncate text-sm font-semibold">{activeContact.name} <span className="font-normal text-muted-foreground">{t('· exemplo')}</span></div><p className="text-xs text-muted-foreground">{t("Conversa individual")}</p></div>
@@ -399,16 +401,16 @@ export default function SocialShell({ account, onLogout }: {
             )}
 
             {area === 'communities' && (
-              <div className="flex h-full min-w-0">
-                <div className="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-border bg-card/50 py-4" aria-label={t("Comunidades de demonstração")}>
+              <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
+                <div data-uorqui-community-rail className="relative z-20 flex h-full min-h-0 w-16 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-card/95 py-4" aria-label={t("Comunidades de demonstração")}>
                   {demoCommunities.map(group => <Button key={group.id} type="button" size="icon" variant={communityId === group.id ? 'secondary' : 'ghost'} className={cn('size-11 rounded-2xl text-lg font-bold', communityId === group.id && 'ring-2 ring-primary/70')} onClick={() => { setCommunityId(group.id); setChannelId(group.channels[0].id); setChannelOpened(false); setMediaViewerId(null); }} aria-label={'Comunidade ' + group.name} aria-pressed={communityId === group.id}>
                     <span className={cn('flex size-9 items-center justify-center rounded-xl text-white',group.className)}>{group.monogram}</span>
                   </Button>)}
                   <Separator className="w-7" />
                   <Button size="icon" variant="outline" disabled title={t('Criação de comunidades em desenvolvimento')} aria-label={t("Criar comunidade indisponível")} className="size-10 rounded-2xl"><Plus className="size-4" /></Button>
                 </div>
-                <section aria-label={t('Lista de canais')} className={cn('min-w-0 flex-1 flex-col border-r border-border bg-card/25 md:flex md:w-65 md:shrink-0 md:flex-none', channelOpened ? 'hidden' : 'flex')}>
-                  <div className="shrink-0 border-b border-border px-4 py-4">
+                <section aria-label={t('Lista de canais')} className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-border bg-card/25 md:flex md:w-65 md:shrink-0 md:flex-none', channelOpened ? 'hidden' : 'flex')}>
+                  <div className="relative z-10 shrink-0 border-b border-border bg-card/95 px-4 py-4">
                     <div className="truncate font-semibold">{t(activeCommunity.name)}</div>
                     <p className="mt-1 text-xs text-muted-foreground">{t(activeCommunity.description)}</p>
                   </div>
@@ -424,8 +426,8 @@ export default function SocialShell({ account, onLogout }: {
                     </div>
                   </ScrollArea>
                 </section>
-                <section aria-label={t("Conteúdo do canal")} className={cn('min-w-0 flex-1 flex-col', channelOpened ? 'flex' : 'hidden md:flex')}>
-                  <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
+                <section aria-label={t("Conteúdo do canal")} className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden', channelOpened ? 'flex' : 'hidden md:flex')}>
+                  <div data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur">
                     <Button size="icon" variant="ghost" aria-label={t('Voltar aos canais')} onClick={() => { setChannelOpened(false); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
                     {activeChannel.kind === 'voice' ? <Volume2 className="size-5 text-muted-foreground" /> : <Hash className="size-5 text-muted-foreground" />}
                     <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{t(activeChannel.label)}</h2><p className="text-xs text-muted-foreground">{t(activeCommunity.name)} {t('· exemplo')}</p></div>
