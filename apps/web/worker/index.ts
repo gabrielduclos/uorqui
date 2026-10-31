@@ -48,7 +48,7 @@ function apiHeaders(request: Request): Headers {
   return headers;
 }
 
-async function callApi(request: Request, origin: URL, path: string, method: 'GET' | 'PATCH' | 'POST' = 'GET', body?: object): Promise<Response> {
+async function callApi(request: Request, origin: URL, path: string, method: 'GET' | 'PATCH' | 'POST' | 'DELETE' = 'GET', body?: object): Promise<Response> {
   const headers = apiHeaders(request);
   if (body) headers.set('content-type', 'application/json');
   if (method !== 'GET' && request.headers.get('origin')) headers.set('origin', request.headers.get('origin')!);
@@ -314,6 +314,22 @@ export default {
     if (write) {
       if (!['POST', 'DELETE'].includes(request.method)) return jsonError(405, 'Method not allowed');
       return handleMediaWrite(request, env, current, origin, write[1] as 'avatar' | 'cover');
+    }
+
+    const dmCancel=DM_CANCEL_PATH.exec(current.pathname);
+    if (dmCancel && request.method === 'DELETE') {
+      try {
+        const response=await callApi(request,origin,current.pathname,'DELETE');
+        if(response.ok && env.DM_ATTACHMENTS){
+          const data=await response.clone().json() as {attachmentId?:string|null};
+          if(data.attachmentId && /^[0-9a-f-]{36}$/.test(data.attachmentId)){
+            await env.DM_ATTACHMENTS.delete('dm/'+dmCancel[1]+'/'+data.attachmentId).catch(() => {});
+          }
+        }
+        const headers=new Headers(response.headers);
+        headers.set('cache-control','no-store');
+        return new Response(response.body,{status:response.status,headers});
+      }catch{return jsonError(502,'Could not cancel message');}
     }
 
     const upstream = new URL(current.pathname + current.search, origin);
