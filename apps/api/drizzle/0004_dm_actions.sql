@@ -1,3 +1,4 @@
+ALTER TABLE "direct_messages" ADD COLUMN "delivered_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "direct_messages" ADD COLUMN "edited_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "direct_messages" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "direct_messages" ADD COLUMN "forwarded_from_id" uuid;--> statement-breakpoint
