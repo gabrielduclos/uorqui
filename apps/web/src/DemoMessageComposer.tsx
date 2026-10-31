@@ -365,6 +365,8 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
     }
   }
 
+  const canSend = Boolean(activeText.trim() || (!editing && (pending || pendingLocation)));
+
   return <form onSubmit={submit} className="shrink-0 border-t border-border bg-card/60 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4 lg:px-8">
     <div className="flex w-full min-w-0 flex-col gap-2">
       {(editing || replyPreview) && <div className="flex items-center gap-3 border-l-2 border-primary bg-muted/55 px-3 py-2 text-sm">
@@ -392,47 +394,50 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       </p>}
       {locating && <p role="status" className="text-xs text-muted-foreground">Solicitando localização ao navegador…</p>}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-      <div ref={controlsRef} className="relative flex min-w-0 items-end gap-2">
-        <div className="relative shrink-0">
+      <div ref={controlsRef} className="relative flex min-w-0 items-end gap-1 sm:gap-2">
+        <div className="shrink-0">
           <input ref={fileInputRef} type="file" className="sr-only" tabIndex={-1} aria-label="Selecionar anexo" onChange={fileSelected} />
           <input ref={cameraInputRef} type="file" capture="environment" className="sr-only" tabIndex={-1} aria-label="Capturar mídia com a câmera" onChange={cameraFileSelected} />
-          <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Adicionar anexo" aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={isRecording || !!editing} onClick={() => { setPickerOpen(open => !open); setEmojiOpen(false); setCameraOptions(false); }}><Plus className="size-6" /></Button>
+          <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 sm:size-11" aria-label="Adicionar anexo" aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={isRecording || !!editing} onClick={() => { setPickerOpen(open => !open); setEmojiOpen(false); setCameraOptions(false); }}><Plus className="size-6" /></Button>
         </div>
-        <div className="relative shrink-0">
-          <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Abrir lista de emojis" aria-haspopup="dialog" aria-expanded={emojiOpen} disabled={isRecording || !!editing} onClick={() => { setEmojiOpen(open => !open); setPickerOpen(false); }}><Smile className="size-5" /></Button>
-        </div>
-        {pickerOpen && <div role="dialog" aria-label="Adicionar à conversa" onKeyDown={event => { if (event.key === 'Escape') { setPickerOpen(false); setCameraOptions(false); } }} className="absolute bottom-full left-0 z-50 mb-3 w-[310px] max-w-[calc(100vw-24px)] border border-border bg-popover p-3 text-popover-foreground shadow-2xl">
-          <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold">Adicionar à conversa</p><button type="button" aria-label="Fechar anexos" onClick={() => setPickerOpen(false)} className="grid size-8 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
-          {cameraOptions ? <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => chooseCamera('image')} className="flex min-h-20 flex-col items-center justify-center gap-2 border border-border p-3 text-xs hover:bg-accent"><Camera className="size-6" />Tirar foto</button>
-            <button type="button" onClick={() => chooseCamera('video')} className="flex min-h-20 flex-col items-center justify-center gap-2 border border-border p-3 text-xs hover:bg-accent"><Video className="size-6" />Gravar vídeo</button>
-            <button type="button" className="col-span-2 py-2 text-xs text-muted-foreground hover:bg-accent" onClick={() => setCameraOptions(false)}>Voltar</button>
-          </div> : <div className="grid grid-cols-2 gap-2">
-            {([
-              { label: 'Câmera', Icon: Camera, action: () => setCameraOptions(true) },
-              { label: 'Galeria', Icon: Images, action: chooseGallery },
-              { label: 'Arquivos', Icon: FileText, action: chooseFile },
-              { label: 'Localização', Icon: MapPin, action: chooseLocation },
-            ] as const).map(item => <button key={item.label} type="button" onClick={item.action} className="flex min-h-21 flex-col items-center justify-center gap-2 border border-border p-3 text-xs hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
-              <item.Icon className="size-6 text-primary" />{item.label}
-            </button>)}
+        <div className="relative min-w-0 flex-1">
+          <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => updateText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="block min-h-12 max-h-52 w-full min-w-0 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
+          {pickerOpen && <div role="dialog" aria-label="Adicionar à conversa" onKeyDown={event => { if (event.key === 'Escape') { setPickerOpen(false); setCameraOptions(false); } }} className="absolute bottom-full left-0 z-50 mb-2 w-full min-w-0 rounded-none border border-border bg-popover p-2 text-popover-foreground shadow-xl">
+            <div className="mb-1 flex items-center justify-between gap-1"><p className="truncate text-xs font-semibold">{cameraOptions ? 'Câmera' : 'Adicionar'}</p><button type="button" aria-label="Fechar anexos" onClick={() => { setPickerOpen(false); setCameraOptions(false); }} className="grid size-7 shrink-0 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
+            {cameraOptions ? <div className="grid grid-cols-2 gap-1">
+              <button type="button" onClick={() => chooseCamera('image')} className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 py-1.5 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Camera className="size-4" />Foto</button>
+              <button type="button" onClick={() => chooseCamera('video')} className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 py-1.5 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Video className="size-4" />Vídeo</button>
+              <button type="button" className="col-span-2 py-1 text-xs text-muted-foreground hover:bg-accent" onClick={() => setCameraOptions(false)}>Voltar</button>
+            </div> : <div className="grid grid-cols-2 gap-1">
+              {([
+                { label: 'Câmera', Icon: Camera, action: () => setCameraOptions(true) },
+                { label: 'Galeria', Icon: Images, action: chooseGallery },
+                { label: 'Arquivos', Icon: FileText, action: chooseFile },
+                { label: 'Localização', Icon: MapPin, action: chooseLocation },
+              ] as const).map(item => <button key={item.label} type="button" onClick={item.action} className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 py-1.5 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+                <item.Icon className="size-4 text-primary" />{item.label}
+              </button>)}
+            </div>}
           </div>}
-          <p className="mt-3 text-[11px] text-muted-foreground">{cameraOptions ? 'A câmera disponível depende do navegador e do dispositivo.' : 'A localização só será obtida com sua permissão.'}</p>
-        </div>}
-        {emojiOpen && <div role="dialog" aria-label="Lista de emojis" onKeyDown={event => { if (event.key === 'Escape') setEmojiOpen(false); }} className="absolute bottom-full left-0 z-50 mb-3 w-[340px] max-w-[calc(100vw-24px)] border border-border bg-popover p-3 text-popover-foreground shadow-2xl">
-          <div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold">Emojis</p><button type="button" aria-label="Fechar emojis" onClick={() => setEmojiOpen(false)} className="grid size-8 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
-          <div className="max-h-64 overflow-y-auto">
-            {EMOJI_GROUPS.map(group => <section key={group.label} className="mb-3">
-              <p className="mb-1 text-xs text-muted-foreground">{group.label}</p>
-              <div className="grid grid-cols-6 gap-1">{group.emojis.map(emoji => <button type="button" key={emoji} aria-label={'Inserir emoji ' + emoji} onMouseDown={event => event.preventDefault()} onClick={() => { updateText(activeText + emoji); textareaRef.current?.focus(); }} className="grid size-10 place-items-center text-xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{emoji}</button>)}</div>
-            </section>)}
-          </div>
-        </div>}
-        <Button type="button" variant={isRecording ? 'destructive' : 'ghost'} size="icon" className="size-11 shrink-0" aria-label={isRecording ? 'Finalizar gravação' : 'Gravar áudio'} onClick={() => void toggleRecording()} disabled={!!editing} title={isRecording ? 'Finalizar gravação' : 'Gravar áudio pelo microfone'}>
-          {isRecording ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-5" />}
+          {emojiOpen && <div role="dialog" aria-label="Lista de emojis" onKeyDown={event => { if (event.key === 'Escape') setEmojiOpen(false); }} className="absolute bottom-full right-0 z-50 mb-2 w-[min(340px,calc(100vw-24px))] rounded-none border border-border bg-popover p-3 text-popover-foreground shadow-xl">
+            <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold">Emojis</p><button type="button" aria-label="Fechar emojis" onClick={() => setEmojiOpen(false)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
+            <div className="max-h-64 overflow-y-auto">
+              {EMOJI_GROUPS.map(group => <section key={group.label} className="mb-3">
+                <p className="mb-1 text-xs text-muted-foreground">{group.label}</p>
+                <div className="grid grid-cols-6 gap-1">{group.emojis.map(emoji => <button type="button" key={emoji} aria-label={'Inserir emoji ' + emoji} onMouseDown={event => event.preventDefault()} onClick={() => { updateText(activeText + emoji); textareaRef.current?.focus(); }} className="grid size-10 place-items-center text-xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{emoji}</button>)}</div>
+              </section>)}
+            </div>
+          </div>}
+        </div>
+        <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 sm:size-11" aria-label="Abrir lista de emojis" aria-haspopup="dialog" aria-expanded={emojiOpen} disabled={isRecording || !!editing} onClick={() => { setEmojiOpen(open => !open); setPickerOpen(false); }}><Smile className="size-5" /></Button>
+        <Button type={isRecording || !canSend ? 'button' : 'submit'} variant={isRecording ? 'destructive' : !canSend ? 'ghost' : 'default'} size="icon"
+          aria-label={isRecording ? 'Finalizar gravação' : canSend ? (editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração') : 'Gravar áudio'}
+          disabled={locating || (!!editing && !canSend)}
+          title={isRecording ? 'Finalizar gravação' : canSend ? 'Enviar' : 'Gravar áudio'}
+          onClick={isRecording || !canSend ? () => void toggleRecording() : undefined}
+          className="size-10 shrink-0 sm:size-11">
+          {isRecording ? <Square className="size-4" fill="currentColor" /> : canSend ? <Send className="size-5" /> : <Mic className="size-5" />}
         </Button>
-        <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => updateText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
-        <Button type="submit" aria-label={editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração'} size="icon" disabled={isRecording || locating || (!activeText.trim() && (!!editing || (!pending && !pendingLocation)))} className="size-11 shrink-0"><Send className="size-4" /></Button>
       </div>
       <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>
     </div>
