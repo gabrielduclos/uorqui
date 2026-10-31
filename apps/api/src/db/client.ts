@@ -1,14 +1,38 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
-import * as schema from './schema.js';
+import pg from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as socialSchema from './schema.js';
+import * as authSchema from './auth-schema.js';
 
-/** Lazily constructed: the public /health endpoint works without a database. */
-export function createDatabase() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error('DATABASE_URL is not configured; set it in apps/api/.env');
+const { Pool } = pg;
+
+let pool: InstanceType<typeof Pool> | undefined;
+const schema = { ...socialSchema, ...authSchema };
+
+export function getPool() {
+  if (pool) return pool;
+
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not configured');
   }
 
-  // HTTP driver is suitable for individual queries. Re-evaluate for interactive transactions.
-  return drizzle({ client: neon(url), schema });
+  pool = new Pool({
+    connectionString,
+    max: 5,
+    connectionTimeoutMillis: 8_000,
+    idleTimeoutMillis: 30_000,
+  });
+  return pool;
+}
+
+/** Lazily initializes the pool so /health works without Neon credentials. */
+export function createDatabase() {
+  return drizzle(getPool(), { schema });
+}
+
+export async function closeDatabase() {
+  if (pool) {
+    await pool.end();
+    pool = undefined;
+  }
 }
