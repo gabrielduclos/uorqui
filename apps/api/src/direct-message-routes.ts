@@ -56,7 +56,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if (ended || response.destroyed || response.writableEnded) return;
       try { response.write(chunk); } catch { finish(); }
     };
-    const unsubscribe = subscribeDmEvents(me, event => {
+    const unsubscribe = await subscribeDmEvents(me, event => {
       write('event: dm-update\ndata: ' + JSON.stringify(event) + '\n\n');
     });
     const heartbeat = setInterval(() => write(': heartbeat\n\n'), 15_000);
@@ -70,6 +70,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if (!response.writableEnded) response.end();
     }
     response.once('close', finish);
+    if (response.destroyed) { finish(); return; }
     write('retry: 2000\n\n');
     write('event: ready\ndata: {}\n\n');
   });
