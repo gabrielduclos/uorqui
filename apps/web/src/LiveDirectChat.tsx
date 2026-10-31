@@ -935,7 +935,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     </section>
 
     <ChatMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId}
-      onClose={()=>setMediaViewerId(null)} locale={locale}/>
+      onClose={()=>setMediaViewerId(null)} onSendEdited={file=>sendAttachment(file,'')} locale={locale}/>
     {incoming && <aside role="status" aria-live="polite"
       className="absolute left-3 right-3 top-3 z-40 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-xl">
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left"
