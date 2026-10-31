@@ -2,6 +2,7 @@ import { useUorquiPreferences } from './UorquiPreferences';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Pencil, Pause, Play, X } from 'lucide-react';
 import { DemoImageEditor } from './DemoImageEditor';
+import { ZoomableChatPhoto } from './ZoomableChatPhoto';
 import { Button } from '@/components/ui/button';
 import type { DemoAttachment } from './DemoMessageComposer';
 
@@ -138,7 +139,7 @@ export function DemoMediaViewer({ items, selectedId, onSelect, onClose, onImageE
           <button type="button" aria-label={t("Mídia anterior")} onClick={() => index > 0 && onSelect(items[index - 1].id)} disabled={index === 0} className="grid size-9 shrink-0 place-items-center rounded-md hover:bg-white/15 disabled:opacity-25 sm:size-11"><ChevronLeft className="size-6" /></button>
           <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
             {active.attachment.kind === 'image'
-              ? <img key={active.id} src={active.attachment.url} alt={t("Foto compartilhada")} className="max-h-[76dvh] max-w-full object-contain" />
+              ? <ZoomableChatPhoto key={active.id} src={active.attachment.url} alt={t("Foto compartilhada")} locale="pt-BR" />
               : <video key={active.id} src={active.attachment.url} controls playsInline preload="metadata" aria-label={t("Vídeo compartilhado")} className="max-h-[76dvh] max-w-full" />}
           </div>
           <button type="button" aria-label={t('Próxima mídia')} onClick={() => index < items.length - 1 && onSelect(items[index + 1].id)} disabled={index === items.length - 1} className="grid size-9 shrink-0 place-items-center rounded-md hover:bg-white/15 disabled:opacity-25 sm:size-11"><ChevronRight className="size-6" /></button>
