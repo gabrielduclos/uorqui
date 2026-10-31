@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const origin = 'http://localhost:5173';
 const base = 'http://127.0.0.1:3049';
+const ATTACHMENT_SECRET='test-only-attachment-hmac-secret-a7e012739318ee99';
+function proof(conversationId,clientId,a){
+  const canonical=JSON.stringify([conversationId,clientId,a.id,a.name,a.type,a.size]);
+  return createHmac('sha256',ATTACHMENT_SECRET).update(canonical).digest('hex');
+}
 let server;
 before(async () => {
   server=spawn(process.execPath,['apps/api/dist/server.js'],{
     cwd:process.cwd(), stdio:'ignore',
     env:{...process.env,NODE_ENV:'test',ENABLE_DEV_SIGNUP:'true',
-      AUTH_BASE_URL:base,WEB_ORIGIN:origin,PORT:'3049',HOST:'127.0.0.1'},
+      AUTH_BASE_URL:base,WEB_ORIGIN:origin,PORT:'3049',HOST:'127.0.0.1',
+      DM_ATTACHMENT_PROOF_SECRET:ATTACHMENT_SECRET},
   });
   for(let i=0;i<90;i++){
     if(server.exitCode!==null)throw new Error('API process exited');
@@ -23,13 +30,14 @@ after(async()=>{if(server && server.exitCode===null){server.kill('SIGTERM');awai
 
 function visitor(){
   let cookie='';
-  const send = async(path,method='GET',body,withOrigin=true)=>{
+  const send = async(path,method='GET',body,withOrigin=true,extraHeaders={})=>{
     const response=await fetch(base+path,{
       method,redirect:'manual',
       headers:{
         ...(withOrigin?{origin}:{}),
         ...(body?{'Content-Type':'application/json'}:{}),
         ...(cookie?{cookie}:{}),
+        ...extraHeaders,
       },
       ...(body?{body:JSON.stringify(body)}:{}),
     });
@@ -527,12 +535,15 @@ test('private DM attachment metadata is scoped to both participants and canceled
   const unsupported=await alice(path+'/messages','POST',{
     body:'',clientId:crypto.randomUUID(),attachment:{id:crypto.randomUUID(),name:'bad.html',type:'text/html',size:50},
   });
-  assert.equal(unsupported.status,400);
+  assert.equal(unsupported.status,403,'invalid direct upload proof must fail before any attachment mutation');
   const empty=await alice(path+'/messages','POST',{body:'',clientId:crypto.randomUUID()});
   assert.equal(empty.status,400);
+  const validAttachment={id:uploadId,name:'imagem de exemplo.png',type:'image/png',size:1024};
+  const fake=await alice(path+'/messages','POST',{body:'',clientId,attachment:validAttachment});
+  assert.equal(fake.status,403,'direct API callers cannot forge R2 uploaded objects');
   const sent=await alice(path+'/messages','POST',{
-    body:'',clientId,attachment:{id:uploadId,name:'imagem de exemplo.png',type:'image/png',size:1024},
-  });
+    body:'',clientId,attachment:validAttachment,
+  },true,{'x-uorqui-attachment-proof':proof(thread.id,clientId,validAttachment)});
   assert.equal(sent.status,201,JSON.stringify(sent.data));
   assert.deepEqual(sent.data.message.attachment,{id:uploadId,name:'imagem de exemplo.png',type:'image/png',size:1024});
   const bobMessages=await bob(path+'/messages');
@@ -545,9 +556,10 @@ test('private DM attachment metadata is scoped to both participants and canceled
   assert.equal(privateAccess.status,404);
   const unknown=await alice(path+'/attachments/'+crypto.randomUUID()+'/access');
   assert.equal(unknown.status,404);
+  const retryAttachment={id:crypto.randomUUID(),name:'different.png',type:'image/png',size:42};
   const retried=await alice(path+'/messages','POST',{
-    body:'',clientId,attachment:{id:crypto.randomUUID(),name:'different.png',type:'image/png',size:42},
-  });
+    body:'',clientId,attachment:retryAttachment,
+  },true,{'x-uorqui-attachment-proof':proof(thread.id,clientId,retryAttachment)});
   assert.equal(retried.status,200);
   assert.equal(retried.data.message.attachment.id,uploadId,'idempotency must preserve original attachment');
   const canceled=await alice(path+'/messages/'+sent.data.message.id,'DELETE');
