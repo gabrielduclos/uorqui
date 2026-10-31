@@ -11,7 +11,9 @@ import { cn } from '@/lib/utils';
 
 type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
-  lastBody: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
+  lastBody: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean;
+  unreadCount: number; unreadMessageCount: number; unreadReactionCount: number;
+  previewKind: 'message' | 'reaction'; previewReactionEmoji: string | null; previewReactionBody: string | null; previewReactionAt: string | null;
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
@@ -392,14 +394,15 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     if (!activeId || messagesLoading || !positionedRef.current || !atBottom ||
         reading.current || Date.now() - lastReadFailure.current < 5000 ||
         !isConversationVisible(activeId)) return;
-    if (!messages.some(m => m.authorId !== myId && !m.readAt)) return;
+    if (!messages.some(m => m.authorId !== myId && !m.readAt) &&
+        !(threads.find(thread => thread.id === activeId)?.unreadReactionCount)) return;
     reading.current = activeId;
     void api('/api/v1/dm/conversations/' + activeId + '/read', { method: 'POST' })
       .then(async () => {
         await Promise.all([loadMessages(activeId), loadThreads()]);
       }).catch(() => { lastReadFailure.current = Date.now(); })
       .finally(() => { reading.current = null; });
-  }, [activeId, messages, messagesLoading, atBottom, mobileOpened, visibilityTick, isConversationVisible, myId, loadMessages, loadThreads]);
+  }, [activeId, messages, threads, messagesLoading, atBottom, mobileOpened, visibilityTick, isConversationVisible, myId, loadMessages, loadThreads]);
 
   useEffect(() => {
     let stream: EventSource | null = null;
@@ -465,7 +468,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         list.getClientRects().length === 0) return;
     for (const thread of threads) {
       const key = thread.id + ':' + thread.lastAt;
-      if (thread.unreadCount === 0 || !thread.lastAt || receivedIds.current.has(key) || receiving.current.has(thread.id)) continue;
+      if (thread.unreadMessageCount === 0 || !thread.lastAt || receivedIds.current.has(key) || receiving.current.has(thread.id)) continue;
       receiving.current.add(thread.id);
       void api('/api/v1/dm/conversations/' + thread.id + '/received', { method: 'POST' })
         .then(() => receivedIds.current.add(key))
@@ -681,10 +684,14 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
           <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
           <span className="min-w-0 flex-1">
             <span className="flex items-center justify-between gap-2"><span className={cn('truncate text-sm font-semibold', thread.unreadCount > 0 && 'font-bold')}>{thread.peerName}</span>
-              <time className="shrink-0 text-[10px] text-muted-foreground">{formatTime(thread.lastAt, locale)}</time></span>
+              <time className="shrink-0 text-[10px] text-muted-foreground">{formatTime(thread.previewKind === 'reaction' ? thread.previewReactionAt : thread.lastAt, locale)}</time></span>
             <span className="mt-1 flex items-center justify-between gap-2">
               <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', thread.unreadCount > 0 && 'font-medium text-foreground/75')}>
-                {thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : thread.lastBody ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '') + thread.lastBody : '@' + thread.peerHandle}
+                {thread.previewKind === 'reaction' && thread.previewReactionEmoji
+                  ? (pt ? 'Reagiu ' : 'Reacted ') + thread.previewReactionEmoji + (pt ? ' à sua mensagem: ' : ' to your message: ') + (thread.previewReactionBody ?? '').slice(0,80)
+                  : thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message')
+                  : thread.lastBody ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '') + thread.lastBody
+                  : '@' + thread.peerHandle}
               </span>
               {thread.unreadCount > 0 && <span aria-label={String(thread.unreadCount) + (pt ? ' não lidas' : ' unread')}
                 className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-md bg-primary px-1 text-[10px] font-bold text-primary-foreground">
@@ -728,8 +735,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
               {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
               {renderedMessages.map(message => {
                 const status = blockReceipts.get(message.id);
-                const reactionEvent = !message.deletedAt ? message.reactions?.[0] : undefined;
-                const reactionFromMe = message.authorId !== myId;
+
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
@@ -741,20 +747,6 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                       const pending = pendingMessages.find(p => p.clientId === message.clientId);
                       if (pending) void submitPending(pending);
                     }}/>
-                  {reactionEvent && <div className={cn('flex', reactionFromMe ? 'justify-end' : 'justify-start')} role="note">
-                    <div className="max-w-[85%] border border-border bg-card px-3 py-2 text-xs text-foreground shadow-sm">
-                      <button type="button" onClick={() => void jumpToRepliedMessage(message.id)}
-                        className="block max-w-full text-left hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-                        <span className="font-medium">{reactionFromMe ? (pt ? 'Você reagiu' : 'You reacted') : (pt ? active.peerName + ' reagiu' : active.peerName + ' reacted')}</span>
-                        {' '}<span className="text-base" aria-label={reactionEvent.emoji}>{reactionEvent.emoji}</span>
-                        {' '}<span className="text-muted-foreground">{pt ? 'à mensagem' : 'to the message'}</span>
-                        <span className="mt-0.5 block max-w-full truncate border-l-2 border-primary/50 pl-2 text-[11px] text-muted-foreground">{message.body}</span>
-                      </button>
-                      {reactionFromMe && <button type="button" onClick={() => void react(message, null)}
-                        disabled={reactionInFlight.current.has(message.id)}
-                        className="mt-1 text-primary underline underline-offset-2">{pt ? 'Desfazer reação' : 'Undo reaction'}</button>}
-                    </div>
-                  </div>}
                   {status && <div role="note" className="flex justify-center py-0.5">
                     <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1.5 rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
                       <span>{status.label}</span>
