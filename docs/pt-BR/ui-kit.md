@@ -71,9 +71,17 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 ## Contrato obrigatório do chat real
 
 - `LiveDirectChat` é responsável pela lista, cabeçalho fixo, rolagem, mensagens e recebimento de eventos. A área de mensagens usa a **largura disponível do desktop** e rolagem somente no painel.
-- `DirectMessageBubble` usa **cantos suavemente arredondados** (`rounded-lg`), cores semânticas, resposta por swipe e menu com blur limitado ao painel da conversa, sem sair do viewport.
+- `DirectMessageBubble` usa **cantos retos** (`rounded-none`) como identidade visual dos balões de conversa, cores semânticas, resposta por swipe e menu com blur limitado ao painel da conversa, sem sair do viewport.
 - `LiveMessageComposer` preserva a ordem **+ anexos | texto expansível | emoji | mic/enviar**, com menu de anexo horizontal e seletor de emojis à direita. Um único botão mostra microfone quando o campo está vazio e envio quando há texto.
 - O texto enviado é persistido na API; cada novo balão aparece imediatamente com spinner sem bloquear o compositor e permite reenviar com o mesmo identificador se falhar. O horário de envio permanece junto ao texto de cada balão; os estados Enviando/Enviada/Recebida/Lida são exibidos uma única vez em uma linha neutra, centralizada, como mensagem do sistema ao final de cada bloco consecutivo de mensagens próprias, com horário da última atualização do estado. Um bloco só indica Lida ou Recebida quando todas as mensagens não excluídas atingiram esse estado. O spinner de envio e a ação de reenvio continuam no próprio balão. O campo de entrada possui borda e fundo semânticos de alto contraste em Light e Dark. O indicador visual “Ao vivo” não é exibido (a sincronização continua ativa). **Áudios e anexos** ainda dependem de endpoints específicos. **Responder** salva uma referência real à mensagem original, com prévia no balão, inclusive após edição ou exclusão da origem. **Editar, excluir para todos, encaminhar e reagir** estão ligados ao backend, com autorizações e persistência. Reações são atualizadas de modo otimista e revertidas em caso de erro. A lista de conversas aberta e visível confirma **Recebida** sem marcar **Lida**. Controles sem backend ficam desabilitados e identificados; não enviar conteúdo apenas na interface local.
 - A lista de conversas **não pode confirmar leitura**. Apenas uma conversa aberta, com janela e painel visíveis, pode emitir confirmação.
 - Abrir chat rola até a última mensagem; ler mensagens antigas não desloca a rolagem. Novas mensagens fora da área visível usam aviso e seta para o final.
 - Verificar desktop/mobile, Light/Dark e PT/EN antes de publicar. Qualquer migração futura deve reutilizar estes componentes em vez de substituí-los por telas genéricas.
+
+## Ajustes do chat real — cancelamento, reações e badge
+
+- O formato dos **balões de mensagem é reto** (`rounded-none`), mesmo com outras superfícies suavemente arredondadas.
+- A prévia de uma resposta é clicável: rola até a origem e a destaca; se for antiga, a API permite consultar `?around=id` mantendo controle de acesso.
+- **Cancelar mensagem** substitui excluir: opção disponível somente para mensagens próprias ainda não lidas, remoção definitiva sem aviso ou tombstone. A API rejeita cancelamentos após `read_at` (HTTP 409).
+- Reações surgem como um balão/evento separado no histórico, permanecem otimistas e possuem ação para desfazer.
+- O ícone de conversas na navegação mobile/desktop mostra **quantidade total de mensagens não lidas** (não número de conversas); SSE com fallback de polling mantém o número sincronizado.
