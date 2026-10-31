@@ -1011,21 +1011,34 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.user_contacts": {
-      "name": "user_contacts",
+    "public.user_friendships": {
+      "name": "user_friendships",
       "schema": "",
       "columns": {
-        "owner_id": {
-          "name": "owner_id",
+        "user_a_id": {
+          "name": "user_a_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "contact_id": {
-          "name": "contact_id",
+        "user_b_id": {
+          "name": "user_b_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "requested_by_id": {
+          "name": "requested_by_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(12)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
         },
         "created_at": {
           "name": "created_at",
@@ -1033,16 +1046,39 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "user_friendships_user_b_idx": {
+          "name": "user_friendships_user_b_idx",
+          "columns": [
+            {
+              "expression": "user_b_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "user_contacts_owner_id_users_id_fk": {
-          "name": "user_contacts_owner_id_users_id_fk",
-          "tableFrom": "user_contacts",
+        "user_friendships_user_a_id_users_id_fk": {
+          "name": "user_friendships_user_a_id_users_id_fk",
+          "tableFrom": "user_friendships",
           "tableTo": "users",
           "columnsFrom": [
-            "owner_id"
+            "user_a_id"
           ],
           "columnsTo": [
             "id"
@@ -1050,12 +1086,25 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "user_contacts_contact_id_users_id_fk": {
-          "name": "user_contacts_contact_id_users_id_fk",
-          "tableFrom": "user_contacts",
+        "user_friendships_user_b_id_users_id_fk": {
+          "name": "user_friendships_user_b_id_users_id_fk",
+          "tableFrom": "user_friendships",
           "tableTo": "users",
           "columnsFrom": [
-            "contact_id"
+            "user_b_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_friendships_requested_by_id_users_id_fk": {
+          "name": "user_friendships_requested_by_id_users_id_fk",
+          "tableFrom": "user_friendships",
+          "tableTo": "users",
+          "columnsFrom": [
+            "requested_by_id"
           ],
           "columnsTo": [
             "id"
@@ -1065,20 +1114,28 @@
         }
       },
       "compositePrimaryKeys": {
-        "user_contacts_owner_id_contact_id_pk": {
-          "name": "user_contacts_owner_id_contact_id_pk",
+        "user_friendships_user_a_id_user_b_id_pk": {
+          "name": "user_friendships_user_a_id_user_b_id_pk",
           "columns": [
-            "owner_id",
-            "contact_id"
+            "user_a_id",
+            "user_b_id"
           ]
         }
       },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "user_contacts_not_self": {
-          "name": "user_contacts_not_self",
-          "value": "\"user_contacts\".\"owner_id\" <> \"user_contacts\".\"contact_id\""
+        "user_friendships_canonical": {
+          "name": "user_friendships_canonical",
+          "value": "\"user_friendships\".\"user_a_id\" < \"user_friendships\".\"user_b_id\""
+        },
+        "user_friendships_requester_member": {
+          "name": "user_friendships_requester_member",
+          "value": "\"user_friendships\".\"requested_by_id\" = \"user_friendships\".\"user_a_id\" OR \"user_friendships\".\"requested_by_id\" = \"user_friendships\".\"user_b_id\""
+        },
+        "user_friendships_valid_status": {
+          "name": "user_friendships_valid_status",
+          "value": "\"user_friendships\".\"status\" IN ('pending', 'accepted', 'declined', 'canceled')"
         }
       },
       "isRLSEnabled": false

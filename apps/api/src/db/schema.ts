@@ -105,13 +105,18 @@ export const directMessageReactions = pgTable('direct_message_reactions', {
 }, (table) => [
   primaryKey({ columns: [table.messageId, table.userId] }),
 ]);
-
-/** Private, one-way saved contacts; never implies mutual following. */
-export const userContacts = pgTable('user_contacts', {
-  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  contactId: uuid('contact_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+/** One friendship/request per canonical unordered pair. */
+export const userFriendships = pgTable('user_friendships', {
+  userAId: uuid('user_a_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userBId: uuid('user_b_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  requestedById: uuid('requested_by_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 12 }).default('pending').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-  primaryKey({ columns: [table.ownerId, table.contactId] }),
-  check('user_contacts_not_self', sql`${table.ownerId} <> ${table.contactId}`),
+  primaryKey({ columns: [table.userAId, table.userBId] }),
+  index('user_friendships_user_b_idx').on(table.userBId),
+  check('user_friendships_canonical', sql`${table.userAId} < ${table.userBId}`),
+  check('user_friendships_requester_member', sql`${table.requestedById} = ${table.userAId} OR ${table.requestedById} = ${table.userBId}`),
+  check('user_friendships_valid_status', sql`${table.status} IN ('pending', 'accepted', 'declined', 'canceled')`),
 ]);
