@@ -55,7 +55,7 @@ O componente `LiveDirectChat` usa o mesmo UI Kit de tema claro/escuro e idiomas 
 Todas as rotas exigem sessão, e cada acesso a um ID de conversa confirma participação. Escritas validam o cabeçalho Origin. Não há suporte a grupos no mensageiro individual. Perfis privados ficam ocultos na busca, mas as conversas já existentes continuam disponíveis para seus participantes.
 
 ### Banco
-A migração `0003_live_direct_messages` acrescenta `client_id` (UUID único) e `read_at` no histórico. A `0004_dm_actions` acrescenta `delivered_at`, `edited_at`, `deleted_at`, `forwarded_from_id` e `direct_message_reactions`. A `0005_dm_replies` acrescenta `reply_to_id` (FK opcional para a mensagem original). **Migrar o banco antes de implantar a API**, senão consultas podem falhar. Nenhum arquivo binário é armazenado no Neon.
+A migração `0003_live_direct_messages` acrescenta `client_id` (UUID único) e `read_at` no histórico. A `0004_dm_actions` acrescenta `delivered_at`, `edited_at`, `deleted_at`, `forwarded_from_id` e `direct_message_reactions`. A `0005_dm_replies` acrescenta `reply_to_id` (FK opcional para a mensagem original). A `0006_dm_reaction_notifications` adiciona `notified_at` e `read_at` às reações: reações antigas não geram notificações retroativas. **Migrar o banco antes de implantar a API**, senão consultas podem falhar. Nenhum arquivo binário é armazenado no Neon.
 
 ### Próximas etapas
 Paginação do histórico, anexos privados no R2, push, controle antispam e moderação.
@@ -64,6 +64,6 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 
 - `DELETE /api/v1/dm/conversations/:id/messages/:messageId` cancela uma mensagem própria **não lida**: remoção definitiva, sem ocupar espaço no chat. Caso `read_at` esteja preenchido, retorna `409` e não altera a mensagem.
 - `GET /api/v1/dm/conversations/:id/messages?around=<uuid>` retorna um trecho autorizado do histórico em torno de uma mensagem original, para rolagem/destaque ao tocar na resposta.
-- Reações aparecem como eventos/balões separados junto à mensagem original e seguem otimistas, com desfazer.
-- O ícone Conversas exibe o total de mensagens não lidas em toda a conta, por SSE/polling, em mobile e desktop.
+- Reações permanecem como pequenos indicadores vinculados ao **balão original**, sem evento ou balão extra no histórico. Elas continuam otimistas e podem ser desfeitas.
+- A **prévia da conversa** mostra a reação mais recente (ex.: “Maria reagiu ❤️ à sua mensagem”) quando é o evento mais recente. Ela soma **uma notificação não lida** para o autor da mensagem; a confirmação acontece apenas ao ler a conversa aberta e visível. O ícone Conversas soma mensagens + reações não lidas por SSE/polling, no mobile e desktop.
 - Identidade visual: balões de mensagens com cantos retos.
