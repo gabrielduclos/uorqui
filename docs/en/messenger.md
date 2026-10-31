@@ -58,6 +58,8 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 ### Private individual chat attachments — first delivery
 
 - Gallery, Camera, Video and File pickers connect to the live messenger. Location awaits its own permission flow. First scope: **one attachment per message**, max **20 MB**, JPEG/PNG/WebP/GIF, MP4/WebM, PDF, TXT, ZIP or a generic download; no transcoding, audio recorder or batch uploads.
+
+- **Anti-forgery control:** the Worker signs metadata using HMAC SHA-256 and private `DM_ATTACHMENT_PROOF_SECRET`. The Fastify API verifies the signature in constant time before accepting an attachment, rejecting direct forged uploads. Configure the **same secret** (at least 32 characters) in Cloudflare Worker and Render before deployment; never commit it or put it in URLs.
 - Separate **private R2 bucket** `uorqui-dm-attachments` with no public URL. The Worker validates same-origin requests, session and conversation membership before upload; creates a real message through Fastify with an idempotent client ID and attachment metadata. PostgreSQL stores metadata **only**, never binary file bytes.
 - `GET/HEAD /media/dm/:conversationId/:attachmentId` checks session, membership and attachment association with a non-canceled message before R2 access. Private `no-store`, `nosniff` responses, safe content-disposition. Unread cancellation attempts R2 object cleanup.
 - Square chat message bubbles support enlarged image previews, inline video controls and safe file downloads. Optimistic local previews, retryable failed uploads, delivery/read receipts, replies, reactions and global unread counts continue.
