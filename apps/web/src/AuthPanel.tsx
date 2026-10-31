@@ -332,21 +332,21 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const inputClass = 'w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40';
   const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
   const minorButton = 'w-full min-h-11 rounded-xl border border-border px-4 py-2.5 text-base font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
-  const submitLabel = busy ? <><Spinner /> Aguarde…</> : view === 'register' ? t("Criar minha conta") : t("Entrar");
+  const submitLabel = busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'register' ? t("Criar minha conta") : t("Entrar");
 
   return (
-    <section aria-label="Acesso à conta" className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+    <section aria-label={t('Acesso à conta')} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <div className="mb-5">
         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t("Identidade Uorqui")}</div>
-        <h2 className="mt-2 text-2xl font-semibold">{account ? 'Sua conta' : view === 'welcome' ? t("Bem-vindo ao Uorqui") : view === 'register' ? t("Criar sua conta") : view === 'forgot' ? 'Recuperar acesso' : view === 'verify' ? t("Confirme seu e-mail") : view === 'reset' ? 'Definir nova senha' : t("Entrar")}</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? 'Seu perfil no Uorqui.' : view === 'welcome' ? t("Comece sua jornada. O feed e as comunidades ainda estão em desenvolvimento.") : view === 'register' ? t("Cadastre-se para criar sua identidade no Uorqui.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
+        <h2 className="mt-2 text-2xl font-semibold">{account ? t('Sua conta') : view === 'welcome' ? t("Bem-vindo ao Uorqui") : view === 'register' ? t("Criar sua conta") : view === 'forgot' ? t('Recuperar acesso') : view === 'verify' ? t("Confirme seu e-mail") : view === 'reset' ? t('Definir nova senha') : t("Entrar")}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? t('Seu perfil no Uorqui.') : view === 'welcome' ? t("Comece sua jornada. O feed e as comunidades ainda estão em desenvolvimento.") : view === 'register' ? t("Cadastre-se para criar sua identidade no Uorqui.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
       </div>
 
       {loading ? (
         <div role="status" aria-label={t("Verificando sessão")} className="space-y-3">
           <div aria-hidden="true" className="h-12 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
           <div aria-hidden="true" className="h-12 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
-          <span className="sr-only">Verificando sessão…</span>
+          <span className="sr-only">{t('Verificando sessão…')}</span>
         </div>
       ) : account ? (
         <div className="space-y-4">
@@ -359,16 +359,16 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               <p className="text-sm text-muted-foreground">{t("Escolha um nome de usuário para concluir seu perfil.")}</p>
               <Label className="block text-sm font-medium" htmlFor="handle">{t("Nome de usuário")}</Label>
               <Input id="handle" className={inputClass} placeholder="seu_usuario" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[a-z][a-z0-9_]{2,31}" required minLength={3} maxLength={32} autoComplete="username" />
-              <Label className="block text-sm font-medium" htmlFor="displayName">Nome exibido</Label>
+              <Label className="block text-sm font-medium" htmlFor="displayName">{t('Nome exibido')}</Label>
               <Input id="displayName" className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} maxLength={120} />
-              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Salvando…</> : t("Criar meu perfil")}</Button>
+              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Salvando…')}</> : t("Criar meu perfil")}</Button>
             </form>
           )}
-          <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} className={minorButton}>{busy ? <><Spinner /> {t("Saindo…")}</> : 'Sair da conta'}</Button>
+          <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} className={minorButton}>{busy ? <><Spinner /> {t("Saindo…")}</> : t('Sair da conta')}</Button>
         </div>
       ) : view === 'welcome' ? (
         <div className="space-y-3">
-          <Button type="button" onClick={() => navigate('register')} className={buttonClass}>Criar conta</Button>
+          <Button type="button" onClick={() => navigate('register')} className={buttonClass}>{t('Criar conta')}</Button>
           <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Entrar com uma conta existente")}</Button>
           {apiChecked && !apiReady && <div role="status" className="space-y-2 text-sm text-amber-600 dark:text-amber-200"><p>{t("O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.")}</p><Button type="button" variant="outline" size="sm" onClick={() => void checkApi()}>{t("Tentar novamente")}</Button></div>}
         </div>
@@ -376,17 +376,17 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         <div className="space-y-4">
           {view === 'verify' ? (
             <div className="space-y-3">
-              <Label htmlFor="verify-email" className="block text-sm font-medium text-foreground">E-mail da conta</Label>
+              <Label htmlFor="verify-email" className="block text-sm font-medium text-foreground">{t('E-mail da conta')}</Label>
               <Input id="verify-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
               {siteKey && <div ref={captchaRef} aria-label={t("Verificação de segurança")} />}
-              <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> {t("Reenviando…")}</> : 'Reenviar confirmação'}</Button>
+              <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> {t("Reenviando…")}</> : t('Reenviar confirmação')}</Button>
               <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Já confirmei · Entrar")}</Button>
             </div>
           ) : (
             <form className="space-y-3" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
               {view === 'register' && (
                 <div>
-                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">Seu nome</Label>
+                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">{t('Seu nome')}</Label>
                   <Input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" />
                 </div>
               )}
@@ -396,25 +396,25 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               </div>}
               {view !== 'forgot' && (
                 <div>
-                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">Senha</Label>
+                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">{t('Senha')}</Label>
                   <div className="relative">
                     <Input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-24'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
-                    <Button type="button" aria-label={showPassword ? t("Ocultar senha") : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-ring">{showPassword ? t("Ocultar") : 'Mostrar'}</Button>
+                    <Button type="button" aria-label={showPassword ? t("Ocultar senha") : t('Mostrar senha')} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-ring">{showPassword ? t("Ocultar") : t('Mostrar')}</Button>
                   </div>
                   {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-muted-foreground">{t("Use pelo menos 12 caracteres.")}</p>}
                 </div>
               )}
               {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label={t("Verificação de segurança")} />}
-              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Aguarde…</> : view === 'forgot' ? t("Enviar link de recuperação") : view === 'reset' ? 'Salvar nova senha' : submitLabel}</Button>
+              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'forgot' ? t("Enviar link de recuperação") : view === 'reset' ? t('Salvar nova senha') : submitLabel}</Button>
               {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-600 dark:text-amber-200">{t("Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.")}</p>}
               {view === 'login' && <div className="flex flex-wrap gap-x-5 gap-y-3">
                 <Button type="button" onClick={() => navigate('forgot')} className="text-sm font-medium text-primary underline underline-offset-4">{t("Esqueci minha senha")}</Button>
-                <Button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-primary underline underline-offset-4">Reenviar confirmação de e-mail</Button>
+                <Button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-primary underline underline-offset-4">{t('Reenviar confirmação de e-mail')}</Button>
               </div>}
             </form>
           )}
           <Button type="button" onClick={() => navigate('welcome')} className={minorButton}>{t("Voltar às boas-vindas")}</Button>
-          {view === 'register' && <Button type="button" onClick={() => navigate('login')} className="w-full text-sm font-medium text-primary underline underline-offset-4">Já tenho uma conta · Entrar</Button>}
+          {view === 'register' && <Button type="button" onClick={() => navigate('login')} className="w-full text-sm font-medium text-primary underline underline-offset-4">{t('Já tenho uma conta · Entrar')}</Button>}
         </div>
       )}
       {message && <p role={view === 'verify' && message.startsWith('Conta criada') ? 'status' : 'alert'} className="mt-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-foreground">{message}</p>}
