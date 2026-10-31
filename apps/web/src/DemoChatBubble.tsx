@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { Copy, MapPin, MoreHorizontal, Pencil, Reply, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -91,16 +92,61 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
 }) {
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [conversationBounds, setConversationBounds] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
-    function dismiss(event: PointerEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener('pointerdown', dismiss);
-    return () => document.removeEventListener('pointerdown', dismiss);
-  }, [open]);
+    const updatePosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const triggerBounds = trigger.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const x = viewport?.offsetLeft ?? 0;
+      const y = viewport?.offsetTop ?? 0;
+      const width = viewport?.width ?? window.innerWidth;
+      const height = viewport?.height ?? window.innerHeight;
+      const menuWidth = Math.min(264, Math.max(1, width - 16));
+      const menuHeight = Math.min(menuRef.current?.offsetHeight ?? 240, Math.max(1, height - 16));
+      const leftPreferred = message.mine ? triggerBounds.right - menuWidth : triggerBounds.left;
+      const left = Math.max(x + 8, Math.min(leftPreferred, x + width - menuWidth - 8));
+      const roomBelow = y + height - triggerBounds.bottom - 8;
+      const roomAbove = triggerBounds.top - y - 8;
+      const topPreferred = roomBelow >= menuHeight || roomBelow >= roomAbove
+        ? triggerBounds.bottom + 6
+        : triggerBounds.top - menuHeight - 6;
+      const top = Math.max(y + 8, Math.min(topPreferred, y + height - menuHeight - 8));
+      setMenuPosition({ left, top, width: menuWidth });
+
+      const conversation = trigger.closest('section[aria-label="Conversa demonstrativa"]');
+      const bounds = conversation?.getBoundingClientRect();
+      setConversationBounds(bounds
+        ? { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }
+        : { left: x, top: y, width, height });
+    };
+
+    updatePosition();
+    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+
+    const dismiss = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node) || triggerRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    window.visualViewport?.addEventListener('resize', updatePosition);
+    window.visualViewport?.addEventListener('scroll', updatePosition);
+    document.addEventListener('pointerdown', dismiss, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.visualViewport?.removeEventListener('resize', updatePosition);
+      window.visualViewport?.removeEventListener('scroll', updatePosition);
+      document.removeEventListener('pointerdown', dismiss, true);
+    };
+  }, [open, message.mine]);
 
   async function copy() {
     if (!message.text.trim()) return;
@@ -132,11 +178,14 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
         </button>}
       </div>
     </SwipeToReply>
-    <div ref={menuRef} className={cn('relative flex shrink-0 items-start', message.mine && 'order-first')}>
-      <Button type="button" variant="ghost" size="icon-sm" aria-label="Opções da mensagem" title="Opções da mensagem" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(value => !value)} className="mt-1 size-8 text-muted-foreground opacity-80 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100">
+    <div className={cn('relative flex shrink-0 items-start', message.mine && 'order-first')}>
+      <Button ref={triggerRef} type="button" variant="ghost" size="icon-sm" aria-label="Opções da mensagem" title="Opções da mensagem" aria-expanded={open} aria-haspopup="menu" onClick={() => { setMenuPosition(null); setOpen(value => !value); }} className="mt-1 size-8 text-muted-foreground opacity-80 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100">
         <MoreHorizontal className="size-4" />
       </Button>
-      {open && <div role="menu" onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }} className={cn('absolute top-9 z-20 min-w-36 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-xl', message.mine ? 'right-0' : 'left-0')}>
+      {open && typeof document !== 'undefined' && createPortal(<>
+        <div aria-hidden="true" className="fixed z-[80] bg-background/15 backdrop-blur-[4px]" style={conversationBounds ?? { inset: 0 }} onClick={() => setOpen(false)} />
+        <div ref={menuRef} role="menu" aria-label="Ações da mensagem" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setOpen(false); triggerRef.current?.focus(); } }} style={{ left: menuPosition?.left ?? -9999, top: menuPosition?.top ?? -9999, width: menuPosition?.width ?? 264, visibility: menuPosition ? 'visible' : 'hidden' }}
+          className="fixed z-[81] max-h-[calc(100dvh-16px)] overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
         <button type="button" role="menuitem" onClick={() => { setOpen(false); onReply(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Reply className="size-4" />Responder</button>
         {!message.mine && onReact && <div className="border-b border-border px-1.5 pb-1.5">
           <p className="px-1.5 py-1 text-[11px] text-muted-foreground">Reagir à mensagem</p>
@@ -149,7 +198,8 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
         {message.text.trim() && <button type="button" role="menuitem" onClick={() => void copy()} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Copy className="size-4" />Copiar texto</button>}
         {message.mine && !!message.text && !message.attachment && <button type="button" role="menuitem" onClick={() => { setOpen(false); onEdit(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Pencil className="size-4" />Editar</button>}
         {message.mine && <button type="button" role="menuitem" onClick={() => { setOpen(false); onDelete(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-destructive hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Trash2 className="size-4" />Excluir</button>}
-      </div>}
+        </div>
+      </>, document.body)}
     </div>
     {feedback && <span role="status" className={cn('absolute top-full z-10 mt-1 text-[11px] text-muted-foreground', message.mine ? 'right-0' : 'left-0')}>{feedback}</span>}
   </div>;
