@@ -6,7 +6,10 @@
   "vars": {
     "API_ORIGIN": "https://uorqui-social-api.onrender.com"
   },
-  "r2_buckets": [{ "binding": "PROFILE_MEDIA", "bucket_name": "uorqui-profile-media" }],
+  "r2_buckets": [
+    { "binding": "PROFILE_MEDIA", "bucket_name": "uorqui-profile-media" },
+    { "binding": "DM_ATTACHMENTS", "bucket_name": "uorqui-dm-attachments" }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -18,6 +21,7 @@
       "/auth/email-verification",
       "/auth/email-verification/",
       "/media/profile/*",
+      "/media/dm/*",
       "/health",
       "/health/*"
     ]
