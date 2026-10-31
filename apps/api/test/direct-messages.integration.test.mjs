@@ -213,3 +213,72 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
     aliceStream.close();bobStream.close();otherStream.close();
   }
 });
+
+test('live DM actions: delivery, edit, react, forward, delete and ownership',async()=>{
+  const list=await alice('/api/v1/dm/conversations');
+  const thread=list.data.conversations.find(c=>c.peerHandle==='dm_bob');
+  assert.ok(thread);
+  const path='/api/v1/dm/conversations/'+thread.id;
+  const originals=await bob(path+'/messages');
+  const reply=originals.data.messages.find(m=>m.body==='Recebido!');
+  assert.ok(reply);
+  const item=path+'/messages/'+reply.id;
+
+  const delivered=await alice(path+'/received','POST');
+  assert.equal(delivered.status,200);
+  const afterDelivered=await alice(path+'/messages');
+  const got=afterDelivered.data.messages.find(m=>m.id===reply.id);
+  assert.ok(got.deliveredAt);
+  assert.equal(got.readAt,null,'delivery does not imply read');
+
+  const forged=await other(item,'PATCH',{body:'unauthorized'});
+  assert.equal(forged.status,404);
+  const badOrigin=await bob(item,'PATCH',{body:'invalid origin'},false);
+  assert.equal(badOrigin.status,403);
+  const edited=await bob(item,'PATCH',{body:'Recebido, editado!'});
+  assert.equal(edited.status,200,JSON.stringify(edited.data));
+  assert.equal(edited.data.message.body,'Recebido, editado!');
+  assert.ok(edited.data.message.editedAt);
+  const seen=await alice(path+'/messages');
+  assert.equal(seen.data.messages.find(m=>m.id===reply.id).body,'Recebido, editado!');
+
+  const selfReaction=await bob(item+'/reaction','PUT',{emoji:'👍'});
+  assert.equal(selfReaction.status,404,'author cannot react to their own message');
+  const react=await alice(item+'/reaction','PUT',{emoji:'❤️'});
+  assert.equal(react.status,200);
+  const reacted=await alice(path+'/messages');
+  const reactedMessage=reacted.data.messages.find(m=>m.id===reply.id);
+  assert.equal(reactedMessage.myReaction,'❤️');
+  assert.deepEqual(reactedMessage.reactions,[{emoji:'❤️',count:1}]);
+  const undo=await alice(item+'/reaction','DELETE');
+  assert.equal(undo.status,200);
+  const unreacted=await alice(path+'/messages');
+  assert.equal(unreacted.data.messages.find(m=>m.id===reply.id).myReaction,null);
+
+  const target=await bob('/api/v1/dm/conversations','POST',{handle:'dm_other'});
+  assert.equal(target.status,200);
+  const clientId=crypto.randomUUID();
+  const forward=await bob(item+'/forward','POST',{targetConversationId:target.data.id,clientId});
+  assert.equal(forward.status,201,JSON.stringify(forward.data));
+  assert.equal(forward.data.message.forwarded,true);
+  const forwardAgain=await bob(item+'/forward','POST',{targetConversationId:target.data.id,clientId});
+  assert.equal(forwardAgain.status,200);
+  assert.equal(forwardAgain.data.message.id,forward.data.message.id);
+  const destination=await other('/api/v1/dm/conversations/'+target.data.id+'/messages');
+  assert.equal(destination.data.messages.at(-1).body,'Recebido, editado!');
+  assert.equal(destination.data.messages.at(-1).forwarded,true);
+  const sameConversation=await bob(item+'/forward','POST',{targetConversationId:thread.id,clientId:crypto.randomUUID()});
+  assert.equal(sameConversation.status,400);
+
+  const deleted=await bob(item,'DELETE');
+  assert.equal(deleted.status,200);
+  assert.equal(deleted.data.deleted,true);
+  const tombstone=await alice(path+'/messages');
+  const erased=tombstone.data.messages.find(m=>m.id===reply.id);
+  assert.ok(erased.deletedAt);
+  assert.equal(erased.body,'','deleted text must not leak to conversation history');
+  const editAfterDelete=await bob(item,'PATCH',{body:'Should not restore'});
+  assert.equal(editAfterDelete.status,404);
+  const reactAfterDelete=await alice(item+'/reaction','PUT',{emoji:'👍'});
+  assert.equal(reactAfterDelete.status,404);
+});
