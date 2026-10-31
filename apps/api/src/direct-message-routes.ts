@@ -22,7 +22,7 @@ async function belongs(conversationId: string, userId: string): Promise<boolean>
 }
 const attachmentProjection = 'CASE WHEN attachment_id IS NULL THEN NULL ELSE json_build_object(\'id\',attachment_id,\'name\',attachment_name,\'type\',attachment_type,\'size\',attachment_size) END AS "attachment"';
 const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded", reply_to_id AS "replyToId", '+attachmentProjection;
-const allowedAttachmentTypes = new Set(['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/webm','application/pdf','text/plain','application/zip','application/octet-stream']);
+const allowedAttachmentTypes = new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream']);
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam } };
 const noCache = 'no-store';
