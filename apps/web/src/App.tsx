@@ -5,6 +5,7 @@ import AuthPanel, { type Account } from './AuthPanel';
 import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
+import { clearProfileImageCache } from './profileImageCache';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
 import { Badge } from '@/components/ui/badge';
@@ -101,6 +102,7 @@ function AppContent() {
       body: '{}',
     });
     if (!response.ok) throw new Error('Logout failed');
+    clearProfileImageCache();
     setAccount(null);
   }, []);
 
