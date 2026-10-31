@@ -78,7 +78,7 @@ function DemoNotice({ children }: { children?: ReactNode }) {
   return (
     <div role="note" className="flex items-center gap-2 border-b border-border bg-primary/5 px-4 py-2 text-xs text-muted-foreground">
       <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-      {children ?? 'Prévia de interface: os dados abaixo são fictícios e não são salvos.'}
+      {children ?? t('Prévia de interface: os dados abaixo são fictícios e não são salvos.')}
     </div>
   );
 }
@@ -183,7 +183,7 @@ export default function SocialShell({ account, onLogout }: {
       [conversationId]: [...(previous[conversationId] ?? []), {
         id: Date.now() + Math.random(), mine: true, text, attachment, location,
         replyTo: replyTarget?.id,
-        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
       }],
     }));
     setReplyTarget(null);
@@ -211,7 +211,7 @@ export default function SocialShell({ account, onLogout }: {
       ...previous,
       [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
         id: Date.now() + Math.random(), mine: true, text, attachment, location,
-        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
       }],
     }));
   }
@@ -239,7 +239,7 @@ export default function SocialShell({ account, onLogout }: {
           ...previous,
           [conversationId]: [...(previous[conversationId] ?? []), {
             id: newId, mine: true, text: '', attachment, replyTo: id,
-            time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
           }],
         }));
         setMediaViewerId(newId);
@@ -258,7 +258,7 @@ export default function SocialShell({ account, onLogout }: {
           ...previous,
           [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
             id: newId, mine: true, text: '', attachment,
-            time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
           }],
         }));
         setMediaViewerId(newId);
@@ -294,10 +294,10 @@ export default function SocialShell({ account, onLogout }: {
         <div className="mt-auto space-y-3 border-t border-border p-3">
           <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
             <ProfileAvatar name={account.profile?.displayName ?? account.user.name} />
-            <span className="min-w-0"><span className="block truncate text-sm font-medium">{account.profile?.displayName ?? account.user.name}</span><span className="block truncate text-xs text-muted-foreground">{account.profile ? '@' + account.profile.handle : 'Conta Uorqui'}</span></span>
+            <span className="min-w-0"><span className="block truncate text-sm font-medium">{account.profile?.displayName ?? account.user.name}</span><span className="block truncate text-xs text-muted-foreground">{account.profile ? '@' + account.profile.handle : t('Conta Uorqui')}</span></span>
           </button>
           <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>
-            {loggingOut ? <Spinner /> : <LogOut aria-hidden="true" className="size-4" />}{loggingOut ? t("Saindo…") : 'Sair'}
+            {loggingOut ? <Spinner /> : <LogOut aria-hidden="true" className="size-4" />}{loggingOut ? t("Saindo…") : t('Sair')}
           </Button>
         </div>
       </aside>
@@ -314,7 +314,7 @@ export default function SocialShell({ account, onLogout }: {
              <Badge variant="secondary" className="hidden gap-1.5 font-normal xl:inline-flex">{t('Prévia do MVP')}</Badge>
              <PreferencesControls />
             <Button variant="ghost" size="icon" aria-label={t("Notificações indisponíveis")} title={t("Notificações chegam em uma próxima etapa")} disabled><Bell className="size-4" /></Button>
-            <button type="button" onClick={() => move('profile')} aria-label="Abrir meu perfil" title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               <ProfileAvatar name={account.profile?.displayName ?? account.user.name} className="size-8" />
             </button>
           </div>
@@ -327,17 +327,17 @@ export default function SocialShell({ account, onLogout }: {
                 <div className="mx-auto max-w-3xl space-y-5 p-4 pb-24 sm:p-7">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div><h2 className="text-2xl font-bold tracking-tight">{t("Seu espaço, suas conexões.")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("Acompanhe pessoas e comunidades que fazem parte do seu mundo.")}</p></div>
-                    <Badge variant="outline">Em construção</Badge>
+                    <Badge variant="outline">{t('Em construção')}</Badge>
                   </div>
                   <Card className="gap-4 border-primary/25 bg-primary/5">
                     <CardHeader className="gap-2">
                       <Badge className="w-fit">{t("Bem-vindo ao Uorqui")}</Badge>
-                      <CardTitle className="text-xl">Tudo começa por aqui.</CardTitle>
+                      <CardTitle className="text-xl">{t('Tudo começa por aqui.')}</CardTitle>
                       <CardDescription>{t("O cadastro e seu perfil já estão funcionando. O feed, as publicações e os vídeos estão sendo preparados.")}</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-2">
                       <Button type="button" onClick={() => move('communities')}><Users className="size-4" /> {t("Explorar comunidades")}</Button>
-                      <Button type="button" variant="outline" onClick={() => move('conversations')}><MessageCircle className="size-4" /> Ver conversas</Button>
+                      <Button type="button" variant="outline" onClick={() => move('conversations')}><MessageCircle className="size-4" /> {t('Ver conversas')}</Button>
                     </CardContent>
                   </Card>
                   <EmptyState icon={Compass} title={t("Seu feed aparecerá aqui")} description={t("Ainda não há publicações reais para mostrar. Quando o backend social estiver pronto, esta área reunirá textos, fotos, carrosséis e vídeos.")} />
@@ -350,8 +350,8 @@ export default function SocialShell({ account, onLogout }: {
               <div className="flex h-full min-w-0">
                 <section aria-label={t("Lista de conversas")} className={cn('w-full min-w-0 flex-col border-r border-border bg-card/30 md:flex md:w-82 md:shrink-0', conversationOpened ? 'hidden' : 'flex')}>
                   <div className="shrink-0 space-y-3 border-b border-border p-4">
-                    <div className="flex items-center justify-between gap-2"><h2 className="text-base font-semibold">Conversas</h2><Badge variant="outline">1:1</Badge></div>
-                    <div className="relative"><Search aria-hidden="true" className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Buscar conversas de exemplo" value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Buscar conversas")} className="h-11 pl-9 text-base" /></div>
+                    <div className="flex items-center justify-between gap-2"><h2 className="text-base font-semibold">{t('Conversas')}</h2><Badge variant="outline">1:1</Badge></div>
+                    <div className="relative"><Search aria-hidden="true" className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label={t('Buscar conversas de exemplo')} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Buscar conversas")} className="h-11 pl-9 text-base" /></div>
                   </div>
                   <DemoNotice>{t("Conversas de demonstração; não há mensagens reais.")}</DemoNotice>
                   <ScrollArea className="min-h-0 flex-1">
@@ -359,20 +359,20 @@ export default function SocialShell({ account, onLogout }: {
                       {visibleContacts.map(contact => (
                         <Button key={contact.id} type="button" variant={contact.id === conversationId && conversationOpened ? 'secondary' : 'ghost'} onClick={() => { setConversationId(contact.id); setConversationOpened(true); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className={cn('h-auto w-full justify-start gap-3 rounded-xl px-3 py-3 text-left md:py-4', contact.id === conversationId && 'md:bg-accent/40')}>
                           <Avatar className="size-11"><AvatarFallback className={cn('text-white', contact.color)}>{contact.initials}</AvatarFallback></Avatar>
-                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{contact.name} <span className="font-normal text-muted-foreground">(exemplo)</span></span><span className={cn('mt-0.5 block truncate text-xs font-normal', drafts['dm/' + contact.id]?.trim() ? 'text-primary' : 'text-muted-foreground')}>
-                              {drafts['dm/' + contact.id]?.trim() ? 'Rascunho: ' + drafts['dm/' + contact.id].trim() : t(contact.topic)}
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{contact.name} <span className="font-normal text-muted-foreground">{t('(exemplo)')}</span></span><span className={cn('mt-0.5 block truncate text-xs font-normal', drafts['dm/' + contact.id]?.trim() ? 'text-primary' : 'text-muted-foreground')}>
+                              {drafts['dm/' + contact.id]?.trim() ? t('Rascunho: ') + drafts['dm/' + contact.id].trim() : t(contact.topic)}
                             </span></span>
                         </Button>
                       ))}
-                      {visibleContacts.length === 0 && <EmptyState icon={Search} title="Nenhuma conversa encontrada" description={t("Tente outro nome. Esta lista é apenas uma prévia visual.")} />}
+                      {visibleContacts.length === 0 && <EmptyState icon={Search} title={t('Nenhuma conversa encontrada')} description={t("Tente outro nome. Esta lista é apenas uma prévia visual.")} />}
                     </div>
                   </ScrollArea>
                 </section>
                 <section data-chat-conversation aria-label={t("Conversa demonstrativa")} className={cn('min-w-0 flex-1 flex-col', conversationOpened ? 'flex' : 'hidden md:flex')}>
                   <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-                    <Button variant="ghost" size="icon" aria-label="Voltar às conversas" onClick={() => { setConversationOpened(false); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label={t('Voltar às conversas')} onClick={() => { setConversationOpened(false); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
                     <Avatar className="size-9"><AvatarFallback className={cn('text-white',activeContact.color)}>{activeContact.initials}</AvatarFallback></Avatar>
-                    <div className="min-w-0"><div className="truncate text-sm font-semibold">{activeContact.name} <span className="font-normal text-muted-foreground">· exemplo</span></div><p className="text-xs text-muted-foreground">{t("Conversa individual")}</p></div>
+                    <div className="min-w-0"><div className="truncate text-sm font-semibold">{activeContact.name} <span className="font-normal text-muted-foreground">{t('· exemplo')}</span></div><p className="text-xs text-muted-foreground">{t("Conversa individual")}</p></div>
                   </div>
                   <DemoNotice>{t("As mensagens enviadas aqui ficam apenas nesta prévia, até atualizar a página.")}</DemoNotice>
                   <ScrollArea className="min-h-0 flex-1">
@@ -388,7 +388,7 @@ export default function SocialShell({ account, onLogout }: {
                       ))}
                     </div>
                   </ScrollArea>
-                  <DemoMessageComposer key={'dm-' + conversationId + '-' + conversationOpened} onSend={sendDemoMessage} ariaLabel="Mensagem de demonstração" placeholder={t("Digite uma mensagem…")}
+                  <DemoMessageComposer key={'dm-' + conversationId + '-' + conversationOpened} onSend={sendDemoMessage} ariaLabel={t('Mensagem de demonstração')} placeholder={t("Digite uma mensagem…")}
                     replyPreview={replyTarget ? { author: replyTarget.mine ? t('Você') : activeContact.name, text: messagePreview({ ...replyTarget, text: t(replyTarget.text) }) } : null}
                     onCancelReply={() => setReplyTarget(null)}
                     editing={editingMessage}
@@ -406,9 +406,9 @@ export default function SocialShell({ account, onLogout }: {
                     <span className={cn('flex size-9 items-center justify-center rounded-xl text-white',group.className)}>{group.monogram}</span>
                   </Button>)}
                   <Separator className="w-7" />
-                  <Button size="icon" variant="outline" disabled title="Criação de comunidades em desenvolvimento" aria-label={t("Criar comunidade indisponível")} className="size-10 rounded-2xl"><Plus className="size-4" /></Button>
+                  <Button size="icon" variant="outline" disabled title={t('Criação de comunidades em desenvolvimento')} aria-label={t("Criar comunidade indisponível")} className="size-10 rounded-2xl"><Plus className="size-4" /></Button>
                 </div>
-                <section aria-label="Lista de canais" className={cn('min-w-0 flex-1 flex-col border-r border-border bg-card/25 md:flex md:w-65 md:shrink-0 md:flex-none', channelOpened ? 'hidden' : 'flex')}>
+                <section aria-label={t('Lista de canais')} className={cn('min-w-0 flex-1 flex-col border-r border-border bg-card/25 md:flex md:w-65 md:shrink-0 md:flex-none', channelOpened ? 'hidden' : 'flex')}>
                   <div className="shrink-0 border-b border-border px-4 py-4">
                     <div className="truncate font-semibold">{t(activeCommunity.name)}</div>
                     <p className="mt-1 text-xs text-muted-foreground">{t(activeCommunity.description)}</p>
@@ -419,7 +419,7 @@ export default function SocialShell({ account, onLogout }: {
                       <div><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Canais de texto")}</p>
                         {activeCommunity.channels.filter(ch => ch.kind === 'text').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); setMediaViewerId(null); }}><Hash className="size-4 text-muted-foreground" />{t(ch.label)}</Button>)}
                       </div>
-                      <div><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Canais de voz</p>
+                      <div><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('Canais de voz')}</p>
                         {activeCommunity.channels.filter(ch => ch.kind === 'voice').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); setMediaViewerId(null); }}><Volume2 className="size-4 text-muted-foreground" />{ch.label}</Button>)}
                       </div>
                     </div>
@@ -427,27 +427,27 @@ export default function SocialShell({ account, onLogout }: {
                 </section>
                 <section aria-label={t("Conteúdo do canal")} className={cn('min-w-0 flex-1 flex-col', channelOpened ? 'flex' : 'hidden md:flex')}>
                   <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-                    <Button size="icon" variant="ghost" aria-label="Voltar aos canais" onClick={() => { setChannelOpened(false); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
+                    <Button size="icon" variant="ghost" aria-label={t('Voltar aos canais')} onClick={() => { setChannelOpened(false); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
                     {activeChannel.kind === 'voice' ? <Volume2 className="size-5 text-muted-foreground" /> : <Hash className="size-5 text-muted-foreground" />}
-                    <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{t(activeChannel.label)}</h2><p className="text-xs text-muted-foreground">{activeCommunity.name} · exemplo</p></div>
+                    <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{t(activeChannel.label)}</h2><p className="text-xs text-muted-foreground">{t(activeCommunity.name)} {t('· exemplo')}</p></div>
                   </div>
                   <DemoNotice>{t("Comunidade demonstrativa. Nenhuma conversa é publicada.")}</DemoNotice>
                   {activeChannel.kind === 'voice' ? (
                     <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto">
-                      <div className="px-6 text-center"><Headphones aria-hidden="true" className="mx-auto mb-4 size-11 text-primary" /><h3 className="font-semibold">Sala de voz</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{t("Aqui você poderá conversar por áudio com os membros da comunidade. Conexão de voz ainda não está disponível.")}</p><Button className="mt-5" disabled>{t("Conectar à voz (em breve)")}</Button></div>
+                      <div className="px-6 text-center"><Headphones aria-hidden="true" className="mx-auto mb-4 size-11 text-primary" /><h3 className="font-semibold">{t('Sala de voz')}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{t("Aqui você poderá conversar por áudio com os membros da comunidade. Conexão de voz ainda não está disponível.")}</p><Button className="mt-5" disabled>{t("Conectar à voz (em breve)")}</Button></div>
                     </div>
                   ) : (
                     <>
                       <ScrollArea className="min-h-0 flex-1">
                         <div className="w-full min-w-0 space-y-5 px-4 py-6 sm:px-6 lg:px-8">
-                          <EmptyState icon={Hash} title={t("Bem-vindo a #") + activeChannel.label} description={t("Os canais de texto organizam conversas públicas ou privadas conforme as permissões de cada comunidade.")} />
+                          <EmptyState icon={Hash} title={t("Bem-vindo a #") + t(activeChannel.label)} description={t("Os canais de texto organizam conversas públicas ou privadas conforme as permissões de cada comunidade.")} />
                           {visibleChannelMessages.map(message => <div className="flex gap-3" key={message.id}>
                             <ProfileAvatar name={message.mine ? account.user.name : t("Equipe")} className="size-8" />
-                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? 'Você (prévia)' : 'Equipe Uorqui (exemplo)'} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{t(message.text)}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={message.attachment.kind === 'image' || message.attachment.kind === 'video' ? () => setMediaViewerId(message.id) : undefined} />}{message.location && <DemoLocationCard location={message.location} />}</div>
+                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? t('Você (prévia)') : t('Equipe Uorqui (exemplo)')} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{t(message.text)}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={message.attachment.kind === 'image' || message.attachment.kind === 'video' ? () => setMediaViewerId(message.id) : undefined} />}{message.location && <DemoLocationCard location={message.location} />}</div>
                           </div>)}
                         </div>
                       </ScrollArea>
-                      <DemoMessageComposer key={'channel-' + communityKey + '-' + channelOpened} onSend={sendDemoChannel} ariaLabel="Mensagem de canal de exemplo" placeholder={t("Mensagem em #") + activeChannel.label + ' (prévia)'}
+                      <DemoMessageComposer key={'channel-' + communityKey + '-' + channelOpened} onSend={sendDemoChannel} ariaLabel={t('Mensagem de canal de exemplo')} placeholder={t("Mensagem em #") + t(activeChannel.label) + t(' (prévia)')}
                         draftText={drafts['channel/' + communityKey] ?? ''}
                         onDraftChange={next => updateDraft('channel/' + communityKey, next)} />
                     </>
@@ -467,8 +467,8 @@ export default function SocialShell({ account, onLogout }: {
                     <CardContent><p className="text-sm leading-6 text-muted-foreground">{account.profile?.bio || t("Seu espaço para apresentar quem você é. A edição do perfil será adicionada em breve.")}</p></CardContent>
                   </Card>
                   <Card className="gap-4">
-                    <CardHeader><CardTitle className="text-base">Sua conta</CardTitle><CardDescription>{t("Informações privadas, visíveis apenas para você nesta página.")}</CardDescription></CardHeader>
-                    <CardContent className="space-y-3"><div className="text-sm"><span className="text-muted-foreground">{t("E-mail")}</span><p className="mt-1 break-all font-medium">{account.user.email}</p></div><Separator /><div className="flex items-center gap-2"><Badge variant="outline">Conta ativa</Badge><span className="text-xs text-muted-foreground">{t("Edição de perfil em desenvolvimento")}</span></div></CardContent>
+                    <CardHeader><CardTitle className="text-base">{t('Sua conta')}</CardTitle><CardDescription>{t("Informações privadas, visíveis apenas para você nesta página.")}</CardDescription></CardHeader>
+                    <CardContent className="space-y-3"><div className="text-sm"><span className="text-muted-foreground">{t("E-mail")}</span><p className="mt-1 break-all font-medium">{account.user.email}</p></div><Separator /><div className="flex items-center gap-2"><Badge variant="outline">{t('Conta ativa')}</Badge><span className="text-xs text-muted-foreground">{t("Edição de perfil em desenvolvimento")}</span></div></CardContent>
                   </Card>
                   <Button className="w-full md:hidden" variant="outline" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>{loggingOut ? <Spinner /> : <LogOut className="size-4" />}{loggingOut ? t("Saindo…") : 'Sair da conta'}</Button>
                 </div>
@@ -483,7 +483,7 @@ export default function SocialShell({ account, onLogout }: {
           {navigation.map(item => {
             const Icon = item.icon;
             return <Button key={item.id} variant="ghost" onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('flex h-16 min-w-0 flex-1 flex-col gap-1 rounded-none px-1 text-[11px] font-medium', area === item.id ? 'text-primary' : 'text-muted-foreground')}>
-              <Icon aria-hidden="true" className="size-5" />{item.label}
+              <Icon aria-hidden="true" className="size-5" />{t(item.label)}
             </Button>;
           })}
         </nav>}
