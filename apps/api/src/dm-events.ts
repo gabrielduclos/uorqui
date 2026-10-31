@@ -26,7 +26,8 @@ function scheduleRetry() {
 }
 
 async function ensureListener(): Promise<void> {
-  if (closing || listener || starting || subscribers.size === 0) return;
+  if (closing || listener || subscribers.size === 0) return;
+  if (starting) return starting;
   const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
   if (!url) return;
   const connection = new Client({ connectionString: url, connectionTimeoutMillis: 8000 });
@@ -64,12 +65,12 @@ async function ensureListener(): Promise<void> {
   await starting;
 }
 
-export function subscribeDmEvents(userId: string, callback: Subscriber): () => void {
+export async function subscribeDmEvents(userId: string, callback: Subscriber): Promise<() => void> {
   if (closing) return () => {};
   let set = subscribers.get(userId);
   if (!set) { set = new Set(); subscribers.set(userId, set); }
   set.add(callback);
-  void ensureListener().catch(() => scheduleRetry());
+  await ensureListener().catch(() => scheduleRetry());
   return () => {
     const current = subscribers.get(userId);
     current?.delete(callback);
