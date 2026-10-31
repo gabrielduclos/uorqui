@@ -70,7 +70,7 @@ export function DemoAudioPlayer({ src }: { src: string; name?: string }) {
           <span>{audioTime(currentTime)}</span><span>{audioTime(duration)}</span>
         </div>
       </div>
-      <button type="button" onClick={() => setRate(previous => RATES[(RATES.indexOf(previous) + 1) % RATES.length])} aria-label={t("Alterar velocidade do áudio, atual ") + String(rate) + t(" vezes")} title="Velocidade" className="h-9 min-w-11 shrink-0 border border-current/20 px-1 text-xs font-semibold tabular-nums hover:bg-current/10 focus-visible:outline-2 focus-visible:outline-ring">{rate}×</button>
+      <button type="button" onClick={() => setRate(previous => RATES[(RATES.indexOf(previous) + 1) % RATES.length])} aria-label={t("Alterar velocidade do áudio, atual ") + String(rate) + t(" vezes")} title={t("Velocidade")} className="h-9 min-w-11 shrink-0 border border-current/20 px-1 text-xs font-semibold tabular-nums hover:bg-current/10 focus-visible:outline-2 focus-visible:outline-ring">{rate}×</button>
     </div>
     {error && <p role="alert" className="text-xs">{t("Não foi possível reproduzir este áudio.")}</p>}
   </div>;
@@ -126,9 +126,9 @@ export function DemoMediaViewer({ items, selectedId, onSelect, onClose, onImageE
   return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-3 text-white sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <div id="demo-media-dialog" role="dialog" aria-modal="true" aria-label={t("Visualizador de mídias")} className="flex h-full max-h-[94dvh] w-full max-w-6xl flex-col outline-none">
       <div className="flex shrink-0 items-center gap-3 border-b border-white/15 pb-3">
-        <p className="min-w-0 flex-1 truncate text-sm">{active.attachment.kind === 'image' ? (editing ? 'Editar foto' : t("Foto")) : 'Vídeo'}</p>
+        <p className="min-w-0 flex-1 truncate text-sm">{active.attachment.kind === 'image' ? (editing ? t("Editar foto") : t("Foto")) : t("Vídeo")}</p>
         <span className="shrink-0 text-xs text-white/70">{index + 1} de {items.length}</span>
-        {active.attachment.kind === 'image' && !!onImageEdited && !editing && <button type="button" onClick={() => setEditing(true)} aria-label={t('Editar foto')} className="flex min-h-10 items-center gap-2 border border-white/20 px-3 text-xs hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><Pencil className="size-4" /><span className="hidden sm:inline">Editar foto</span></button>}
+        {active.attachment.kind === 'image' && !!onImageEdited && !editing && <button type="button" onClick={() => setEditing(true)} aria-label={t('Editar foto')} className="flex min-h-10 items-center gap-2 border border-white/20 px-3 text-xs hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><Pencil className="size-4" /><span className="hidden sm:inline">{t("Editar foto")}</span></button>}
         <a href={active.attachment.url} download={active.attachment.name} aria-label={t("Baixar mídia")} className="grid size-10 shrink-0 place-items-center rounded-md hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><Download className="size-5" /></a>
         <button ref={closeRef} type="button" onClick={onClose} aria-label={t('Fechar visualizador')} className="grid size-10 shrink-0 place-items-center rounded-md hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><X className="size-5" /></button>
       </div>
