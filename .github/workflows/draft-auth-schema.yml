@@ -4,6 +4,7 @@ on:
     paths:
       - 'apps/api/src/auth/auth.cli.ts'
       - 'apps/api/src/auth/auth-policy.ts'
+      - 'apps/api/package.json'
       - '.github/workflows/draft-auth-schema.yml'
 permissions:
   contents: read
