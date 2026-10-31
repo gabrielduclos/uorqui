@@ -630,6 +630,11 @@ test('hybrid DM permissions: public messages, private requests, acceptance and r
   assert.equal((await alice('/api/v1/profiles/dm_bob')).status,200);
   assert.equal((await other('/api/v1/profiles/dm_bob')).status,404);
   assert.equal((await other('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
+  assert.equal((await other('/api/v1/friends/requests','POST',{handle:'dm_bob'})).status,201,
+    'a known exact @handle may request a private account');
+  assert.equal((await bob('/api/v1/friends')).data.received.some(p=>p.handle==='dm_other'),true);
+  assert.equal((await bob('/api/v1/friends/requests/dm_other/decline','POST')).status,200);
+  assert.equal((await other('/api/v1/friends/relationship/dm_bob')).data.status,'none');
   assert.equal((await alice('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,200);
   const allowed=await alice(path+'/messages','POST',{body:'Private friend message',clientId:crypto.randomUUID()});
   assert.equal(allowed.status,201);
@@ -641,6 +646,8 @@ test('hybrid DM permissions: public messages, private requests, acceptance and r
   assert.equal((await alice('/api/v1/profiles/dm_bob')).status,404);
   assert.equal((await alice('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
   assert.equal((await alice(path+'/messages','POST',{body:'blocked after unfriend',clientId:crypto.randomUUID()})).status,403);
+  assert.equal((await alice(path+'/attachments/allowed')).status,403,
+    'the R2 upload gate must reject private nonfriends before storing bytes');
   const id=allowed.data.message.id;
   assert.equal((await alice(path+'/messages/'+id,'PATCH',{body:'blocked edit'})).status,403);
   assert.equal((await alice(path+'/messages/'+id+'/reaction','PUT',{emoji:'❤️'})).status,403);
