@@ -20,7 +20,7 @@ const MAX_DM_BYTES = 20 * 1024 * 1024;
 const DM_UPLOAD_PATH = /^\/api\/media\/dm\/([0-9a-f-]{36})$/;
 const DM_MEDIA_PATH = /^\/media\/dm\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
 const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
-const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','video/mp4','video/webm','application/pdf','text/plain','application/zip','application/octet-stream']);
+const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream']);
 const MEDIA_PATH = /^\/media\/profile\/([0-9a-f-]{36})\/(avatar|cover)\/([0-9a-f-]{36})\.(webp|jpg|png)$/;
 const UPLOAD_PATH = /^\/api\/media\/profile\/(avatar|cover)$/;
 const TYPE_EXTENSION: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
@@ -214,7 +214,7 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
       (type === 'application/pdf' && !magic.startsWith('%PDF-')) ||
       (type === 'application/zip' && !magic.startsWith('PK')) ||
       (type === 'video/webm' && !(signature[0] === 0x1a && signature[1] === 0x45 && signature[2] === 0xdf && signature[3] === 0xa3)) ||
-      (type === 'video/mp4' && magic.slice(4, 8) !== 'ftyp')) return jsonError(415, 'Invalid attachment format');
+      ((type === 'video/mp4' || type === 'video/quicktime' || type === 'image/heic' || type === 'image/heif') && magic.slice(4, 8) !== 'ftyp')) return jsonError(415, 'Invalid attachment format');
 
   const attachmentId = crypto.randomUUID();
   const key = 'dm/' + conversationId + '/' + attachmentId;
