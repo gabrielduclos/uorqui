@@ -92,6 +92,8 @@ export const directMessageReactions = pgTable('direct_message_reactions', {
   messageId: uuid('message_id').notNull().references(() => directMessages.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   emoji: varchar('emoji', { length: 16 }).notNull(),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
+  readAt: timestamp('read_at', { withTimezone: true }),
 }, (table) => [
   primaryKey({ columns: [table.messageId, table.userId] }),
 ]);
