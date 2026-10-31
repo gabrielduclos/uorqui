@@ -10,7 +10,7 @@ Direct messages use Better Auth, Neon PostgreSQL, `direct_conversations`, and `d
 - Persistent text history (latest 100 messages), 4,000-character limit, idempotent `clientId` retries.
 - Each message retains its inline timestamp. Sending/Sent/Received/Read appears as one centered system-style status row with the time of the latest relevant update after each consecutive outgoing message block. The block conservatively reflects the least advanced non-deleted message, so it cannot claim Read before all messages are read. Delivery acknowledgement does not mark a message read.
 - Optimistic message bubble with spinner and retry (same client ID) while the composer remains available.
-- Edit, delete for both participants (tombstone), forward to another existing conversation, and persist reactions to received messages. Reactions update optimistically with rollback on failure.\n- **Reply** sends an optional authorized `replyToId` referring to a message in the same conversation; the UI shows a live preview without copying the source into the body. Deleted sources show a tombstone.\n- A visible, focused inbox marks incoming messages **Received** even without opening the conversation, but never **Read**.
+- Edit, delete for both participants (tombstone), forward to another existing conversation, and persist reactions to received messages. Reactions update optimistically with rollback on failure.\n- **Reply** sends an optional authorized `replyToId` referring to a message in the same conversation; the reply preview is clickable and scrolls/highlights the original, fetching an older history window when necessary; the UI shows a live preview without copying the source into the body. Deleted sources show a tombstone.\n- A visible, focused inbox marks incoming messages **Received** even without opening the conversation, but never **Read**.
 - **SSE push signaling backed by PostgreSQL LISTEN/NOTIFY**, with polling safety fallback. WebSocket, background push and presence are not yet included.
 - Mobile-first responsive conversation layout with fixed headers and keyboard handling, high-contrast composer in Light/Dark and no “Live” visual badge.
 
@@ -44,3 +44,11 @@ Migration `0003_live_direct_messages` adds unique `client_id` and `read_at` to d
 
 ### Not included yet
 Older-message pagination, R2 attachments, push, presence, anti-spam and moderation.
+
+### Cancellation, reaction events, and navigation
+
+- `DELETE /api/v1/dm/conversations/:id/messages/:messageId` cancels a user's own **unread** message, permanently and without a placeholder. Already-read messages return HTTP 409 without mutation.
+- `GET /api/v1/dm/conversations/:id/messages?around=<uuid>` returns an authorized segment centered around the original for reply navigation/highlighting.
+- Reactions appear as their own optimistic chat bubbles next to their source, with Undo.
+- The chat icon shows the aggregate number of unread messages account-wide via SSE/polling on mobile and desktop.
+- Visual identity: square chat message bubbles.
