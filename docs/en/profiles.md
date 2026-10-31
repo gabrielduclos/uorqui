@@ -6,7 +6,7 @@ Profiles use the existing Better Auth session, Neon PostgreSQL and the `users`/`
 
 ### Your profile
 - Display name, unique lowercase username (3–32 characters), bio up to 500 characters.
-- Avatar and cover through **HTTPS image URLs**. Native binary uploads require dedicated media storage and are not implemented yet.
+- Avatar and cover through **HTTPS image URLs**. Direct uploads use private Cloudflare R2 storage with client-side crop and compression.
 - Public profile toggle: when disabled, the user is excluded from search and the public page returns 404. The owner can still edit through My Profile.
 - Server-side validation, permission checks and transactional updates.
 
@@ -32,5 +32,17 @@ Profiles use the existing Better Auth session, Neon PostgreSQL and the `users`/`
 
 Drizzle migration `0002_profile_visibility_media` adds `avatar_url`, `cover_url` and `is_public` (default TRUE). Apply the migration **before** deploying the API/frontend changes to prevent missing-column errors. The UI kit remains documentation-only.
 
+
+## Profile photos and Cloudflare R2
+
+- Dedicated new private bucket: `uorqui-profile-media`; do not reuse legacy media buckets.
+- Worker binding: `PROFILE_MEDIA`. `POST /api/media/profile/avatar` and `POST /api/media/profile/cover` upload processed WebP/JPEG/PNG images up to 3 MB; `DELETE` removes them.
+- Client-side cropper outputs 640×640 avatars and 1440×480 covers, preferring WebP compression.
+- Session authorization and profile persistence remain in Fastify and Neon; only metadata references live in Postgres, not images.
+- All reads through `/media/profile/{id}/{avatar|cover}/{asset}.{ext}` are authorized against the current DB record and its public/private state. Revoked images are no longer served.
+- Keep the R2 bucket private, with no public domain or shared cache.
+- Production requires the Cloudflare Worker R2 binding; failures must show an error.
+- Existing external HTTPS links are supported for backwards compatibility.
+
 ## Later
-Image uploads and optimization (R2 or equivalent), media safety, external image privacy and real DM integration.
+Media safety, legacy external image privacy and real DM integration.
