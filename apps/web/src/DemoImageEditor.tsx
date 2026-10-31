@@ -160,15 +160,15 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
 
   return <section aria-label={t("Editor de foto")} className="flex min-h-0 flex-1 flex-col gap-3 py-3">
     <div className="flex flex-wrap items-center gap-2">
-      {tools.map(item => <Button key={item.id} type="button" size="sm" variant={tool === item.id ? 'default' : 'outline'} aria-label={item.label} aria-pressed={tool === item.id} onClick={() => setTool(item.id)} className="size-10 shrink-0 rounded-none p-0"><item.Icon className="size-4" /></Button>)}
+      {tools.map(item => <Button key={item.id} type="button" size="sm" variant={tool === item.id ? 'default' : 'outline'} aria-label={t(item.label)} aria-pressed={tool === item.id} onClick={() => setTool(item.id)} className="size-10 shrink-0 rounded-none p-0"><item.Icon className="size-4" /></Button>)}
       <span className="mx-1 h-7 w-px bg-white/25" />
-      {COLORS.map(item => <button key={item} type="button" aria-label={'Cor ' + item} aria-pressed={color === item} title={item} onClick={() => setColor(item)} className="size-7 shrink-0 rounded-full border-2 border-white/50 outline-offset-2 focus-visible:outline-2 focus-visible:outline-white" style={{ backgroundColor: item, outline: color === item ? '2px solid white' : undefined }} />)}
+      {COLORS.map(item => <button key={item} type="button" aria-label={t('Cor ') + item} aria-pressed={color === item} title={item} onClick={() => setColor(item)} className="size-7 shrink-0 rounded-full border-2 border-white/50 outline-offset-2 focus-visible:outline-2 focus-visible:outline-white" style={{ backgroundColor: item, outline: color === item ? '2px solid white' : undefined }} />)}
       <span className="flex-1" />
       <Button type="button" variant="outline" size="sm" onClick={undo} disabled={!marks.length || saving}><Undo2 className="size-4" />Desfazer</Button>
       <Button type="button" variant="outline" size="sm" onClick={() => { setMarks([]); setWorking(null); }} disabled={!marks.length || saving}><RotateCcw className="size-4" />Limpar</Button>
     </div>
     <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/40">
-      <canvas ref={canvas} onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} style={{ touchAction: 'none', maxHeight: '65dvh', maxWidth: '100%', width: 'auto', height: 'auto', cursor: 'crosshair' }} aria-label="Área de desenho sobre a foto" />
+      <canvas ref={canvas} onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} style={{ touchAction: 'none', maxHeight: '65dvh', maxWidth: '100%', width: 'auto', height: 'auto', cursor: 'crosshair' }} aria-label={t('Área de desenho sobre a foto')} />
     </div>
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
     <div className="flex shrink-0 justify-end gap-2">
