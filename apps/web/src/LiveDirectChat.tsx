@@ -32,8 +32,9 @@ function formatTime(value: string | null | undefined, locale: string) {
 }
 
 /** Text-only first release. All messages are persisted server-side. */
-export default function LiveDirectChat({ myId, initialHandle, onStarted }: {
+export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobileOpenChange }: {
   myId: string; initialHandle?: string | null; onStarted?: () => void;
+  onMobileOpenChange?: (open: boolean) => void;
 }) {
   const { locale } = useUorquiPreferences();
   const pt = locale === 'pt-BR';
@@ -54,8 +55,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted }: {
   const reading = useRef(false);
   const activeIdRef = useRef<string | null>(null);
   const handledHandle = useRef<string | null>(null);
-  const unreadRef = useRef<string>('');
   activeIdRef.current=activeId;
+  useEffect(() => onMobileOpenChange?.(mobileOpened), [mobileOpened, onMobileOpenChange]);
 
   const loadThreads = useCallback(async () => {
     const response=await api<{conversations:Conversation[]}>('/api/v1/dm/conversations');
@@ -106,7 +107,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted }: {
   },[loadThreads,openThread,pt]);
 
   useEffect(() => {
-    if(!initialHandle || initialHandle === handledHandle.current) return;
+    if(!initialHandle) { handledHandle.current = null; return; }
+    if(initialHandle === handledHandle.current) return;
     handledHandle.current=initialHandle;
     void startPerson(initialHandle).finally(()=>onStarted?.());
   },[initialHandle,startPerson,onStarted]);
