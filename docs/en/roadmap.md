@@ -21,7 +21,8 @@
 - [x] Choose Better Auth, implement Fastify/React authentication flows and commit migration 0001.
 - [x] Test auth migration on temporary Neon and pass CI type/build/schema checks.
 - [x] Pass a real signup, session, profile, duplicate protection and logout integration test using ephemeral PostgreSQL in GitHub Actions.
-- [ ] Request approval to apply migration 0001 to main; configure secrets and verify registration/login end-to-end.
+- [x] Apply Better Auth migration 0001 to Neon main, verify 10 application tables and the second Drizzle journal entry, and remove the temporary branch.
+- [ ] Configure private secrets and validate authentication end-to-end against Neon main.
 - [ ] Implement email verification, password recovery and production-safe signup controls before opening access.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
