@@ -108,7 +108,7 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
       const y = viewport?.offsetTop ?? 0;
       const width = viewport?.width ?? window.innerWidth;
       const height = viewport?.height ?? window.innerHeight;
-      const menuWidth = Math.min(264, Math.max(160, width - 16));
+      const menuWidth = Math.min(264, Math.max(1, width - 16));
       const menuHeight = Math.min(menuRef.current?.offsetHeight ?? 240, Math.max(1, height - 16));
       const leftPreferred = message.mine ? triggerBounds.right - menuWidth : triggerBounds.left;
       const left = Math.max(x + 8, Math.min(leftPreferred, x + width - menuWidth - 8));
