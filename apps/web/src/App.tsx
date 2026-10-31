@@ -20,10 +20,10 @@ const areas = [
 
 export default function App() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#080e1b] text-slate-100">
+    <main className="relative min-h-screen overflow-x-clip bg-[#080e1b] text-slate-100">
       <div aria-hidden="true" className="pointer-events-none absolute -top-48 left-1/2 h-120 w-120 -translate-x-1/2 rounded-full bg-indigo-600/20 blur-[100px]" />
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8 sm:px-10">
-        <header className="flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/10 bg-[#080e1b]/95 py-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur">
           <div className="text-2xl font-bold tracking-tight">uorqui<span className="text-indigo-400">.</span></div>
           <span className="rounded-full border border-slate-600/70 px-3 py-1.5 text-xs text-slate-300">
             Projeto open source · Pré-MVP
