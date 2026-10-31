@@ -146,7 +146,7 @@ export function ZoomableChatPhoto({ src, alt, locale = 'pt-BR' }: {
     <div ref={stageRef} className="flex h-full w-full touch-none select-none items-center justify-center overflow-hidden"
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
       onWheel={onWheel}
-      onDoubleClick={event => { if (event.pointerType !== 'touch') zoomTo(scaleRef.current > 1 ? 1 : 2.5, { x: event.clientX, y: event.clientY }); }}>
+      onDoubleClick={event => { if (event.detail >= 2) zoomTo(scaleRef.current > 1 ? 1 : 2.5, { x: event.clientX, y: event.clientY }); }}>
       <img ref={imageRef} src={src} alt={alt} draggable={false}
         className="max-h-[76dvh] max-w-full select-none object-contain"
         style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`, transformOrigin: 'center center', willChange: 'transform' }} />
