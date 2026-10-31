@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
+import { subscribeDmEvents, publishDmConversationEvent } from './dm-events.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 const uuidParam = { type: 'string', format: 'uuid' } as const;
@@ -24,6 +25,56 @@ const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam }
 const noCache = 'no-store';
 
 export function registerDirectMessageRoutes(app:FastifyInstance, getSession: SessionReader) {
+  app.get('/api/v1/dm/events', async (request, reply) => {
+    // EventSource uses the same-origin session cookie; no tokens in URLs.
+    // Connection lifetime is bounded so revoked/expired sessions are rechecked.
+    let me: string | null;
+    try {
+      me = await identity(request, getSession);
+    } catch (error) {
+      request.log.error({ err: error }, 'DM event authentication failed');
+      return reply.code(503).send({ error: 'Unavailable' });
+    }
+    if (!me) return reply.code(401).send({ error: 'Unauthorized' });
+    if ((request.headers.accept ?? '').indexOf('text/event-stream') === -1) {
+      return reply.code(406).send({ error: 'Expected event stream' });
+    }
+
+    const response = reply.raw;
+    response.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'private, no-store, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    reply.hijack();
+    // Initial ready event triggers a refresh after establishing the subscription,
+    // covering changes that occurred during the initial HTTP handshake.
+    let ended = false;
+    const write = (chunk: string) => {
+      if (ended || response.destroyed || response.writableEnded) return;
+      try { response.write(chunk); } catch { finish(); }
+    };
+    const unsubscribe = await subscribeDmEvents(me, event => {
+      write('event: dm-update\ndata: ' + JSON.stringify(event) + '\n\n');
+    });
+    const heartbeat = setInterval(() => write(': heartbeat\n\n'), 15_000);
+    const expires = setTimeout(() => finish(), 5 * 60_000);
+    function finish() {
+      if (ended) return;
+      ended = true;
+      clearInterval(heartbeat);
+      clearTimeout(expires);
+      unsubscribe();
+      if (!response.writableEnded) response.end();
+    }
+    response.once('close', finish);
+    if (response.destroyed) { finish(); return; }
+    write('retry: 2000\n\n');
+    write('event: ready\ndata: {}\n\n');
+  });
+
   app.get('/api/v1/dm/people', {
     schema:{ querystring:{ type:'object', additionalProperties:false, required:['q'],
       properties:{ q:{type:'string',minLength:2,maxLength:40} } } },
@@ -75,6 +126,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!match.rowCount)return reply.code(404).send({error:'User unavailable'});
       const [a,b]=[me,match.rows[0].id as string].sort();
       const r=await getPool().query('INSERT INTO direct_conversations(participant_a_id,participant_b_id) VALUES($1,$2) ON CONFLICT(participant_a_id,participant_b_id) DO UPDATE SET participant_a_id=EXCLUDED.participant_a_id RETURNING id',[a,b]);
+      await publishDmConversationEvent(r.rows[0].id as string, 'conversation').catch(error => request.log.warn({err:error},'DM event unavailable'));
       return reply.header('Cache-Control',noCache).send({id:r.rows[0].id});
     }catch(e){request.log.error({err:e},'DM open');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -106,7 +158,10 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!text||text.length>4000)return reply.code(400).send({error:'Invalid message'});
       const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id) VALUES($1,$2,$3,$4) ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
       const r=await getPool().query(q,[id,me,text,clientId]);
-      if(r.rowCount)return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
+      if(r.rowCount){
+        await publishDmConversationEvent(id,'message').catch(error=>request.log.warn({err:error},'DM notification failed'));
+        return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
+      }
       const prev=await getPool().query('SELECT '+messageColumns+' FROM direct_messages WHERE client_id=$1 AND conversation_id=$2 AND author_id=$3',[clientId,id,me]);
       if(!prev.rowCount)return reply.code(409).send({error:'Message ID conflict'});
       return reply.header('Cache-Control',noCache).send({message:prev.rows[0]});
@@ -120,6 +175,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
       const r=await getPool().query('UPDATE direct_messages SET read_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL RETURNING id',[id,me]);
+      if(r.rowCount) await publishDmConversationEvent(id,'read').catch(error=>request.log.warn({err:error},'DM read notification failed'));
       return reply.header('Cache-Control',noCache).send({read:r.rowCount??0});
     }catch(e){request.log.error({err:e},'DM read');return reply.code(503).send({error:'Unavailable'});}
   });
