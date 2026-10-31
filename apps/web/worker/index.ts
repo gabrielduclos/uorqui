@@ -239,8 +239,10 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
     }
     return Response.json(result, { status:saved.status,headers:{'Cache-Control':'no-store'} });
   } catch {
-    await env.DM_ATTACHMENTS.delete(key).catch(() => {});
-    return jsonError(503,'Could not send attachment');
+    // The API may have committed the message before a network failure. Keep
+    // its object so a retry with the same clientId can recover it; deleting
+    // it here could permanently break a successfully sent attachment.
+    return jsonError(503,'Could not confirm attachment message');
   }
 }
 
