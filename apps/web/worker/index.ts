@@ -1,11 +1,12 @@
 interface ProfileMediaObject {
   body: ReadableStream;
   size: number;
+  range?: { offset: number; length: number };
   httpMetadata?: { contentType?: string };
 }
 interface ProfileMediaBucket {
   put(key: string, body: ArrayBuffer, options: { httpMetadata: { contentType: string } }): Promise<unknown>;
-  get(key: string): Promise<ProfileMediaObject | null>;
+  get(key: string, options?: { range?: Headers }): Promise<ProfileMediaObject | null>;
   delete(key: string): Promise<void>;
 }
 interface Env {
@@ -266,14 +267,18 @@ async function handleDmDownload(request: Request, env: Env, origin: URL, convers
     if (!access.allowed || !access.name || !access.type) return jsonError(404, 'Attachment unavailable');
   } catch { return jsonError(503,'Attachment authorization unavailable'); }
   try {
-    const object = await env.DM_ATTACHMENTS.get('dm/' + conversationId + '/' + attachmentId);
+    const object = await env.DM_ATTACHMENTS.get('dm/' + conversationId + '/' + attachmentId,
+      request.headers.has('range') ? {range:request.headers} : undefined);
     if (!object) return jsonError(404,'Attachment unavailable');
+    const partial=!!request.headers.get('range') && !!object.range;
     const inline = access.type.startsWith('image/') || access.type.startsWith('video/') || access.type === 'application/pdf';
     const fallback = access.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120) || 'attachment';
     return new Response(request.method === 'HEAD' ? null : object.body,{
-      status:200,headers:{
+      status:partial ? 206 : 200,headers:{
         'content-type':access.type,
-        'content-length':String(object.size),
+        'content-length':String(partial ? object.range!.length : object.size),
+        'accept-ranges':'bytes',
+        ...(partial ? {'content-range':'bytes '+object.range!.offset+'-'+(object.range!.offset+object.range!.length-1)+'/'+object.size} : {}),
         'content-disposition':(inline ? 'inline' : 'attachment') + '; filename="' + fallback + '"; filename*=UTF-8\'\'' + encodeURIComponent(access.name),
         'cache-control':'private, no-store',
         'x-content-type-options':'nosniff',
