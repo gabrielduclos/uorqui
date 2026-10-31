@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
-import { FileAudio, FileText, Image, Mic, Paperclip, Send, Square, Video, X, Reply, Pencil } from 'lucide-react';
+import { FileAudio, FileText, Image, Mic, Paperclip, Play, Send, Square, Video, X, Reply, Pencil } from 'lucide-react';
+import { DemoAudioPlayer } from './DemoChatMedia';
 import { Button } from '@/components/ui/button';
 
 export type AttachmentKind = 'image' | 'video' | 'audio' | 'file';
@@ -35,26 +36,32 @@ function formatSize(bytes: number) {
   return bytes < 1024 * 1024 ? Math.max(1, Math.ceil(bytes / 1024)) + ' KB' : (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-export function DemoAttachmentView({ attachment }: { attachment: DemoAttachment }) {
+export function DemoAttachmentView({ attachment, onOpenMedia }: { attachment: DemoAttachment; onOpenMedia?: () => void }) {
   if (attachment.kind === 'image') {
-    return <a href={attachment.url} download={attachment.name} aria-label={'Baixar foto ' + attachment.name} className="mt-1 block w-fit max-w-full">
-      <img src={attachment.url} alt={attachment.name} loading="lazy" className="max-h-72 max-w-full rounded-lg object-contain" />
-    </a>;
+    const image = <img src={attachment.url} alt={attachment.name} loading="lazy" className="max-h-72 max-w-full object-contain" />;
+    return onOpenMedia
+      ? <button type="button" aria-label={'Abrir foto ' + attachment.name} onClick={onOpenMedia} className="mt-1 block max-w-full overflow-hidden focus-visible:outline-2 focus-visible:outline-ring">{image}</button>
+      : <a href={attachment.url} download={attachment.name} aria-label={'Baixar foto ' + attachment.name} className="mt-1 block w-fit max-w-full">{image}</a>;
   }
   if (attachment.kind === 'video') {
-    return <video src={attachment.url} controls playsInline preload="metadata" aria-label={attachment.name} className="mt-1 max-h-72 w-full max-w-lg rounded-lg" />;
+    return onOpenMedia
+      ? <button type="button" onClick={onOpenMedia} aria-label={'Abrir vídeo ' + attachment.name} className="relative mt-1 block max-w-full overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-ring">
+          <video src={attachment.url} muted playsInline preload="metadata" aria-hidden="true" className="pointer-events-none max-h-72 max-w-full" />
+          <span className="absolute inset-0 grid place-items-center bg-black/20"><Play className="size-9 text-white" fill="currentColor" /></span>
+        </button>
+      : <video src={attachment.url} controls playsInline preload="metadata" aria-label={attachment.name} className="mt-1 max-h-72 w-full max-w-lg" />;
   }
   if (attachment.kind === 'audio') {
-    return <audio src={attachment.url} controls preload="metadata" aria-label={attachment.name} className="mt-1 w-full max-w-sm" />;
+    return <DemoAudioPlayer src={attachment.url} name={attachment.name} />;
   }
-  return <a href={attachment.url} download={attachment.name} className="mt-1 flex min-w-0 items-center gap-2 rounded-lg border border-current/20 px-3 py-2 underline underline-offset-2">
+  return <a href={attachment.url} download={attachment.name} className="mt-1 flex min-w-0 items-center gap-2 border border-current/20 px-3 py-2 underline underline-offset-2">
     <FileText aria-hidden="true" className="size-5 shrink-0" />
     <span className="min-w-0 flex-1 truncate text-sm">{attachment.name}</span>
     <span className="shrink-0 text-xs opacity-75">{formatSize(attachment.size)}</span>
   </a>;
 }
 
-export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, replyPreview, onCancelReply, editing, onCancelEditing }: {
+export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, replyPreview, onCancelReply, editing, onCancelEditing, draftText, onDraftChange }: {
   onSend: (payload: ComposePayload) => void;
   placeholder: string;
   ariaLabel: string;
@@ -62,10 +69,17 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
   onCancelReply?: () => void;
   editing?: { id: number; text: string } | null;
   onCancelEditing?: () => void;
+  draftText?: string;
+  onDraftChange?: (text: string) => void;
 }) {
   const [text, setText] = useState('');
   const [editText, setEditText] = useState('');
-  const activeText = editing ? editText : text;
+  const activeText = editing ? editText : draftText ?? text;
+  function updateText(next: string) {
+    if (editing) setEditText(next);
+    else if (onDraftChange) onDraftChange(next);
+    else setText(next);
+  }
   const [pending, setPending] = useState<DemoAttachment | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -241,7 +255,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
     if (!editing) stagedRef.current = null;
     setPending(null);
     if (editing) setEditText('');
-    else setText('');
+    else updateText('');
     setPickerOpen(false);
     setError('');
     textareaRef.current?.focus();
@@ -299,7 +313,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
         <Button type="button" variant={isRecording ? 'destructive' : 'ghost'} size="icon" className="size-11 shrink-0" aria-label={isRecording ? 'Finalizar gravação' : 'Gravar áudio'} onClick={() => void toggleRecording()} disabled={!!editing} title={isRecording ? 'Finalizar gravação' : 'Gravar áudio pelo microfone'}>
           {isRecording ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-5" />}
         </Button>
-        <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => editing ? setEditText(event.target.value) : setText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
+        <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => updateText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
         <Button type="submit" aria-label={editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração'} size="icon" disabled={isRecording || (!activeText.trim() && (!!editing || !pending))} className="size-11 shrink-0"><Send className="size-4" /></Button>
       </div>
       <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>

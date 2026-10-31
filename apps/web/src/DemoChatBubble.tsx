@@ -14,7 +14,10 @@ export type DemoMessage = {
   attachment?: DemoAttachment;
   replyTo?: number;
   edited?: boolean;
+  myReaction?: string;
 };
+
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
 export function messagePreview(message: DemoMessage): string {
   if (message.text.trim()) return message.text.trim().replace(/\s+/g, ' ').slice(0, 120);
@@ -64,13 +67,15 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
   </div>;
 }
 
-export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onLocateReply }: {
+export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onLocateReply, onReact, onOpenMedia }: {
   message: DemoMessage;
   quoted?: DemoMessage;
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onLocateReply: (id: number) => void;
+  onReact?: (emoji: string) => void;
+  onOpenMedia?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -104,11 +109,14 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
           <span className="mt-0.5 block max-w-full truncate opacity-80">{quoted ? messagePreview(quoted) : 'Mensagem indisponível'}</span>
         </button>}
         {message.text && <p className="wrap-break-word whitespace-pre-wrap leading-6">{message.text}</p>}
-        {message.attachment && <DemoAttachmentView attachment={message.attachment} />}
+        {message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={onOpenMedia} />}
         <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', message.mine ? 'text-white/75' : 'text-muted-foreground')}>
           {message.edited && <span>editada ·</span>}
           <time>{message.time}</time>
         </div>
+        {message.myReaction && !message.mine && <button type="button" onClick={() => onReact?.(message.myReaction!)} aria-label={'Remover reação ' + message.myReaction} title="Remover minha reação" className="mt-2 inline-flex items-center border border-border/50 bg-background/80 px-2 py-0.5 text-sm text-foreground hover:bg-accent">
+          {message.myReaction}<span className="ml-1 text-[10px] opacity-70">1</span>
+        </button>}
       </div>
     </SwipeToReply>
     <div ref={menuRef} className={cn('relative flex shrink-0 items-start', message.mine && 'order-first')}>
@@ -117,6 +125,14 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
       </Button>
       {open && <div role="menu" onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }} className={cn('absolute top-9 z-20 min-w-36 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-xl', message.mine ? 'right-0' : 'left-0')}>
         <button type="button" role="menuitem" onClick={() => { setOpen(false); onReply(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Reply className="size-4" />Responder</button>
+        {!message.mine && onReact && <div className="border-b border-border px-1.5 pb-1.5">
+          <p className="px-1.5 py-1 text-[11px] text-muted-foreground">Reagir à mensagem</p>
+          <div className="flex items-center gap-0.5">
+            {QUICK_REACTIONS.map(emoji => <button key={emoji} type="button" aria-label={'Reagir com ' + emoji} aria-pressed={message.myReaction === emoji} onClick={() => { onReact(emoji); setOpen(false); }} className={cn('grid size-9 place-items-center text-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring', message.myReaction === emoji && 'bg-primary/15')}>
+              {emoji}
+            </button>)}
+          </div>
+        </div>}
         {message.text.trim() && <button type="button" role="menuitem" onClick={() => void copy()} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Copy className="size-4" />Copiar texto</button>}
         {message.mine && !!message.text && !message.attachment && <button type="button" role="menuitem" onClick={() => { setOpen(false); onEdit(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Pencil className="size-4" />Editar</button>}
         {message.mine && <button type="button" role="menuitem" onClick={() => { setOpen(false); onDelete(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-destructive hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Trash2 className="size-4" />Excluir</button>}
