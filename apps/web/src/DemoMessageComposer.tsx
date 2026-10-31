@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
-import { FileAudio, FileText, Image, Mic, Paperclip, Play, Send, Square, Video, X, Reply, Pencil } from 'lucide-react';
+import { Camera, FileText, Image, Images, MapPin, Mic, Play, Plus, Send, Smile, Square, Video, X, Reply, Pencil } from 'lucide-react';
 import { DemoAudioPlayer } from './DemoChatMedia';
 import { Button } from '@/components/ui/button';
 
@@ -11,10 +11,18 @@ export type DemoAttachment = {
   size: number;
   mimeType: string;
 };
-export type ComposePayload = { text: string; attachment?: DemoAttachment };
+export type DemoLocation = { latitude: number; longitude: number };
+export type ComposePayload = { text: string; attachment?: DemoAttachment; location?: DemoLocation };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_FILE_LABEL = '50 MB';
+const EMOJI_GROUPS = [
+  { label: 'Expressões', emojis: ['😀', '😃', '😁', '😂', '🤣', '😊', '😍', '🥰', '😘', '😎', '🥹', '😢', '😭', '😡', '🤔', '😴', '🤩', '😮'] },
+  { label: 'Gestos', emojis: ['👍', '👎', '👏', '🙌', '🙏', '👋', '👌', '✌️', '🤝', '💪', '🫶', '👀'] },
+  { label: 'Corações e símbolos', emojis: ['❤️', '🩷', '💜', '💙', '💚', '💔', '🔥', '✨', '🎉', '✅', '⭐', '🎮'] },
+] as const;
+const attachmentTitle = (attachment: DemoAttachment) =>
+  attachment.kind === 'image' ? 'Foto' : attachment.kind === 'video' ? 'Vídeo' : attachment.kind === 'audio' ? 'Áudio' : 'Arquivo';
 const COMPOSER_MIN_HEIGHT = 48;
 const COMPOSER_MAX_HEIGHT = 208;
 
@@ -38,25 +46,25 @@ function formatSize(bytes: number) {
 
 export function DemoAttachmentView({ attachment, onOpenMedia }: { attachment: DemoAttachment; onOpenMedia?: () => void }) {
   if (attachment.kind === 'image') {
-    const image = <img src={attachment.url} alt={attachment.name} loading="lazy" className="max-h-72 max-w-full object-contain" />;
+    const image = <img src={attachment.url} alt="Foto compartilhada" loading="lazy" className="max-h-72 max-w-full object-contain" />;
     return onOpenMedia
-      ? <button type="button" aria-label={'Abrir foto ' + attachment.name} onClick={onOpenMedia} className="mt-1 block max-w-full overflow-hidden focus-visible:outline-2 focus-visible:outline-ring">{image}</button>
-      : <a href={attachment.url} download={attachment.name} aria-label={'Baixar foto ' + attachment.name} className="mt-1 block w-fit max-w-full">{image}</a>;
+      ? <button type="button" aria-label="Abrir foto" onClick={onOpenMedia} className="mt-1 block max-w-full overflow-hidden focus-visible:outline-2 focus-visible:outline-ring">{image}</button>
+      : <a href={attachment.url} download={attachment.name} aria-label="Baixar foto" className="mt-1 block w-fit max-w-full">{image}</a>;
   }
   if (attachment.kind === 'video') {
     return onOpenMedia
-      ? <button type="button" onClick={onOpenMedia} aria-label={'Abrir vídeo ' + attachment.name} className="relative mt-1 block max-w-full overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-ring">
+      ? <button type="button" onClick={onOpenMedia} aria-label="Abrir vídeo" className="relative mt-1 block max-w-full overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-ring">
           <video src={attachment.url} muted playsInline preload="metadata" aria-hidden="true" className="pointer-events-none max-h-72 max-w-full" />
           <span className="absolute inset-0 grid place-items-center bg-black/20"><Play className="size-9 text-white" fill="currentColor" /></span>
         </button>
       : <video src={attachment.url} controls playsInline preload="metadata" aria-label={attachment.name} className="mt-1 max-h-72 w-full max-w-lg" />;
   }
   if (attachment.kind === 'audio') {
-    return <DemoAudioPlayer src={attachment.url} name={attachment.name} />;
+    return <DemoAudioPlayer src={attachment.url} />;
   }
   return <a href={attachment.url} download={attachment.name} className="mt-1 flex min-w-0 items-center gap-2 border border-current/20 px-3 py-2 underline underline-offset-2">
     <FileText aria-hidden="true" className="size-5 shrink-0" />
-    <span className="min-w-0 flex-1 truncate text-sm">{attachment.name}</span>
+    <span className="min-w-0 flex-1 text-sm">Arquivo</span>
     <span className="shrink-0 text-xs opacity-75">{formatSize(attachment.size)}</span>
   </a>;
 }
@@ -82,9 +90,16 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
   }
   const [pending, setPending] = useState<DemoAttachment | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [cameraOptions, setCameraOptions] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [pendingLocation, setPendingLocation] = useState<DemoLocation | null>(null);
+  const [locating, setLocating] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const cameraKindRef = useRef<'image' | 'video'>('image');
+  const controlsRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedKindRef = useRef<AttachmentKind>('file');
   const stagedRef = useRef<DemoAttachment | null>(null);
@@ -92,11 +107,13 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mountedRef = useRef(true);
+  const locationRequestRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      locationRequestRef.current++;
       const recorder = recorderRef.current;
       if (recorder && recorder.state !== 'inactive') {
         recorder.onstop = null;
@@ -139,13 +156,77 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
     setPending(next);
   }
 
-  function chooseFile(kind: AttachmentKind) {
+  useEffect(() => {
+    if (!pickerOpen && !emojiOpen) return;
+    function closeOutside(event: PointerEvent) {
+      if (controlsRef.current && !controlsRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+        setCameraOptions(false);
+        setEmojiOpen(false);
+      }
+    }
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [pickerOpen, emojiOpen]);
+
+  function chooseFile() {
     const input = fileInputRef.current;
     if (!input) return;
-    selectedKindRef.current = kind;
-    input.accept = kind === 'image' ? 'image/*' : kind === 'video' ? 'video/*' : kind === 'audio' ? 'audio/*' : '';
+    selectedKindRef.current = 'file';
+    input.accept = '*/*';
     setPickerOpen(false);
     input.click();
+  }
+
+  function chooseGallery() {
+    const input = fileInputRef.current;
+    if (!input) return;
+    selectedKindRef.current = 'file';
+    input.accept = 'image/*,video/*';
+    setPickerOpen(false);
+    input.click();
+  }
+
+  function chooseCamera(kind: 'image' | 'video') {
+    const input = cameraInputRef.current;
+    if (!input) return;
+    cameraKindRef.current = kind;
+    input.accept = kind === 'image' ? 'image/*' : 'video/*';
+    setPickerOpen(false);
+    setCameraOptions(false);
+    input.click();
+  }
+
+  function cameraFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) stageFile(file, cameraKindRef.current);
+  }
+
+  function chooseLocation() {
+    setPickerOpen(false);
+    setCameraOptions(false);
+    if (!navigator.geolocation) {
+      setError('Localização não disponível neste navegador.');
+      return;
+    }
+    const requestId = ++locationRequestRef.current;
+    setLocating(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        if (!mountedRef.current || locationRequestRef.current !== requestId) return;
+        setPendingLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        replacePending(null);
+        setLocating(false);
+      },
+      error => {
+        if (!mountedRef.current || locationRequestRef.current !== requestId) return;
+        setError(error.code === 1 ? 'Permissão de localização negada. Autorize no navegador para compartilhar.' : 'Não foi possível obter a localização. Tente novamente.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 },
+    );
   }
 
   function stageFile(file: File, kind: AttachmentKind) {
@@ -158,7 +239,9 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       setError('O limite desta prévia é ' + MAX_FILE_LABEL + ' por arquivo.');
       return;
     }
-    replacePending({ kind, name: file.name, url: URL.createObjectURL(file), size: file.size, mimeType: file.type });
+    const actualKind: AttachmentKind = kind === 'file' ? (file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'file') : kind;
+    replacePending({ kind: actualKind, name: file.name, url: URL.createObjectURL(file), size: file.size, mimeType: file.type });
+    setPendingLocation(null);
     setError('');
   }
 
@@ -249,19 +332,27 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
     event.preventDefault();
     if (isRecording) return;
     const value = activeText.trim();
-    if (!value && (editing || !pending)) return;
-    onSend({ text: value, attachment: editing ? undefined : pending ?? undefined });
+    if (!value && (editing || (!pending && !pendingLocation))) return;
+    onSend({ text: value, attachment: editing ? undefined : pending ?? undefined, location: editing ? undefined : pendingLocation ?? undefined });
     // The sent message owns the object URL; otherwise revoke any discarded attachment.
     if (!editing) stagedRef.current = null;
     setPending(null);
+    setPendingLocation(null);
     if (editing) setEditText('');
     else updateText('');
     setPickerOpen(false);
+    setEmojiOpen(false);
     setError('');
     textareaRef.current?.focus();
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Escape' && (pickerOpen || emojiOpen)) {
+      event.preventDefault();
+      setPickerOpen(false);
+      setEmojiOpen(false);
+      return;
+    }
     if (event.key === 'Escape' && (editing || replyPreview)) {
       event.preventDefault();
       if (editing) onCancelEditing?.();
@@ -286,35 +377,62 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       </div>}
       {pending && <div className="flex max-w-full items-start gap-3 rounded-xl border border-border bg-muted/60 p-3">
         <div className="min-w-0 flex-1">
-          <p className="mb-2 truncate text-xs font-medium">{pending.name} · {formatSize(pending.size)}</p>
+          <p className="mb-2 text-xs font-medium">{attachmentTitle(pending)} · {formatSize(pending.size)}</p>
           <DemoAttachmentView attachment={pending} />
         </div>
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Remover anexo" onClick={() => replacePending(null)}><X className="size-4" /></Button>
       </div>}
+      {pendingLocation && <div className="flex items-center gap-3 border border-border bg-muted/50 px-3 py-2 text-sm">
+        <MapPin className="size-5 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1">Localização selecionada — pronta para compartilhar</span>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remover localização" onClick={() => setPendingLocation(null)}><X className="size-4" /></Button>
+      </div>}
       {isRecording && <p role="status" className="flex items-center gap-2 text-xs text-destructive">
         <span className="size-2 animate-pulse rounded-full bg-destructive" /> Gravando áudio — toque no botão quadrado para finalizar
       </p>}
+      {locating && <p role="status" className="text-xs text-muted-foreground">Solicitando localização ao navegador…</p>}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-      <div className="flex min-w-0 items-end gap-2">
+      <div ref={controlsRef} className="relative flex min-w-0 items-end gap-2">
         <div className="relative shrink-0">
           <input ref={fileInputRef} type="file" className="sr-only" tabIndex={-1} aria-label="Selecionar anexo" onChange={fileSelected} />
-          <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Adicionar anexo" aria-haspopup="menu" aria-expanded={pickerOpen} disabled={isRecording || !!editing} onClick={() => setPickerOpen(open => !open)}><Paperclip className="size-5" /></Button>
-          {pickerOpen && <div role="menu" aria-label="Escolher tipo de anexo" onKeyDown={event => { if (event.key === 'Escape') setPickerOpen(false); }} className="absolute bottom-full left-0 z-40 mb-2 w-52 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
+          <input ref={cameraInputRef} type="file" capture="environment" className="sr-only" tabIndex={-1} aria-label="Capturar mídia com a câmera" onChange={cameraFileSelected} />
+          <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Adicionar anexo" aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={isRecording || !!editing} onClick={() => { setPickerOpen(open => !open); setEmojiOpen(false); setCameraOptions(false); }}><Plus className="size-6" /></Button>
+        </div>
+        <div className="relative shrink-0">
+          <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Abrir lista de emojis" aria-haspopup="dialog" aria-expanded={emojiOpen} disabled={isRecording || !!editing} onClick={() => { setEmojiOpen(open => !open); setPickerOpen(false); }}><Smile className="size-5" /></Button>
+        </div>
+        {pickerOpen && <div role="dialog" aria-label="Adicionar à conversa" onKeyDown={event => { if (event.key === 'Escape') { setPickerOpen(false); setCameraOptions(false); } }} className="absolute bottom-full left-0 z-50 mb-3 w-[310px] max-w-[calc(100vw-24px)] border border-border bg-popover p-3 text-popover-foreground shadow-2xl">
+          <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold">Adicionar à conversa</p><button type="button" aria-label="Fechar anexos" onClick={() => setPickerOpen(false)} className="grid size-8 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
+          {cameraOptions ? <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => chooseCamera('image')} className="flex min-h-20 flex-col items-center justify-center gap-2 border border-border p-3 text-xs hover:bg-accent"><Camera className="size-6" />Tirar foto</button>
+            <button type="button" onClick={() => chooseCamera('video')} className="flex min-h-20 flex-col items-center justify-center gap-2 border border-border p-3 text-xs hover:bg-accent"><Video className="size-6" />Gravar vídeo</button>
+            <button type="button" className="col-span-2 py-2 text-xs text-muted-foreground hover:bg-accent" onClick={() => setCameraOptions(false)}>Voltar</button>
+          </div> : <div className="grid grid-cols-2 gap-2">
             {([
-              { kind: 'image', label: 'Foto', Icon: Image },
-              { kind: 'video', label: 'Vídeo', Icon: Video },
-              { kind: 'audio', label: 'Áudio do dispositivo', Icon: FileAudio },
-              { kind: 'file', label: 'Arquivo', Icon: FileText },
-            ] as const).map(item => <button key={item.kind} type="button" role="menuitem" onClick={() => chooseFile(item.kind)} className="flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none">
-              <item.Icon className="size-4" aria-hidden="true" />{item.label}
+              { label: 'Câmera', Icon: Camera, action: () => setCameraOptions(true) },
+              { label: 'Galeria', Icon: Images, action: chooseGallery },
+              { label: 'Arquivos', Icon: FileText, action: chooseFile },
+              { label: 'Localização', Icon: MapPin, action: chooseLocation },
+            ] as const).map(item => <button key={item.label} type="button" onClick={item.action} className="flex min-h-21 flex-col items-center justify-center gap-2 border border-border p-3 text-xs hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+              <item.Icon className="size-6 text-primary" />{item.label}
             </button>)}
           </div>}
-        </div>
+          <p className="mt-3 text-[11px] text-muted-foreground">{cameraOptions ? 'A câmera disponível depende do navegador e do dispositivo.' : 'A localização só será obtida com sua permissão.'}</p>
+        </div>}
+        {emojiOpen && <div role="dialog" aria-label="Lista de emojis" onKeyDown={event => { if (event.key === 'Escape') setEmojiOpen(false); }} className="absolute bottom-full left-0 z-50 mb-3 w-[340px] max-w-[calc(100vw-24px)] border border-border bg-popover p-3 text-popover-foreground shadow-2xl">
+          <div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold">Emojis</p><button type="button" aria-label="Fechar emojis" onClick={() => setEmojiOpen(false)} className="grid size-8 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
+          <div className="max-h-64 overflow-y-auto">
+            {EMOJI_GROUPS.map(group => <section key={group.label} className="mb-3">
+              <p className="mb-1 text-xs text-muted-foreground">{group.label}</p>
+              <div className="grid grid-cols-6 gap-1">{group.emojis.map(emoji => <button type="button" key={emoji} aria-label={'Inserir emoji ' + emoji} onMouseDown={event => event.preventDefault()} onClick={() => { updateText(activeText + emoji); textareaRef.current?.focus(); }} className="grid size-10 place-items-center text-xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{emoji}</button>)}</div>
+            </section>)}
+          </div>
+        </div>}
         <Button type="button" variant={isRecording ? 'destructive' : 'ghost'} size="icon" className="size-11 shrink-0" aria-label={isRecording ? 'Finalizar gravação' : 'Gravar áudio'} onClick={() => void toggleRecording()} disabled={!!editing} title={isRecording ? 'Finalizar gravação' : 'Gravar áudio pelo microfone'}>
           {isRecording ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-5" />}
         </Button>
         <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => updateText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
-        <Button type="submit" aria-label={editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração'} size="icon" disabled={isRecording || (!activeText.trim() && (!!editing || !pending))} className="size-11 shrink-0"><Send className="size-4" /></Button>
+        <Button type="submit" aria-label={editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração'} size="icon" disabled={isRecording || locating || (!activeText.trim() && (!!editing || (!pending && !pendingLocation)))} className="size-11 shrink-0"><Send className="size-4" /></Button>
       </div>
       <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>
     </div>
