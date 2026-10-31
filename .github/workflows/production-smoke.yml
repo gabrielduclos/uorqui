@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      EXPECT_PUBLIC_REGISTRATION: 'false'
+      EXPECT_PUBLIC_REGISTRATION: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
