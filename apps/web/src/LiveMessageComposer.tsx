@@ -109,13 +109,13 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
         </p>
       </div>}
     </div>
-    <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only"
+    <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
-    <input ref={videoRef} type="file" accept="video/mp4,video/webm" className="sr-only"
+    <input ref={videoRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
-    <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,application/octet-stream" className="sr-only"
+    <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
     <textarea ref={textareaRef} rows={1} value={value}
       onChange={event => onChange(event.target.value)} onKeyDown={keyDown} maxLength={4000}
