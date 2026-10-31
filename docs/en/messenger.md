@@ -49,6 +49,13 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 
 - `DELETE /api/v1/dm/conversations/:id/messages/:messageId` cancels a user's own **unread** message, permanently and without a placeholder. Already-read messages return HTTP 409 without mutation.
 - `GET /api/v1/dm/conversations/:id/messages?around=<uuid>` returns an authorized segment centered around the original for reply navigation/highlighting.
-- Reactions appear as their own optimistic chat bubbles next to their source, with Undo.
+- Reactions stay as compact optimistic chips on their source messages, **not separate timeline bubbles**. Received reactions update the inbox preview (emoji, time, source excerpt) and are **unread notifications** counted in both the thread and navigation badges until a real read receipt.
 - The chat icon shows the aggregate number of unread messages account-wide via SSE/polling on mobile and desktop.
 - Visual identity: square chat message bubbles.
+
+### Persistent unread reaction notifications
+
+- Migration `0006_dm_reaction_notifications` adds `updated_at` and `read_at` to reactions; legacy reactions start marked read to avoid spurious retroactive notifications.
+- PUT reaction upserts the emoji and makes the recipient's reaction receipt unread, while DELETE removes the pending receipt. SSE refreshes the inbox.
+- Inbox API provides `previewKind`, `previewReactionEmoji`, `previewReactionBody`, `previewReactionAt`, `unreadMessageCount`, `unreadReactionCount`, and their sum `unreadCount`. Only another participant's reactions on your messages notify you.
+- Read acknowledgements clear unread messages and reactions only upon actually viewing the chat, never just browsing the inbox.
