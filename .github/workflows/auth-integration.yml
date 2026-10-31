@@ -1,0 +1,48 @@
+name: API auth integration (temporary PostgreSQL)
+on:
+  push:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/auth-integration.yml'
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/auth-integration.yml'
+permissions:
+  contents: read
+jobs:
+  api-auth:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: uorqui_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d uorqui_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uorqui_test
+      AUTH_SECRET: test-only-secret-1234567890-abcdefghijklmnopqrstuvwxyz
+      AUTH_BASE_URL: http://127.0.0.1:3001
+      WEB_ORIGIN: http://localhost:5173
+      ENABLE_DEV_SIGNUP: 'true'
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - name: Apply Drizzle migrations to ephemeral PostgreSQL
+        run: npm run db:migrate
+      - name: Build API
+        run: npm run build -w @uorqui/api
+      - name: Exercise authentication and onboarding
+        run: node --test apps/api/test/auth.integration.test.mjs
