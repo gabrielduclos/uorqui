@@ -71,9 +71,17 @@ When changing UI, review dark/light × Portuguese/English × desktop/mobile, upd
 ## Required contract for the live messenger
 
 - `LiveDirectChat` handles inbox, fixed conversation header, scroll, messages, and realtime updates. The message surface fills available desktop width and only the message panel scrolls.
-- `DirectMessageBubble` has **gently rounded corners** (`rounded-lg`), semantic palette, swipe-to-reply and a viewport-safe context menu with blur restricted to the conversation.
+- `DirectMessageBubble` uses **square corners** (`rounded-none`) as the Uorqui chat identity, semantic palette, swipe-to-reply and a viewport-safe context menu with blur restricted to the conversation.
 - `LiveMessageComposer` preserves **+ attachments | expanding text | emoji | shared mic/send** with a horizontal attachment menu and right-side emoji picker.
 - Text messages persist through the API and appear instantly with an in-bubble spinner, retrying with the same client ID on failure while leaving the composer available. Each bubble retains its inline message timestamp. Sending/Sent/Received/Read appears once in a neutral centered system-style line after each consecutive block of outgoing messages, with the status update time; a block only reads Read or Received once every non-deleted message reaches that state. The optimistic spinner and retry control remain inside individual bubbles. The composer has distinct semantic border/background contrast in Light/Dark. No “Live” badge appears, while realtime sync remains enabled. Audio and attachments still need dedicated endpoints; structured replies reference the original message via an authenticated API and show a preview, including deleted source placeholders; unsupported actions remain visibly disabled, not simulated locally. Editing, deleting for both participants, forwarding and reactions have authenticated, persistent endpoints. Reactions update optimistically and roll back on error; a focused, visible inbox acknowledges Received without marking Read.
 - Browsing the inbox **must never mark a conversation read**; only an opened, visible conversation with a focused browser window may acknowledge messages.
 - Start at the latest message, preserve position while reading older ones, and show a down arrow and incoming-message notice instead of forcing scroll.
 - Validate desktop/mobile, Dark/Light, and Portuguese/English before merging. Backend migrations must reuse these UI components rather than introducing generic replacements.
+
+## Live messenger updates — cancellation, reactions and unread count
+
+- Actual chat bubbles retain the **square-corner** identity (`rounded-none`).
+- Reply previews are clickable, navigate to and temporarily highlight the source, fetching `?around=id` when outside the latest window.
+- **Cancel message** replaces delete: available only for own unread messages, permanently removes the message without a placeholder; the API atomically rejects cancellation after read (HTTP 409).
+- Reactions render as separate chat event bubbles and stay optimistic, with an Undo action.
+- The mobile/desktop conversation icon shows the **sum of unread messages**, kept current via SSE with polling fallback.
