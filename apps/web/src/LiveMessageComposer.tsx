@@ -81,7 +81,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
   }
   async function toggleRecording() {
     if(recorder.current?.state==='recording'){recorder.current.stop();return;}
-    if(recorder.current?.state==='paused'){recorder.current.resume();setRecording('recording');return;}
+    if(recorder.current?.state==='paused'){recorder.current.stop();return;}
     if(!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder==='undefined'){
       setError(pt?'Este navegador não permite gravar áudio.':'Audio recording is unavailable.');return;
     }
@@ -247,11 +247,11 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, sendi
     <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
-      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <input ref={videoRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="sr-only"
-      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
-    <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
-      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file) onAttach(file); }} />
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
+    <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,.mp3,.m4a,.ogg,.webm,.wav,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <textarea ref={textareaRef} rows={1} value={value} disabled={recording!=='idle'}
       onPaste={e=>{const file=Array.from(e.clipboardData.items).find(item=>item.kind==='file' && item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();stageFile(file);}}}
       onChange={event => onChange(event.target.value)} onKeyDown={keyDown} maxLength={4000}
