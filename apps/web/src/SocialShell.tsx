@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft, Bell, Compass, Hash, Headphones, Home, LogOut, MessageCircle,
@@ -14,13 +14,14 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import DemoMessageComposer, { DemoAttachmentView, type ComposePayload } from './DemoMessageComposer';
-import { DemoChatBubble, DemoLocationCard, messagePreview, type DemoMessage } from './DemoChatBubble';
+import { DemoChatBubble, DemoLocationCard, type DemoMessage } from './DemoChatBubble';
 import { DemoMediaViewer, type PreviewMediaItem } from './DemoChatMedia';
 import { PreferencesControls } from './PreferencesControls';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { useVisualViewportFrame } from './useVisualViewportFrame';
 import { ProfileEditor, type UserProfileData } from './UserProfiles';
 import { useCachedProfileImage } from './profileImageCache';
+import LiveDirectChat from './LiveDirectChat';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -33,22 +34,6 @@ const navigation = [
   { id: 'conversations', label: 'Conversas', icon: MessageCircle },
   { id: 'communities', label: 'Comunidades', icon: Users },
 ] as const;
-
-const demoContacts = [
-  { id: 'lia', name: 'Lia', initials: 'LI', topic: 'Uma conversa de exemplo', color: 'bg-sky-600' },
-  { id: 'caio', name: 'Caio', initials: 'CA', topic: 'Tudo certo para a partida?', color: 'bg-violet-600' },
-] as const;
-
-const exampleMessages: Record<string, DemoMessage[]> = {
-  lia: [
-    { id: 1, mine: false, text: 'Oi! Vamos testar como as conversas vão funcionar?', time: '10:24' },
-    { id: 2, mine: true, text: 'Claro! Gostei da interface mais limpa.', time: '10:25' },
-    { id: 3, mine: false, text: 'As mensagens privadas serão sempre entre duas pessoas.', time: '10:26' },
-  ],
-  caio: [
-    { id: 4, mine: false, text: 'Tudo certo para a partida?', time: 'Ontem' },
-  ],
-};
 
 const demoCommunities = [
   {
@@ -105,12 +90,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
   const [area, setArea] = useState<Area>('feed');
-  const [search, setSearch] = useState('');
-  const [conversationId, setConversationId] = useState<string>('lia');
+  const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
-  const [conversations, setConversations] = useState<Record<string, DemoMessage[]>>(exampleMessages);
-  const [replyTarget, setReplyTarget] = useState<DemoMessage | null>(null);
-  const [editingMessage, setEditingMessage] = useState<DemoMessage | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [mediaViewerId, setMediaViewerId] = useState<number | null>(null);
   const [communityId, setCommunityId] = useState<string>('estudio');
@@ -126,18 +107,24 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
     return () => { urls.forEach(url => URL.revokeObjectURL(url)); };
   }, []);
 
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const handle = (event as CustomEvent<string>).detail;
+      if (typeof handle !== 'string') return;
+      setRequestedChatHandle(handle);
+      setArea('conversations');
+    };
+    window.addEventListener('uorqui:open-dm', listener);
+    return () => window.removeEventListener('uorqui:open-dm', listener);
+  }, []);
+
   const activeCommunity = demoCommunities.find(group => group.id === communityId) ?? demoCommunities[0];
   const activeChannel = activeCommunity.channels.find(ch => ch.id === channelId) ?? activeCommunity.channels[0];
-  const activeContact = demoContacts.find(contact => contact.id === conversationId) ?? demoContacts[0];
-  const visibleContacts = useMemo(() => demoContacts.filter(contact =>
-    contact.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))
-  ), [search]);
   const communityKey = communityId + '/' + channelId;
   const visibleChannelMessages: DemoMessage[] = channelExamples[communityKey] ?? [
     { id: 100, mine: false, text: 'Este canal demonstra como os bate-papos de comunidades serão organizados.', time: 'Exemplo' },
   ];
-  const activeMessages = area === 'conversations' ? (conversations[conversationId] ?? []) : visibleChannelMessages;
-  const mediaItems: PreviewMediaItem[] = activeMessages.flatMap(message =>
+  const mediaItems: PreviewMediaItem[] = visibleChannelMessages.flatMap(message =>
     message.attachment && (message.attachment.kind === 'image' || message.attachment.kind === 'video')
       ? [{ id: message.id, attachment: message.attachment }]
       : []
@@ -147,67 +134,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
     setDrafts(previous => ({ ...previous, [key]: value }));
   }
 
-  function reactToDemoMessage(id: number, emoji: string) {
-    setConversations(previous => ({
-      ...previous,
-      [conversationId]: (previous[conversationId] ?? []).map(message =>
-        message.id === id && !message.mine
-          ? { ...message, myReaction: message.myReaction === emoji ? undefined : emoji }
-          : message
-      ),
-    }));
-  }
-
   function move(next: Area) {
     setArea(next);
-    setSearch('');
     setConversationOpened(false);
     setChannelOpened(false);
-    setReplyTarget(null);
-    setEditingMessage(null);
     setMediaViewerId(null);
-  }
-
-  function sendDemoMessage({ text, attachment, location }: ComposePayload) {
-    if (editingMessage) {
-      if (!text) return;
-      setConversations(previous => ({
-        ...previous,
-        [conversationId]: (previous[conversationId] ?? []).map(message =>
-          message.id === editingMessage.id && message.mine && !message.attachment
-            ? { ...message, text, edited: true }
-            : message
-        ),
-      }));
-      setEditingMessage(null);
-      return;
-    }
-    if (!text && !attachment && !location) return;
-    if (attachment) attachmentUrls.current.add(attachment.url);
-    setConversations(previous => ({
-      ...previous,
-      [conversationId]: [...(previous[conversationId] ?? []), {
-        id: Date.now() + Math.random(), mine: true, text, attachment, location,
-        replyTo: replyTarget?.id,
-        time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-      }],
-    }));
-    setReplyTarget(null);
-  }
-
-  function deleteDemoMessage(message: DemoMessage) {
-    if (!message.mine) return;
-    if (message.attachment) {
-      URL.revokeObjectURL(message.attachment.url);
-      attachmentUrls.current.delete(message.attachment.url);
-    }
-    setConversations(previous => ({
-      ...previous,
-      [conversationId]: (previous[conversationId] ?? []).filter(item => item.id !== message.id),
-    }));
-    if (mediaViewerId === message.id) setMediaViewerId(null);
-    if (replyTarget?.id === message.id) setReplyTarget(null);
-    if (editingMessage?.id === message.id) setEditingMessage(null);
   }
 
   function sendDemoChannel({ text, attachment, location }: ComposePayload) {
@@ -223,52 +154,27 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   }
 
   function saveEditedImage(id: number, image: Blob) {
-    const current = activeMessages.find(message => message.id === id);
-    if (!current?.attachment || current.attachment.kind !== 'image') return;
+    const current = visibleChannelMessages.find(message => message.id === id);
+    if (!current?.attachment || current.attachment.kind !== 'image' || activeChannel.kind !== 'text') return;
     const url = URL.createObjectURL(image);
     attachmentUrls.current.add(url);
-    const attachment = {
-      kind: 'image' as const, name: 'foto-editada.png',
-      url, size: image.size, mimeType: 'image/png',
-    };
-    if (area === 'conversations') {
-      if (current.mine) {
-        setConversations(previous => ({
-          ...previous,
-          [conversationId]: (previous[conversationId] ?? []).map(message =>
-            message.id === id ? { ...message, attachment, edited: true } : message
-          ),
-        }));
-      } else {
-        const newId = Date.now() + Math.random();
-        setConversations(previous => ({
-          ...previous,
-          [conversationId]: [...(previous[conversationId] ?? []), {
-            id: newId, mine: true, text: '', attachment, replyTo: id,
-            time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-          }],
-        }));
-        setMediaViewerId(newId);
-      }
-    } else if (activeChannel.kind === 'text') {
-      if (current.mine) {
-        setChannelExamples(previous => ({
-          ...previous,
-          [communityKey]: (previous[communityKey] ?? visibleChannelMessages).map(message =>
-            message.id === id ? { ...message, attachment, edited: true } : message
-          ),
-        }));
-      } else {
-        const newId = Date.now() + Math.random();
-        setChannelExamples(previous => ({
-          ...previous,
-          [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
-            id: newId, mine: true, text: '', attachment,
-            time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-          }],
-        }));
-        setMediaViewerId(newId);
-      }
+    const attachment = { kind: 'image' as const, name: 'foto-editada.png',
+      url, size: image.size, mimeType: 'image/png' };
+    if (current.mine) {
+      setChannelExamples(previous => ({
+        ...previous,
+        [communityKey]: (previous[communityKey] ?? visibleChannelMessages).map(message =>
+          message.id === id ? { ...message, attachment, edited: true } : message),
+      }));
+    } else {
+      const newId = Date.now() + Math.random();
+      setChannelExamples(previous => ({
+        ...previous,
+        [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
+          id: newId, mine: true, text: '', attachment, time: 'Agora',
+        }],
+      }));
+      setMediaViewerId(newId);
     }
   }
 
@@ -352,56 +258,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
             )}
 
             {area === 'conversations' && (
-              <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
-                <section aria-label={t("Lista de conversas")} className={cn('h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/30 md:flex md:w-82 md:shrink-0', conversationOpened ? 'hidden' : 'flex')}>
-                  <div className="shrink-0 space-y-3 border-b border-border p-4">
-                    <div className="flex items-center justify-between gap-2"><h2 className="text-base font-semibold">{t('Conversas')}</h2><Badge variant="outline">1:1</Badge></div>
-                    <div className="relative"><Search aria-hidden="true" className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label={t('Buscar conversas de exemplo')} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Buscar conversas")} className="h-11 pl-9 text-base" /></div>
-                  </div>
-                  <DemoNotice>{t("Conversas de demonstração; não há mensagens reais.")}</DemoNotice>
-                  <ScrollArea className="min-h-0 flex-1">
-                    <div className="p-2">
-                      {visibleContacts.map(contact => (
-                        <Button key={contact.id} type="button" variant={contact.id === conversationId && conversationOpened ? 'secondary' : 'ghost'} onClick={() => { setConversationId(contact.id); setConversationOpened(true); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className={cn('h-auto w-full justify-start gap-3 rounded-xl px-3 py-3 text-left md:py-4', contact.id === conversationId && 'md:bg-accent/40')}>
-                          <Avatar className="size-11"><AvatarFallback className={cn('text-white', contact.color)}>{contact.initials}</AvatarFallback></Avatar>
-                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{contact.name} <span className="font-normal text-muted-foreground">{t('(exemplo)')}</span></span><span className={cn('mt-0.5 block truncate text-xs font-normal', drafts['dm/' + contact.id]?.trim() ? 'text-primary' : 'text-muted-foreground')}>
-                              {drafts['dm/' + contact.id]?.trim() ? t('Rascunho: ') + drafts['dm/' + contact.id].trim() : t(contact.topic)}
-                            </span></span>
-                        </Button>
-                      ))}
-                      {visibleContacts.length === 0 && <EmptyState icon={Search} title={t('Nenhuma conversa encontrada')} description={t("Tente outro nome. Esta lista é apenas uma prévia visual.")} />}
-                    </div>
-                  </ScrollArea>
-                </section>
-                <section data-chat-conversation aria-label={t("Conversa demonstrativa")} className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden', conversationOpened ? 'flex' : 'hidden md:flex')}>
-                  <div data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur">
-                    <Button variant="ghost" size="icon" aria-label={t('Voltar às conversas')} onClick={() => { setConversationOpened(false); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
-                    <Avatar className="size-9"><AvatarFallback className={cn('text-white',activeContact.color)}>{activeContact.initials}</AvatarFallback></Avatar>
-                    <div className="min-w-0"><div className="truncate text-sm font-semibold">{activeContact.name} <span className="font-normal text-muted-foreground">{t('· exemplo')}</span></div><p className="text-xs text-muted-foreground">{t("Conversa individual")}</p></div>
-                  </div>
-                  <DemoNotice>{t("As mensagens enviadas aqui ficam apenas nesta prévia, até atualizar a página.")}</DemoNotice>
-                  <ScrollArea className="min-h-0 flex-1">
-                    <div className="flex w-full min-w-0 flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">
-                      {(conversations[conversationId] ?? []).map(message => (
-                        <DemoChatBubble key={message.id} message={{ ...message, text: t(message.text), time: t(message.time) }} quoted={(conversations[conversationId] ?? []).find(item => item.id === message.replyTo)}
-                          onReply={() => { setEditingMessage(null); setReplyTarget(message); }}
-                          onEdit={() => { if (message.mine && !message.attachment) { setReplyTarget(null); setEditingMessage(message); } }}
-                          onDelete={() => deleteDemoMessage(message)}
-                          onReact={emoji => reactToDemoMessage(message.id, emoji)}
-                          onOpenMedia={message.attachment && (message.attachment.kind === 'image' || message.attachment.kind === 'video') ? () => setMediaViewerId(message.id) : undefined}
-                          onLocateReply={id => { document.getElementById('dm-message-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
-                      ))}
-                    </div>
-                  </ScrollArea>
-                  <DemoMessageComposer key={'dm-' + conversationId + '-' + conversationOpened} onSend={sendDemoMessage} ariaLabel={t('Mensagem de demonstração')} placeholder={t("Digite uma mensagem…")}
-                    replyPreview={replyTarget ? { author: replyTarget.mine ? t('Você') : activeContact.name, text: messagePreview({ ...replyTarget, text: t(replyTarget.text) }) } : null}
-                    onCancelReply={() => setReplyTarget(null)}
-                    editing={editingMessage}
-                    onCancelEditing={() => setEditingMessage(null)}
-                    draftText={drafts['dm/' + conversationId] ?? ''}
-                    onDraftChange={next => updateDraft('dm/' + conversationId, next)} />
-                </section>
-              </div>
+              <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle}
+                onMobileOpenChange={setConversationOpened}
+                onStarted={() => setRequestedChatHandle(null)} />
             )}
 
             {area === 'communities' && (

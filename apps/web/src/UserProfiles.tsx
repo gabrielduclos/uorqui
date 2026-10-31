@@ -244,7 +244,7 @@ export function ProfileEditor({ initial, onSaved }: {
   </div>;
 }
 
-export function PublicProfilePage({ handle }: { handle: string }) {
+export function PublicProfilePage({ handle, onMessage }: { handle: string; onMessage?: (handle: string) => void }) {
   const { locale } = useUorquiPreferences();
   const pt = locale === 'pt-BR';
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
@@ -280,7 +280,7 @@ export function PublicProfilePage({ handle }: { handle: string }) {
           <UserAvatar name={profile.displayName} image={profile.avatarUrl} size="lg" />
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h1 className="text-2xl font-bold">{profile.displayName}</h1><p className="mt-1 text-sm text-muted-foreground">@{profile.handle}</p></div>
-            <Button disabled title={pt ? 'Mensagens reais serão habilitadas na próxima etapa.' : 'Real messaging is coming next.'}><MessageCircle className="size-4" />{pt ? 'Conversar (em breve)' : 'Message (coming soon)'}</Button>
+            <Button disabled={!onMessage} onClick={() => onMessage?.(profile.handle)} title={!onMessage ? (pt ? 'Entre na sua conta para conversar.' : 'Sign in to send a message.') : undefined}><MessageCircle className="size-4" />{pt ? 'Conversar' : 'Message'}</Button>
           </div>
           <Separator />
           <p className="whitespace-pre-wrap text-sm leading-7">{profile.bio || (pt ? 'Este usuário ainda não escreveu uma biografia.' : 'This user has not added a bio yet.')}</p>
