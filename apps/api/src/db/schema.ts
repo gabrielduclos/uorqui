@@ -76,8 +76,19 @@ export const directMessages = pgTable('direct_messages', {
   body: text('body').notNull(),
   clientId: uuid('client_id'),
   readAt: timestamp('read_at', { withTimezone: true }),
+  editedAt: timestamp('edited_at', { withTimezone: true }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  forwardedFromId: uuid('forwarded_from_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
   uniqueIndex('direct_messages_client_id_idx').on(table.clientId),
+]);
+
+export const directMessageReactions = pgTable('direct_message_reactions', {
+  messageId: uuid('message_id').notNull().references(() => directMessages.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  emoji: varchar('emoji', { length: 16 }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.messageId, table.userId] }),
 ]);
