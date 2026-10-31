@@ -45,14 +45,16 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
     window.addEventListener('keydown',handle);
     return()=>window.removeEventListener('keydown',handle);
   },[selectedId,index,items,onSelect,onClose,editing]);
-  if(!active || !selectedId || typeof document==='undefined')return null;
-  const image=active.attachment.type.startsWith('image/');
-  const url=active.attachmentUrl || '/media/dm/'+active.conversationId+'/'+active.attachment.id;
-  const cached=useCachedChatMedia(url,!!selectedId);
+  // Hooks must run even when the modal is closed, otherwise reopening it
+  // changes the hook order and can crash the chat.
+  const url=active ? active.attachmentUrl || '/media/dm/'+active.conversationId+'/'+active.attachment.id : null;
+  const cached=useCachedChatMedia(url,!!selectedId && !!active);
   const [videoPlaying,setVideoPlaying]=useState(false);
-  const [videoSrc,setVideoSrc]=useState(url);
+  const [videoSrc,setVideoSrc]=useState<string | null>(null);
   useEffect(()=>{setVideoPlaying(false);setVideoSrc(url);},[url]);
   useEffect(()=>{if(cached && !videoPlaying)setVideoSrc(cached);},[cached,videoPlaying]);
+  if(!active || !selectedId || !url || typeof document==='undefined')return null;
+  const image=active.attachment.type.startsWith('image/');
   const displayedName=attachmentLabel(active.attachment.type,locale);
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-3 text-white sm:p-6"
@@ -83,7 +85,7 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
           <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
             {image?<img key={active.id} src={cached || url} alt={displayedName}
               className="max-h-[76dvh] max-w-full object-contain"/>:
-              <video key={active.id} src={videoSrc} controls playsInline preload="metadata"
+              <video key={active.id} src={videoSrc || url} controls playsInline preload="metadata"
                 onPlay={()=>setVideoPlaying(true)} onPause={()=>setVideoPlaying(false)}
                 className="max-h-[76dvh] max-w-full" aria-label={displayedName}/>}
           </div>
