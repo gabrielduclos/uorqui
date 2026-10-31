@@ -1241,7 +1241,7 @@
         "id": {
           "name": "id",
           "type": "uuid",
-          "primaryKey": false,
+          "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
@@ -1342,7 +1342,7 @@
         "id": {
           "name": "id",
           "type": "uuid",
-          "primaryKey": false,
+          "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
         },
