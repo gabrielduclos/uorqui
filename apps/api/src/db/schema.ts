@@ -96,4 +96,5 @@ export const directMessageReactions = pgTable('direct_message_reactions', {
   readAt: timestamp('read_at', { withTimezone: true }),
 }, (table) => [
   primaryKey({ columns: [table.messageId, table.userId] }),
+  index('dm_reactions_message_updated_idx').on(table.messageId, table.updatedAt),
 ]);
