@@ -486,7 +486,6 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
           {isRecording ? <Square className="size-4" fill="currentColor" /> : canSend ? <Send className="size-5" /> : <Mic className="size-5" />}
         </Button>
       </div>
-      <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>
       {photoEditorOpen && pending?.kind === 'image' && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-2 text-white sm:p-5">
           <div ref={editorDialogRef} role="dialog" aria-modal="true" aria-label="Editar foto antes de enviar" onKeyDown={editorKeyDown} className="flex h-full max-h-[96dvh] w-full max-w-6xl min-w-0 flex-col overflow-hidden">
