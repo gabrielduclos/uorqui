@@ -35,12 +35,12 @@ export function AccountBlockButton({handle,onChanged,compact=false}:{handle:stri
     }catch{setError(pt?'Falha ao atualizar o bloqueio.':'Could not update block.');}
     finally{setBusy(false);}
   }
-  return <div className="flex flex-col items-start gap-1">
+  return <div className="relative flex flex-col items-start gap-1">
     {!confirm?<Button type="button" size={compact?'sm':'default'} variant="outline" disabled={blocked===null||busy}
       onClick={()=>blocked?void change():setConfirm(true)}>
       {blocked?<ShieldCheck className="size-4"/>:<ShieldBan className="size-4"/>}
       {blocked?(pt?'Desbloquear':'Unblock'):(pt?'Bloquear':'Block')}
-    </Button>:<div role="group" aria-label={pt?'Confirmar bloqueio':'Confirm blocking'} className="max-w-64 rounded-xl border border-border bg-card p-3 shadow-lg">
+    </Button>:<div role="group" aria-label={pt?'Confirmar bloqueio':'Confirm blocking'} className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-border bg-card p-3 shadow-lg">
       <p className="text-xs text-muted-foreground">{pt?'Bloquear impede mensagens e pedidos, desfaz a amizade e oculta as fotos e capas entre as contas. O histórico continua disponível.':'Block prevents messages and requests, removes friendship and hides profile photos and covers. Chat history remains.'}</p>
       <div className="mt-3 flex gap-2">
         <Button size="sm" variant="destructive" disabled={busy} onClick={()=>void change()}>{pt?'Bloquear conta':'Block account'}</Button>
