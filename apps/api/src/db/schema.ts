@@ -13,7 +13,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-// Database model only. Routes, authentication and authorization are not implemented yet.
+// Database schema shared by authentication, profiles, communities, and direct messages.
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   handle: varchar('handle', { length: 32 }).notNull().unique(),
@@ -74,7 +74,10 @@ export const directMessages = pgTable('direct_messages', {
   conversationId: uuid('conversation_id').notNull().references(() => directConversations.id, { onDelete: 'cascade' }),
   authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   body: text('body').notNull(),
+  clientId: uuid('client_id'),
+  readAt: timestamp('read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
+  uniqueIndex('direct_messages_client_id_idx').on(table.clientId),
 ]);
