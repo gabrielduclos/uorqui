@@ -25,9 +25,9 @@ function StartupSplash() {
 }
 
 const areas = [
-  { title: t("Conversas"), icon: MessageCircle, description: t("Mensagens privadas entre duas pessoas, com uma interface leve e familiar.") },
-  { title: 'Feed', icon: Newspaper, description: t("Um espaço contínuo para textos, fotos e vídeos da sua rede.") },
-  { title: t("Comunidades"), icon: Users, description: t("Grupos com canais de texto e salas de voz organizados por assunto.") },
+  { title: 'Conversas', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
+  { title: 'Feed', icon: Newspaper, description: 'Um espaço contínuo para textos, fotos e vídeos da sua rede.' },
+  { title: 'Comunidades', icon: Users, description: 'Grupos com canais de texto e salas de voz organizados por assunto.' },
 ] as const;
 
 function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => void }) {
