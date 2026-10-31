@@ -90,6 +90,17 @@ When changing UI, review dark/light × Portuguese/English × desktop/mobile, upd
 
 ## Messenger attachments
 
-- The **+** menu retains semantic Light/Dark and PT/EN styling. Gallery, Camera, Video and File launch native pickers; Location is clearly unavailable until its permission flow exists.
-- Messages may contain text or **one private attachment** (up to 20 MB). Square bubbles show an expandable image, inline video or download card, with unchanged time and delivery receipts.
+- The **+** menu retains semantic Light/Dark and PT/EN styling. Gallery, Camera, Video and File launch native pickers; Location asks permission only on user action, with preview and confirmation before sending.
+- Messages may contain text or **one private attachment** (up to 50 MB). Square bubbles show an expandable image, inline video or download card, with unchanged time and delivery receipts.
 - Pending attachments use local previews and retry without duplicate client IDs. R2 and PostgreSQL enforce conversation authorization; no public URLs or tokens embedded in links.
+
+
+### Parity with the original demo (PR #31)
+
+- Attachments are **staged for preview and explicit send**, showing name/size and Remove; typed text becomes an attachment caption. Paste a clipboard image to stage it.
+- Camera picker offers native **Take photo** and **Record video**, alongside gallery and files.
+- Voice recorder supports stop, pause/resume, discard and **play before sending**. Audio player with seek/duration and **1×, 1.5×, 2×** playback speeds, using browser-supported WebM/MP4/OGG/MP3/WAV/AAC formats.
+- Image annotation editor **before send** provides freehand pen, rectangle, ellipse, arrows, colors, undo and clear; saving creates a new PNG without modifying the original.
+- Photo/video carousel navigates conversation media with prev/next controls, ← → Esc, and download; videos have native controls.
+- The restored **50 MB** cap requires migration `0008_dm_attachment_50mb` changing only `dm_attachment_consistency`; apply Neon production migration before publishing API/Worker. No existing files are removed.
+- Location requires user-triggered browser permission and staged confirmation; one normal DM carries an OpenStreetMap link, with no background tracking.

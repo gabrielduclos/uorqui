@@ -23,8 +23,9 @@ async function belongs(conversationId: string, userId: string): Promise<boolean>
 }
 const attachmentProjection = 'CASE WHEN attachment_id IS NULL THEN NULL ELSE json_build_object(\'id\',attachment_id,\'name\',attachment_name,\'type\',attachment_type,\'size\',attachment_size) END AS "attachment"';
 const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded", reply_to_id AS "replyToId", '+attachmentProjection;
-const allowedAttachmentTypes = new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream']);
-const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const allowedAttachmentTypes = new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream',
+  'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 function verifiedAttachmentUpload(request:FastifyRequest, conversationId:string, clientId:string,
   attachment:{id:string;name:string;type:string;size:number}) {
   // Server-to-server proof: the public Fastify endpoint must not accept fake
@@ -214,7 +215,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       properties:{body:{type:'string',maxLength:4000},clientId:uuidParam,replyToId:uuidParam,attachment:{
         type:'object',additionalProperties:false,required:['id','name','type','size'],
         properties:{id:uuidParam,name:{type:'string',minLength:1,maxLength:180},
-          type:{type:'string',maxLength:100},size:{type:'integer',minimum:1,maximum:20971520}}
+          type:{type:'string',maxLength:100},size:{type:'integer',minimum:1,maximum:52428800}}
       }}}}
   },async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});

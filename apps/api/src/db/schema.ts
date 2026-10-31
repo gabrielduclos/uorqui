@@ -92,7 +92,7 @@ export const directMessages = pgTable('direct_messages', {
   index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
   uniqueIndex('direct_messages_client_id_idx').on(table.clientId),
   check('dm_attachment_consistency', sql.raw(
-    '((attachment_id IS NULL AND attachment_name IS NULL AND attachment_type IS NULL AND attachment_size IS NULL) OR (attachment_id IS NOT NULL AND attachment_name IS NOT NULL AND attachment_type IS NOT NULL AND attachment_size > 0 AND attachment_size <= 20971520))'
+    '((attachment_id IS NULL AND attachment_name IS NULL AND attachment_type IS NULL AND attachment_size IS NULL) OR (attachment_id IS NOT NULL AND attachment_name IS NOT NULL AND attachment_type IS NOT NULL AND attachment_size > 0 AND attachment_size <= 52428800))'
   )),
 ]);
 

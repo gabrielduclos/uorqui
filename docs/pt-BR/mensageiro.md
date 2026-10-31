@@ -72,10 +72,21 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 
 ### Anexos individuais privados — primeira entrega
 
-- **Galeria, Câmera, Vídeo e Arquivo** conectados ao mensageiro real; **Localização** permanece indisponível até ter um fluxo de permissão próprio. Primeiro escopo: um arquivo por mensagem, até **20 MB**, tipos JPEG/PNG/WebP/GIF, MP4/WebM, PDF, TXT, ZIP ou arquivo genérico para download; sem transcodificação, gravação de áudio ou uploads em lote.
+- **Galeria, Câmera, Vídeo e Arquivo** conectados ao mensageiro real; **Localização** usa a permissão explícita do navegador, gera uma prévia antes do envio e envia um cartão de mapa como mensagem real, sem criar arquivos no R2. Primeiro escopo: um arquivo por mensagem, até **50 MB**, tipos JPEG/PNG/WebP/GIF, MP4/WebM, PDF, TXT, ZIP ou arquivo genérico para download; sem transcodificação, gravação de áudio ou uploads em lote.
 
 - **Proteção antifalsificação:** o Worker assina os metadados com HMAC SHA-256 via variável secreta `DM_ATTACHMENT_PROOF_SECRET`. A API valida a assinatura em tempo constante antes de aceitar um anexo; requisições diretas sem assinatura são recusadas. A variável secreta precisa ser configurada com o **mesmo valor**, de pelo menos 32 caracteres, no Worker da Cloudflare e no Render **antes do deploy**; não entra no repositório nem nas URLs.
 - Bucket **R2 privado** `uorqui-dm-attachments`, distinto da mídia do perfil, sem URL pública. Worker recebe bytes por `POST /api/media/dm/:id` após origem e sessão verificadas; cria a mensagem no backend com ID de cliente idempotente, metadados e referência ao objeto. Uploads não confirmados são descartados em melhor esforço. O banco guarda **somente metadados**, não os bytes.
 - `GET/HEAD /media/dm/:conversationId/:attachmentId` verifica sessão, participação e vínculo do arquivo a uma mensagem não cancelada antes do R2. Resposta privada com `no-store`, `nosniff`, `Content-Disposition` seguro, sem acesso público. O Worker tenta remover o objeto ao cancelar mensagem não lida.
 - Balões com **cantos retos**, prévia de imagem ampliável, vídeo com controles, arquivos para baixar, nome e horário. Envio otimista com miniatura local, status e opção de reenviar falhas usando o mesmo `clientId`; reações, recibos, respostas e badge continuam vinculados à mensagem.
 - A migração **`0007_dm_attachments`** adiciona `attachment_id`, `attachment_name`, `attachment_type`, `attachment_size` e restrição de consistência. **Precisa ser validada no Neon temporário e aprovada antes de aplicar ao banco principal e fazer merge.** A UI não deve publicar antes da migração.
+
+
+### Paridade de mídia com a versão demo (PR #31)
+
+- Anexos agora ficam **em prévia antes do envio**, com nome, tamanho e ação para remover. Texto digitado pode acompanhar o anexo como legenda. Colar imagem do clipboard abre a mesma prévia.
+- Câmera: escolha **Tirar foto** ou **Gravar vídeo** no seletor nativo. Galeria, vídeo e documentos continuam com entradas nativas.
+- Microfone: gravar, pausar, retomar, finalizar, descartar e **ouvir antes de enviar**. Player do áudio com seek, duração e velocidades **1×, 1,5×, 2×**; formatos WebM/MP4/OGG/MP3/WAV/AAC conforme suporte do navegador.
+- Editor de fotos **antes de enviar**: desenho, retângulo, círculo, seta, cores, desfazer e limpar. Salvar gera um PNG novo sem alterar o original.
+- Visualizador de foto/vídeo com rolagem por mídias da conversa, botões anterior/próxima, teclado (←, → e Esc) e opção de salvar; vídeo tem controles nativos.
+- O limite é restaurado para **50 MB** com migração Drizzle `0008_dm_attachment_50mb`, trocando somente a restrição `dm_attachment_consistency`. A mudança requer migração no Neon principal antes de publicar o Worker/API do PR #31; nenhum arquivo existente é apagado.
+- Localização é enviada como texto especial com link OpenStreetMap depois da permissão e confirmação da prévia; não existe rastreamento contínuo.

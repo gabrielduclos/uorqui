@@ -3,6 +3,7 @@ import { ArrowDown, ArrowLeft, MessageCircle, Search, UserPlus, X } from 'lucide
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
+import { ChatMediaViewer } from './ChatMediaViewer';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [cancelTarget, setCancelTarget] = useState<Message | null>(null);
   const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [mediaViewerId,setMediaViewerId] = useState<string | null>(null);
+  useEffect(()=>{setMediaViewerId(null);},[activeId]);
   const highlightTimer = useRef<number | null>(null);
   const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -381,6 +384,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     outgoingBlock.push(message);
   });
   endBlock();
+  const mediaItems=renderedMessages.filter((message):message is Message & {attachment:NonNullable<Message['attachment']>} =>
+    !!message.attachment && !message.deletedAt &&
+    (message.attachment.type.startsWith('image/') || message.attachment.type.startsWith('video/')));
   const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
     if (!activeId || messagesLoading || !scrollBox.current ||
@@ -604,6 +610,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             'Content-Type':pending.attachment.type,
             'x-uorqui-client-id':pending.clientId,
             'x-uorqui-filename':encodeURIComponent(pending.attachment.name),
+            ...(pending.body ? {'x-uorqui-caption':encodeURIComponent(pending.body)} : {}),
             ...(pending.replyToId ? {'x-uorqui-reply-to-id':pending.replyToId} : {}),
           },
           body:file,
@@ -625,14 +632,15 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed',statusUpdatedAt:new Date().toISOString()} : p));
     }
   }
-  function sendAttachment(file: File) {
+  function sendAttachment(file: File, caption: string) {
     const conversationId=activeIdRef.current;
     if(!conversationId || busy) return;
     const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime',
-      'application/pdf','text/plain','application/zip','application/octet-stream']);
+      'application/pdf','text/plain','application/zip','application/octet-stream',
+      'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
     const mime=file.type || 'application/octet-stream';
-    if(!file.size || file.size>20*1024*1024) {
-      setChatError(pt ? 'O anexo deve ter até 20 MB.' : 'Attachment must be 20 MB or less.'); return;
+    if(!file.size || file.size>50*1024*1024) {
+      setChatError(pt ? 'O anexo deve ter até 50 MB.' : 'Attachment must be 50 MB or less.'); return;
     }
     if (!allowed.has(mime) || !file.name || file.name.length>180 || /[\\/\r\n]/.test(file.name)) {
       setChatError(pt ? 'Tipo ou nome de arquivo não permitido.' : 'Unsupported file type or filename.'); return;
@@ -645,7 +653,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     pendingFiles.current.set(clientId,file);
     pendingBlobUrls.current.set(clientId,previewUrl);
     const pending:PendingMessage={
-      id:clientId,clientId,conversationId,authorId:myId,body:'',
+      id:clientId,clientId,conversationId,authorId:myId,body:caption.trim().slice(0,4000),
       createdAt:sentAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
       forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
       attachment:{id:clientId,name:file.name,type:mime,size:file.size},attachmentUrl:previewUrl,
@@ -656,6 +664,24 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setReplySource(null);
     jumpToLast('smooth');
     void submitPending(pending);
+  }
+  function sendLocation(latitude:number,longitude:number,caption:string) {
+    const conversationId=activeIdRef.current;
+    if(!conversationId || busy || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+       || Math.abs(latitude)>90 || Math.abs(longitude)>180)return;
+    const lat=latitude.toFixed(6),lon=longitude.toFixed(6);
+    const link='https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lon+'#map=15/'+lat+'/'+lon;
+    const body='📍 '+(pt?'Localização compartilhada':'Shared location')+'\n'+link+(caption?'\n'+caption:'');
+    const clientId=crypto.randomUUID(),createdAt=new Date().toISOString();
+    const pending:PendingMessage={
+      id:clientId,clientId,conversationId,authorId:myId,body,
+      createdAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
+      forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:createdAt,
+      replyToId:replySource?.id??null,
+      replyTo:replySource?{id:replySource.id,body:replySource.body,authorId:replySource.authorId,deleted:false}:null,
+    };
+    setPendingMessages(prev=>[...prev,pending]);setReplySource(null);
+    jumpToLast('smooth');void submitPending(pending);
   }
   async function send() {
     const id = activeId;
@@ -809,6 +835,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                 const status = blockReceipts.get(message.id);
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message}
+                    onOpenMedia={setMediaViewerId}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
                     disabled={actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
@@ -863,7 +890,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             </button>
           </div>}
           <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
-            onAttach={sendAttachment} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
+            onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
         </div>
         {cancelTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"
@@ -907,6 +934,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       </div>}
     </section>
 
+    <ChatMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId}
+      onClose={()=>setMediaViewerId(null)} onSendEdited={file=>sendAttachment(file,'')} locale={locale}/>
     {incoming && <aside role="status" aria-live="polite"
       className="absolute left-3 right-3 top-3 z-40 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-xl">
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left"

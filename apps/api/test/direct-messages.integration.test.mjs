@@ -568,3 +568,26 @@ test('private DM attachment metadata is scoped to both participants and canceled
   const afterCancel=await bob(path+'/attachments/'+uploadId+'/access');
   assert.equal(afterCancel.status,404,'canceled attachment must be inaccessible');
 });
+
+test('restored demo attachments allow signed 50 MB audio and captions, reject larger files',async()=>{
+  const list=await alice('/api/v1/dm/conversations');
+  const thread=list.data.conversations.find(x=>x.peerHandle==='dm_bob');
+  assert.ok(thread);
+  const path='/api/v1/dm/conversations/'+thread.id;
+  const maxAttachment={id:crypto.randomUUID(),name:'gravacao.webm',type:'audio/webm',size:50*1024*1024};
+  const clientId=crypto.randomUUID();
+  const created=await alice(path+'/messages','POST',{
+    body:'Legenda do áudio',clientId,attachment:maxAttachment,
+  },true,{'x-uorqui-attachment-proof':proof(thread.id,clientId,maxAttachment)});
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  assert.equal(created.data.message.body,'Legenda do áudio');
+  assert.deepEqual(created.data.message.attachment,maxAttachment);
+  const seen=await bob(path+'/messages');
+  assert.equal(seen.data.messages.find(x=>x.id===created.data.message.id).attachment.type,'audio/webm');
+  const large={id:crypto.randomUUID(),name:'maior.mp4',type:'video/mp4',size:50*1024*1024+1};
+  const largeClient=crypto.randomUUID();
+  const rejected=await alice(path+'/messages','POST',{
+    body:'',clientId:largeClient,attachment:large,
+  },true,{'x-uorqui-attachment-proof':proof(thread.id,largeClient,large)});
+  assert.equal(rejected.status,400,'50MB+1 byte must be rejected by server validation');
+});

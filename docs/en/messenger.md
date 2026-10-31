@@ -57,10 +57,21 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 
 ### Private individual chat attachments — first delivery
 
-- Gallery, Camera, Video and File pickers connect to the live messenger. Location awaits its own permission flow. First scope: **one attachment per message**, max **20 MB**, JPEG/PNG/WebP/GIF, MP4/WebM, PDF, TXT, ZIP or a generic download; no transcoding, audio recorder or batch uploads.
+- Gallery, Camera, Video and File pickers connect to the live messenger. Location is requested only when the user taps the location picker; coordinates are staged before sending as a normal persistent message with a map link. First scope: **one attachment per message**, max **50 MB**, JPEG/PNG/WebP/GIF, MP4/WebM, PDF, TXT, ZIP or a generic download; no transcoding, audio recorder or batch uploads.
 
 - **Anti-forgery control:** the Worker signs metadata using HMAC SHA-256 and private `DM_ATTACHMENT_PROOF_SECRET`. The Fastify API verifies the signature in constant time before accepting an attachment, rejecting direct forged uploads. Configure the **same secret** (at least 32 characters) in Cloudflare Worker and Render before deployment; never commit it or put it in URLs.
 - Separate **private R2 bucket** `uorqui-dm-attachments` with no public URL. The Worker validates same-origin requests, session and conversation membership before upload; creates a real message through Fastify with an idempotent client ID and attachment metadata. PostgreSQL stores metadata **only**, never binary file bytes.
 - `GET/HEAD /media/dm/:conversationId/:attachmentId` checks session, membership and attachment association with a non-canceled message before R2 access. Private `no-store`, `nosniff` responses, safe content-disposition. Unread cancellation attempts R2 object cleanup.
 - Square chat message bubbles support enlarged image previews, inline video controls and safe file downloads. Optimistic local previews, retryable failed uploads, delivery/read receipts, replies, reactions and global unread counts continue.
 - **Migration `0007_dm_attachments`** adds four attachment metadata fields and consistency check. Test on a temporary Neon branch and obtain production migration authorization **before merge/deploy**.
+
+
+### Parity with the original demo (PR #31)
+
+- Attachments are **staged for preview and explicit send**, showing name/size and Remove; typed text becomes an attachment caption. Paste a clipboard image to stage it.
+- Camera picker offers native **Take photo** and **Record video**, alongside gallery and files.
+- Voice recorder supports stop, pause/resume, discard and **play before sending**. Audio player with seek/duration and **1×, 1.5×, 2×** playback speeds, using browser-supported WebM/MP4/OGG/MP3/WAV/AAC formats.
+- Image annotation editor **before send** provides freehand pen, rectangle, ellipse, arrows, colors, undo and clear; saving creates a new PNG without modifying the original.
+- Photo/video carousel navigates conversation media with prev/next controls, ← → Esc, and download; videos have native controls.
+- The restored **50 MB** cap requires migration `0008_dm_attachment_50mb` changing only `dm_attachment_consistency`; apply Neon production migration before publishing API/Worker. No existing files are removed.
+- Location requires user-triggered browser permission and staged confirmation; one normal DM carries an OpenStreetMap link, with no background tracking.
