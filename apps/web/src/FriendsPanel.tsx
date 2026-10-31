@@ -4,11 +4,13 @@ import { UserAvatar } from './UserProfiles';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
+import { BlockedAccountsPanel } from './BlockedAccountsPanel';
+import { clearProfileImageCache } from './profileImageCache';
 import { Input } from '@/components/ui/input';
 
 type Friend = { handle: string; displayName: string; avatarUrl: string | null; requestedAt?: string };
 type FriendList = { friends: Friend[]; received: Friend[]; sent: Friend[] };
-type Tab = 'friends' | 'received' | 'sent';
+type Tab = 'friends' | 'received' | 'sent' | 'blocked';
 
 async function friendsRequest(path: string, options?: RequestInit): Promise<Response> {
   const response = await fetch(path,{credentials:'same-origin',cache:'no-store',...options});
@@ -41,7 +43,7 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
   useEffect(()=>{
     let active=true;
     void refresh().catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar suas amizades.':'Could not load your friends.');}});
-    const update=()=>void refresh().catch(()=>{});
+    const update=()=>{clearProfileImageCache();void refresh().catch(()=>{});};
     const focus=()=>void refresh().catch(()=>{});
     window.addEventListener('uorqui:friends-updated',update);
     window.addEventListener('focus',focus);
@@ -97,8 +99,8 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
     }finally{setPending(null);}
   }
   const pendingSet=new Set([...list.friends,...list.received,...list.sent].map(p=>p.handle));
-  const visible=list[tab].filter(p=>(p.displayName+' '+p.handle).toLocaleLowerCase(locale).includes(search.trim().toLocaleLowerCase(locale)));
-  const labels:Record<Tab,string>=pt?{friends:'Amigos',received:'Recebidos',sent:'Enviados'}:{friends:'Friends',received:'Received',sent:'Sent'};
+  const visible=(tab==='blocked'?[]:list[tab]).filter(p=>(p.displayName+' '+p.handle).toLocaleLowerCase(locale).includes(search.trim().toLocaleLowerCase(locale)));
+  const labels:Record<Tab,string>=pt?{friends:'Amigos',received:'Recebidos',sent:'Enviados',blocked:'Bloqueados'}:{friends:'Friends',received:'Received',sent:'Sent',blocked:'Blocked'};
 
   const item=(person:Friend,kind:Tab)=> <div key={person.handle} className="flex min-h-[66px] items-center gap-2 rounded-xl px-2 py-2 hover:bg-secondary/60">
     <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
@@ -165,13 +167,14 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
       </div>)}
       <p className="px-3 text-xs text-muted-foreground">{pt?'Perfis privados não aparecem na busca; use o @usuário exato para solicitar.':'Private profiles are not searchable; use the exact @username to request.'}</p>
     </div>:<>
-      <div className="grid grid-cols-3 gap-1 rounded-xl bg-secondary/70 p-1" role="tablist" aria-label={pt?'Listas de amizade':'Friendship lists'}>
-        {(['friends','received','sent'] as const).map(kind=><button key={kind} type="button" role="tab" aria-selected={tab===kind}
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-secondary/70 p-1" role="tablist" aria-label={pt?'Listas de amizade':'Friendship lists'}>
+        {(['friends','received','sent','blocked'] as const).map(kind=><button key={kind} type="button" role="tab" aria-selected={tab===kind}
           onClick={()=>{setTab(kind);setSearch('');setNotice('');}}
           className={'flex min-h-10 items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium '+(tab===kind?'bg-card shadow-sm':'text-muted-foreground hover:text-foreground')}>
-          {labels[kind]} {list[kind].length>0&&<span className="rounded-md bg-primary/15 px-1 text-[10px] text-primary">{list[kind].length}</span>}
+          {labels[kind]} {kind!=='blocked'&&list[kind].length>0&&<span className="rounded-md bg-primary/15 px-1 text-[10px] text-primary">{list[kind].length}</span>}
         </button>)}
       </div>
+      {tab==='blocked'?<BlockedAccountsPanel/>:<>
       <div className="relative px-1"><Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
         <Input value={search} onChange={e=>setSearch(e.target.value)} className="h-11 rounded-xl bg-background pl-9 text-base"
           aria-label={pt?'Pesquisar amigos':'Search friends'} placeholder={pt?'Pesquisar por nome ou @usuário':'Search by name or @username'}/>
@@ -182,6 +185,7 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
         <p className="mt-2 text-xs text-muted-foreground">{pt?'A amizade só é confirmada quando a solicitação é aceita.':'Friendship starts when a request is accepted.'}</p>
       </div>}
       {visible.map(person=>item(person,tab))}
+      </>}
     </>}
   </div>;
 }

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { PreferencesControls } from './PreferencesControls';
 import { ContactToggleButton } from './ContactToggleButton';
+import { AccountBlockButton } from './AccountBlockButton';
 import { navigateBackFromPublicProfile, navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 
@@ -250,6 +251,10 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
   const pt = locale === 'pt-BR';
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  useEffect(()=>{const changed=()=>{clearProfileImageCache();setProfile(null);setStatus('missing');};
+    window.addEventListener('uorqui:blocks-updated',changed);
+    return ()=>window.removeEventListener('uorqui:blocks-updated',changed);
+  },[]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -278,6 +283,7 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
           <h1 className="text-xl font-semibold">{pt ? 'Perfil privado ou indisponível' : 'Private or unavailable profile'}</h1>
           <p className="max-w-sm text-sm text-muted-foreground">{pt ? 'Se você conhece este @usuário, pode enviar uma solicitação de amizade. O perfil só será mostrado após a aceitação.' : 'If you know this @username, send a friend request. The profile becomes available after acceptance.'}</p>
           {onMessage && <ContactToggleButton handle={handle}/>}
+          {onMessage && <AccountBlockButton handle={handle} compact />}
           <Button variant="outline" asChild><a href="/" onClick={navigateBackFromPublicProfile}>{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button>
         </div>}
       {status === 'error' && <div role="alert" className="py-16 text-center text-sm text-destructive">{pt ? 'Não foi possível carregar o perfil.' : 'Could not load profile.'}</div>}
@@ -289,6 +295,7 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
             <div><h1 className="text-2xl font-bold">{profile.displayName}</h1><p className="mt-1 text-sm text-muted-foreground">@{profile.handle}</p></div>
             <div className="flex flex-wrap items-center gap-2">
               {onMessage && <ContactToggleButton handle={profile.handle} />}
+              {onMessage && <AccountBlockButton handle={profile.handle} onChanged={()=>{setProfile(null);setStatus('missing');}} />}
               <Button disabled={!onMessage} onClick={() => onMessage?.(profile.handle)} title={!onMessage ? (pt ? 'Entre na sua conta para conversar.' : 'Sign in to send a message.') : undefined}><MessageCircle className="size-4" />{pt ? 'Conversar' : 'Message'}</Button>
             </div>
           </div>

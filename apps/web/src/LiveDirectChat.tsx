@@ -7,6 +7,8 @@ import { attachmentLabel } from './chatAttachmentLabels';
 import { invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
 import { FriendsPanel } from './FriendsPanel';
+import { AccountBlockButton } from './AccountBlockButton';
+import { clearProfileImageCache } from './profileImageCache';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -451,7 +453,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     const onDmUpdate = (event: Event) => {
       try {
         const data = JSON.parse((event as MessageEvent<string>).data) as { conversationId?: string; kind?: string };
-        if (data.kind === 'friendship-update') { void loadThreads().catch(() => {}); return; }
+        if (data.kind === 'friendship-update') { clearProfileImageCache(); void loadThreads().catch(() => {}); return; }
         if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind ?? '')) return;
         const conversationId = data.conversationId;
         const isOpen = isConversationVisible(conversationId);
@@ -849,7 +851,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             <span className="min-w-0"><span className="block truncate text-sm font-semibold">{active.peerName}</span>
               <span className="block truncate text-xs text-muted-foreground">@{active.peerHandle}</span></span>
           </a>
-
+          <AccountBlockButton handle={active.peerHandle} compact onChanged={()=>{void loadThreads().catch(()=>{});}}/>
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollBox} onScroll={onMessagesScroll}
@@ -921,7 +923,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
           {active.canMessage ? <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
             onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/> :
             <div role="status" className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-center text-sm text-muted-foreground">
-              {pt ? 'Este perfil é privado. Somente amigos podem enviar novas mensagens.' : 'This profile is private. Only friends can send new messages.'}
+              {pt ? 'Mensagens indisponíveis: perfil privado sem amizade ou conta bloqueada.' : 'Messaging unavailable: private profile without friendship or blocked account.'}
               <div className="mt-2"><button type="button" className="text-primary underline" onClick={() => { closeThread(); setListView('contacts'); }}>
                 {pt ? 'Ver solicitações de amizade' : 'View friend requests'}
               </button></div>
