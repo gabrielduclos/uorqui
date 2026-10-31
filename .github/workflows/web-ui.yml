@@ -1,0 +1,30 @@
+name: Web UI (shadcn / React)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'package.json'
+      - '.github/workflows/web-ui.yml'
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'package.json'
+      - '.github/workflows/web-ui.yml'
+permissions:
+  contents: read
+jobs:
+  typecheck-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install workspaces
+        run: npm install --include=dev --no-audit --no-fund
+      - name: Type-check and build React application
+        run: npm run build -w @uorqui/web
+      - name: Validate Cloudflare Worker configuration
+        run: npm run check:worker -w @uorqui/web
