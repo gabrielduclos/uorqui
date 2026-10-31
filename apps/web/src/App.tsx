@@ -4,6 +4,7 @@ import { Github, MessageCircle, Users, Newspaper } from 'lucide-react';
 import AuthPanel, { type Account } from './AuthPanel';
 import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
+import { publicProfileHandle } from './publicProfileNavigation';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
 import { Badge } from '@/components/ui/badge';
@@ -67,12 +68,17 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
 }
 
 function AppContent() {
-  const publicHandle = window.location.pathname.match(/^\/@([a-z][a-z0-9_]{2,31})\/?$/i)?.[1]?.toLowerCase();
-  const [loading, setLoading] = useState(!publicHandle);
+  const [publicHandle, setPublicHandle] = useState<string | null>(() => publicProfileHandle(window.location.pathname));
+  const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
 
   useEffect(() => {
-    if (publicHandle) return;
+    const onNavigation = () => setPublicHandle(publicProfileHandle(window.location.pathname));
+    window.addEventListener('popstate', onNavigation);
+    return () => window.removeEventListener('popstate', onNavigation);
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
     let mounted = true;
     const timeout = window.setTimeout(() => controller.abort(), 20_000);
@@ -84,7 +90,7 @@ function AppContent() {
       finally { window.clearTimeout(timeout); if (mounted) setLoading(false); }
     })();
     return () => { mounted = false; window.clearTimeout(timeout); controller.abort(); };
-  }, [publicHandle]);
+  }, []);
 
   const onAuthenticated = useCallback((next: Account) => setAccount(next), []);
   const signOut = useCallback(async () => {
@@ -100,9 +106,14 @@ function AppContent() {
 
   return (
     <MotionConfig reducedMotion="user">
-      {publicHandle ? <PublicProfilePage handle={publicHandle} /> : loading ? <StartupSplash /> : account?.profile ? (
+      {account?.profile ? (
         <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)} />
-      ) : <Landing onAuthenticated={onAuthenticated} />}
+      ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
+      {publicHandle && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-background">
+          <PublicProfilePage handle={publicHandle} />
+        </div>
+      )}
     </MotionConfig>
   );
 }
