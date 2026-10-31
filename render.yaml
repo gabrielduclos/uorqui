@@ -26,3 +26,15 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      # Public signup requires ALL of the following settings in Render.
+      # Keep disabled until sender domain and Turnstile widget are configured.
+      - key: ENABLE_PUBLIC_SIGNUP
+        value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: AUTH_EMAIL_FROM
+        sync: false
+      - key: TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false

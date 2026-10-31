@@ -70,6 +70,8 @@ test('Auth + social profile local integration', async () => {
   const status = await send('/api/v1/status');
   assert.equal(status.response.status, 200);
   assert.equal(status.data.publicRegistration, false);
+  assert.equal(status.data.registrationAvailable, true);
+  assert.equal(status.data.emailVerificationRequired, false);
   assert.equal(status.data.developmentRegistrationEnabled, true);
 
   const blocked = await send('/api/v1/me', { useCookie: false });

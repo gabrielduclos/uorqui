@@ -3,7 +3,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { authPolicy } from './auth-policy.js';
 import { createDatabase } from '../db/client.js';
 import * as authSchema from '../db/auth-schema.js';
-import { isDevelopmentSignupEnabled } from './registration.js';
+import { isRegistrationAvailable, isPublicSignupEnabled } from './registration.js';
+import { sendAccountEmail } from './email.js';
 
 function buildAuth() {
   const secret = process.env.AUTH_SECRET;
@@ -32,7 +33,20 @@ function buildAuth() {
       ...authPolicy.emailAndPassword,
       // No email-verification/reset provider has been configured yet.
       // Disable public registrations until that work is finished.
-      disableSignUp: !isDevelopmentSignupEnabled(),
+      disableSignUp: !isRegistrationAvailable(),
+      requireEmailVerification: isPublicSignupEnabled(),
+      sendResetPassword: async ({ user, url }) => {
+        await sendAccountEmail(user.email, 'Uorqui — redefinição de senha',
+          `Para redefinir sua senha, abra este link: ${url}\n\nSe não foi você, ignore esta mensagem.`);
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: isPublicSignupEnabled(),
+      autoSignInAfterVerification: false,
+      sendVerificationEmail: async ({ user, url }) => {
+        await sendAccountEmail(user.email, 'Uorqui — confirme seu e-mail',
+          `Confirme seu endereço de e-mail para acessar o Uorqui: ${url}\n\nSe não criou esta conta, ignore esta mensagem.`);
+      },
     },
     session: {
       expiresIn: 60 * 60 * 24 * 7,

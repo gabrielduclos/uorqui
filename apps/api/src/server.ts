@@ -4,7 +4,7 @@ import cors from '@fastify/cors';
 import { fromNodeHeaders } from 'better-auth/node';
 import { eq } from 'drizzle-orm';
 import { getAuth } from './auth/auth.js';
-import { isDevelopmentSignupEnabled } from './auth/registration.js';
+import { isDevelopmentSignupEnabled, isPublicSignupEnabled, isRegistrationAvailable, verifyRegistrationChallenge } from './auth/registration.js';
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 
@@ -79,8 +79,12 @@ app.get('/api/v1/status', async () => ({
   project: 'uorqui',
   stage: 'auth-development',
   featuresEnabled: ['auth-scaffold'],
-  publicRegistration: false,
+  publicRegistration: isPublicSignupEnabled(),
+  registrationAvailable: isRegistrationAvailable(),
   developmentRegistrationEnabled: isDevelopmentSignupEnabled(),
+  emailVerificationRequired: isPublicSignupEnabled(),
+  passwordRecoveryAvailable: isPublicSignupEnabled(),
+  turnstileSiteKey: isPublicSignupEnabled() ? process.env.TURNSTILE_SITE_KEY : null,
 }));
 
 // Better Auth uses Fetch API Request/Response semantics; Fastify handles the network.
@@ -92,12 +96,25 @@ app.route({
       return reply.status(503).send({ error: 'Authentication not configured' });
     }
     try {
+      // Verify the challenge on the server, including direct requests to Render.
+      // A browser-only CAPTCHA check would be trivial to bypass.
+      let authBody = request.body;
+      const guarded = new Set(['/api/auth/sign-up/email', '/api/auth/request-password-reset', '/api/auth/send-verification-email']);
+      if (isPublicSignupEnabled() && request.method === 'POST' && guarded.has(request.url.split('?')[0])) {
+        const payload = request.body as Record<string, unknown> | undefined;
+        const token = typeof payload?.captchaToken === 'string' ? payload.captchaToken : '';
+        if (!await verifyRegistrationChallenge(token, request.ip)) {
+          return reply.status(403).send({ error: 'Verificação de segurança não concluída. Tente novamente.' });
+        }
+        const { captchaToken: _captchaToken, ...clean } = payload ?? {};
+        authBody = clean;
+      }
       const url = new URL(request.raw.url ?? request.url, process.env.AUTH_BASE_URL ?? 'http://localhost:3001');
       const headers = fromNodeHeaders(request.headers);
       const authRequest = new Request(url, {
         method: request.method,
         headers,
-        ...(request.body ? { body: JSON.stringify(request.body) } : {}),
+        ...(authBody ? { body: JSON.stringify(authBody) } : {}),
       });
       const response = await getAuth().handler(authRequest);
 
