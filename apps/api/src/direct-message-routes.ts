@@ -20,7 +20,7 @@ async function belongs(conversationId: string, userId: string): Promise<boolean>
     [conversationId,userId]);
   return r.rowCount === 1;
 }
-const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded"';
+const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded", reply_to_id AS "replyToId"';
 const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam } };
 const noCache = 'no-store';
 
@@ -142,6 +142,9 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         (SELECT emoji, COUNT(*)::int AS n FROM direct_message_reactions WHERE message_id=dm.id GROUP BY emoji ORDER BY emoji) grouped), '[]'::json) AS reactions`;
       const query='SELECT '+messageColumns+', '+reactions+
         ', (SELECT emoji FROM direct_message_reactions WHERE message_id=dm.id AND user_id=$2) AS "myReaction"'+
+        ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN original.body ELSE \'\' END,'+
+        '\'authorId\',original.author_id,\'deleted\',original.deleted_at IS NOT NULL) FROM direct_messages original'+
+        ' WHERE original.id=dm.reply_to_id AND original.conversation_id=dm.conversation_id) AS "replyTo"'+
         ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC';
       const r=await getPool().query(query,[id,me]);
       return reply.header('Cache-Control',noCache).send({messages:r.rows});
@@ -149,7 +152,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
   });
   app.post('/api/v1/dm/conversations/:id/messages',{
     schema:{params:pathParams,body:{type:'object',additionalProperties:false,required:['body','clientId'],
-      properties:{body:{type:'string',minLength:1,maxLength:4000},clientId:uuidParam}}}
+      properties:{body:{type:'string',minLength:1,maxLength:4000},clientId:uuidParam,replyToId:uuidParam}}}
   },async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
@@ -157,11 +160,15 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const {body,clientId}=request.body as {body:string;clientId:string};
+      const {body,clientId,replyToId}=request.body as {body:string;clientId:string;replyToId?:string};
       const text=body.trim();
       if(!text||text.length>4000)return reply.code(400).send({error:'Invalid message'});
-      const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id) VALUES($1,$2,$3,$4) ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
-      const r=await getPool().query(q,[id,me,text,clientId]);
+      if(replyToId){
+        const source=await getPool().query('SELECT id FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL',[replyToId,id]);
+        if(!source.rowCount)return reply.code(404).send({error:'Reply target unavailable'});
+      }
+      const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id,reply_to_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
+      const r=await getPool().query(q,[id,me,text,clientId,replyToId??null]);
       if(r.rowCount){
         await publishDmConversationEvent(id,'message').catch(error=>request.log.warn({err:error},'DM notification failed'));
         return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
