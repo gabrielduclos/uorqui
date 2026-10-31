@@ -47,6 +47,8 @@ jobs:
         run: npm run build -w @uorqui/api
       - name: Exercise authentication and onboarding
         run: node --test apps/api/test/auth.integration.test.mjs
+      - name: Exercise real direct messages between two users
+        run: node --test apps/api/test/direct-messages.integration.test.mjs
       - name: Verify disabled registration is enforced server-side
         run: node --test apps/api/test/signup-closed.integration.test.mjs
       - name: Verify production does not enable signup from dev flags
