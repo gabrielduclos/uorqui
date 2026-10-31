@@ -87,7 +87,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   onLogout: () => Promise<void>;
   onAccountUpdate: (next: SignedInAccount) => void;
 }) {
-  const { t } = useUorquiPreferences();
+  const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
   const [area, setArea] = useState<Area>('feed');
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
