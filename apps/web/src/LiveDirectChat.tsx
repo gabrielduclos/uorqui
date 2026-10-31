@@ -628,7 +628,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   function sendAttachment(file: File) {
     const conversationId=activeIdRef.current;
     if(!conversationId || busy) return;
-    const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/webm',
+    const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime',
       'application/pdf','text/plain','application/zip','application/octet-stream']);
     const mime=file.type || 'application/octet-stream';
     if(!file.size || file.size>20*1024*1024) {
