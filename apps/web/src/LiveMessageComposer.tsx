@@ -16,9 +16,9 @@ const ATTACHMENTS = [
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
 
-export function LiveMessageComposer({ value, onChange, onSubmit, sending, locale, textareaRef }: {
+export function LiveMessageComposer({ value, onChange, onSubmit, sending, locale, textareaRef, editing = false }: {
   value: string; onChange: (text: string) => void; onSubmit: () => void;
-  sending: boolean; locale: string; textareaRef: RefObject<HTMLTextAreaElement | null>;
+  sending: boolean; locale: string; textareaRef: RefObject<HTMLTextAreaElement | null>; editing?: boolean;
 }) {
   const pt = locale === 'pt-BR';
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
@@ -103,8 +103,8 @@ export function LiveMessageComposer({ value, onChange, onSubmit, sending, locale
     <textarea ref={textareaRef} rows={1} value={value}
       onChange={event => onChange(event.target.value)} onKeyDown={keyDown} maxLength={4000}
       aria-label={pt ? 'Escrever mensagem' : 'Write a message'}
-      data-message-composer placeholder={pt ? 'Mensagem…' : 'Message…'}
-      className="min-h-12 max-h-52 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-3 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none"
+      data-message-composer placeholder={editing ? (pt ? 'Editar mensagem…' : 'Edit message…') : (pt ? 'Mensagem…' : 'Message…')}
+      className="min-h-12 max-h-52 min-w-0 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-3 text-base leading-6 text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40"
     />
     <div className="relative shrink-0">
       <button type="button" aria-label={pt ? 'Abrir lista de emojis' : 'Open emoji picker'}
