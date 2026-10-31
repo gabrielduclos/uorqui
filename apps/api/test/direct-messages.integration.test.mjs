@@ -297,14 +297,18 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
   const sameConversation=await bob(item+'/forward','POST',{targetConversationId:thread.id,clientId:crypto.randomUUID()});
   assert.equal(sameConversation.status,400);
 
-  const deleted=await bob(item,'DELETE');
+  // Use a fresh unread message for cancellation; the reacted-to reply was explicitly read above.
+  const cancellable=await bob(path+'/messages','POST',{body:'Mensagem para cancelar',clientId:crypto.randomUUID()});
+  assert.equal(cancellable.status,201);
+  const cancelItem=path+'/messages/'+cancellable.data.message.id;
+  const deleted=await bob(cancelItem,'DELETE');
   assert.equal(deleted.status,200);
   assert.equal(deleted.data.canceled,true);
   const afterCancel=await alice(path+'/messages');
-  assert.equal(afterCancel.data.messages.some(m=>m.id===reply.id),false,'canceled message leaves no placeholder');
-  const editAfterDelete=await bob(item,'PATCH',{body:'Should not restore'});
+  assert.equal(afterCancel.data.messages.some(m=>m.id===cancellable.data.message.id),false,'canceled message leaves no placeholder');
+  const editAfterDelete=await bob(cancelItem,'PATCH',{body:'Should not restore'});
   assert.equal(editAfterDelete.status,404);
-  const reactAfterDelete=await alice(item+'/reaction','PUT',{emoji:'👍'});
+  const reactAfterDelete=await alice(cancelItem+'/reaction','PUT',{emoji:'👍'});
   assert.equal(reactAfterDelete.status,404);
 });
 
