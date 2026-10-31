@@ -17,8 +17,10 @@ interface Env {
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const MAX_DM_BYTES = 20 * 1024 * 1024;
-const UUID = '[0-9a-f-]{36}';
-const DM_UPLOAD_PATH = new RegExp('^/api/media/dm/(' + UUID + ')
+const DM_UPLOAD_PATH = /^\/api\/media\/dm\/([0-9a-f-]{36})$/;
+const DM_MEDIA_PATH = /^\/media\/dm\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
+const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
+const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','video/mp4','video/webm','application/pdf','text/plain','application/zip','application/octet-stream']);
 const MEDIA_PATH = /^\/media\/profile\/([0-9a-f-]{36})\/(avatar|cover)\/([0-9a-f-]{36})\.(webp|jpg|png)$/;
 const UPLOAD_PATH = /^\/api\/media\/profile\/(avatar|cover)$/;
 const TYPE_EXTENSION: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
