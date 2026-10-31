@@ -50,3 +50,7 @@ jobs:
         run: node --test apps/api/test/signup-closed.integration.test.mjs
       - name: Verify production does not enable signup from dev flags
         run: node --test apps/api/test/production-locked.integration.test.mjs
+      - name: Build Cloudflare Worker frontend for isolated proxy test
+        run: npm run build -w @uorqui/web
+      - name: Test Worker to Fastify to PostgreSQL cookies and API routing
+        run: node --test apps/api/test/worker-proxy.integration.test.mjs
