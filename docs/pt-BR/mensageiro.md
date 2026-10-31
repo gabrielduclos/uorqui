@@ -44,7 +44,7 @@ O mensageiro individual usa autenticação Better Auth, PostgreSQL no Neon e as 
 
 O componente `LiveDirectChat` usa o mesmo UI Kit de tema claro/escuro e idiomas PT/EN que o restante do Uorqui. Os componentes `DemoChatBubble` e `DemoMessageComposer` ainda guardam exemplos de funcionalidades não migradas e **não** devem ser confundidos com o backend real.
 
-- A lista e a busca **nunca** marcam mensagens como lidas. Nem a chegada de um evento SSE ou uma consulta de histórico constitui confirmação de leitura.
+- A lista e a busca **nunca** marcam mensagens como **Lidas**. Uma mensagem que entrou no **badge global de não lidas** já foi recebida pelo cliente conectado, portanto o hook da navegação confirma **Recebida** via `/received`, mesmo fora da área de conversas. Isso **não** executa `/read` e **não** zera o badge. Uma edição cria uma nova revisão e nova confirmação de entrega.
 - Uma confirmação de leitura só ocorre com conversa aberta, painel realmente visível, aba e janela em foco, histórico renderizado e visualização no final da conversa. O botão Voltar fecha a seleção da conversa.
 - Abrir uma conversa rola até a mensagem mais recente; rolar para cima mantém a posição. Novas mensagens recebidas enquanto o usuário lê o histórico mostram uma seta para baixo e um contador, sem deslocar a tela.
 - Mensagens de outras conversas podem mostrar um aviso flutuante com prévia; abri-lo exige ação explícita do usuário e dispensá-lo não altera o estado de leitura.
