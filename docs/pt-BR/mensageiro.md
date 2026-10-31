@@ -64,6 +64,13 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 
 - `DELETE /api/v1/dm/conversations/:id/messages/:messageId` cancela uma mensagem própria **não lida**: remoção definitiva, sem ocupar espaço no chat. Caso `read_at` esteja preenchido, retorna `409` e não altera a mensagem.
 - `GET /api/v1/dm/conversations/:id/messages?around=<uuid>` retorna um trecho autorizado do histórico em torno de uma mensagem original, para rolagem/destaque ao tocar na resposta.
-- Reações aparecem como eventos/balões separados junto à mensagem original e seguem otimistas, com desfazer.
+- Reações permanecem como marcadores na mensagem original e **não viram balões no histórico**. Reações recebidas aparecem na **prévia da lista de conversas**, com emoji, horário e trecho da mensagem reagida; contam como **não lidas** na conversa e no ícone global até a confirmação real de leitura.
 - O ícone Conversas exibe o total de mensagens não lidas em toda a conta, por SSE/polling, em mobile e desktop.
 - Identidade visual: balões de mensagens com cantos retos.
+
+### Notificações persistentes de reação
+
+- A migração `0006_dm_reaction_notifications` acrescenta `updated_at` e `read_at` às reações. Reações anteriores são inicialmente marcadas como lidas para evitar alertas retroativos.
+- `PUT /api/v1/dm/conversations/:id/messages/:messageId/reaction` cria/atualiza o emoji e zera `read_at`, gerando evento SSE. `DELETE .../reaction` remove o marcador e a notificação pendente.
+- `GET /api/v1/dm/conversations` retorna `previewKind`, `previewReactionEmoji`, `previewReactionBody`, `previewReactionAt`, `unreadMessageCount`, `unreadReactionCount` e `unreadCount` total. Somente reações enviadas por outra pessoa a mensagens próprias geram notificações para o destinatário.
+- `POST /api/v1/dm/conversations/:id/read` reconhece em uma única chamada as mensagens e reações pendentes **somente com conversa aberta/visível**, nunca ao apenas olhar a lista.
