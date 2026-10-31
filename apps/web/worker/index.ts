@@ -213,7 +213,7 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
 
   try {
     const auth = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/attachments/allowed');
-    if (!auth.ok) return jsonError(auth.status === 401 ? 401 : auth.status === 404 ? 404 : 503, 'Attachment upload not authorized');
+    if (!auth.ok) return jsonError(auth.status === 401 ? 401 : auth.status === 403 ? 403 : auth.status === 404 ? 404 : 503, 'Attachment upload not authorized');
   } catch { return jsonError(503, 'Attachment authentication unavailable'); }
 
   const bytes = await boundedBody(request, MAX_DM_BYTES);

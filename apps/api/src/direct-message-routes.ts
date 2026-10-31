@@ -40,6 +40,24 @@ function verifiedAttachmentUpload(request:FastifyRequest, conversationId:string,
 const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam } };
 const noCache = 'no-store';
 
+/** Destination privacy is evaluated on every write, not inferred from UI state. */
+async function canMessage(conversationId: string, me: string): Promise<boolean> {
+  const result = await getPool().query(
+    'SELECT 1 FROM direct_conversations c JOIN profiles p ON p.user_id = ' +
+    'CASE WHEN c.participant_a_id=$2 THEN c.participant_b_id ELSE c.participant_a_id END ' +
+    'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(c.participant_a_id,c.participant_b_id) ' +
+    'AND f.user_b_id=GREATEST(c.participant_a_id,c.participant_b_id) ' +
+    "WHERE c.id=$1 AND (c.participant_a_id=$2 OR c.participant_b_id=$2) AND (p.is_public=true OR f.status='accepted') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id))",
+    [conversationId,me],
+  );
+  return result.rowCount === 1;
+}
+const mayPostSql =
+  "EXISTS (SELECT 1 FROM direct_conversations c JOIN profiles p ON p.user_id = CASE WHEN c.participant_a_id=$2 THEN c.participant_b_id ELSE c.participant_a_id END " +
+  "LEFT JOIN user_friendships f ON f.user_a_id=LEAST(c.participant_a_id,c.participant_b_id) AND f.user_b_id=GREATEST(c.participant_a_id,c.participant_b_id) " +
+  "WHERE c.id=$1 AND (c.participant_a_id=$2 OR c.participant_b_id=$2) AND (p.is_public=true OR f.status='accepted') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id)))";
+
+
 export function registerDirectMessageRoutes(app:FastifyInstance, getSession: SessionReader) {
   app.get('/api/v1/dm/events', async (request, reply) => {
     // EventSource uses the same-origin session cookie; no tokens in URLs.
@@ -102,7 +120,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(q.length<2) return reply.code(400).send({error:'Search too short'});
       const escaped = '%' + q.replace(/[\\%_]/g,'\\$&') + '%';
       const r=await getPool().query(
-        'SELECT u.handle, p.display_name AS "displayName", p.avatar_url AS "avatarUrl" FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.id<>$1 AND p.is_public=true AND (u.handle ILIKE $2 OR p.display_name ILIKE $2) ORDER BY u.handle LIMIT 20',
+        'SELECT u.handle, p.display_name AS "displayName", p.avatar_url AS "avatarUrl" FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.id<>$1 AND p.is_public=true AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=$1 AND bl.blocked_id=u.id) OR (bl.blocker_id=u.id AND bl.blocked_id=$1)) AND (u.handle ILIKE $2 OR p.display_name ILIKE $2) ORDER BY u.handle LIMIT 20',
         [me,escaped]);
       return reply.header('Cache-Control',noCache).send({people:r.rows});
     } catch(e){request.log.error({err:e},'DM people search');return reply.code(503).send({error:'Unavailable'});}
@@ -113,7 +131,9 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me) return reply.code(401).send({error:'Unauthorized'});
       const query=[
         'SELECT c.id, c.created_at AS "createdAt", u.handle AS "peerHandle",',
-        'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl",',
+        'CASE WHEN (p.is_public=true OR f.status=\'accepted\') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id)) THEN p.display_name ELSE u.handle END AS "peerName",',
+        'CASE WHEN (p.is_public=true OR f.status=\'accepted\') AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id)) THEN p.avatar_url ELSE NULL END AS "peerAvatarUrl",',
+        '((p.is_public=true OR COALESCE(f.status=\'accepted\',false)) AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=c.participant_a_id AND bl.blocked_id=c.participant_b_id) OR (bl.blocker_id=c.participant_b_id AND bl.blocked_id=c.participant_a_id))) AS "canMessage",',
         `NULLIF(m.body,'') AS "lastBody", m.attachment_type AS "lastAttachmentType", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",`,
         'reaction.emoji AS "lastReactionEmoji", reaction.notified_at AS "lastReactionAt", reaction.message_id AS "lastReactionMessageId",',
         'reaction.user_id AS "lastReactionAuthorId",',
@@ -123,6 +143,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'FROM direct_conversations c',
         'JOIN users u ON u.id=CASE WHEN c.participant_a_id=$1 THEN c.participant_b_id ELSE c.participant_a_id END',
         'JOIN profiles p ON p.user_id=u.id',
+        'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(c.participant_a_id,c.participant_b_id) AND f.user_b_id=GREATEST(c.participant_a_id,c.participant_b_id)',
         'LEFT JOIN LATERAL (SELECT body,attachment_type,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
         'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL) unread ON true',
         'LEFT JOIN LATERAL (SELECT MAX(COALESCE(edited_at,created_at)) AS pending_received_at FROM direct_messages',
@@ -148,7 +169,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const me=await identity(request,getSession);
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {handle}=request.body as {handle:string};
-      const match=await getPool().query('SELECT u.id FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.handle=$1 AND u.id<>$2 AND p.is_public=true LIMIT 1',[handle,me]);
+      const match=await getPool().query('SELECT u.id FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.handle=$1 AND u.id<>$2 AND NOT EXISTS (SELECT 1 FROM user_blocks bl WHERE (bl.blocker_id=$2 AND bl.blocked_id=u.id) OR (bl.blocker_id=u.id AND bl.blocked_id=$2)) AND (p.is_public=true OR EXISTS(SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(u.id,$2::uuid) AND f.user_b_id=GREATEST(u.id,$2::uuid) AND f.status=\'accepted\')) LIMIT 1',[handle,me]);
       if(!match.rowCount)return reply.code(404).send({error:'User unavailable'});
       const [a,b]=[me,match.rows[0].id as string].sort();
       const r=await getPool().query('INSERT INTO direct_conversations(participant_a_id,participant_b_id) VALUES($1,$2) ON CONFLICT(participant_a_id,participant_b_id) DO UPDATE SET participant_a_id=EXCLUDED.participant_a_id RETURNING id',[a,b]);
@@ -193,6 +214,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       return reply.header('Cache-Control',noCache).send({allowed:true});
     }catch(e){request.log.error({err:e},'DM attachment upload access');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -224,6 +246,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       const {body,clientId,replyToId,attachment}=request.body as {body:string;clientId:string;replyToId?:string;attachment?:{id:string;name:string;type:string;size:number}};
       const text=body.trim();
       if((!text&&!attachment)||text.length>4000)return reply.code(400).send({error:'Invalid message'});
@@ -239,7 +262,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         const source=await getPool().query('SELECT id FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL',[replyToId,id]);
         if(!source.rowCount)return reply.code(404).send({error:'Reply target unavailable'});
       }
-      const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id,reply_to_id,attachment_id,attachment_name,attachment_type,attachment_size) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
+      const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id,reply_to_id,attachment_id,attachment_name,attachment_type,attachment_size) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9 WHERE '+mayPostSql+' ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
       const r=await getPool().query(q,[id,me,text,clientId,replyToId??null,attachment?.id??null,attachment?.name??null,attachment?.type??null,attachment?.size??null]);
       if(r.rowCount){
         await publishDmConversationEvent(id,'message').catch(error=>request.log.warn({err:error},'DM notification failed'));
@@ -296,6 +319,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,messageId}=request.params as {id:string;messageId:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       const text=(request.body as {body:string}).body.trim();
       if(!text||text.length>4000)return reply.code(400).send({error:'Invalid message'});
       const r=await getPool().query('UPDATE direct_messages SET body=$1, edited_at=now() WHERE id=$2 AND conversation_id=$3 AND author_id=$4 AND deleted_at IS NULL RETURNING '+messageColumns,[text,messageId,id,me]);
@@ -331,6 +355,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,messageId}=request.params as {id:string;messageId:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       const emoji=(request.body as {emoji:string}).emoji;
       const r=await getPool().query(
         'INSERT INTO direct_message_reactions (message_id,user_id,emoji,notified_at) SELECT m.id,$1,$2,now() FROM direct_messages m WHERE m.id=$3 AND m.conversation_id=$4 AND m.author_id<>$1 AND m.deleted_at IS NULL ON CONFLICT (message_id,user_id) DO UPDATE SET emoji=EXCLUDED.emoji, notified_at=CASE WHEN direct_message_reactions.emoji IS DISTINCT FROM EXCLUDED.emoji THEN now() ELSE direct_message_reactions.notified_at END, read_at=CASE WHEN direct_message_reactions.emoji IS DISTINCT FROM EXCLUDED.emoji THEN NULL ELSE direct_message_reactions.read_at END RETURNING message_id',
@@ -346,6 +371,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,messageId}=request.params as {id:string;messageId:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       await getPool().query('DELETE FROM direct_message_reactions WHERE message_id=$1 AND user_id=$2 AND EXISTS (SELECT 1 FROM direct_messages WHERE id=$1 AND conversation_id=$3)',[messageId,me,id]);
       await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM reaction notification failed'));
       return reply.header('Cache-Control',noCache).send({emoji:null});
@@ -359,9 +385,10 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const {id,messageId}=request.params as {id:string;messageId:string};
       const {targetConversationId,clientId}=request.body as {targetConversationId:string;clientId:string};
       if(!await belongs(id,me)||!await belongs(targetConversationId,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(targetConversationId,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       if(id===targetConversationId)return reply.code(400).send({error:'Choose another conversation'});
       const q='INSERT INTO direct_messages (conversation_id,author_id,body,client_id,forwarded_from_id) '+
-        'SELECT $1,$2,body,$3,id FROM direct_messages WHERE id=$4 AND conversation_id=$5 AND deleted_at IS NULL '+
+        'SELECT $1,$2,body,$3,id FROM direct_messages WHERE id=$4 AND conversation_id=$5 AND deleted_at IS NULL AND '+mayPostSql+' '+
         'ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
       const r=await getPool().query(q,[targetConversationId,me,clientId,messageId,id]);
       if(r.rowCount){

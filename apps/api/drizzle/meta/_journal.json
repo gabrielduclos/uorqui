@@ -64,6 +64,20 @@
       "when": 1793486500000,
       "tag": "0008_dm_attachment_50mb",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793489600000,
+      "tag": "0009_mutual_friendships",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793491400000,
+      "tag": "0010_user_blocks",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq, ilike, or } from 'drizzle-orm';
-import { createDatabase } from './db/client.js';
+import { createDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
@@ -47,13 +47,24 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
     // Escape LIKE wildcard characters so search input cannot expand to an unbounded match.
     const pattern = '%' + search.replace(/[\\%_]/g, '\\$&') + '%';
     try {
+      const session = await readSession(request);
       const matches = await createDatabase()
-        .select({ handle: users.handle, displayName: profiles.displayName, avatarUrl: profiles.avatarUrl })
+        .select({ id: users.id, handle: users.handle, displayName: profiles.displayName, avatarUrl: profiles.avatarUrl })
         .from(users).innerJoin(profiles, eq(users.id, profiles.userId))
         .where(and(eq(profiles.isPublic, true),
           or(ilike(users.handle, pattern), ilike(profiles.displayName, pattern))))
         .orderBy(users.handle).limit(15);
-      return reply.header('Cache-Control', 'no-store').send({ results: matches });
+      const excluded = new Set<string>();
+      if (session) {
+        const blocked = await getPool().query(
+          'SELECT CASE WHEN blocker_id=$1 THEN blocked_id ELSE blocker_id END AS user_id FROM user_blocks WHERE blocker_id=$1 OR blocked_id=$1',
+          [session.user.id],
+        );
+        for (const row of blocked.rows) excluded.add(row.user_id as string);
+      }
+      return reply.header('Cache-Control', 'no-store').send({
+        results: matches.filter(person => !excluded.has(person.id)).map(({ id: _id, ...person }) => person),
+      });
     } catch (error) {
       request.log.error({ err: error }, 'Profile search failed');
       return reply.status(503).send({ error: 'Service unavailable' });
@@ -76,7 +87,26 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
         .innerJoin(profiles, eq(users.id, profiles.userId))
         .where(eq(users.handle, handle.replace(/^@/, '').toLowerCase()))
         .limit(1);
-      if (!record || !record.isPublic) return reply.status(404).send({ error: 'Profile not found' });
+      if (!record) return reply.status(404).send({ error: 'Profile not found' });
+      // A block always overrides public visibility, profile URLs and friendship.
+      const requester = await readSession(request);
+      if (requester && requester.user.id !== record.id) {
+        const blocked = await getPool().query(
+          'SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',
+          [requester.user.id,record.id]);
+        if (blocked.rowCount) return reply.status(404).send({ error: 'Profile not found' });
+      }
+      if (!record.isPublic) {
+        const session = requester;
+        if (!session) return reply.status(404).send({ error: 'Profile not found' });
+        const friendship = await getPool().query(
+          "SELECT 1 FROM user_friendships WHERE user_a_id=LEAST($1::uuid,$2::uuid) " +
+          "AND user_b_id=GREATEST($1::uuid,$2::uuid) AND status='accepted'",
+          [record.id,session.user.id],
+        );
+        if (session.user.id !== record.id && !friendship.rowCount)
+          return reply.status(404).send({ error: 'Profile not found' });
+      }
       const { isPublic: _visibility, ...publicData } = record;
       return reply.header('Cache-Control', 'no-store').send({ profile: publicData });
     } catch (error) {
@@ -105,9 +135,25 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
       if (!record || (kind === 'avatar' ? record.avatarUrl : record.coverUrl) !== expected) {
         return reply.status(404).send({ allowed: false });
       }
+      const requester = await readSession(request);
+      // Even images of publicly visible profiles are restricted after blocking.
+      if (requester && requester.user.id !== userId) {
+        const blocked = await getPool().query(
+          'SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',
+          [requester.user.id,userId]);
+        if (blocked.rowCount) return reply.status(404).send({ allowed: false });
+      }
       if (!record.isPublic) {
-        const session = await readSession(request);
-        if (!session || session.user.id !== userId) return reply.status(404).send({ allowed: false });
+        const session = requester;
+        if (!session) return reply.status(404).send({ allowed: false });
+        if (session.user.id !== userId) {
+          const friendship = await getPool().query(
+            "SELECT 1 FROM user_friendships WHERE user_a_id=LEAST($1::uuid,$2::uuid) " +
+            "AND user_b_id=GREATEST($1::uuid,$2::uuid) AND status='accepted'",
+            [session.user.id,userId],
+          );
+          if (!friendship.rowCount) return reply.status(404).send({ allowed: false });
+        }
       }
       return reply.header('Cache-Control', 'no-store').send({ allowed: true });
     } catch (error) {

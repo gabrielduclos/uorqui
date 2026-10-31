@@ -214,6 +214,12 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   const existing=await alice('/api/v1/dm/conversations/'+id+'/messages');
   assert.equal(existing.status,200);
   assert.equal(existing.data.messages.length,2);
+  // Existing history remains accessible, but nonfriends cannot write to a private profile.
+  const privateThread = await alice('/api/v1/dm/conversations');
+  assert.equal(privateThread.data.conversations.find(c=>c.id===id).canMessage,false);
+  const privateMessage=await alice('/api/v1/dm/conversations/'+id+'/messages','POST',{body:'blocked',clientId:crypto.randomUUID()});
+  assert.equal(privateMessage.status,403);
+  assert.equal((await bob('/api/v1/me/profile','PATCH',{isPublic:true})).status,200);
 
   const rogueRead=await other('/api/v1/dm/conversations/'+id+'/read','POST');
   assert.equal(rogueRead.status,404);
@@ -595,4 +601,115 @@ test('restored demo attachments allow signed 50 MB audio and captions, reject la
     body:'',clientId:largeClient,attachment:large,
   },true,{'x-uorqui-attachment-proof':proof(thread.id,largeClient,large)});
   assert.equal(rejected.status,400,'50MB+1 byte must be rejected by server validation');
+});
+
+
+test('hybrid DM permissions: public messages, private requests, acceptance and removal',async()=>{
+  const aliceChat=(await alice('/api/v1/dm/conversations')).data.conversations.find(c=>c.peerHandle==='dm_bob');
+  const path='/api/v1/dm/conversations/'+aliceChat.id;
+  const publicDelivery=await alice(path+'/messages','POST',{body:'Public DM works without friendship',clientId:crypto.randomUUID()});
+  assert.equal(publicDelivery.status,201);
+  assert.equal((await anon('/api/v1/friends')).status,401);
+  assert.equal((await alice('/api/v1/friends/requests','POST',{handle:'dm_bob'},false)).status,403);
+  assert.equal((await alice('/api/v1/friends/requests','POST',{handle:'dm_alice'})).status,404);
+  assert.equal((await alice('/api/v1/friends/requests','POST',{handle:'dm_bob'})).status,201);
+  assert.equal((await alice('/api/v1/friends/requests','POST',{handle:'dm_bob'})).status,200);
+  assert.equal((await alice('/api/v1/friends/relationship/dm_bob')).data.status,'sent');
+  assert.equal((await bob('/api/v1/friends/relationship/dm_alice')).data.status,'received');
+  assert.equal((await bob('/api/v1/friends')).data.received.length,1);
+  assert.equal((await alice('/api/v1/friends')).data.sent.length,1);
+  assert.equal((await other('/api/v1/friends')).data.friends.length,0,'friends remain private to accounts');
+  assert.equal((await alice('/api/v1/friends/requests/dm_bob/accept','POST')).status,404,'sender cannot accept own request');
+  assert.equal((await bob('/api/v1/friends/requests/dm_alice/accept','POST')).status,200);
+  assert.equal((await bob('/api/v1/friends')).data.friends.length,1);
+  assert.equal((await alice('/api/v1/friends')).data.friends.length,1);
+  assert.equal((await alice('/api/v1/friends/relationship/dm_bob')).data.status,'friends');
+
+  // Private account becomes visible to accepted friends, not unrelated users.
+  assert.equal((await bob('/api/v1/me/profile','PATCH',{isPublic:false})).status,200);
+  assert.equal((await alice('/api/v1/profiles/dm_bob')).status,200);
+  assert.equal((await other('/api/v1/profiles/dm_bob')).status,404);
+  assert.equal((await other('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
+  assert.equal((await other('/api/v1/friends/requests','POST',{handle:'dm_bob'})).status,201,
+    'a known exact @handle may request a private account');
+  assert.equal((await bob('/api/v1/friends')).data.received.some(p=>p.handle==='dm_other'),true);
+  assert.equal((await bob('/api/v1/friends/requests/dm_other/decline','POST')).status,200);
+  assert.equal((await other('/api/v1/friends/relationship/dm_bob')).data.status,'none');
+  assert.equal((await alice('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,200);
+  const allowed=await alice(path+'/messages','POST',{body:'Private friend message',clientId:crypto.randomUUID()});
+  assert.equal(allowed.status,201);
+
+  assert.equal((await alice('/api/v1/friends/dm_bob','DELETE',undefined,false)).status,403);
+  assert.equal((await alice('/api/v1/friends/dm_bob','DELETE')).status,204);
+  const history=await alice(path+'/messages');
+  assert.equal(history.status,200,'friend removal must preserve DM history');
+  assert.equal((await alice('/api/v1/profiles/dm_bob')).status,404);
+  assert.equal((await alice('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
+  assert.equal((await alice(path+'/messages','POST',{body:'blocked after unfriend',clientId:crypto.randomUUID()})).status,403);
+  assert.equal((await alice(path+'/attachments/allowed')).status,403,
+    'the R2 upload gate must reject private nonfriends before storing bytes');
+  const id=allowed.data.message.id;
+  assert.equal((await alice(path+'/messages/'+id,'PATCH',{body:'blocked edit'})).status,403);
+  assert.equal((await alice(path+'/messages/'+id+'/reaction','PUT',{emoji:'❤️'})).status,403);
+  assert.equal((await alice(path+'/messages/'+id+'/forward','POST',{targetConversationId:aliceChat.id,clientId:crypto.randomUUID()})).status,403);
+
+  assert.equal((await bob('/api/v1/me/profile','PATCH',{isPublic:true})).status,200);
+  assert.equal((await alice(path+'/messages','POST',{body:'Public again',clientId:crypto.randomUUID()})).status,201);
+});
+
+test('account blocking revokes contact, messages and profile photos in both directions without deleting history',async()=>{
+  const bobId=(await bob('/api/v1/me')).data.user.id;
+  const picture=crypto.randomUUID()+'.png';
+  const cover=crypto.randomUUID()+'.webp';
+  const avatarUrl='/media/profile/'+bobId+'/avatar/'+picture;
+  const coverUrl='/media/profile/'+bobId+'/cover/'+cover;
+  const patched=await bob('/api/v1/me/profile','PATCH',{avatarUrl,coverUrl,isPublic:true});
+  assert.equal(patched.status,200,JSON.stringify(patched.data));
+  const avatarAccess='/api/v1/media/access/'+bobId+'/avatar/'+picture;
+  const coverAccess='/api/v1/media/access/'+bobId+'/cover/'+cover;
+  assert.equal((await alice(avatarAccess)).status,200,'public photo initially accessible');
+  assert.equal((await alice(coverAccess)).status,200,'public cover initially accessible');
+  const conversation=(await alice('/api/v1/dm/conversations')).data.conversations.find(c=>c.peerHandle==='dm_bob');
+  assert.ok(conversation);
+  const id=conversation.id;
+  assert.equal((await anon('/api/v1/blocks')).status,401);
+  assert.equal((await alice('/api/v1/blocks','POST',{handle:'dm_bob'},false)).status,403);
+  assert.equal((await alice('/api/v1/blocks','POST',{handle:'dm_alice'})).status,404);
+  assert.equal((await alice('/api/v1/blocks','POST',{handle:'dm_bob'})).status,200);
+  assert.equal((await alice('/api/v1/blocks','POST',{handle:'dm_bob'})).status,200,'block is idempotent');
+  const list=await alice('/api/v1/blocks');
+  assert.equal(list.status,200);
+  assert.equal(list.data.blocked.length,1);
+  assert.equal(list.data.blocked[0].handle,'dm_bob');
+  assert.equal(list.data.blocked[0].avatarUrl,undefined,'do not return photos of blocked accounts');
+  assert.equal((await bob('/api/v1/blocks')).data.blocked.length,0,'blocking is directional and private');
+  assert.equal((await alice('/api/v1/friends/relationship/dm_bob')).data.status,'blocked');
+  assert.equal((await bob('/api/v1/friends/relationship/dm_alice')).data.status,'none');
+  for(const person of [alice,bob]){
+    assert.equal((await person('/api/v1/dm/conversations/'+id+'/messages')).status,200,'history remains available');
+    assert.equal((await person('/api/v1/dm/conversations/'+id+'/messages','POST',{body:'blocked',clientId:crypto.randomUUID()})).status,403);
+    assert.equal((await person('/api/v1/dm/conversations/'+id+'/attachments/allowed')).status,403,'R2 bytes cannot be uploaded');
+  }
+  assert.equal((await alice('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
+  assert.equal((await bob('/api/v1/dm/conversations','POST',{handle:'dm_alice'})).status,404);
+  assert.equal((await alice('/api/v1/friends/requests','POST',{handle:'dm_bob'})).status,404);
+  assert.equal((await bob('/api/v1/friends/requests','POST',{handle:'dm_alice'})).status,404);
+  assert.equal((await alice('/api/v1/profiles/dm_bob')).status,404);
+  assert.equal((await bob('/api/v1/profiles/dm_alice')).status,404);
+  assert.equal((await alice(avatarAccess)).status,404,'direct R2 photo access is revoked');
+  assert.equal((await alice(coverAccess)).status,404,'direct R2 cover access is revoked');
+  assert.equal((await alice('/api/v1/profiles/search?q=dm_bob')).data.results.length,0,'blocked photos absent from public search');
+  assert.equal((await alice('/api/v1/dm/people?q=dm_bob')).data.people.length,0);
+  const masked=(await alice('/api/v1/dm/conversations')).data.conversations.find(c=>c.id===id);
+  assert.equal(masked.peerAvatarUrl,null,'old conversation must hide avatar after blocking');
+  assert.equal(masked.canMessage,false);
+  assert.equal((await alice('/api/v1/blocks/dm_bob','DELETE',undefined,false)).status,403);
+  assert.equal((await alice('/api/v1/blocks/dm_bob','DELETE')).status,204);
+  assert.equal((await alice('/api/v1/blocks/dm_bob','DELETE')).status,204);
+  assert.equal((await alice('/api/v1/blocks')).data.blocked.length,0);
+  assert.equal((await alice('/api/v1/friends/relationship/dm_bob')).data.status,'none',
+    'unblocking does not restore a friendship');
+  assert.equal((await alice(avatarAccess)).status,200,'public avatar is available again after unblocking');
+  assert.equal((await alice(coverAccess)).status,200,'public cover is available again after unblocking');
+  assert.equal((await alice('/api/v1/dm/conversations/'+id+'/messages','POST',{body:'unblocked',clientId:crypto.randomUUID()})).status,201);
 });

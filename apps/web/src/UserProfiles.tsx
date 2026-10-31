@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { PreferencesControls } from './PreferencesControls';
+import { ContactToggleButton } from './ContactToggleButton';
+import { AccountBlockButton } from './AccountBlockButton';
 import { navigateBackFromPublicProfile, navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 
@@ -249,6 +251,10 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
   const pt = locale === 'pt-BR';
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  useEffect(()=>{const changed=()=>{clearProfileImageCache();setProfile(null);setStatus('missing');};
+    window.addEventListener('uorqui:blocks-updated',changed);
+    return ()=>window.removeEventListener('uorqui:blocks-updated',changed);
+  },[]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -272,7 +278,14 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
     </header>
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
       {status === 'loading' && <p role="status" className="py-16 text-center text-sm text-muted-foreground">{pt ? 'Carregando perfil…' : 'Loading profile…'}</p>}
-      {status === 'missing' && <div className="flex flex-col items-center gap-3 py-16 text-center"><LockKeyhole className="size-10 text-muted-foreground" /><h1 className="text-xl font-semibold">{pt ? 'Perfil indisponível' : 'Profile unavailable'}</h1><p className="text-sm text-muted-foreground">{pt ? 'Este perfil não existe ou não é público.' : 'This profile does not exist or is not public.'}</p><Button variant="outline" asChild><a href="/" onClick={navigateBackFromPublicProfile}>{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button></div>}
+      {status === 'missing' && <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <LockKeyhole className="size-10 text-muted-foreground"/>
+          <h1 className="text-xl font-semibold">{pt ? 'Perfil privado ou indisponível' : 'Private or unavailable profile'}</h1>
+          <p className="max-w-sm text-sm text-muted-foreground">{pt ? 'Se você conhece este @usuário, pode enviar uma solicitação de amizade. O perfil só será mostrado após a aceitação.' : 'If you know this @username, send a friend request. The profile becomes available after acceptance.'}</p>
+          {onMessage && <ContactToggleButton handle={handle}/>}
+          {onMessage && <AccountBlockButton handle={handle} compact />}
+          <Button variant="outline" asChild><a href="/" onClick={navigateBackFromPublicProfile}>{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button>
+        </div>}
       {status === 'error' && <div role="alert" className="py-16 text-center text-sm text-destructive">{pt ? 'Não foi possível carregar o perfil.' : 'Could not load profile.'}</div>}
       {status === 'ready' && profile && <Card className="gap-0 overflow-hidden p-0">
         <Cover url={profile.coverUrl} name={pt ? 'Capa do perfil' : 'Profile cover'} />
@@ -280,7 +293,11 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
           <UserAvatar name={profile.displayName} image={profile.avatarUrl} size="lg" />
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h1 className="text-2xl font-bold">{profile.displayName}</h1><p className="mt-1 text-sm text-muted-foreground">@{profile.handle}</p></div>
-            <Button disabled={!onMessage} onClick={() => onMessage?.(profile.handle)} title={!onMessage ? (pt ? 'Entre na sua conta para conversar.' : 'Sign in to send a message.') : undefined}><MessageCircle className="size-4" />{pt ? 'Conversar' : 'Message'}</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {onMessage && <ContactToggleButton handle={profile.handle} />}
+              {onMessage && <AccountBlockButton handle={profile.handle} onChanged={()=>{setProfile(null);setStatus('missing');}} />}
+              <Button disabled={!onMessage} onClick={() => onMessage?.(profile.handle)} title={!onMessage ? (pt ? 'Entre na sua conta para conversar.' : 'Sign in to send a message.') : undefined}><MessageCircle className="size-4" />{pt ? 'Conversar' : 'Message'}</Button>
+            </div>
           </div>
           <Separator />
           <p className="whitespace-pre-wrap text-sm leading-7">{profile.bio || (pt ? 'Este usuário ainda não escreveu uma biografia.' : 'This user has not added a bio yet.')}</p>

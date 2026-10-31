@@ -84,3 +84,18 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 - Chat media is cached in **bounded tab memory** using shared object URLs: **90 MiB total**, **50 MiB per media**, **36 entries**, **10-minute lifetime**, deduplicated authorized requests. Images prefetch when their bubble mounts, audio enters the cache on playback, and opened videos are cached for repeat viewing. No persistent cache, Service Worker, IndexedDB or localStorage. Every initial request checks Worker access and blobs are cleared on logout/account change and invalidated when messages are canceled.
 - Audio player uses Light/Dark semantic high-contrast colors, distinct primary Play/Pause button, legible slider and playback speed.
 - Locations open **Google Maps** without API key. Previously sent OpenStreetMap coordinates are displayed with a Google Maps link, without changing or losing historical messages.
+### Friend requests and privacy-gated messages
+
+- **Public profiles** accept new direct messages from any authenticated user. **Private profiles** accept them only from mutually accepted friends. The server enforces this when opening a conversation or sending, editing, reacting, and forwarding messages.
+- Switching a profile to private immediately prevents further writes by nonfriends; previously exchanged messages remain visible. Unfriending keeps DM history but revokes private messaging rights.
+- The messenger has Friends, Received and Sent tabs with add, accept, decline, cancel and unfriend actions. A private user can be requested by an exact known @handle; private accounts do not appear in public people searches. In-app SSE updates refresh friend request lists without exposing message content.
+- API: `GET /api/v1/friends`, `GET /api/v1/friends/relationship/:handle`, `POST /api/v1/friends/requests`, `POST /api/v1/friends/requests/:handle/accept`, `POST /api/v1/friends/requests/:handle/decline`, `DELETE /api/v1/friends/:handle`. All authenticated, with Origin checks on writes. Request controls: max 10/day and 25 pending, 24h cooldown for canceled and 7 days after decline.
+- Drizzle migration **`0009_mutual_friendships`** creates canonical `user_friendships` pairs and statuses. **Migrate production Neon before publishing the API/Worker.** This replaces the unshipped unilateral contacts migration; blocking, reports and closed-app push remain future work.
+
+### Account blocking and hidden profile media
+
+- Block from public profiles or DM headers; unblock in **Friends → Blocked**. Blocking is directional, but prevents messages, edits, reactions, forwards, attachments and friend requests in **both directions**. It cancels pending/accepted friendships without deleting chat history; unblocking never restores friendships.
+- Profile photos and covers are hidden from each other, including direct authorized R2 links. Conversation list URLs and names are masked, blocked accounts are excluded from authenticated public search, and cached profile pictures are cleared on block/unblock and SSE friend updates. The blocked-account management list deliberately contains no profile image URLs.
+- Authenticated API: `GET /api/v1/blocks`, `POST /api/v1/blocks`, `DELETE /api/v1/blocks/:handle` with origin validation for writes.
+- Previously downloaded images and publicly hosted external images cannot be revoked retroactively. Only Worker-controlled R2 authorization can guarantee live access revocation.
+- `0010_user_blocks` introduces the table; migrate Neon production before deploying the corresponding API and Worker.
