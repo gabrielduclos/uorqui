@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
-type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify';
+type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 type ApiStatus = {
   registrationAvailable?: boolean;
   developmentRegistrationEnabled?: boolean;
@@ -55,7 +55,8 @@ function Spinner() {
 
 export default function AuthPanel() {
   const [account, setAccount] = useState<Account | null>(null);
-  const [view, setView] = useState<AuthView>('welcome');
+  const [view, setView] = useState<AuthView>(() => new URLSearchParams(window.location.search).has('token') ? 'reset' : 'welcome');
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
   const [status, setStatus] = useState<ApiStatus>({});
   const [apiReady, setApiReady] = useState(false);
   const [apiChecked, setApiChecked] = useState(false);
@@ -67,6 +68,7 @@ export default function AuthPanel() {
   const [displayName, setDisplayName] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
   const captchaRef = useRef<HTMLDivElement | null>(null);
+  const captchaWidgetId = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -135,6 +137,7 @@ export default function AuthPanel() {
         'error-callback': () => setCaptchaToken(''),
         theme: 'dark',
       });
+      captchaWidgetId.current = widgetId;
     };
     if (window.turnstile) mount();
     else {
@@ -151,6 +154,8 @@ export default function AuthPanel() {
         disposed = true;
         script?.removeEventListener('load', mount);
         if (widgetId) window.turnstile?.remove(widgetId);
+      captchaWidgetId.current = null;
+        captchaWidgetId.current = null;
       };
     }
     return () => {
@@ -172,6 +177,11 @@ export default function AuthPanel() {
       busyRef.current = false;
       setBusy(false);
     }
+  };
+
+  const resetChallenge = () => {
+    setCaptchaToken('');
+    if (captchaWidgetId.current) window.turnstile?.reset(captchaWidgetId.current);
   };
 
   const challenge = (): string | null => {
@@ -202,10 +212,11 @@ export default function AuthPanel() {
         {
           method: 'POST',
           body: JSON.stringify(signup
-            ? { name: name.trim(), email: email.trim(), password, ...(token ? { captchaToken: token } : {}) }
+            ? { name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin, ...(token ? { captchaToken: token } : {}) }
             : { email: email.trim(), password }),
         },
       );
+      if (signup) resetChallenge();
       if (!response.ok) {
         setMessage(readableError(body, signup ? 'Não foi possível criar sua conta.' : 'E-mail ou senha inválidos.'));
         return;
@@ -230,8 +241,9 @@ export default function AuthPanel() {
       if (token === null) return;
       const { response } = await requestJson('/api/auth/request-password-reset', {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim(), redirectTo: window.location.origin, ...(token ? { captchaToken: token } : {}) }),
+        body: JSON.stringify({ email: email.trim(), redirectTo: window.location.origin + '/?reset=1', ...(token ? { captchaToken: token } : {}) }),
       });
+      resetChallenge();
       if (!response.ok) {
         setMessage('Não foi possível solicitar a redefinição. Tente novamente.');
         return;
@@ -252,7 +264,30 @@ export default function AuthPanel() {
         method: 'POST',
         body: JSON.stringify({ email: email.trim(), callbackURL: window.location.origin, ...(token ? { captchaToken: token } : {}) }),
       });
+      resetChallenge();
       setMessage(response.ok ? 'Se a conta estiver pendente, enviaremos um novo link de confirmação.' : 'Não foi possível reenviar o e-mail. Tente novamente.');
+    });
+  }
+
+  async function completePasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await doAction(async () => {
+      if (!resetToken) {
+        setMessage('Link inválido. Solicite uma nova recuperação de senha.');
+        return;
+      }
+      const { response, body } = await requestJson('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ newPassword: password, token: resetToken }),
+      });
+      if (!response.ok) {
+        setMessage(readableError(body, 'Link inválido ou expirado. Solicite outro.'));
+        return;
+      }
+      setPassword('');
+      window.history.replaceState({}, '', window.location.pathname);
+      navigate('login');
+      setMessage('Senha redefinida com sucesso. Entre com a nova senha.');
     });
   }
 
@@ -287,7 +322,7 @@ export default function AuthPanel() {
     <section aria-label="Acesso à conta" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
       <div className="mb-5">
         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Identidade Uorqui</div>
-        <h2 className="mt-2 text-2xl font-semibold">{account ? 'Sua conta' : view === 'welcome' ? 'Bem-vindo ao Uorqui' : view === 'register' ? 'Criar sua conta' : view === 'forgot' ? 'Recuperar acesso' : view === 'verify' ? 'Confirme seu e-mail' : 'Entrar'}</h2>
+        <h2 className="mt-2 text-2xl font-semibold">{account ? 'Sua conta' : view === 'welcome' ? 'Bem-vindo ao Uorqui' : view === 'register' ? 'Criar sua conta' : view === 'forgot' ? 'Recuperar acesso' : view === 'verify' ? 'Confirme seu e-mail' : view === 'reset' ? 'Definir nova senha' : 'Entrar'}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">{account ? 'Seu perfil no Uorqui.' : view === 'welcome' ? 'Comece sua jornada. O feed e as comunidades ainda estão em desenvolvimento.' : view === 'register' ? 'Cadastre-se para criar sua identidade no Uorqui.' : view === 'verify' ? 'Verifique a caixa de entrada e o spam do endereço informado.' : 'Use seu e-mail para acessar sua conta.'}</p>
       </div>
 
@@ -326,33 +361,34 @@ export default function AuthPanel() {
           {view === 'verify' ? (
             <div className="space-y-3">
               <p className="break-words text-sm text-slate-200">E-mail: <strong>{email}</strong></p>
+              {siteKey && <div ref={captchaRef} aria-label="Verificação de segurança" />}
               <button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> Reenviando…</> : 'Reenviar confirmação'}</button>
               <button type="button" onClick={() => navigate('login')} className={minorButton}>Já confirmei · Entrar</button>
             </div>
           ) : (
-            <form className="space-y-3" onSubmit={view === 'forgot' ? requestRecovery : authenticate}>
+            <form className="space-y-3" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
               {view === 'register' && (
                 <div>
                   <label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">Seu nome</label>
                   <input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" />
                 </div>
               )}
-              <div>
+              {view !== 'reset' && <div>
                 <label className="mb-1.5 block text-sm font-medium" htmlFor="auth-email">E-mail</label>
                 <input id="auth-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-              </div>
+              </div>}
               {view !== 'forgot' && (
                 <div>
                   <label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">Senha</label>
                   <div className="relative">
-                    <input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-24'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' ? 'new-password' : 'current-password'} />
+                    <input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-24'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
                     <button type="button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-indigo-200 focus-visible:outline-2 focus-visible:outline-indigo-300">{showPassword ? 'Ocultar' : 'Mostrar'}</button>
                   </div>
-                  {view === 'register' && <p className="mt-1 text-xs text-slate-300">Use pelo menos 12 caracteres.</p>}
+                  {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-slate-300">Use pelo menos 12 caracteres.</p>}
                 </div>
               )}
               {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label="Verificação de segurança" />}
-              <button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Aguarde…</> : view === 'forgot' ? 'Enviar link de recuperação' : submitLabel}</button>
+              <button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Aguarde…</> : view === 'forgot' ? 'Enviar link de recuperação' : view === 'reset' ? 'Salvar nova senha' : submitLabel}</button>
               {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-200">Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.</p>}
               {view === 'login' && <button type="button" onClick={() => navigate('forgot')} className="block text-sm font-medium text-indigo-200 underline underline-offset-4">Esqueci minha senha</button>}
             </form>

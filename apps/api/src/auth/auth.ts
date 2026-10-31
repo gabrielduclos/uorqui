@@ -35,6 +35,7 @@ function buildAuth() {
       // Disable public registrations until that work is finished.
       disableSignUp: !isRegistrationAvailable(),
       requireEmailVerification: isPublicSignupEnabled(),
+      revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => {
         await sendAccountEmail(user.email, 'Uorqui — redefinição de senha',
           `Para redefinir sua senha, abra este link: ${url}\n\nSe não foi você, ignore esta mensagem.`);
