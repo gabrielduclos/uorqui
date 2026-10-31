@@ -15,6 +15,13 @@
       "when": 1793413708698,
       "tag": "0001_kind_secret_warriors",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793467000000,
+      "tag": "0002_profile_visibility_media",
+      "breakpoints": true
     }
   ]
 }

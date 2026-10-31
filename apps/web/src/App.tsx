@@ -3,6 +3,7 @@ import { motion, MotionConfig } from 'motion/react';
 import { Github, MessageCircle, Users, Newspaper } from 'lucide-react';
 import AuthPanel, { type Account } from './AuthPanel';
 import SocialShell from './SocialShell';
+import { PublicProfilePage } from './UserProfiles';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
 import { Badge } from '@/components/ui/badge';
@@ -66,10 +67,12 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
 }
 
 function AppContent() {
-  const [loading, setLoading] = useState(true);
+  const publicHandle = window.location.pathname.match(/^\/@([a-z][a-z0-9_]{2,31})\/?$/i)?.[1]?.toLowerCase();
+  const [loading, setLoading] = useState(!publicHandle);
   const [account, setAccount] = useState<Account | null>(null);
 
   useEffect(() => {
+    if (publicHandle) return;
     const controller = new AbortController();
     let mounted = true;
     const timeout = window.setTimeout(() => controller.abort(), 20_000);
@@ -81,7 +84,7 @@ function AppContent() {
       finally { window.clearTimeout(timeout); if (mounted) setLoading(false); }
     })();
     return () => { mounted = false; window.clearTimeout(timeout); controller.abort(); };
-  }, []);
+  }, [publicHandle]);
 
   const onAuthenticated = useCallback((next: Account) => setAccount(next), []);
   const signOut = useCallback(async () => {
@@ -97,8 +100,8 @@ function AppContent() {
 
   return (
     <MotionConfig reducedMotion="user">
-      {loading ? <StartupSplash /> : account?.profile ? (
-        <SocialShell account={account} onLogout={signOut} />
+      {publicHandle ? <PublicProfilePage handle={publicHandle} /> : loading ? <StartupSplash /> : account?.profile ? (
+        <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)} />
       ) : <Landing onAuthenticated={onAuthenticated} />}
     </MotionConfig>
   );

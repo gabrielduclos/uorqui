@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useUorquiPreferences } from './UorquiPreferences';
+import type { UserProfileData } from './UserProfiles';
 
 type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 type ApiStatus = {
@@ -15,7 +16,7 @@ type ApiStatus = {
 };
 export type Account = {
   user: { id: string; email: string; name: string };
-  profile: { handle: string; displayName: string; bio: string | null } | null;
+  profile: UserProfileData | null;
 };
 
 declare global {
