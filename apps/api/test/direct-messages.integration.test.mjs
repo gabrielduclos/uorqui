@@ -23,7 +23,7 @@ after(async()=>{if(server && server.exitCode===null){server.kill('SIGTERM');awai
 
 function visitor(){
   let cookie='';
-  return async(path,method='GET',body,withOrigin=true)=>{
+  const send = async(path,method='GET',body,withOrigin=true)=>{
     const response=await fetch(base+path,{
       method,redirect:'manual',
       headers:{
@@ -40,6 +40,43 @@ function visitor(){
     }
     return {status:response.status,data:await response.json().catch(()=>null)};
   };
+  send.events = signal => fetch(base+'/api/v1/dm/events', {
+    headers:{accept:'text/event-stream',...(cookie?{cookie}:{})},
+    signal,
+  });
+  return send;
+}
+
+// Parse actual event-stream bytes rather than directly calling the event bus.
+// The stream is authenticated with the same session cookie used for messages.
+async function openEventStream(send) {
+  const controller=new AbortController();
+  const response=await send.events(controller.signal);
+  assert.equal(response.status,200,'SSE session should authenticate');
+  assert.match(response.headers.get('content-type')??'',/text\/event-stream/);
+  const reader=response.body.getReader();
+  const decoder=new TextDecoder();
+  let buffer='';
+  const timeout=setTimeout(()=>controller.abort(),18_000);
+  async function next(type='dm-update', kind) {
+    for (;;) {
+      const index=buffer.indexOf('\n\n');
+      if(index>=0){
+        const block=buffer.slice(0,index);
+        buffer=buffer.slice(index+2);
+        const event=block.match(/^event: ([^\n]+)/m)?.[1];
+        if(event!==type)continue;
+        const payload=block.match(/^data: (.+)$/m)?.[1]??'{}';
+        const value=JSON.parse(payload);
+        if(kind && value.kind!==kind)continue;
+        return value;
+      }
+      const chunk=await reader.read();
+      if(chunk.done)throw new Error('SSE stream ended before expected event');
+      buffer+=decoder.decode(chunk.value,{stream:true}).replace(/\r\n/g,'\n');
+    }
+  }
+  return {next,close(){clearTimeout(timeout);controller.abort();void reader.cancel().catch(()=>{});}};
 }
 
 const alice=visitor(),bob=visitor(),other=visitor(),anon=visitor();
@@ -60,6 +97,8 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
 
   const noAuth=await anon('/api/v1/dm/conversations');
   assert.equal(noAuth.status,401);
+  const anonymousStream=await anon.events(AbortSignal.timeout(2000));
+  assert.equal(anonymousStream.status,401,'anonymous streaming must be denied');
 
   const search=await alice('/api/v1/dm/people?q=dm_bob');
   assert.equal(search.status,200,JSON.stringify(search.data));
@@ -72,10 +111,22 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   const self=await alice('/api/v1/dm/conversations','POST',{handle:'dm_alice'});
   assert.equal(self.status,404);
 
+  const aliceStream=await openEventStream(alice);
+  const bobStream=await openEventStream(bob);
+  const otherStream=await openEventStream(other);
+  try {
+    await Promise.all([aliceStream.next('ready'),bobStream.next('ready'),otherStream.next('ready')]);
+
   const opened=await alice('/api/v1/dm/conversations','POST',{handle:'dm_bob'});
   assert.equal(opened.status,200,JSON.stringify(opened.data));
   const id=opened.data.id;
   assert.match(id,/^[0-9a-f-]{36}$/);
+  const [aliceOpen,bobOpen]=await Promise.all([
+    aliceStream.next('dm-update','conversation'),bobStream.next('dm-update','conversation'),
+  ]);
+  assert.equal(aliceOpen.conversationId,id);
+  assert.equal(bobOpen.conversationId,id);
+  assert.equal(aliceOpen.body,undefined,'SSE must not expose message bodies');
 
   const duplicateOpening=await bob('/api/v1/dm/conversations','POST',{handle:'dm_alice'});
   assert.equal(duplicateOpening.status,200);
@@ -95,6 +146,11 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   assert.equal(message.status,201,JSON.stringify(message.data));
   assert.equal(message.data.message.authorId,aliceId);
   assert.equal(message.data.message.readAt,null);
+  const [aliceMessage,bobMessage]=await Promise.all([
+    aliceStream.next('dm-update','message'),bobStream.next('dm-update','message'),
+  ]);
+  assert.equal(aliceMessage.conversationId,id);
+  assert.equal(bobMessage.conversationId,id);
 
   const repeat=await alice('/api/v1/dm/conversations/'+id+'/messages','POST',{
     body:'Olá, mensagem persistida!',clientId:firstId,
@@ -116,6 +172,11 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   const read=await bob('/api/v1/dm/conversations/'+id+'/read','POST');
   assert.equal(read.status,200);
   assert.equal(read.data.read,1);
+  const [aliceRead,bobRead]=await Promise.all([
+    aliceStream.next('dm-update','read'),bobStream.next('dm-update','read'),
+  ]);
+  assert.equal(aliceRead.conversationId,id);
+  assert.equal(bobRead.conversationId,id);
   const afterRead=await alice('/api/v1/dm/conversations/'+id+'/messages');
   assert.ok(afterRead.data.messages[0].readAt);
   const afterList=await bob('/api/v1/dm/conversations');
@@ -141,4 +202,7 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
 
   const rogueRead=await other('/api/v1/dm/conversations/'+id+'/read','POST');
   assert.equal(rogueRead.status,404);
+  } finally {
+    aliceStream.close();bobStream.close();otherStream.close();
+  }
 });
