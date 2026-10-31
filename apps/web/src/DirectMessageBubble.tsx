@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Download, FileText, Forward, LoaderCircle, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Forward, LoaderCircle, MapPin, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { cn } from '@/lib/utils';
 
@@ -78,6 +78,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   const isAudio = !!asset?.type.startsWith('audio/');
   const time = new Date(message.createdAt);
   const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
+  const locationMessage=/^📍 (?:Localização compartilhada|Shared location)\n(https:\/\/www\.openstreetmap\.org\/\?mlat=[-\d.]+&mlon=[-\d.]+#map=[-\d./]+)(?:\n([\s\S]*))?$/.exec(message.body);
   const timeLabel = Number.isFinite(time.getTime())
     ? time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -166,10 +167,16 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
             </a>}
           {(isImage || isVideo) && <p className="mt-1 max-w-full truncate text-[11px] opacity-75">{asset.name}</p>}
         </div>}
+        {locationMessage && !message.deletedAt && <a href={locationMessage[1]} target="_blank" rel="noopener noreferrer"
+          className="mb-2 flex items-center gap-2 border border-current/25 bg-current/5 px-3 py-3 hover:underline"
+          aria-label={pt?'Abrir localização no mapa':'Open location on map'}>
+          <MapPin className="size-6 shrink-0"/>
+          <span className="text-xs font-semibold">{pt?'Localização compartilhada · Ver no mapa':'Shared location · View map'}</span>
+        </a>}
         <p className="whitespace-pre-wrap break-words">
           {message.deletedAt
             ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
-            : (quote && !message.replyToId ? quote[2] : message.body)}
+            : (locationMessage ? (locationMessage[2]??'') : quote && !message.replyToId ? quote[2] : message.body)}
           {' '}
           <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap align-baseline text-[10px] opacity-80', mine ? 'text-primary-foreground' : 'text-muted-foreground')}>
             {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
