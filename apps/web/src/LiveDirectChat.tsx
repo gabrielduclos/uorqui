@@ -338,10 +338,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   useEffect(() => {
     if (!threads.length || document.visibilityState !== 'visible') return;
     for (const thread of threads) {
-      if (thread.lastAuthorId === myId || !thread.lastAt || receivedIds.current.has(thread.id) || receiving.current.has(thread.id)) continue;
+      if (thread.lastAuthorId === myId || !thread.lastAt || receivedIds.current.has(thread.id + ':' + thread.lastAt) || receiving.current.has(thread.id)) continue;
       receiving.current.add(thread.id);
       void api('/api/v1/dm/conversations/' + thread.id + '/received', { method: 'POST' })
-        .then(() => receivedIds.current.add(thread.id))
+        .then(() => receivedIds.current.add(thread.id + ':' + thread.lastAt))
         .catch(() => {}).finally(() => receiving.current.delete(thread.id));
     }
   }, [threads, myId]);
@@ -432,7 +432,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   }
   async function send() {
     const id = activeId;
-    const body = (quoteSource && !editing ? '> '+ quoteSource.body.replace(/\\s+/g,' ').slice(0,160)+'\\n\\n' : '') + draft.trim();
+    const body = (quoteSource && !editing ? '> '+ quoteSource.body.replace(/\s+/g,' ').slice(0,160)+'\n\n' : '') + draft.trim();
     if (!id || !draft.trim() || busy || body.length > 4000) return;
     setChatError(''); setActionNotice('');
     if (editing) {
