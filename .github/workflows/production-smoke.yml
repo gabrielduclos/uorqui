@@ -1,0 +1,23 @@
+name: Production signup smoke test (no account creation)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/test/production-smoke.test.mjs'
+      - '.github/workflows/production-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  signup-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXPECT_PUBLIC_REGISTRATION: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify production health, proxy, session and CAPTCHA rejection
+        run: node --test apps/api/test/production-smoke.test.mjs
