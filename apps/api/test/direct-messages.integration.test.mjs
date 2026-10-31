@@ -265,6 +265,11 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
   assert.equal(receipt.data.reactionsRead,1);
   const readReaction=await bob('/api/v1/dm/conversations');
   assert.equal(readReaction.data.conversations.find(c=>c.id===thread.id).unreadCount,0);
+  const repeated=await alice(item+'/reaction','PUT',{emoji:'❤️'});
+  assert.equal(repeated.status,200);
+  const afterRepeated=await bob('/api/v1/dm/conversations');
+  assert.equal(afterRepeated.data.conversations.find(c=>c.id===thread.id).unreadReactionCount,0,
+    'idempotent retry of the same emoji must not notify again');
   const reacted=await alice(path+'/messages');
   const reactedMessage=reacted.data.messages.find(m=>m.id===reply.id);
   assert.equal(reactedMessage.myReaction,'❤️');
