@@ -163,6 +163,13 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   assert.equal(received.data.messages.length,1);
   assert.equal(received.data.messages[0].body,'Olá, mensagem persistida!');
 
+  // Regression contract: fetching history (or listing an open row) never
+  // acknowledges a message. Only the explicit /read action may do so.
+  const afterHistoryOnly=await bob('/api/v1/dm/conversations');
+  assert.equal(afterHistoryOnly.status,200);
+  assert.equal(afterHistoryOnly.data.conversations[0].unreadCount,1);
+  assert.equal(received.data.messages[0].readAt,null);
+
   const listed=await bob('/api/v1/dm/conversations');
   assert.equal(listed.status,200);
   assert.equal(listed.data.conversations[0].peerHandle,'dm_alice');
