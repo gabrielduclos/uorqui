@@ -218,6 +218,12 @@ export default function AuthPanel() {
       );
       if (signup) resetChallenge();
       if (!response.ok) {
+        const errorCode = body && typeof body === 'object' && 'code' in body ? String(body.code) : '';
+        if (!signup && errorCode === 'EMAIL_NOT_VERIFIED') {
+          navigate('verify');
+          setMessage('Sua conta está aguardando confirmação. Você pode solicitar um novo e-mail abaixo.');
+          return;
+        }
         setMessage(readableError(body, signup ? 'Não foi possível criar sua conta.' : 'E-mail ou senha inválidos.'));
         return;
       }
@@ -256,6 +262,10 @@ export default function AuthPanel() {
     await doAction(async () => {
       if (!apiReady || !requiresVerification) {
         setMessage('O envio de e-mails ainda não está disponível.');
+        return;
+      }
+      if (!email.trim() || !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email.trim())) {
+        setMessage('Digite um e-mail válido para receber a confirmação.');
         return;
       }
       const token = challenge();
@@ -360,7 +370,8 @@ export default function AuthPanel() {
         <div className="space-y-4">
           {view === 'verify' ? (
             <div className="space-y-3">
-              <p className="break-words text-sm text-slate-200">E-mail: <strong>{email}</strong></p>
+              <label htmlFor="verify-email" className="block text-sm font-medium text-slate-200">E-mail da conta</label>
+              <input id="verify-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
               {siteKey && <div ref={captchaRef} aria-label="Verificação de segurança" />}
               <button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> Reenviando…</> : 'Reenviar confirmação'}</button>
               <button type="button" onClick={() => navigate('login')} className={minorButton}>Já confirmei · Entrar</button>
@@ -390,7 +401,10 @@ export default function AuthPanel() {
               {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label="Verificação de segurança" />}
               <button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> Aguarde…</> : view === 'forgot' ? 'Enviar link de recuperação' : view === 'reset' ? 'Salvar nova senha' : submitLabel}</button>
               {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-200">Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.</p>}
-              {view === 'login' && <button type="button" onClick={() => navigate('forgot')} className="block text-sm font-medium text-indigo-200 underline underline-offset-4">Esqueci minha senha</button>}
+              {view === 'login' && <div className="flex flex-wrap gap-x-5 gap-y-3">
+                <button type="button" onClick={() => navigate('forgot')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Esqueci minha senha</button>
+                <button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-indigo-200 underline underline-offset-4">Reenviar confirmação de e-mail</button>
+              </div>}
             </form>
           )}
           <button type="button" onClick={() => navigate('welcome')} className={minorButton}>Voltar às boas-vindas</button>
