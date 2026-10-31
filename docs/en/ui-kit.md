@@ -103,4 +103,12 @@ When changing UI, review dark/light × Portuguese/English × desktop/mobile, upd
 - Image annotation editor **before send** provides freehand pen, rectangle, ellipse, arrows, colors, undo and clear; saving creates a new PNG without modifying the original.
 - Photo/video carousel navigates conversation media with prev/next controls, ← → Esc, and download; videos have native controls.
 - The restored **50 MB** cap requires migration `0008_dm_attachment_50mb` changing only `dm_attachment_consistency`; apply Neon production migration before publishing API/Worker. No existing files are removed.
-- Location requires user-triggered browser permission and staged confirmation; one normal DM carries an OpenStreetMap link, with no background tracking.
+- Location requires user-triggered browser permission and staged confirmation; one normal DM carries a Google Maps link, with no background tracking.
+
+
+### Chat media UI rules
+
+- Four top-level attachment options: Gallery / Camera / File / Location; capture video inside Camera, without a duplicate Video button.
+- Show localized human-readable media labels rather than technical filenames, while preserving original download metadata.
+- Audio controls use semantic high-contrast card foreground, primary Play/Pause, secondary speed and primary seek progress for both themes.
+- Chat images and opened media share bounded private tab-memory object URLs; location cards open Google Maps including previously sent OpenStreetMap links.
