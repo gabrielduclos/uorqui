@@ -86,3 +86,10 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - Reações **não** criam balões ou eventos no histórico: ficam ligadas ao balão original, com atualização otimista e ação para desfazer. A reação mais recente aparece na **prévia da lista de conversas** nos dois lados: **“Você reagiu ❤️ à mensagem”** para quem reagiu, sem contador; **“Maria reagiu ❤️ à sua mensagem”** para quem recebeu, contando como notificação não lida até a leitura.
 - O ícone de conversas na navegação mobile/desktop mostra a **soma de mensagens e reações não lidas** (não número de conversas); SSE com fallback de polling mantém o número sincronizado. Assim que uma **mensagem** entra nessa contagem, o cliente confirma **Recebida** (sem marcar Lida). Reações só afetam a notificação; não criam recibo de entrega da mensagem.
 - **Recibos por estado homogêneo:** mensagens próprias consecutivas não compartilham uma linha de status se uma já estiver **Lida** e outra estiver **Recebida/Enviada**. Cada edição separa seu próprio bloco de recibo e faz o texto revisado começar novamente em **Enviada**, aguardando nova entrega e leitura. A leitura anterior continua registrada para impedir cancelar uma mensagem que já foi lida.
+
+
+## Anexos do mensageiro
+
+- O menu **+** mantém o padrão semântica Light/Dark e PT/EN; Galeria, Câmera, Vídeo e Arquivo abrem seletores nativos. Localização permanece claramente indisponível.
+- Uma mensagem pode ter texto ou **um anexo privado** (até 20 MB). Balões mantêm **cantos retos** e oferecem miniatura de imagem com ampliação, vídeo inline ou cartão de arquivo; status e timestamp seguem os mesmos padrões do chat.
+- O anexo otimista tem miniatura local enquanto envia; falhas permitem **Reenviar** sem duplicar o ID. O R2 e o PostgreSQL devem preservar autorização por conversa; nem URL pública nem tokens nos links.
