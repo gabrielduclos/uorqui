@@ -1,8 +1,8 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft, Bell, Compass, Hash, Headphones, Home, LogOut, MessageCircle,
-  Plus, Search, Send, Settings2, Users, Video, Volume2,
+  Plus, Search, Users, Video, Volume2,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -13,19 +13,19 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import DemoMessageComposer, { DemoAttachmentView, type ComposePayload, type DemoAttachment } from './DemoMessageComposer';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: { handle: string; displayName: string; bio: string | null } | null;
 };
 type Area = 'feed' | 'conversations' | 'communities' | 'profile';
-type DemoMessage = { id: number; mine: boolean; text: string; time: string };
+type DemoMessage = { id: number; mine: boolean; text: string; time: string; attachment?: DemoAttachment };
 
 const navigation = [
   { id: 'feed', label: 'Início', icon: Home },
   { id: 'conversations', label: 'Conversas', icon: MessageCircle },
   { id: 'communities', label: 'Comunidades', icon: Users },
-  { id: 'profile', label: 'Perfil', icon: Settings2 },
 ] as const;
 
 const demoContacts = [
@@ -97,15 +97,19 @@ export default function SocialShell({ account, onLogout }: {
   const [search, setSearch] = useState('');
   const [conversationId, setConversationId] = useState<string>('lia');
   const [conversationOpened, setConversationOpened] = useState(false);
-  const [draft, setDraft] = useState('');
   const [conversations, setConversations] = useState<Record<string, DemoMessage[]>>(exampleMessages);
   const [communityId, setCommunityId] = useState<string>('estudio');
   const [channelId, setChannelId] = useState<string>('geral');
   const [channelOpened, setChannelOpened] = useState(false);
-  const [channelDraft, setChannelDraft] = useState('');
   const [channelExamples, setChannelExamples] = useState<Record<string, DemoMessage[]>>({});
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState('');
+  const attachmentUrls = useRef(new Set<string>());
+
+  useEffect(() => {
+    const urls = attachmentUrls.current;
+    return () => { urls.forEach(url => URL.revokeObjectURL(url)); };
+  }, []);
 
   const activeCommunity = demoCommunities.find(group => group.id === communityId) ?? demoCommunities[0];
   const activeChannel = activeCommunity.channels.find(ch => ch.id === channelId) ?? activeCommunity.channels[0];
@@ -125,29 +129,28 @@ export default function SocialShell({ account, onLogout }: {
     setChannelOpened(false);
   }
 
-  function sendDemoMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const value = draft.trim();
-    if (!value) return;
+  function sendDemoMessage({ text, attachment }: ComposePayload) {
+    if (!text && !attachment) return;
+    if (attachment) attachmentUrls.current.add(attachment.url);
     setConversations(previous => ({
       ...previous,
       [conversationId]: [...(previous[conversationId] ?? []), {
-        id: Date.now(), mine: true, text: value, time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        id: Date.now() + Math.random(), mine: true, text, attachment,
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       }],
     }));
-    setDraft('');
   }
 
-  function sendDemoChannel(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!channelDraft.trim()) return;
+  function sendDemoChannel({ text, attachment }: ComposePayload) {
+    if (!text && !attachment) return;
+    if (attachment) attachmentUrls.current.add(attachment.url);
     setChannelExamples(previous => ({
       ...previous,
       [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
-        id: Date.now(), mine: true, text: channelDraft.trim(), time: 'Agora',
+        id: Date.now() + Math.random(), mine: true, text, attachment,
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       }],
     }));
-    setChannelDraft('');
   }
 
   async function logout() {
@@ -158,13 +161,13 @@ export default function SocialShell({ account, onLogout }: {
     catch { setLogoutError('Não foi possível sair da conta. Tente novamente.'); setLoggingOut(false); }
   }
 
-  const title = navigation.find(item => item.id === area)?.label ?? 'Uorqui';
+  const title = area === 'profile' ? 'Perfil' : navigation.find(item => item.id === area)?.label ?? 'Uorqui';
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
     <div className="flex h-[100dvh] min-h-[380px] w-full overflow-hidden bg-background text-foreground">
       <aside className="hidden w-55 shrink-0 flex-col border-r border-border bg-card/65 md:flex">
-        <button className="flex h-17 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('feed')} aria-label="Uorqui — ir para o início">
+        <button className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('feed')} aria-label="Uorqui — ir para o início">
           uorqui<span className="text-primary">.</span>
         </button>
         <nav className="flex flex-col gap-1 p-3" aria-label="Navegação principal">
@@ -176,10 +179,10 @@ export default function SocialShell({ account, onLogout }: {
           })}
         </nav>
         <div className="mt-auto space-y-3 border-t border-border p-3">
-          <div className="flex min-w-0 items-center gap-2 rounded-xl px-2 py-2">
+          <button type="button" onClick={() => move('profile')} aria-label="Abrir meu perfil" className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
             <ProfileAvatar name={account.profile?.displayName ?? account.user.name} />
-            <div className="min-w-0"><div className="truncate text-sm font-medium">{account.profile?.displayName ?? account.user.name}</div><div className="truncate text-xs text-muted-foreground">{account.profile ? '@' + account.profile.handle : 'Conta Uorqui'}</div></div>
-          </div>
+            <span className="min-w-0"><span className="block truncate text-sm font-medium">{account.profile?.displayName ?? account.user.name}</span><span className="block truncate text-xs text-muted-foreground">{account.profile ? '@' + account.profile.handle : 'Conta Uorqui'}</span></span>
+          </button>
           <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>
             {loggingOut ? <Spinner /> : <LogOut aria-hidden="true" className="size-4" />}{loggingOut ? 'Saindo…' : 'Sair'}
           </Button>
@@ -187,7 +190,7 @@ export default function SocialShell({ account, onLogout }: {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="relative z-30 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/80 px-4 pt-[env(safe-area-inset-top)] sm:px-6">
+        <header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card/80 px-4 pt-[env(safe-area-inset-top)] sm:px-6 md:h-16 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => move('feed')} aria-label="Uorqui — voltar ao início" className="shrink-0 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">uorqui<span className="text-primary">.</span></button>
             <Separator orientation="vertical" className="h-5 md:hidden" />
@@ -196,7 +199,9 @@ export default function SocialShell({ account, onLogout }: {
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="hidden gap-1.5 font-normal sm:inline-flex">Prévia do MVP</Badge>
             <Button variant="ghost" size="icon" aria-label="Notificações indisponíveis" title="Notificações chegam em uma próxima etapa" disabled><Bell className="size-4" /></Button>
-            <ProfileAvatar name={account.profile?.displayName ?? account.user.name} className="size-8" />
+            <button type="button" onClick={() => move('profile')} aria-label="Abrir meu perfil" title="Meu perfil" className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              <ProfileAvatar name={account.profile?.displayName ?? account.user.name} className="size-8" />
+            </button>
           </div>
         </header>
 
@@ -258,16 +263,15 @@ export default function SocialShell({ account, onLogout }: {
                       {(conversations[conversationId] ?? []).map(message => (
                         <div key={message.id} className={cn('flex', message.mine ? 'justify-end' : 'justify-start')}>
                           <div className={cn('max-w-[85%] rounded-2xl px-4 py-2.5 sm:max-w-[72%]', message.mine ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted text-foreground')}>
-                            <p className="wrap-break-word text-sm leading-6">{message.text}</p><time className={cn('mt-1 block text-right text-[11px]', message.mine ? 'text-white/75' : 'text-muted-foreground')}>{message.time}</time>
+                            {message.text && <p className="wrap-break-word whitespace-pre-wrap text-sm leading-6">{message.text}</p>}
+                            {message.attachment && <DemoAttachmentView attachment={message.attachment} />}
+                            <time className={cn('mt-1 block text-right text-[11px]', message.mine ? 'text-white/75' : 'text-muted-foreground')}>{message.time}</time>
                           </div>
                         </div>
                       ))}
                     </div>
                   </ScrollArea>
-                  <form onSubmit={sendDemoMessage} className="flex shrink-0 items-end gap-2 border-t border-border bg-card/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
-                    <Input aria-label="Mensagem de demonstração" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Digite uma mensagem de exemplo…" maxLength={500} className="h-11 flex-1 text-base" />
-                    <Button type="submit" aria-label="Adicionar mensagem à prévia" size="icon" disabled={!draft.trim()} className="size-11 shrink-0"><Send className="size-4" /></Button>
-                  </form>
+                  <DemoMessageComposer key={'dm-' + conversationId} onSend={sendDemoMessage} ariaLabel="Mensagem de demonstração" placeholder="Digite uma mensagem…" />
                 </section>
               </div>
             )}
@@ -316,14 +320,11 @@ export default function SocialShell({ account, onLogout }: {
                           <EmptyState icon={Hash} title={'Bem-vindo a #' + activeChannel.label} description="Os canais de texto organizam conversas públicas ou privadas conforme as permissões de cada comunidade." />
                           {visibleChannelMessages.map(message => <div className="flex gap-3" key={message.id}>
                             <ProfileAvatar name={message.mine ? account.user.name : 'Equipe'} className="size-8" />
-                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? 'Você (prévia)' : 'Equipe Uorqui (exemplo)'} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p><p className="mt-1 text-sm leading-6 wrap-break-word">{message.text}</p></div>
+                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? 'Você (prévia)' : 'Equipe Uorqui (exemplo)'} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{message.text}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} />}</div>
                           </div>)}
                         </div>
                       </ScrollArea>
-                      <form onSubmit={sendDemoChannel} className="flex shrink-0 items-end gap-2 border-t border-border bg-card/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
-                        <Input aria-label="Mensagem de canal de exemplo" className="h-11 min-w-0 flex-1 text-base" placeholder={'Mensagem em #' + activeChannel.label + ' (prévia)'} maxLength={500} value={channelDraft} onChange={e => setChannelDraft(e.target.value)} />
-                        <Button type="submit" size="icon" className="size-11 shrink-0" aria-label="Adicionar mensagem ao canal de exemplo" disabled={!channelDraft.trim()}><Send className="size-4" /></Button>
-                      </form>
+                      <DemoMessageComposer key={'channel-' + communityKey} onSend={sendDemoChannel} ariaLabel="Mensagem de canal de exemplo" placeholder={'Mensagem em #' + activeChannel.label + ' (prévia)'} />
                     </>
                   )}
                 </section>
