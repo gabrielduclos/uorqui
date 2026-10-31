@@ -43,6 +43,13 @@
       "when": 1793478000000,
       "tag": "0005_dm_replies",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793483000000,
+      "tag": "0006_dm_reaction_notifications",
+      "breakpoints": true
     }
   ]
 }
