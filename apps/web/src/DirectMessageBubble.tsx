@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { Copy, Download, FileText, Forward, LoaderCircle, MapPin, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
@@ -78,7 +78,21 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   const isImage = !!asset?.type.startsWith('image/');
   const isVideo = !!asset?.type.startsWith('video/');
   const isAudio = !!asset?.type.startsWith('audio/');
-  const cachedSrc=useCachedChatMedia(assetUrl,isImage);
+  const imageRef=useRef<HTMLButtonElement>(null);
+  const [imageNearViewport,setImageNearViewport]=useState(false);
+  useEffect(()=>{
+    if(!isImage){setImageNearViewport(false);return;}
+    const node=imageRef.current;
+    if(!node || typeof IntersectionObserver==='undefined'){setImageNearViewport(true);return;}
+    const observer=new IntersectionObserver(records=>{
+      if(records.some(entry=>entry.isIntersecting)){
+        setImageNearViewport(true);observer.disconnect();
+      }
+    },{rootMargin:'300px'});
+    observer.observe(node);
+    return()=>observer.disconnect();
+  },[isImage,assetUrl]);
+  const cachedSrc=useCachedChatMedia(assetUrl,isImage && imageNearViewport);
   const visibleSrc=cachedSrc || assetUrl;
   const mediaLabel=attachmentLabel(asset?.type,locale);
   const time = new Date(message.createdAt);
@@ -160,7 +174,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         </blockquote>}
 
         {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0">
-          {isImage ? <button type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
+          {isImage ? <button ref={imageRef} type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
             aria-label={pt ? 'Ampliar imagem' : 'Open image'}
             className="block max-w-full focus-visible:outline-2 focus-visible:outline-current">
             {cachedSrc || !assetUrl.startsWith('/media/dm/')
