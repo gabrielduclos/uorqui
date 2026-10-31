@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
-import { Camera, FileText, Image, Images, MapPin, Mic, Play, Plus, Send, Smile, Square, Video, X, Reply, Pencil } from 'lucide-react';
+import { Camera, FileText, Images, MapPin, Mic, Play, Plus, Send, Smile, Square, Video, X, Reply, Pencil } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { DemoImageEditor } from './DemoImageEditor';
 import { DemoAudioPlayer } from './DemoChatMedia';
 import { Button } from '@/components/ui/button';
 
@@ -89,6 +91,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
     else setText(next);
   }
   const [pending, setPending] = useState<DemoAttachment | null>(null);
+  const [photoEditorOpen, setPhotoEditorOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cameraOptions, setCameraOptions] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -100,6 +103,8 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const cameraKindRef = useRef<'image' | 'video'>('image');
   const controlsRef = useRef<HTMLDivElement>(null);
+  const editorDialogRef = useRef<HTMLDivElement>(null);
+  const closeEditorRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedKindRef = useRef<AttachmentKind>('file');
   const stagedRef = useRef<DemoAttachment | null>(null);
@@ -154,6 +159,44 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
     if (stagedRef.current) URL.revokeObjectURL(stagedRef.current.url);
     stagedRef.current = next;
     setPending(next);
+    if (next?.kind !== 'image') setPhotoEditorOpen(false);
+  }
+
+  function saveEditedPhoto(blob: Blob) {
+    if (blob.size === 0 || blob.size > MAX_FILE_BYTES) {
+      setError('Não foi possível preparar a foto. O limite é ' + MAX_FILE_LABEL + '.');
+      return;
+    }
+    replacePending({
+      kind: 'image',
+      name: 'foto-editada.png',
+      url: URL.createObjectURL(blob),
+      size: blob.size,
+      mimeType: 'image/png',
+    });
+    setPhotoEditorOpen(false);
+    setError('');
+  }
+
+  useEffect(() => {
+    if (!photoEditorOpen) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeEditorRef.current?.focus();
+    return () => { previous?.focus(); };
+  }, [photoEditorOpen]);
+
+  function editorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      setPhotoEditorOpen(false);
+    }
+    if (event.key !== 'Tab' || !editorDialogRef.current) return;
+    const focusable = Array.from(editorDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled])'));
+    if (focusable.length === 0) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
   useEffect(() => {
@@ -380,7 +423,8 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       {pending && <div className="flex max-w-full items-start gap-3 rounded-xl border border-border bg-muted/60 p-3">
         <div className="min-w-0 flex-1">
           <p className="mb-2 text-xs font-medium">{attachmentTitle(pending)} · {formatSize(pending.size)}</p>
-          <DemoAttachmentView attachment={pending} />
+          <DemoAttachmentView attachment={pending} onOpenMedia={pending.kind === 'image' ? () => setPhotoEditorOpen(true) : undefined} />
+          {pending.kind === 'image' && <Button type="button" variant="outline" size="sm" onClick={() => setPhotoEditorOpen(true)} className="mt-2 h-9 rounded-none"><Pencil className="size-4" />Editar foto antes de enviar</Button>}
         </div>
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Remover anexo" onClick={() => replacePending(null)}><X className="size-4" /></Button>
       </div>}
@@ -443,6 +487,17 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
         </Button>
       </div>
       <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>
+      {photoEditorOpen && pending?.kind === 'image' && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-2 text-white sm:p-5">
+          <div ref={editorDialogRef} role="dialog" aria-modal="true" aria-label="Editar foto antes de enviar" onKeyDown={editorKeyDown} className="flex h-full max-h-[96dvh] w-full max-w-6xl min-w-0 flex-col overflow-hidden">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/15 px-1 py-2">
+              <p className="text-sm font-semibold">Editar foto antes de enviar</p>
+              <button ref={closeEditorRef} type="button" aria-label="Fechar editor de foto" onClick={() => setPhotoEditorOpen(false)} className="grid size-10 place-items-center hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><X className="size-5" /></button>
+            </div>
+            <DemoImageEditor key={pending.url} src={pending.url} onCancel={() => setPhotoEditorOpen(false)} onSave={saveEditedPhoto} />
+          </div>
+        </div>, document.body
+      )}
     </div>
   </form>;
 }
