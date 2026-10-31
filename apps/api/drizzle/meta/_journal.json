@@ -22,6 +22,13 @@
       "when": 1793467000000,
       "tag": "0002_profile_visibility_media",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793470000000,
+      "tag": "0003_live_direct_messages",
+      "breakpoints": true
     }
   ]
 }
