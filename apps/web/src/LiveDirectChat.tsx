@@ -3,6 +3,7 @@ import { ArrowDown, ArrowLeft, MessageCircle, Search, UserPlus, X } from 'lucide
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
+import { ChatMediaViewer } from './ChatMediaViewer';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [cancelTarget, setCancelTarget] = useState<Message | null>(null);
   const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [mediaViewerId,setMediaViewerId] = useState<string | null>(null);
+  useEffect(()=>{setMediaViewerId(null);},[activeId]);
   const highlightTimer = useRef<number | null>(null);
   const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -381,6 +384,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     outgoingBlock.push(message);
   });
   endBlock();
+  const mediaItems=renderedMessages.filter((message):message is Message & {attachment:NonNullable<Message['attachment']>} =>
+    !!message.attachment && !message.deletedAt &&
+    (message.attachment.type.startsWith('image/') || message.attachment.type.startsWith('video/')));
   const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
     if (!activeId || messagesLoading || !scrollBox.current ||
@@ -811,6 +817,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                 const status = blockReceipts.get(message.id);
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message}
+                    onOpenMedia={setMediaViewerId}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
                     disabled={actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
@@ -909,6 +916,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       </div>}
     </section>
 
+    <ChatMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId}
+      onClose={()=>setMediaViewerId(null)} locale={locale}/>
     {incoming && <aside role="status" aria-live="polite"
       className="absolute left-3 right-3 top-3 z-40 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-xl">
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left"
