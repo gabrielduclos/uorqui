@@ -599,31 +599,30 @@ test('restored demo attachments allow signed 50 MB audio and captions, reject la
 
 
 test('saved contacts: personal, idempotent, no reciprocal save or DM deletion', async () => {
-  const one = visitor(), two = visitor(), stranger = visitor();
-  await createUser(one, 'Contact Alpha', 'contact_alpha');
-  await createUser(two, 'Contact Beta', 'contact_beta');
-  await createUser(stranger, 'Contact Gamma', 'contact_gamma');
+  // Reuse the authenticated accounts created by the first test.
+  // Better Auth limits repeated signup attempts in one integration suite.
+  const one = alice, two = bob, stranger = other;
 
   assert.equal((await anon('/api/v1/contacts')).status, 401);
-  assert.equal((await one('/api/v1/contacts','POST',{handle:'contact_beta'},false)).status,403);
-  assert.equal((await one('/api/v1/contacts','POST',{handle:'contact_alpha'})).status,404);
+  assert.equal((await one('/api/v1/contacts','POST',{handle:'dm_bob'},false)).status,403);
+  assert.equal((await one('/api/v1/contacts','POST',{handle:'dm_alice'})).status,404);
   assert.equal((await one('/api/v1/contacts','POST',{handle:'nonexistent_contact'})).status,404);
-  assert.equal((await one('/api/v1/contacts','POST',{handle:'contact_beta'})).status,200);
-  assert.equal((await one('/api/v1/contacts','POST',{handle:'contact_beta'})).status,200);
+  assert.equal((await one('/api/v1/contacts','POST',{handle:'dm_bob'})).status,200);
+  assert.equal((await one('/api/v1/contacts','POST',{handle:'dm_bob'})).status,200);
   const saved = await one('/api/v1/contacts');
   assert.equal(saved.status,200);
   assert.equal(saved.data.contacts.length,1);
-  assert.equal(saved.data.contacts[0].handle,'contact_beta');
-  assert.equal(saved.data.contacts[0].displayName,'Contact Beta');
+  assert.equal(saved.data.contacts[0].handle,'dm_bob');
+  assert.equal(saved.data.contacts[0].displayName,'DM Bob');
   assert.equal(saved.data.contacts[0].email,undefined);
   assert.equal((await two('/api/v1/contacts')).data.contacts.length,0,'saving is not reciprocal');
   assert.equal((await stranger('/api/v1/contacts')).data.contacts.length,0,'another user cannot read my contacts');
 
-  const chat=await one('/api/v1/dm/conversations','POST',{handle:'contact_beta'});
+  const chat=await one('/api/v1/dm/conversations','POST',{handle:'dm_bob'});
   assert.equal(chat.status,200);
-  assert.equal((await one('/api/v1/contacts/contact_beta','DELETE',undefined,false)).status,403);
-  assert.equal((await one('/api/v1/contacts/contact_beta','DELETE')).status,204);
-  assert.equal((await one('/api/v1/contacts/contact_beta','DELETE')).status,204,'deletion is idempotent');
+  assert.equal((await one('/api/v1/contacts/dm_bob','DELETE',undefined,false)).status,403);
+  assert.equal((await one('/api/v1/contacts/dm_bob','DELETE')).status,204);
+  assert.equal((await one('/api/v1/contacts/dm_bob','DELETE')).status,204,'deletion is idempotent');
   assert.equal((await one('/api/v1/contacts')).data.contacts.length,0);
   const threads=await one('/api/v1/dm/conversations');
   assert.equal(threads.status,200);
