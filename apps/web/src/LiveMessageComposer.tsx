@@ -291,21 +291,21 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         <Smile className="size-5"/>
       </button>
       {emojiOpen && <div role="dialog" aria-label={pt ? 'Emojis' : 'Emojis'}
-        className="absolute bottom-full right-0 z-40 mb-2 w-[min(340px,calc(100vw-24px))] max-h-[min(360px,55dvh)] overflow-y-auto border border-border bg-popover p-3 text-popover-foreground shadow-xl">
-        <div className="mb-2 flex items-center justify-between">
+        className="absolute bottom-full right-0 z-40 mb-2 w-[min(270px,calc(100vw-24px))] max-h-[min(250px,40dvh)] overflow-y-auto overscroll-contain border border-border bg-popover p-2 text-popover-foreground shadow-xl sm:w-[340px] sm:max-h-[min(360px,55dvh)] sm:p-3">
+        <div className="mb-1 flex items-center justify-between sm:mb-2">
           <p className="text-xs font-semibold">{pt ? 'Emojis' : 'Emojis'}</p>
           <button type="button" aria-label={pt ? 'Fechar emojis' : 'Close emojis'}
             onClick={() => setEmojiOpen(false)} className="grid size-8 place-items-center hover:bg-accent">
             <X className="size-4"/>
           </button>
         </div>
-        {EMOJI_GROUPS.map(group => <section key={group.en} className="mb-3">
+        {EMOJI_GROUPS.map(group => <section key={group.en} className="mb-2 sm:mb-3">
           <p className="mb-1 text-xs text-muted-foreground">{pt ? group.pt : group.en}</p>
-          <div className="grid grid-cols-6 gap-1">
+          <div className="grid grid-cols-7 gap-1 sm:grid-cols-6">
             {group.symbols.map(emoji => <button type="button" key={emoji}
               aria-label={emoji} onMouseDown={event => event.preventDefault()}
               onClick={() => { onChange(value + emoji); textareaRef.current?.focus({ preventScroll: true }); }}
-              className="grid size-10 place-items-center text-xl hover:bg-accent">{emoji}</button>)}
+              className="grid size-8 place-items-center text-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:size-10 sm:text-xl">{emoji}</button>)}
           </div>
         </section>)}
       </div>}
