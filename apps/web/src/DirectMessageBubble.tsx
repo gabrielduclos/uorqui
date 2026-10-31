@@ -1,12 +1,15 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Check, CheckCheck, Copy, MoreHorizontal, Reply, X } from 'lucide-react';
+import { Copy, Forward, LoaderCircle, MoreHorizontal, Pencil, Reply, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type DirectChatMessage = {
   id: string; conversationId: string; authorId: string; body: string;
   clientId: string | null; createdAt: string; readAt: string | null;
+  deliveredAt: string | null; editedAt: string | null; deletedAt: string | null; forwarded: boolean;
+  pendingStatus?: 'sending' | 'failed';
+  reactions: { emoji: string; count: number }[]; myReaction: string | null;
 };
 
 function SwipeToQuote({ children, onQuote }: { children: ReactNode; onQuote: () => void }) {
@@ -41,8 +44,17 @@ function SwipeToQuote({ children, onQuote }: { children: ReactNode; onQuote: () 
   </div>;
 }
 
-export function DirectMessageBubble({ message, mine, locale, onQuote }: {
-  message: DirectChatMessage; mine: boolean; locale: string; onQuote: (message: DirectChatMessage) => void;
+const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
+
+export function DirectMessageBubble({ message, mine, locale, onQuote, onEdit, onDelete, onForward, onReact, onRetry, disabled }: {
+  message: DirectChatMessage; mine: boolean; locale: string;
+  onQuote: (message: DirectChatMessage) => void;
+  onEdit: (message: DirectChatMessage) => void;
+  onDelete: (message: DirectChatMessage) => void;
+  onForward: (message: DirectChatMessage) => void;
+  onReact: (message: DirectChatMessage, emoji: string | null) => void;
+  onRetry: (message: DirectChatMessage) => void;
+  disabled?: boolean;
 }) {
   const pt = locale === 'pt-BR';
   const [open, setOpen] = useState(false);
@@ -103,37 +115,74 @@ export function DirectMessageBubble({ message, mine, locale, onQuote }: {
   }
 
   return <div data-direct-message-id={message.id} className={cn('group relative flex min-w-0 items-start gap-1.5', mine ? 'justify-end' : 'justify-start')}>
-    <SwipeToQuote onQuote={() => onQuote(message)}>
+    <SwipeToQuote onQuote={() => { if (!message.deletedAt) onQuote(message); }}>
       <div className={cn('min-w-0 max-w-[calc(100vw-108px)] rounded-none px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]',
         mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
-        {quote && <blockquote className={cn('mb-2 border-l-2 px-2 py-1 text-xs',mine?'border-white/60 bg-white/10':'border-primary/70 bg-background/60')}>
+        {message.forwarded && !message.deletedAt && <span className="mb-1 flex items-center gap-1 text-[11px] opacity-75"><Forward className="size-3"/> {pt ? 'Encaminhada' : 'Forwarded'}</span>}
+        {quote && !message.deletedAt && <blockquote className={cn('mb-2 border-l-2 px-2 py-1 text-xs',mine?'border-white/60 bg-white/10':'border-primary/70 bg-background/60')}>
           <span className="block font-semibold">{pt ? 'Mensagem citada' : 'Quoted message'}</span>
           <span className="mt-0.5 block max-w-full truncate opacity-80">{quote[1]}</span>
         </blockquote>}
-        <p className="whitespace-pre-wrap break-words">{quote ? quote[2] : message.body}</p>
-        <div className={cn('mt-1 flex items-center justify-end gap-1.5 text-[11px]', mine ? 'text-primary-foreground/75' : 'text-muted-foreground')}>
-          <time dateTime={message.createdAt}>{timeLabel}</time>
-          {mine && (message.readAt
-            ? <CheckCheck className="size-3.5 text-sky-300" aria-label={pt ? 'Lida' : 'Read'}/>
-            : <Check className="size-3.5" aria-label={pt ? 'Enviada' : 'Sent'}/>)}
-        </div>
+
+        <p className="whitespace-pre-wrap break-words">
+          {message.deletedAt
+            ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
+            : (quote ? quote[2] : message.body)}
+          {' '}
+          <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap align-baseline text-[10px] opacity-80', mine ? 'text-primary-foreground' : 'text-muted-foreground')}>
+            {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
+            <time dateTime={message.createdAt}>{timeLabel}</time>
+            {mine && !message.deletedAt && (
+              message.pendingStatus === 'sending' ? <><LoaderCircle aria-label={pt ? 'Enviando' : 'Sending'} className="size-3 animate-spin"/><span>{pt ? 'Enviando' : 'Sending'}</span></>
+              : message.pendingStatus === 'failed' ? <button type="button" onClick={() => onRetry(message)}
+                  className="rounded border border-current px-1 font-semibold underline" aria-label={pt ? 'Falha ao enviar. Tentar novamente' : 'Failed to send. Retry'}>{pt ? 'Reenviar' : 'Retry'}</button>
+              : <span>{message.readAt ? (pt ? 'Lida' : 'Read') : message.deliveredAt ? (pt ? 'Recebida' : 'Received') : (pt ? 'Enviada' : 'Sent')}</span>
+            )}
+          </span>
+        </p>
       </div>
+      {!!message.reactions?.length && !message.deletedAt && <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'justify-end' : 'justify-start')}>
+        {message.reactions.map(reaction => <button key={reaction.emoji} type="button"
+          disabled={disabled || mine}
+          aria-label={(pt ? 'Reação' : 'Reaction') + ' ' + reaction.emoji + ': ' + reaction.count}
+          aria-pressed={message.myReaction === reaction.emoji}
+          onClick={() => onReact(message, message.myReaction === reaction.emoji ? null : reaction.emoji)}
+          className={cn('inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs', message.myReaction === reaction.emoji && 'border-primary bg-primary/10', !mine && 'hover:bg-accent')}>
+          <span>{reaction.emoji}</span><span>{reaction.count}</span>
+        </button>)}
+      </div>}
     </SwipeToQuote>
-    <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
+    {!message.deletedAt && !message.pendingStatus && <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
       aria-label={pt ? 'Opções da mensagem' : 'Message options'} aria-haspopup="menu" aria-expanded={open}
+      disabled={disabled}
       className={cn('grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-opacity hover:bg-accent focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100',mine && 'order-first')}>
       <MoreHorizontal className="size-[18px]"/>
-    </button>
-    {open && typeof document !== 'undefined' && createPortal(<>
+    </button>}
+    {open && !message.deletedAt && typeof document !== 'undefined' && createPortal(<>
       <div aria-hidden="true" className="fixed z-[90] bg-background/15 backdrop-blur-[4px]" style={conversationBounds ?? { inset: 0 }} onClick={() => setOpen(false)}/>
       <div ref={menu} role="menu" aria-label={pt ? 'Ações da mensagem' : 'Message actions'}
         onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); trigger.current?.focus(); } }}
         className="fixed z-[91] max-h-[calc(100dvh-16px)] overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-2xl"
         style={{ left: position?.left ?? -9999, top: position?.top ?? -9999, width: position?.width ?? 264, visibility: position ? 'visible' : 'hidden' }}>
+        {!mine && <div className="border-b border-border px-2 pb-2">
+          <p className="px-1 py-1 text-[11px] text-muted-foreground">{pt ? 'Reagir à mensagem' : 'React to message'}</p>
+          <div className="flex justify-between gap-0.5">
+            {REACTIONS.map(emoji => <button key={emoji} type="button"
+              aria-label={(pt ? 'Reagir' : 'React') + ' ' + emoji} aria-pressed={message.myReaction === emoji}
+              onClick={() => { setOpen(false); onReact(message, message.myReaction === emoji ? null : emoji); }}
+              className={cn('grid size-9 place-items-center text-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring', message.myReaction === emoji && 'bg-primary/20')}>{emoji}</button>)}
+          </div>
+        </div>}
         <button role="menuitem" type="button" onClick={() => { setOpen(false); onQuote(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Reply className="size-4"/>{pt ? 'Citar texto' : 'Quote text'}</button>
         <button role="menuitem" type="button" onClick={() => void copyText()}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Copy className="size-4"/>{pt ? 'Copiar' : 'Copy'}</button>
+        <button role="menuitem" type="button" onClick={() => { setOpen(false); onForward(message); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Forward className="size-4"/>{pt ? 'Encaminhar' : 'Forward'}</button>
+        {mine && <button role="menuitem" type="button" onClick={() => { setOpen(false); onEdit(message); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Pencil className="size-4"/>{pt ? 'Editar' : 'Edit'}</button>}
+        {mine && <button role="menuitem" type="button" onClick={() => { setOpen(false); onDelete(message); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-accent"><Trash2 className="size-4"/>{pt ? 'Excluir para todos' : 'Delete for everyone'}</button>}
         <button role="menuitem" type="button" onClick={() => setOpen(false)}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><X className="size-4"/>{pt ? 'Fechar' : 'Close'}</button>
       </div>

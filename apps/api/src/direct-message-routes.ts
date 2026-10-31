@@ -20,7 +20,7 @@ async function belongs(conversationId: string, userId: string): Promise<boolean>
     [conversationId,userId]);
   return r.rowCount === 1;
 }
-const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt"';
+const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded"';
 const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam } };
 const noCache = 'no-store';
 
@@ -98,13 +98,13 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const query=[
         'SELECT c.id, c.created_at AS "createdAt", u.handle AS "peerHandle",',
         'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl",',
-        'm.body AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId",',
+        'm.body AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",',
         'COALESCE(unread.n,0)::int AS "unreadCount"',
         'FROM direct_conversations c',
         'JOIN users u ON u.id=CASE WHEN c.participant_a_id=$1 THEN c.participant_b_id ELSE c.participant_a_id END',
         'JOIN profiles p ON p.user_id=u.id',
-        'LEFT JOIN LATERAL (SELECT body,created_at,author_id FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
-        'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND read_at IS NULL) unread ON true',
+        'LEFT JOIN LATERAL (SELECT body,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
+        'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND read_at IS NULL AND deleted_at IS NULL) unread ON true',
         'WHERE c.participant_a_id=$1 OR c.participant_b_id=$1',
         'ORDER BY COALESCE(m.created_at,c.created_at) DESC LIMIT 100'
       ].join(' ');
@@ -138,8 +138,12 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const query='SELECT '+messageColumns+' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC';
-      const r=await getPool().query(query,[id]);
+      const reactions = `COALESCE((SELECT json_agg(json_build_object('emoji', grouped.emoji, 'count', grouped.n)) FROM
+        (SELECT emoji, COUNT(*)::int AS n FROM direct_message_reactions WHERE message_id=dm.id GROUP BY emoji ORDER BY emoji) grouped), '[]'::json) AS reactions`;
+      const query='SELECT '+messageColumns+', '+reactions+
+        ', (SELECT emoji FROM direct_message_reactions WHERE message_id=dm.id AND user_id=$2) AS "myReaction"'+
+        ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC';
+      const r=await getPool().query(query,[id,me]);
       return reply.header('Cache-Control',noCache).send({messages:r.rows});
     }catch(e){request.log.error({err:e},'DM messages');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -167,6 +171,20 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       return reply.header('Cache-Control',noCache).send({message:prev.rows[0]});
     }catch(e){request.log.error({err:e},'DM send');return reply.code(503).send({error:'Unavailable'});}
   });
+  // Delivery is separate from reading. Receiving the message in an active client
+  // acknowledges delivery even when the conversation is only in the inbox.
+  app.post('/api/v1/dm/conversations/:id/received',{schema:{params:pathParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await identity(request,getSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const r=await getPool().query('UPDATE direct_messages SET delivered_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND delivered_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
+      if(r.rowCount)await publishDmConversationEvent(id,'received').catch(error=>request.log.warn({err:error},'DM delivery notification failed'));
+      return reply.header('Cache-Control',noCache).send({received:r.rowCount??0});
+    }catch(e){request.log.error({err:e},'DM received');return reply.code(503).send({error:'Unavailable'});}
+  });
   app.post('/api/v1/dm/conversations/:id/read',{schema:{params:pathParams}},async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
@@ -174,9 +192,93 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET read_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL RETURNING id',[id,me]);
+      const r=await getPool().query('UPDATE direct_messages SET read_at=now(), delivered_at=COALESCE(delivered_at,now()) WHERE conversation_id=$1 AND author_id<>$2 AND read_at IS NULL AND deleted_at IS NULL RETURNING id',[id,me]);
       if(r.rowCount) await publishDmConversationEvent(id,'read').catch(error=>request.log.warn({err:error},'DM read notification failed'));
       return reply.header('Cache-Control',noCache).send({read:r.rowCount??0});
     }catch(e){request.log.error({err:e},'DM read');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  // Actions always check conversation membership, and own-message mutations check the author.
+  // Soft deletion clears the stored text while leaving a tombstone in the timeline.
+  const messagePath = '/api/v1/dm/conversations/:id/messages/:messageId';
+  const messageParams = { type:'object', required:['id','messageId'], additionalProperties:false,
+    properties:{id:uuidParam,messageId:uuidParam} };
+  app.patch(messagePath,{schema:{params:messageParams,body:{type:'object',additionalProperties:false,
+    required:['body'],properties:{body:{type:'string',minLength:1,maxLength:4000}}}}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try {
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,messageId}=request.params as {id:string;messageId:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const text=(request.body as {body:string}).body.trim();
+      if(!text||text.length>4000)return reply.code(400).send({error:'Invalid message'});
+      const r=await getPool().query('UPDATE direct_messages SET body=$1, edited_at=now() WHERE id=$2 AND conversation_id=$3 AND author_id=$4 AND deleted_at IS NULL RETURNING '+messageColumns,[text,messageId,id,me]);
+      if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
+      await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM edit notification failed'));
+      return reply.header('Cache-Control',noCache).send({message:r.rows[0]});
+    }catch(e){request.log.error({err:e},'DM edit');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.delete(messagePath,{schema:{params:messageParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try {
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,messageId}=request.params as {id:string;messageId:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const r=await getPool().query('UPDATE direct_messages SET body=\'\', deleted_at=now() WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL RETURNING id',[messageId,id,me]);
+      if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
+      await getPool().query('DELETE FROM direct_message_reactions WHERE message_id=$1',[messageId]);
+      await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM delete notification failed'));
+      return reply.header('Cache-Control',noCache).send({deleted:true});
+    }catch(e){request.log.error({err:e},'DM delete');return reply.code(503).send({error:'Unavailable'});}
+  });
+  const reactionsPath = messagePath + '/reaction';
+  app.put(reactionsPath,{schema:{params:messageParams,body:{type:'object',additionalProperties:false,required:['emoji'],
+    properties:{emoji:{type:'string',enum:['👍','❤️','😂','😮','😢','🎉']}}}}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try {
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,messageId}=request.params as {id:string;messageId:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const emoji=(request.body as {emoji:string}).emoji;
+      const r=await getPool().query(
+        'INSERT INTO direct_message_reactions (message_id,user_id,emoji) SELECT m.id,$1,$2 FROM direct_messages m WHERE m.id=$3 AND m.conversation_id=$4 AND m.author_id<>$1 AND m.deleted_at IS NULL ON CONFLICT (message_id,user_id) DO UPDATE SET emoji=EXCLUDED.emoji RETURNING message_id',
+        [me,emoji,messageId,id]);
+      if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
+      await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM reaction notification failed'));
+      return reply.header('Cache-Control',noCache).send({emoji});
+    }catch(e){request.log.error({err:e},'DM react');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.delete(reactionsPath,{schema:{params:messageParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try {
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,messageId}=request.params as {id:string;messageId:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      await getPool().query('DELETE FROM direct_message_reactions WHERE message_id=$1 AND user_id=$2 AND EXISTS (SELECT 1 FROM direct_messages WHERE id=$1 AND conversation_id=$3)',[messageId,me,id]);
+      await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM reaction notification failed'));
+      return reply.header('Cache-Control',noCache).send({emoji:null});
+    }catch(e){request.log.error({err:e},'DM unreact');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.post(messagePath+'/forward',{schema:{params:messageParams,body:{type:'object',additionalProperties:false,
+    required:['targetConversationId','clientId'],properties:{targetConversationId:uuidParam,clientId:uuidParam}}}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try {
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,messageId}=request.params as {id:string;messageId:string};
+      const {targetConversationId,clientId}=request.body as {targetConversationId:string;clientId:string};
+      if(!await belongs(id,me)||!await belongs(targetConversationId,me))return reply.code(404).send({error:'Not found'});
+      if(id===targetConversationId)return reply.code(400).send({error:'Choose another conversation'});
+      const q='INSERT INTO direct_messages (conversation_id,author_id,body,client_id,forwarded_from_id) '+
+        'SELECT $1,$2,body,$3,id FROM direct_messages WHERE id=$4 AND conversation_id=$5 AND deleted_at IS NULL '+
+        'ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
+      const r=await getPool().query(q,[targetConversationId,me,clientId,messageId,id]);
+      if(r.rowCount){
+        await publishDmConversationEvent(targetConversationId,'message').catch(error=>request.log.warn({err:error},'DM forward notification failed'));
+        return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
+      }
+      const prior=await getPool().query('SELECT '+messageColumns+' FROM direct_messages WHERE client_id=$1 AND conversation_id=$2 AND author_id=$3 AND forwarded_from_id=$4',[clientId,targetConversationId,me,messageId]);
+      if(prior.rowCount)return reply.header('Cache-Control',noCache).send({message:prior.rows[0]});
+      return reply.code(404).send({error:'Message unavailable'});
+    }catch(e){request.log.error({err:e},'DM forward');return reply.code(503).send({error:'Unavailable'});}
   });
 }

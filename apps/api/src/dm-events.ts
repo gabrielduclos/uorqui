@@ -3,7 +3,7 @@ import { getPool } from './db/client.js';
 
 const { Client } = pg;
 const CHANNEL = 'uorqui_dm_events';
-export type DmEventKind = 'message' | 'read' | 'conversation';
+export type DmEventKind = 'message' | 'read' | 'conversation' | 'update' | 'received';
 export type DmEvent = { userId: string; conversationId: string; kind: DmEventKind };
 type Subscriber = (event: Omit<DmEvent, 'userId'>) => void;
 
@@ -46,7 +46,7 @@ async function ensureListener(): Promise<void> {
           const event = JSON.parse(packet.payload) as DmEvent;
           if (!event || typeof event.userId !== 'string' ||
               typeof event.conversationId !== 'string' ||
-              !['message', 'read', 'conversation'].includes(event.kind)) return;
+              !['message', 'read', 'conversation', 'update', 'received'].includes(event.kind)) return;
           for (const subscriber of subscribers.get(event.userId) ?? []) {
             try { subscriber({ kind: event.kind, conversationId: event.conversationId }); }
             catch { /* ignore disconnected browser writer */ }

@@ -11,10 +11,11 @@ import { cn } from '@/lib/utils';
 
 type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
-  lastBody: string | null; lastAt: string | null; lastAuthorId: string | null; unreadCount: number;
+  lastBody: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
+type PendingMessage = Message & { pendingStatus: 'sending' | 'failed' };
 type IncomingNotice = { id: string; name: string; preview: string };
 const NEAR_BOTTOM_PX = 96;
 
@@ -46,6 +47,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpened, setMobileOpened] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -53,18 +55,23 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [error, setError] = useState('');
   const [searching, setSearching] = useState(false);
   const [chatError, setChatError] = useState('');
-  const [live, setLive] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(0);
   const [incoming, setIncoming] = useState<IncomingNotice | null>(null);
   const [quoteSource, setQuoteSource] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<Message | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionNotice, setActionNotice] = useState('');
+  const draftBeforeEdit = useRef('');
+  const forwardAttempt = useRef<{ sourceId: string; targetId: string; clientId: string } | null>(null);
   const realtimeConnected = useRef(false);
   const lastThreadFallback = useRef(0);
   const lastMessageFallback = useRef(0);
   const scrollBox = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const sendId = useRef<string | null>(null);
   const reading = useRef<string | null>(null);
   const lastReadFailure = useRef(0);
   const activeIdRef = useRef<string | null>(null);
@@ -140,9 +147,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setChatError('');
     setIncoming(null);
     setQuoteSource(null);
+    setEditing(null); setDeleteTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
-    sendId.current = null;
   }, []);
   const closeThread = useCallback(() => {
     setActiveId(null);
@@ -154,8 +161,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setNewBelow(0);
     positionedRef.current = false;
     setQuoteSource(null);
+    setEditing(null); setDeleteTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
     setDraft('');
-    sendId.current = null;
+
   }, []);
 
   const startPerson = useCallback(async (handle: string) => {
@@ -186,10 +194,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     const result = await api<{ messages: Message[] }>('/api/v1/dm/conversations/' + id + '/messages');
     if (activeIdRef.current !== id) return;
     setMessages(previous => {
-      const same = previous.length === result.messages.length && previous.every((m, i) =>
-        m.id === result.messages[i].id && m.readAt === result.messages[i].readAt && m.body === result.messages[i].body);
+      const same = JSON.stringify(previous) === JSON.stringify(result.messages);
       return same ? previous : result.messages;
     });
+    setPendingMessages(previous => previous.filter(p => p.conversationId !== id || !result.messages.some(m => m.clientId === p.clientId)));
     setMessagesLoading(false);
   }, []);
 
@@ -229,11 +237,12 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
 
   // The Uorqui-chat behavior: start at the latest message, preserve scroll when
   // reading older ones, and show a downward arrow for messages arriving below.
-  const lastId = messages.at(-1)?.id ?? '';
+  const renderedMessages: Message[] = [...messages, ...pendingMessages.filter(p => p.conversationId === activeId && !messages.some(m => m.clientId === p.clientId))].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+  const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
     if (!activeId || messagesLoading || !scrollBox.current ||
         messages.some(message => message.conversationId !== activeId)) return;
-    const last = messages.at(-1);
+    const last = renderedMessages.at(-1);
     if (!positionedRef.current) {
       positionedRef.current = true;
       previousLastRef.current = last?.id ?? '';
@@ -244,7 +253,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     previousLastRef.current = last.id;
     if (atBottomRef.current || last.authorId === myId) jumpToLast('instant');
     else if (last.authorId !== myId) setNewBelow(n => n + 1);
-  }, [activeId, messages, messagesLoading, lastId, myId, jumpToLast]);
+  }, [activeId, messages, pendingMessages, messagesLoading, lastId, myId, jumpToLast]);
 
   // Read only when actual message content has been rendered AND the recipient
   // is viewing the bottom of that conversation; merely listing/selecting is
@@ -275,7 +284,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     let disposed = false;
     const updateConnected = (connected: boolean) => {
       realtimeConnected.current = connected;
-      if (!disposed) setLive(connected);
+      if (disposed) return;
     };
     const onReady = () => {
       void loadThreads().catch(() => {});
@@ -285,7 +294,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     const onDmUpdate = (event: Event) => {
       try {
         const data = JSON.parse((event as MessageEvent<string>).data) as { conversationId?: string; kind?: string };
-        if (!data.conversationId || !['message', 'read', 'conversation'].includes(data.kind ?? '')) return;
+        if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind ?? '')) return;
         const conversationId = data.conversationId;
         const isOpen = isConversationVisible(conversationId);
         void loadThreads().then(next => {
@@ -323,6 +332,19 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     connect();
     return () => { disposed = true; document.removeEventListener('visibilitychange', visibility); disconnect(); };
   }, [loadThreads, loadMessages, isConversationVisible, myId, pt]);
+  // Delivery is not reading: receiving an inbox update never clears the unread badge.
+  const receiving = useRef(new Set<string>());
+  const receivedIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!threads.length || document.visibilityState !== 'visible') return;
+    for (const thread of threads) {
+      if (thread.lastAuthorId === myId || !thread.lastAt || receivedIds.current.has(thread.id + ':' + thread.lastAt) || receiving.current.has(thread.id)) continue;
+      receiving.current.add(thread.id);
+      void api('/api/v1/dm/conversations/' + thread.id + '/received', { method: 'POST' })
+        .then(() => receivedIds.current.add(thread.id + ':' + thread.lastAt))
+        .catch(() => {}).finally(() => receiving.current.delete(thread.id));
+    }
+  }, [threads, myId]);
 
   useEffect(() => {
     if (!incoming) return;
@@ -333,40 +355,113 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   useEffect(() => {
     const onEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (deleteTarget) { event.preventDefault(); setDeleteTarget(null); return; }
+      if (forwardTarget) { event.preventDefault(); setForwardTarget(null); forwardAttempt.current = null; return; }
+      if (editing) { event.preventDefault(); cancelEdit(); return; }
       if (quoteSource) { setQuoteSource(null); return; }
       if (activeIdRef.current) { event.preventDefault(); closeThread(); }
     };
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
-  }, [quoteSource, closeThread]);
+  }, [quoteSource, editing, deleteTarget, forwardTarget, closeThread]);
 
-  async function send() {
-    const body = (quoteSource ? '> ' + quoteSource.body.replace(/\s+/g, ' ').slice(0, 160) + '\n\n' : '') + draft.trim();
-    const id = activeId;
-    if (!id || !draft.trim() || busy || body.length > 4000) return;
-    setBusy(true); setChatError('');
-    const clientId = sendId.current ?? crypto.randomUUID();
-    sendId.current = clientId;
+
+  function beginEdit(message: Message) {
+    if (actionBusy || busy || message.deletedAt) return;
+    draftBeforeEdit.current = draft;
+    setQuoteSource(null); setEditing(message); setDraft(message.body); setActionNotice('');
+    requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+  }
+  function cancelEdit() { setEditing(null); setDraft(draftBeforeEdit.current); }
+  async function deleteMessage() {
+    if (!deleteTarget || actionBusy || !activeId) return;
+    const id = activeId, message = deleteTarget;
+    setActionBusy(true); setChatError('');
     try {
-      await api('/api/v1/dm/conversations/' + id + '/messages', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body, clientId }),
+      await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id, { method:'DELETE' });
+      setDeleteTarget(null);
+      if (editing?.id === message.id) cancelEdit();
+      if (quoteSource?.id === message.id) setQuoteSource(null);
+      await Promise.all([loadMessages(id),loadThreads()]);
+    } catch { setChatError(pt ? 'Não foi possível excluir a mensagem.' : 'Could not delete message.'); }
+    finally { setActionBusy(false); }
+  }
+  async function react(message: Message, emoji: string | null) {
+    if (!activeId || actionBusy || message.deletedAt) return;
+    const id = activeId;
+    setActionBusy(true); setChatError('');
+    try {
+      await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id + '/reaction', {
+        method: emoji ? 'PUT' : 'DELETE',
+        ...(emoji ? { headers:{'Content-Type':'application/json'}, body:JSON.stringify({emoji}) } : {}),
       });
-      sendId.current = null;
-      setDraft('');
-      setQuoteSource(null);
-      await Promise.all([loadMessages(id), loadThreads()]);
-      jumpToLast('smooth');
-      textareaRef.current?.focus({ preventScroll: true });
+      await loadMessages(id);
+    } catch { setChatError(pt ? 'Não foi possível atualizar a reação.' : 'Could not update reaction.'); }
+    finally { setActionBusy(false); }
+  }
+  async function forward(targetId: string) {
+    if (!forwardTarget || !activeId || targetId === activeId || actionBusy) return;
+    const source = forwardTarget, id = activeId, previous = forwardAttempt.current;
+    const clientId = previous?.sourceId === source.id && previous.targetId === targetId ? previous.clientId : crypto.randomUUID();
+    forwardAttempt.current = { sourceId:source.id, targetId, clientId };
+    setActionBusy(true); setChatError('');
+    try {
+      await api('/api/v1/dm/conversations/' + id + '/messages/' + source.id + '/forward',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetConversationId:targetId,clientId}),
+      });
+      const peer = threads.find(t => t.id === targetId);
+      setActionNotice(pt ? 'Encaminhada para ' + (peer?.peerName ?? 'conversa') : 'Forwarded to ' + (peer?.peerName ?? 'chat'));
+      setForwardTarget(null); forwardAttempt.current = null;
+      await loadThreads();
+    } catch { setChatError(pt ? 'Falha ao encaminhar. Tente novamente.' : 'Forward failed. Retry.'); }
+    finally { setActionBusy(false); }
+  }
+  async function submitPending(pending: PendingMessage) {
+    setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'sending'} : p));
+    try {
+      await api('/api/v1/dm/conversations/' + pending.conversationId + '/messages', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({body:pending.body,clientId:pending.clientId}),
+      });
+      if (activeIdRef.current === pending.conversationId) await loadMessages(pending.conversationId);
+      void loadThreads().catch(() => {});
+      setPendingMessages(prev => prev.filter(p => p.clientId !== pending.clientId));
     } catch {
-      setChatError(pt ? 'Mensagem não enviada. Tente novamente.' : 'Message not sent. Retry.');
-    } finally { setBusy(false); }
+      setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed'} : p));
+    }
   }
-  function onDraftChange(value: string) {
-    if (sendId.current) sendId.current = null;
-    setDraft(value);
+  async function send() {
+    const id = activeId;
+    const body = (quoteSource && !editing ? '> '+ quoteSource.body.replace(/\s+/g,' ').slice(0,160)+'\n\n' : '') + draft.trim();
+    if (!id || !draft.trim() || busy || body.length > 4000) return;
+    setChatError(''); setActionNotice('');
+    if (editing) {
+      setBusy(true);
+      try {
+        await api('/api/v1/dm/conversations/' + id + '/messages/' + editing.id,{
+          method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:draft.trim()}),
+        });
+        cancelEdit();
+        await Promise.all([loadMessages(id),loadThreads()]);
+      } catch { setChatError(pt ? 'Falha ao editar mensagem.' : 'Could not edit message.'); }
+      finally { setBusy(false); }
+      return;
+    }
+    const clientId = crypto.randomUUID();
+    const pending: PendingMessage = {
+      id:clientId, clientId,conversationId:id,authorId:myId,body,
+      createdAt:new Date().toISOString(),readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
+      forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',
+    };
+    setPendingMessages(prev => [...prev,pending]);
+    setDraft(''); setQuoteSource(null);
+    jumpToLast('smooth');
+    textareaRef.current?.focus({preventScroll:true});
+    void submitPending(pending);
   }
+  function onDraftChange(value: string) { setDraft(value); }
   function quote(message: Message) {
+    if (editing) cancelEdit();
     setQuoteSource(message);
     textareaRef.current?.focus({ preventScroll: true });
   }
@@ -387,11 +482,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
           <div><h2 className="text-[23px] font-semibold tracking-tight">{pt ? 'Conversas' : 'Messages'}</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Tudo perto. Tudo em um lugar.' : 'Close conversations, all in one place.'}</p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
-            title={live ? (pt ? 'Mensagens ao vivo' : 'Live messages') : (pt ? 'Sincronização automática' : 'Automatic sync')}>
-            <span className={cn('size-1.5 rounded-full', live ? 'bg-emerald-500' : 'bg-muted-foreground')}/>
-            {live ? (pt ? 'Ao vivo' : 'Live') : '1:1'}
-          </span>
+
         </div>
         <div className="relative">
           <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
@@ -438,7 +529,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
               <time className="shrink-0 text-[10px] text-muted-foreground">{formatTime(thread.lastAt, locale)}</time></span>
             <span className="mt-1 flex items-center justify-between gap-2">
               <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', thread.unreadCount > 0 && 'font-medium text-foreground/75')}>
-                {thread.lastBody ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '') + thread.lastBody : '@' + thread.peerHandle}
+                {thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : thread.lastBody ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '') + thread.lastBody : '@' + thread.peerHandle}
               </span>
               {thread.unreadCount > 0 && <span aria-label={String(thread.unreadCount) + (pt ? ' não lidas' : ' unread')}
                 className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-md bg-primary px-1 text-[10px] font-bold text-primary-foreground">
@@ -469,7 +560,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             <span className="min-w-0"><span className="block truncate text-sm font-semibold">{active.peerName}</span>
               <span className="block truncate text-xs text-muted-foreground">@{active.peerHandle}</span></span>
           </a>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{live ? (pt ? 'Ao vivo' : 'Live') : ''}</span>
+
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollBox} onScroll={onMessagesScroll}
@@ -479,9 +570,16 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                 <div className="h-12 w-1/2 animate-pulse self-start bg-muted"/>
                 <div className="h-12 w-2/3 animate-pulse self-end bg-muted"/>
               </div>}
-              {!messagesLoading && !messages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
-              {messages.map(message => <DirectMessageBubble key={message.id} message={message}
-                mine={message.authorId === myId} locale={locale} onQuote={quote}/>)}
+              {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
+              {renderedMessages.map(message => <DirectMessageBubble key={message.id} message={message}
+                mine={message.authorId === myId} locale={locale} onQuote={quote}
+                disabled={actionBusy || busy} onEdit={beginEdit} onDelete={setDeleteTarget}
+                onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
+                onReact={(message, emoji) => void react(message, emoji)}
+                onRetry={message => {
+                  const pending = pendingMessages.find(p => p.clientId === message.clientId);
+                  if (pending) void submitPending(pending);
+                }}/>)}
             </div>
           </div>
           {!atBottom && <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
@@ -498,7 +596,15 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         </div>
         <div className="relative z-10 shrink-0 border-t border-border/70 bg-card/95 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
           {chatError && <p role="alert" className="mb-2 text-xs text-destructive">{chatError}</p>}
-          {quoteSource && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
+          {actionNotice && <p role="status" className="mb-2 text-xs text-primary">{actionNotice}</p>}
+          {editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/70 px-3 py-2 text-xs">
+            <div className="min-w-0 flex-1"><strong className="block">{pt ? 'Editando mensagem' : 'Editing message'}</strong>
+              <span className="block truncate text-muted-foreground">{editing.body}</span>
+            </div>
+            <button type="button" onClick={cancelEdit} aria-label={pt ? 'Cancelar edição' : 'Cancel edit'}
+              className="grid size-9 place-items-center hover:bg-accent"><X className="size-4"/></button>
+          </div>}
+          {quoteSource && !editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
             <div className="min-w-0 flex-1">
               <span className="block font-semibold">{pt ? 'Respondendo com citação' : 'Quoting message'}</span>
               <span className="mt-0.5 block truncate text-muted-foreground">{quoteSource.body}</span>
@@ -509,8 +615,43 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             </button>
           </div>}
           <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
-            sending={busy} locale={locale} textareaRef={textareaRef}/>
+            sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
         </div>
+        {deleteTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"
+            className="w-full max-w-sm rounded-xl border border-border bg-popover p-5 text-popover-foreground shadow-2xl">
+            <h3 id="delete-direct-message-title" className="text-base font-semibold">{pt ? 'Excluir mensagem?' : 'Delete message?'}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{pt ? 'Esta mensagem será excluída para as duas pessoas da conversa.' : 'This message will be deleted for both people in the conversation.'}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" disabled={actionBusy} onClick={() => setDeleteTarget(null)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
+              <Button variant="destructive" disabled={actionBusy} onClick={() => void deleteMessage()}>{pt ? 'Excluir' : 'Delete'}</Button>
+            </div>
+          </div>
+        </div>}
+        {forwardTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="forward-direct-message-title"
+            className="flex max-h-[min(520px,75dvh)] w-full max-w-md flex-col rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <h3 id="forward-direct-message-title" className="font-semibold">{pt ? 'Encaminhar mensagem' : 'Forward message'}</h3>
+              <button type="button" aria-label={pt ? 'Cancelar encaminhamento' : 'Cancel forward'} disabled={actionBusy}
+                onClick={() => { setForwardTarget(null); forwardAttempt.current = null; }} className="grid size-9 place-items-center rounded-md hover:bg-accent"><X className="size-4"/></button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{pt ? 'Escolha uma conversa de destino.' : 'Select a destination conversation.'}</p>
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
+              {threads.filter(thread => thread.id !== activeId).map(thread => <button type="button" key={thread.id}
+                disabled={actionBusy} onClick={() => void forward(thread.id)}
+                className="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-accent disabled:opacity-50">
+                <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
+                <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{thread.peerName}</strong>
+                  <span className="block truncate text-xs text-muted-foreground">@{thread.peerHandle}</span></span>
+              </button>)}
+              {threads.length <= 1 && <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+                {pt ? 'Abra outra conversa para poder encaminhar uma mensagem.' : 'Start another conversation to forward this message.'}
+              </p>}
+            </div>
+            {chatError && <p role="alert" className="mt-2 text-xs text-destructive">{chatError}</p>}
+          </div>
+        </div>}
       </> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
         <MessageCircle className="size-10 text-primary"/>
         <h3 className="font-semibold">{pt ? 'Selecione uma conversa' : 'Select a conversation'}</h3>
