@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft, Bell, Compass, Hash, Headphones, Home, LogOut, MessageCircle,
@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import DemoMessageComposer, { DemoAttachmentView, type ComposePayload } from './DemoMessageComposer';
-import { DemoChatBubble, DemoLocationCard, messagePreview, type DemoMessage } from './DemoChatBubble';
+import { DemoChatBubble, DemoLocationCard, type DemoMessage } from './DemoChatBubble';
 import { DemoMediaViewer, type PreviewMediaItem } from './DemoChatMedia';
 import { PreferencesControls } from './PreferencesControls';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -34,22 +34,6 @@ const navigation = [
   { id: 'conversations', label: 'Conversas', icon: MessageCircle },
   { id: 'communities', label: 'Comunidades', icon: Users },
 ] as const;
-
-const demoContacts = [
-  { id: 'lia', name: 'Lia', initials: 'LI', topic: 'Uma conversa de exemplo', color: 'bg-sky-600' },
-  { id: 'caio', name: 'Caio', initials: 'CA', topic: 'Tudo certo para a partida?', color: 'bg-violet-600' },
-] as const;
-
-const exampleMessages: Record<string, DemoMessage[]> = {
-  lia: [
-    { id: 1, mine: false, text: 'Oi! Vamos testar como as conversas vão funcionar?', time: '10:24' },
-    { id: 2, mine: true, text: 'Claro! Gostei da interface mais limpa.', time: '10:25' },
-    { id: 3, mine: false, text: 'As mensagens privadas serão sempre entre duas pessoas.', time: '10:26' },
-  ],
-  caio: [
-    { id: 4, mine: false, text: 'Tudo certo para a partida?', time: 'Ontem' },
-  ],
-};
 
 const demoCommunities = [
   {
@@ -103,16 +87,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   onLogout: () => Promise<void>;
   onAccountUpdate: (next: SignedInAccount) => void;
 }) {
-  const { t, locale } = useUorquiPreferences();
+  const { t } = useUorquiPreferences();
   useVisualViewportFrame();
   const [area, setArea] = useState<Area>('feed');
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [conversationId, setConversationId] = useState<string>('lia');
   const [conversationOpened, setConversationOpened] = useState(false);
-  const [conversations, setConversations] = useState<Record<string, DemoMessage[]>>(exampleMessages);
-  const [replyTarget, setReplyTarget] = useState<DemoMessage | null>(null);
-  const [editingMessage, setEditingMessage] = useState<DemoMessage | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [mediaViewerId, setMediaViewerId] = useState<number | null>(null);
   const [communityId, setCommunityId] = useState<string>('estudio');
@@ -141,16 +120,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
 
   const activeCommunity = demoCommunities.find(group => group.id === communityId) ?? demoCommunities[0];
   const activeChannel = activeCommunity.channels.find(ch => ch.id === channelId) ?? activeCommunity.channels[0];
-  const activeContact = demoContacts.find(contact => contact.id === conversationId) ?? demoContacts[0];
-  const visibleContacts = useMemo(() => demoContacts.filter(contact =>
-    contact.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))
-  ), [search]);
   const communityKey = communityId + '/' + channelId;
   const visibleChannelMessages: DemoMessage[] = channelExamples[communityKey] ?? [
     { id: 100, mine: false, text: 'Este canal demonstra como os bate-papos de comunidades serão organizados.', time: 'Exemplo' },
   ];
-  const activeMessages = area === 'conversations' ? (conversations[conversationId] ?? []) : visibleChannelMessages;
-  const mediaItems: PreviewMediaItem[] = (area === 'conversations' ? [] : activeMessages).flatMap(message =>
+  const mediaItems: PreviewMediaItem[] = visibleChannelMessages.flatMap(message =>
     message.attachment && (message.attachment.kind === 'image' || message.attachment.kind === 'video')
       ? [{ id: message.id, attachment: message.attachment }]
       : []
@@ -160,67 +134,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
     setDrafts(previous => ({ ...previous, [key]: value }));
   }
 
-  function reactToDemoMessage(id: number, emoji: string) {
-    setConversations(previous => ({
-      ...previous,
-      [conversationId]: (previous[conversationId] ?? []).map(message =>
-        message.id === id && !message.mine
-          ? { ...message, myReaction: message.myReaction === emoji ? undefined : emoji }
-          : message
-      ),
-    }));
-  }
-
   function move(next: Area) {
     setArea(next);
-    setSearch('');
     setConversationOpened(false);
     setChannelOpened(false);
-    setReplyTarget(null);
-    setEditingMessage(null);
     setMediaViewerId(null);
-  }
-
-  function sendDemoMessage({ text, attachment, location }: ComposePayload) {
-    if (editingMessage) {
-      if (!text) return;
-      setConversations(previous => ({
-        ...previous,
-        [conversationId]: (previous[conversationId] ?? []).map(message =>
-          message.id === editingMessage.id && message.mine && !message.attachment
-            ? { ...message, text, edited: true }
-            : message
-        ),
-      }));
-      setEditingMessage(null);
-      return;
-    }
-    if (!text && !attachment && !location) return;
-    if (attachment) attachmentUrls.current.add(attachment.url);
-    setConversations(previous => ({
-      ...previous,
-      [conversationId]: [...(previous[conversationId] ?? []), {
-        id: Date.now() + Math.random(), mine: true, text, attachment, location,
-        replyTo: replyTarget?.id,
-        time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-      }],
-    }));
-    setReplyTarget(null);
-  }
-
-  function deleteDemoMessage(message: DemoMessage) {
-    if (!message.mine) return;
-    if (message.attachment) {
-      URL.revokeObjectURL(message.attachment.url);
-      attachmentUrls.current.delete(message.attachment.url);
-    }
-    setConversations(previous => ({
-      ...previous,
-      [conversationId]: (previous[conversationId] ?? []).filter(item => item.id !== message.id),
-    }));
-    if (mediaViewerId === message.id) setMediaViewerId(null);
-    if (replyTarget?.id === message.id) setReplyTarget(null);
-    if (editingMessage?.id === message.id) setEditingMessage(null);
   }
 
   function sendDemoChannel({ text, attachment, location }: ComposePayload) {
@@ -236,52 +154,27 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
   }
 
   function saveEditedImage(id: number, image: Blob) {
-    const current = activeMessages.find(message => message.id === id);
-    if (!current?.attachment || current.attachment.kind !== 'image') return;
+    const current = visibleChannelMessages.find(message => message.id === id);
+    if (!current?.attachment || current.attachment.kind !== 'image' || activeChannel.kind !== 'text') return;
     const url = URL.createObjectURL(image);
     attachmentUrls.current.add(url);
-    const attachment = {
-      kind: 'image' as const, name: 'foto-editada.png',
-      url, size: image.size, mimeType: 'image/png',
-    };
-    if (area === 'conversations') {
-      if (current.mine) {
-        setConversations(previous => ({
-          ...previous,
-          [conversationId]: (previous[conversationId] ?? []).map(message =>
-            message.id === id ? { ...message, attachment, edited: true } : message
-          ),
-        }));
-      } else {
-        const newId = Date.now() + Math.random();
-        setConversations(previous => ({
-          ...previous,
-          [conversationId]: [...(previous[conversationId] ?? []), {
-            id: newId, mine: true, text: '', attachment, replyTo: id,
-            time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-          }],
-        }));
-        setMediaViewerId(newId);
-      }
-    } else if (activeChannel.kind === 'text') {
-      if (current.mine) {
-        setChannelExamples(previous => ({
-          ...previous,
-          [communityKey]: (previous[communityKey] ?? visibleChannelMessages).map(message =>
-            message.id === id ? { ...message, attachment, edited: true } : message
-          ),
-        }));
-      } else {
-        const newId = Date.now() + Math.random();
-        setChannelExamples(previous => ({
-          ...previous,
-          [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
-            id: newId, mine: true, text: '', attachment,
-            time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-          }],
-        }));
-        setMediaViewerId(newId);
-      }
+    const attachment = { kind: 'image' as const, name: 'foto-editada.png',
+      url, size: image.size, mimeType: 'image/png' };
+    if (current.mine) {
+      setChannelExamples(previous => ({
+        ...previous,
+        [communityKey]: (previous[communityKey] ?? visibleChannelMessages).map(message =>
+          message.id === id ? { ...message, attachment, edited: true } : message),
+      }));
+    } else {
+      const newId = Date.now() + Math.random();
+      setChannelExamples(previous => ({
+        ...previous,
+        [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
+          id: newId, mine: true, text: '', attachment, time: 'Agora',
+        }],
+      }));
+      setMediaViewerId(newId);
     }
   }
 
@@ -366,6 +259,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
 
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle}
+                onMobileOpenChange={setConversationOpened}
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
 
