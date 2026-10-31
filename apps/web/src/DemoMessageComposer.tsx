@@ -469,12 +469,12 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
         </div>
         <div className="relative min-w-0 flex-1">
           <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => updateText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? t('Edite sua mensagem…') : placeholder} maxLength={2000} disabled={isRecording} className="block min-h-12 max-h-52 w-full min-w-0 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
-          {emojiOpen && <div role="dialog" aria-label={t('Lista de emojis')} onKeyDown={event => { if (event.key === 'Escape') setEmojiOpen(false); }} className="absolute bottom-full right-0 z-50 mb-2 w-[min(340px,calc(100vw-24px))] rounded-none border border-border bg-popover p-3 text-popover-foreground shadow-xl">
+          {emojiOpen && <div role="dialog" aria-label={t('Lista de emojis')} onKeyDown={event => { if (event.key === 'Escape') setEmojiOpen(false); }} className="absolute bottom-full left-0 z-50 mb-2 w-[min(270px,calc(100vw-24px))] rounded-none border border-border bg-popover p-2 text-popover-foreground shadow-xl sm:left-auto sm:right-0 sm:w-[340px] sm:p-3">
             <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold">{t("Emojis")}</p><button type="button" aria-label={t('Fechar emojis')} onClick={() => setEmojiOpen(false)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
-            <div className="max-h-64 overflow-y-auto">
-              {EMOJI_GROUPS.map(group => <section key={t(group.label)} className="mb-3">
-                <p className="mb-1 text-xs text-muted-foreground">{group.label}</p>
-                <div className="grid grid-cols-6 gap-1">{group.emojis.map(emoji => <button type="button" key={emoji} aria-label={t('Emojis') + ' ' + emoji} onMouseDown={event => event.preventDefault()} onClick={() => { updateText(activeText + emoji); textareaRef.current?.focus(); }} className="grid size-10 place-items-center text-xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{emoji}</button>)}</div>
+            <div className="max-h-[min(220px,36dvh)] overflow-y-auto overscroll-contain sm:max-h-64">
+              {EMOJI_GROUPS.map(group => <section key={t(group.label)} className="mb-2 sm:mb-3">
+                <p className="mb-1 text-xs text-muted-foreground">{t(group.label)}</p>
+                <div className="grid grid-cols-7 gap-1 sm:grid-cols-6">{group.emojis.map(emoji => <button type="button" key={emoji} aria-label={t('Emojis') + ' ' + emoji} onMouseDown={event => event.preventDefault()} onClick={() => { updateText(activeText + emoji); textareaRef.current?.focus(); }} className="grid size-8 place-items-center text-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:size-10 sm:text-xl">{emoji}</button>)}</div>
               </section>)}
             </div>
           </div>}
