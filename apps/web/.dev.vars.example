@@ -1,0 +1,4 @@
+# Optional for `npm run preview:worker -w @uorqui/web`.
+# Copy to apps/web/.dev.vars; never commit real local values.
+# This is the NEW, separate Fastify API origin. NOT the existing Uorqui legacy app.
+API_ORIGIN=http://127.0.0.1:3001

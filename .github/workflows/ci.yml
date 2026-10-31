@@ -19,6 +19,8 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Validate Cloudflare Worker bundle without deploying
+        run: npm run check:worker -w @uorqui/web
       - name: Check Drizzle migration files for schema drift
         shell: bash
         run: |
