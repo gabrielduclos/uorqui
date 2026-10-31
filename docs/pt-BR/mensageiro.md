@@ -13,7 +13,7 @@ O mensageiro individual usa autenticação Better Auth, PostgreSQL no Neon e as 
 - Atualização instantânea via **SSE e PostgreSQL LISTEN/NOTIFY**, com polling de segurança quando necessário. Ainda não há push com o aplicativo fechado nem presença online.
 - Interface mobile-first preservando header fixo e teclado; campo de digitação com contraste em Light/Dark e sem indicador “Ao vivo”.
 - Balão otimista e spinner no envio, sem bloquear o compositor; reenvio após falhas usa o mesmo `clientId`.
-- Editar texto próprio, excluir para ambos com tombstone, encaminhar mensagens entre conversas existentes e reagir a mensagens recebidas com atualização SSE. Reações são otimistas e revertidas em caso de erro.\n- **Responder** vincula a nova mensagem ao ID da mensagem original, mostrando sua prévia no balão sem duplicar o texto no corpo. As prévias de origens excluídas não revelam o texto apagado.\n- Com a **lista de conversas aberta, visível e em foco**, as mensagens recebidas são marcadas como **Recebidas**, mesmo sem entrar na conversa; **Lida** exige conversa aberta, visível e em foco.
+- Editar texto próprio, excluir para ambos com tombstone, encaminhar mensagens entre conversas existentes e reagir a mensagens recebidas com atualização SSE. Reações são otimistas e revertidas em caso de erro.\n- **Responder** vincula a nova mensagem ao ID da mensagem original, mostrando sua prévia clicável no balão sem duplicar o texto no corpo. Toque na prévia para rolar até a mensagem original, inclusive carregando uma janela mais antiga do histórico, com destaque temporário. As prévias de origens excluídas não revelam o texto apagado.\n- Com a **lista de conversas aberta, visível e em foco**, as mensagens recebidas são marcadas como **Recebidas**, mesmo sem entrar na conversa; **Lida** exige conversa aberta, visível e em foco.
 
 ### API
 - `GET /api/v1/dm/people?q=`: busca autenticada, apenas perfis públicos.
@@ -59,3 +59,11 @@ A migração `0003_live_direct_messages` acrescenta `client_id` (UUID único) e 
 
 ### Próximas etapas
 Paginação do histórico, anexos privados no R2, push, controle antispam e moderação.
+
+### Cancelamento, eventos de reação e navegação
+
+- `DELETE /api/v1/dm/conversations/:id/messages/:messageId` cancela uma mensagem própria **não lida**: remoção definitiva, sem ocupar espaço no chat. Caso `read_at` esteja preenchido, retorna `409` e não altera a mensagem.
+- `GET /api/v1/dm/conversations/:id/messages?around=<uuid>` retorna um trecho autorizado do histórico em torno de uma mensagem original, para rolagem/destaque ao tocar na resposta.
+- Reações aparecem como eventos/balões separados junto à mensagem original e seguem otimistas, com desfazer.
+- O ícone Conversas exibe o total de mensagens não lidas em toda a conta, por SSE/polling, em mobile e desktop.
+- Identidade visual: balões de mensagens com cantos retos.

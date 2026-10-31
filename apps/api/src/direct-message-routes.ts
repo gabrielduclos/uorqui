@@ -131,13 +131,20 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
     }catch(e){request.log.error({err:e},'DM open');return reply.code(503).send({error:'Unavailable'});}
   });
   app.get('/api/v1/dm/conversations/:id/messages',{
-    schema:{params:pathParams}
+    schema:{params:pathParams,querystring:{type:'object',additionalProperties:false,properties:{around:uuidParam}}}
   },async(request,reply)=>{
     try{
       const me=await identity(request,getSession);
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const {around}=request.query as {around?:string};
+      let anchor: {created_at: string; id: string} | undefined;
+      if(around){
+        const source=await getPool().query('SELECT created_at,id FROM direct_messages WHERE id=$1 AND conversation_id=$2',[around,id]);
+        if(!source.rowCount)return reply.code(404).send({error:'Message unavailable'});
+        anchor=source.rows[0];
+      }
       const reactions = `COALESCE((SELECT json_agg(json_build_object('emoji', grouped.emoji, 'count', grouped.n)) FROM
         (SELECT emoji, COUNT(*)::int AS n FROM direct_message_reactions WHERE message_id=dm.id GROUP BY emoji ORDER BY emoji) grouped), '[]'::json) AS reactions`;
       const query='SELECT '+messageColumns+', '+reactions+
@@ -145,8 +152,10 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN original.body ELSE \'\' END,'+
         '\'authorId\',original.author_id,\'deleted\',original.deleted_at IS NOT NULL) FROM direct_messages original'+
         ' WHERE original.id=dm.reply_to_id AND original.conversation_id=dm.conversation_id) AS "replyTo"'+
-        ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC';
-      const r=await getPool().query(query,[id,me]);
+        (anchor
+          ? ' FROM (SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND (created_at,id) <= ($3::timestamptz,$4::uuid) ORDER BY created_at DESC,id DESC LIMIT 50) older UNION ALL SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND (created_at,id) > ($3::timestamptz,$4::uuid) ORDER BY created_at ASC,id ASC LIMIT 50) newer) dm ORDER BY created_at ASC,id ASC'
+          : ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC');
+      const r=await getPool().query(query,anchor?[id,me,anchor.created_at,anchor.id]:[id,me]);
       return reply.header('Cache-Control',noCache).send({messages:r.rows});
     }catch(e){request.log.error({err:e},'DM messages');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -209,7 +218,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
   });
 
   // Actions always check conversation membership, and own-message mutations check the author.
-  // Soft deletion clears the stored text while leaving a tombstone in the timeline.
+  // Unread cancellation permanently removes the message, without a tombstone.
   const messagePath = '/api/v1/dm/conversations/:id/messages/:messageId';
   const messageParams = { type:'object', required:['id','messageId'], additionalProperties:false,
     properties:{id:uuidParam,messageId:uuidParam} };
@@ -234,11 +243,17 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,messageId}=request.params as {id:string;messageId:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET body=\'\', deleted_at=now() WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL RETURNING id',[messageId,id,me]);
-      if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
-      await getPool().query('DELETE FROM direct_message_reactions WHERE message_id=$1',[messageId]);
-      await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM delete notification failed'));
-      return reply.header('Cache-Control',noCache).send({deleted:true});
+      // Atomic unread-only cancel: the message vanishes from history entirely.
+      // Concurrent read receipts cannot race past this WHERE predicate.
+      const r=await getPool().query('DELETE FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND read_at IS NULL RETURNING id',[messageId,id,me]);
+      if(!r.rowCount){
+        const existing=await getPool().query('SELECT read_at FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND author_id=$3',[messageId,id,me]);
+        if(existing.rowCount && existing.rows[0].read_at)return reply.code(409).send({error:'Message already read'});
+        return reply.code(404).send({error:'Message unavailable'});
+      }
+      // Reactions cascade and reply references become null through their foreign keys.
+      await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM cancel notification failed'));
+      return reply.header('Cache-Control',noCache).send({canceled:true});
     }catch(e){request.log.error({err:e},'DM delete');return reply.code(503).send({error:'Unavailable'});}
   });
   const reactionsPath = messagePath + '/reaction';
