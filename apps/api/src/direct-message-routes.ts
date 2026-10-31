@@ -163,6 +163,9 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const {body,clientId,replyToId}=request.body as {body:string;clientId:string;replyToId?:string};
       const text=body.trim();
       if(!text||text.length>4000)return reply.code(400).send({error:'Invalid message'});
+      // An already-persisted retry must remain idempotent even if its reply source was deleted later.
+      const existing=await getPool().query('SELECT '+messageColumns+' FROM direct_messages WHERE client_id=$1 AND conversation_id=$2 AND author_id=$3',[clientId,id,me]);
+      if(existing.rowCount)return reply.header('Cache-Control',noCache).send({message:existing.rows[0]});
       if(replyToId){
         const source=await getPool().query('SELECT id FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL',[replyToId,id]);
         if(!source.rowCount)return reply.code(404).send({error:'Reply target unavailable'});
