@@ -68,7 +68,7 @@ export function DemoAttachmentView({ attachment, onOpenMedia }: { attachment: De
   }
   return <a href={attachment.url} download={attachment.name} className="mt-1 flex min-w-0 items-center gap-2 border border-current/20 px-3 py-2 underline underline-offset-2">
     <FileText aria-hidden="true" className="size-5 shrink-0" />
-    <span className="min-w-0 flex-1 text-sm">Arquivo</span>
+    <span className="min-w-0 flex-1 text-sm">{t("Arquivo")}</span>
     <span className="shrink-0 text-xs opacity-75">{formatSize(attachment.size)}</span>
   </a>;
 }
@@ -418,7 +418,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       {(editing || replyPreview) && <div className="flex items-center gap-3 border-l-2 border-primary bg-muted/55 px-3 py-2 text-sm">
         {editing ? <Pencil className="size-4 shrink-0 text-primary" /> : <Reply className="size-4 shrink-0 text-primary" />}
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold">{editing ? 'Editando mensagem' : t("Respondendo a ") + replyPreview?.author}</p>
+          <p className="text-xs font-semibold">{editing ? t("Editando mensagem") : t("Respondendo a ") + replyPreview?.author}</p>
           <p className="truncate text-xs text-muted-foreground">{editing?.text ?? replyPreview?.text}</p>
         </div>
         <Button type="button" size="icon-sm" variant="ghost" aria-label={editing ? t('Cancelar edição') : t('Cancelar resposta')} onClick={() => editing ? onCancelEditing?.() : onCancelReply?.()}><X className="size-4" /></Button>
@@ -444,19 +444,19 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       <div ref={controlsRef} className="relative flex min-w-0 items-end gap-1 sm:gap-2">
         {pickerOpen && <div role="dialog" aria-label={t('Adicionar à conversa')} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setPickerOpen(false); setCameraOptions(false); } }} className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-[520px] rounded-none border border-border bg-popover p-2 text-popover-foreground shadow-xl">
           <div className="mb-1 flex items-center justify-between gap-2 px-1">
-            <p className="truncate text-xs font-medium">{cameraOptions ? 'Câmera' : 'Adicionar'}</p>
+            <p className="truncate text-xs font-medium">{cameraOptions ? t("Câmera") : t("Adicionar")}</p>
             <button type="button" aria-label={t("Fechar anexos")} onClick={() => { setPickerOpen(false); setCameraOptions(false); }} className="grid size-7 shrink-0 place-items-center hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-4" /></button>
           </div>
           {cameraOptions ? <div className="grid grid-cols-3 gap-1">
             <button type="button" onClick={() => chooseCamera('image')} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Camera className="size-5 text-primary" />{t("Foto")}</button>
             <button type="button" onClick={() => chooseCamera('video')} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Video className="size-5 text-primary" />{t('Vídeo')}</button>
-            <button type="button" onClick={() => setCameraOptions(false)} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-5 text-muted-foreground" />Voltar</button>
+            <button type="button" onClick={() => setCameraOptions(false)} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-5 text-muted-foreground" />{t("Voltar")}</button>
           </div> : <div className="grid grid-cols-4 gap-1">
             {([
-              { label: 'Câmera', Icon: Camera, action: () => setCameraOptions(true) },
+              { label: t("Câmera"), Icon: Camera, action: () => setCameraOptions(true) },
               { label: t("Galeria"), Icon: Images, action: chooseGallery },
-              { label: 'Arquivos', Icon: FileText, action: chooseFile },
-              { label: 'Localização', Icon: MapPin, action: chooseLocation },
+              { label: t("Arquivos"), Icon: FileText, action: chooseFile },
+              { label: t("Localização"), Icon: MapPin, action: chooseLocation },
             ] as const).map(item => <button key={item.label} type="button" onClick={item.action} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-0.5 text-[10px] sm:text-xs hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
               <item.Icon className="size-5 shrink-0 text-primary" />{item.label}
             </button>)}
@@ -481,9 +481,9 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
         </div>
         <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 sm:size-11" aria-label={t("Abrir lista de emojis")} aria-haspopup="dialog" aria-expanded={emojiOpen} disabled={isRecording || !!editing} onClick={() => { setEmojiOpen(open => !open); setPickerOpen(false); }}><Smile className="size-5" /></Button>
         <Button type={isRecording || !canSend ? 'button' : 'submit'} variant={isRecording ? 'destructive' : !canSend ? 'ghost' : 'default'} size="icon"
-          aria-label={t(isRecording ? 'Finalizar gravação' : canSend ? (editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração') : 'Gravar áudio')}
+          aria-label={t(isRecording ? t("Finalizar gravação") : canSend ? (editing ? t("Salvar edição da mensagem") : t("Enviar mensagem de demonstração")) : t("Gravar áudio"))}
           disabled={locating || (!!editing && !canSend)}
-          title={isRecording ? t("Finalizar gravação") : canSend ? t("Enviar") : 'Gravar áudio'}
+          title={isRecording ? t("Finalizar gravação") : canSend ? t("Enviar") : t("Gravar áudio")}
           onClick={isRecording || !canSend ? () => void toggleRecording() : undefined}
           className="size-10 shrink-0 sm:size-11">
           {isRecording ? <Square className="size-4" fill="currentColor" /> : canSend ? <Send className="size-5" /> : <Mic className="size-5" />}
