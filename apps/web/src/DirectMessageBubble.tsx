@@ -8,7 +8,7 @@ export type DirectChatMessage = {
   id: string; conversationId: string; authorId: string; body: string;
   clientId: string | null; createdAt: string; readAt: string | null;
   deliveredAt: string | null; editedAt: string | null; deletedAt: string | null; forwarded: boolean;
-  pendingStatus?: 'sending' | 'failed';
+  pendingStatus?: 'sending' | 'failed'; statusUpdatedAt?: string;
   reactions: { emoji: string; count: number }[]; myReaction: string | null;
 };
 
