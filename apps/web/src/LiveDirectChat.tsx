@@ -81,7 +81,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
 
   /** A selected list row is not a read receipt: only the visible chat panel counts. */
   const isConversationVisible = useCallback((id: string) => {
-    if (activeIdRef.current !== id || document.visibilityState !== 'visible') return false;
+    if (activeIdRef.current !== id || document.visibilityState !== 'visible' || !document.hasFocus()) return false;
     if (window.matchMedia('(max-width: 767px)').matches && !mobileOpenedRef.current) return false;
     const node = panelRef.current;
     if (!node || !node.isConnected || node.getClientRects().length === 0) return false;
@@ -254,7 +254,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     const check = () => setVisibilityTick(v => v + 1);
     document.addEventListener('visibilitychange', check);
     window.addEventListener('focus', check);
-    return () => { document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check); };
+    window.addEventListener('blur', check);
+    return () => { document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check); window.removeEventListener('blur', check); };
   }, []);
   useEffect(() => {
     if (!activeId || messagesLoading || !positionedRef.current || !atBottom ||
