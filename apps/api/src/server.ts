@@ -9,6 +9,7 @@ import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 import { registerProfileRoutes } from './profile-routes.js';
 import { registerDirectMessageRoutes } from './direct-message-routes.js';
+import { closeDmEvents } from './dm-events.js';
 
 const app = Fastify({
   logger: {
@@ -80,7 +81,7 @@ app.get('/health/ready', async (request, reply) => {
 app.get('/api/v1/status', async () => ({
   project: 'uorqui',
   stage: 'auth-development',
-  featuresEnabled: ['auth-scaffold', 'user-profiles', 'direct-messaging'],
+  featuresEnabled: ['auth-scaffold', 'user-profiles', 'direct-messaging', 'realtime-dm-sse'],
   publicRegistration: isPublicSignupEnabled(),
   registrationAvailable: isRegistrationAvailable(),
   developmentRegistrationEnabled: isDevelopmentSignupEnabled(),
@@ -236,6 +237,6 @@ try {
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    void app.close().then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
+    void app.close().then(closeDmEvents).then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
   });
 }
