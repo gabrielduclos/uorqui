@@ -47,16 +47,12 @@ export default {
     const upstreamUrl = new URL(incoming.pathname + incoming.search, origin);
     // Rebuild the request with the backend URL. Cookies and request body are
     // forwarded, but the new request gets the backend host automatically.
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-
     try {
-      const upstream = await fetch(new Request(upstreamUrl, {
-        method: request.method,
-        headers,
-        body: request.body,
-        redirect: 'manual',
-      }));
+      // Cloning an incoming Request preserves streaming bodies (including
+      // multipart uploads) without consuming or buffering them.
+      const forwarded = new Request(upstreamUrl.toString(), request);
+      forwarded.headers.delete('host');
+      const upstream = await fetch(forwarded, { redirect: 'manual' });
       const responseHeaders = new Headers(upstream.headers);
       responseHeaders.set('Cache-Control', 'no-store');
       return new Response(upstream.body, {
