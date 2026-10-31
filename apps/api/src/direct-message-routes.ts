@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getPool } from './db/client.js';
 import { subscribeDmEvents, publishDmConversationEvent } from './dm-events.js';
 
@@ -24,6 +25,17 @@ const attachmentProjection = 'CASE WHEN attachment_id IS NULL THEN NULL ELSE jso
 const messageColumns = 'id, conversation_id AS "conversationId", author_id AS "authorId", body, client_id AS "clientId", created_at AS "createdAt", read_at AS "readAt", delivered_at AS "deliveredAt", edited_at AS "editedAt", deleted_at AS "deletedAt", (forwarded_from_id IS NOT NULL) AS "forwarded", reply_to_id AS "replyToId", '+attachmentProjection;
 const allowedAttachmentTypes = new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream']);
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+function verifiedAttachmentUpload(request:FastifyRequest, conversationId:string, clientId:string,
+  attachment:{id:string;name:string;type:string;size:number}) {
+  // Server-to-server proof: the public Fastify endpoint must not accept fake
+  // R2 attachment metadata posted directly by a browser or another client.
+  const secret=process.env.DM_ATTACHMENT_PROOF_SECRET;
+  const proof=request.headers['x-uorqui-attachment-proof'];
+  if(!secret || secret.length<32 || typeof proof!=='string' || !/^[0-9a-f]{64}$/.test(proof))return false;
+  const canonical=JSON.stringify([conversationId,clientId,attachment.id,attachment.name,attachment.type,attachment.size]);
+  const expected=createHmac('sha256',secret).update(canonical).digest('hex');
+  return timingSafeEqual(Buffer.from(proof,'hex'),Buffer.from(expected,'hex'));
+}
 const pathParams = { type:'object', required:['id'], properties:{ id:uuidParam } };
 const noCache = 'no-store';
 
@@ -214,6 +226,8 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const {body,clientId,replyToId,attachment}=request.body as {body:string;clientId:string;replyToId?:string;attachment?:{id:string;name:string;type:string;size:number}};
       const text=body.trim();
       if((!text&&!attachment)||text.length>4000)return reply.code(400).send({error:'Invalid message'});
+      if(attachment && !verifiedAttachmentUpload(request,id,clientId,attachment))
+        return reply.code(403).send({error:'Invalid attachment upload proof'});
       if(attachment && (!allowedAttachmentTypes.has(attachment.type) ||
         attachment.name.trim()!==attachment.name || /[\\/\r\n\u0000-\u001f]/.test(attachment.name) ||
         attachment.size>MAX_ATTACHMENT_BYTES)) return reply.code(400).send({error:'Invalid attachment'});
