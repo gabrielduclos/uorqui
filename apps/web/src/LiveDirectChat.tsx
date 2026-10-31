@@ -411,7 +411,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         list.getClientRects().length === 0) return;
     for (const thread of threads) {
       const key = thread.id + ':' + thread.lastAt;
-      if (thread.lastAuthorId === myId || !thread.lastAt || receivedIds.current.has(key) || receiving.current.has(thread.id)) continue;
+      if (thread.unreadCount === 0 || !thread.lastAt || receivedIds.current.has(key) || receiving.current.has(thread.id)) continue;
       receiving.current.add(thread.id);
       void api('/api/v1/dm/conversations/' + thread.id + '/received', { method: 'POST' })
         .then(() => receivedIds.current.add(key))
@@ -665,7 +665,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                 const status = blockReceipts.get(message.id);
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message}
-                    mine={message.authorId === myId} locale={locale} onReply={respond}
+                    mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     disabled={actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onDelete={setDeleteTarget}
                     onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
                     onReact={(message, emoji) => void react(message, emoji)}
@@ -709,7 +709,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
           </div>}
           {replySource && !editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
             <div className="min-w-0 flex-1">
-              <span className="block font-semibold">{pt ? 'Respondendo à mensagem' : 'Replying to message'}</span>
+              <span className="block font-semibold">{pt ? 'Respondendo a ' : 'Replying to '}{replySource.authorId === myId ? (pt ? 'você' : 'you') : active.peerName}</span>
               <span className="mt-0.5 block truncate text-muted-foreground">{replySource.body}</span>
             </div>
             <button type="button" onClick={() => setReplySource(null)}
