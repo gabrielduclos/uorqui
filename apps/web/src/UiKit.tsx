@@ -97,7 +97,6 @@ export default function UiKit() {
               <div className="relative"><Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label={pt ? 'Pesquisar' : 'Search'} placeholder={pt ? 'Pesquisar…' : 'Search…'} className="pl-9" /></div>
               <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={checked} onChange={event => setChecked(event.target.checked)} className="size-4 accent-primary" />{pt ? 'Receber notificações' : 'Receive notifications'}</label>
             </CardContent></Card>
-          </Card>
           <Card><CardHeader><CardTitle className="text-lg">{pt ? 'Etiquetas e avisos' : 'Badges and notices'}</CardTitle><CardDescription>{pt ? 'Estados sem depender apenas da cor' : 'States that never rely on color alone'}</CardDescription></CardHeader>
             <CardContent className="space-y-5">
               <div className="flex flex-wrap gap-2"><Badge>{pt ? 'Ativo' : 'Active'}</Badge><Badge variant="secondary">{pt ? 'Pendente' : 'Pending'}</Badge><Badge variant="outline">Beta</Badge><Badge variant="destructive">{pt ? 'Erro' : 'Error'}</Badge></div>
