@@ -34,10 +34,6 @@ jobs:
         shell: bash
         run: |
           npm run db:generate
-          for generated in apps/api/drizzle/0008_*.sql; do
-            if [[ -f "$generated" ]]; then cat "$generated"; fi
-          done
-          node -e 'const fs=require("fs");const p="apps/api/drizzle/meta/0008_snapshot.json";if(fs.existsSync(p)){const x=JSON.parse(fs.readFileSync(p));console.log("GENERATED_SNAPSHOT_ATTACHMENT_COLUMNS",JSON.stringify(Object.fromEntries(Object.entries(x.tables["public.direct_messages"].columns).filter(([k])=>k.startsWith("attachment_")))));console.log("GENERATED_SNAPSHOT_CHECKS",JSON.stringify(x.tables["public.direct_messages"].checkConstraints));}'
           if [[ -n "$(git status --porcelain -- apps/api/drizzle)" ]]; then
             echo 'Drizzle schema changed without committed migration artifacts' >&2
             git status --short -- apps/api/drizzle
