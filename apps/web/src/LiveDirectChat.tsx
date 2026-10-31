@@ -3,6 +3,8 @@ import { ArrowDown, ArrowLeft, MessageCircle, Search, UserPlus, X } from 'lucide
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
+import { attachmentLabel } from './chatAttachmentLabels';
+import { invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -12,7 +14,7 @@ import { cn } from '@/lib/utils';
 
 type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
-  lastBody: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
+  lastBody: string | null; lastAttachmentType?: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
   unreadReactionCount: number; lastReactionEmoji: string | null; lastReactionAt: string | null; lastReactionMessageId: string | null; lastReactionAuthorId: string | null;
   pendingReceivedAt: string | null;
 };
@@ -542,6 +544,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setActionBusy(true); setChatError('');
     try {
       await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id, { method:'DELETE' });
+      if(message.attachment)invalidateChatMedia('/media/dm/'+id+'/'+message.attachment.id);
       setCancelTarget(null);
       setMessages(previous => previous.filter(item => item.id !== message.id));
       if (editing?.id === message.id) cancelEdit();
@@ -658,7 +661,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
       attachment:{id:clientId,name:file.name,type:mime,size:file.size},attachmentUrl:previewUrl,
       replyToId:replySource?.id??null,
-      replyTo:replySource ? {id:replySource.id,body:replySource.body || ('📎 ' + (replySource.attachment?.name ?? '')),authorId:replySource.authorId,deleted:false} : null,
+      replyTo:replySource ? {id:replySource.id,body:replySource.body || (replySource.attachment ? attachmentLabel(replySource.attachment.type,locale) : ''),authorId:replySource.authorId,deleted:false} : null,
     };
     setPendingMessages(prev=>[...prev,pending]);
     setReplySource(null);
@@ -670,7 +673,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     if(!conversationId || busy || !Number.isFinite(latitude) || !Number.isFinite(longitude)
        || Math.abs(latitude)>90 || Math.abs(longitude)>180)return;
     const lat=latitude.toFixed(6),lon=longitude.toFixed(6);
-    const link='https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lon+'#map=15/'+lat+'/'+lon;
+    const link='https://www.google.com/maps?q='+lat+','+lon;
     const body='📍 '+(pt?'Localização compartilhada':'Shared location')+'\n'+link+(caption?'\n'+caption:'');
     const clientId=crypto.randomUUID(),createdAt=new Date().toISOString();
     const pending:PendingMessage={
@@ -789,7 +792,11 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                   ? (thread.lastReactionAuthorId === myId
                       ? (pt ? 'Você reagiu ' + thread.lastReactionEmoji + ' à mensagem' : 'You reacted ' + thread.lastReactionEmoji + ' to a message')
                       : (pt ? thread.peerName + ' reagiu ' + thread.lastReactionEmoji + ' à sua mensagem' : thread.peerName + ' reacted ' + thread.lastReactionEmoji + ' to your message'))
-                  : thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : thread.lastBody ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '') + thread.lastBody : '@' + thread.peerHandle}
+                  : thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message')
+                  : (thread.lastBody || thread.lastAttachmentType)
+                    ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '')
+                      + (thread.lastBody || attachmentLabel(thread.lastAttachmentType,locale))
+                    : '@' + thread.peerHandle}
               </span>
               {thread.unreadCount > 0 && <span aria-label={String(thread.unreadCount) + (pt ? ' não lidas' : ' unread')}
                 className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-md bg-primary px-1 text-[10px] font-bold text-primary-foreground">
