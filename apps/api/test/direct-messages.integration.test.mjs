@@ -416,6 +416,16 @@ test('edited DMs restart sent/received/read without erasing the original read pr
   const before=await alice(path+'/messages');
   const original=before.data.messages.find(m=>m.id===initial.data.message.id);
   assert.ok(original.readAt && original.deliveredAt);
+  // Editing an older message must still restart delivery if a newer chat
+  // message exists (the inbox's last-message timestamp will not change).
+  const later=await alice(path+'/messages','POST',{
+    body:'Mensagem mais recente que não será editada',clientId:crypto.randomUUID(),
+  });
+  assert.equal(later.status,201);
+  await bob(path+'/read','POST');
+  const beforeEditList=await bob('/api/v1/dm/conversations');
+  const beforeEditThread=beforeEditList.data.conversations.find(c=>c.id===thread.id);
+  assert.equal(beforeEditThread.unreadCount,0);
 
   const edited=await alice(item,'PATCH',{body:'Versão revisada, precisa de novo recibo'});
   assert.equal(edited.status,200,JSON.stringify(edited.data));
@@ -426,7 +436,10 @@ test('edited DMs restart sent/received/read without erasing the original read pr
   assert.equal(edited.data.message.deliveredAt,original.deliveredAt);
   const unreadAgain=await bob('/api/v1/dm/conversations');
   const changed=unreadAgain.data.conversations.find(c=>c.id===thread.id);
-  assert.ok(changed.unreadCount>=1,'edited revision becomes unread again');
+  assert.equal(changed.unreadCount,1,'edited revision becomes unread again');
+  assert.equal(changed.lastAt,beforeEditThread.lastAt,'edit does not alter last-message timestamp');
+  assert.ok(changed.pendingReceivedAt,'even old message edits must have a fresh delivery key');
+  assert.ok(Date.parse(changed.pendingReceivedAt)>=Date.parse(edited.data.message.editedAt));
 
   const history=await bob(path+'/messages');
   const revised=history.data.messages.find(m=>m.id===original.id);
@@ -441,6 +454,9 @@ test('edited DMs restart sent/received/read without erasing the original read pr
   const redelivered=await bob(path+'/received','POST');
   assert.equal(redelivered.status,200);
   assert.ok(redelivered.data.received>=1);
+  const receivedInbox=await bob('/api/v1/dm/conversations');
+  assert.equal(receivedInbox.data.conversations.find(c=>c.id===thread.id).pendingReceivedAt,null,
+    'no unreceived edits remain after confirming receipt');
   const updatedReceipt=await alice(path+'/messages');
   const receivedVersion=updatedReceipt.data.messages.find(m=>m.id===original.id);
   assert.ok(Date.parse(receivedVersion.deliveredAt)>=Date.parse(receivedVersion.editedAt),
