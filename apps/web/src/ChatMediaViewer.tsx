@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Pencil, X } from 'lucide-react';
 import { ChatImageEditor } from './ChatImageEditor';
+import { ZoomableChatPhoto } from './ZoomableChatPhoto';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { useCachedChatMedia } from './chatMediaCache';
 import { createPortal } from 'react-dom';
@@ -83,8 +84,7 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"
             aria-label={pt?'Mídia anterior':'Previous media'}><ChevronLeft className="size-6"/></button>
           <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
-            {image?<img key={active.id} src={cached || url} alt={displayedName}
-              className="max-h-[76dvh] max-w-full object-contain"/>:
+            {image?<ZoomableChatPhoto key={active.id} src={cached || url} alt={displayedName} locale={locale}/>:
               <video key={active.id} src={videoSrc || url} controls playsInline preload="metadata"
                 onPlay={()=>setVideoPlaying(true)} onPause={()=>setVideoPlaying(false)}
                 className="max-h-[76dvh] max-w-full" aria-label={displayedName}/>}
