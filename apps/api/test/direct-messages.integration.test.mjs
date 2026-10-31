@@ -242,6 +242,10 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
   const seen=await alice(path+'/messages');
   assert.equal(seen.data.messages.find(m=>m.id===reply.id).body,'Recebido, editado!');
 
+  const aliceIdentity=await alice('/api/v1/me');
+  const bobIdentity=await bob('/api/v1/me');
+  assert.equal(aliceIdentity.status,200);
+  assert.equal(bobIdentity.status,200);
   const aliceBeforeReaction=await alice('/api/v1/dm/conversations');
   const previousAliceUnread=aliceBeforeReaction.data.conversations.find(c=>c.id===thread.id).unreadCount;
   const selfReaction=await bob(item+'/reaction','PUT',{emoji:'👍'});
@@ -259,8 +263,8 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
   assert.equal(reactionThread.unreadCount,1,'reaction contributes to total unread badge');
   assert.equal(reactionThread.lastReactionEmoji,'❤️','inbox previews the latest reaction');
   assert.equal(reactionThread.lastReactionMessageId,reply.id);
-  assert.ok(reactionThread.lastReactionAuthorId && reactionThread.lastReactionAuthorId!==reply.authorId,
-    'recipient inbox must identify reacting peer');
+  assert.equal(reactionThread.lastReactionAuthorId,aliceIdentity.data.user.id,
+    'recipient inbox must identify the reactor');
   assert.ok(reactionThread.lastReactionAt);
   const aliceInbox=await alice('/api/v1/dm/conversations');
   const aliceReactionThread=aliceInbox.data.conversations.find(c=>c.id===thread.id);
@@ -271,9 +275,9 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
   assert.equal(aliceReactionThread.lastReactionEmoji,'❤️',
     'reactor must see their reaction in inbox preview');
   assert.equal(aliceReactionThread.lastReactionMessageId,reply.id);
-  assert.ok(aliceReactionThread.lastReactionAuthorId &&
-    aliceReactionThread.lastReactionAuthorId!==reply.authorId,
-    'inbox distinguishes outgoing reactions from incoming ones');
+  assert.equal(aliceReactionThread.lastReactionAuthorId,aliceIdentity.data.user.id,
+    'reactor inbox identifies own reaction');
+  assert.notEqual(aliceReactionThread.lastReactionAuthorId,bobIdentity.data.user.id);
 
   const historyOnly=await bob(path+'/messages');
   assert.equal(historyOnly.status,200);
