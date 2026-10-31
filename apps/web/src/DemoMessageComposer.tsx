@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { FileAudio, FileText, Image, Mic, Paperclip, Send, Square, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -14,6 +14,22 @@ export type ComposePayload = { text: string; attachment?: DemoAttachment };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_FILE_LABEL = '50 MB';
+const COMPOSER_MIN_HEIGHT = 48;
+const COMPOSER_MAX_HEIGHT = 208;
+
+function resizeMessageField(field: HTMLTextAreaElement) {
+  // Keep the scrollbar hidden while measuring so a one-line message never shows it.
+  field.style.overflowY = 'hidden';
+  field.style.height = 'auto';
+
+  // scrollHeight includes padding, but excludes borders. Account for both borders
+  // to avoid the unwanted desktop scrollbar when the textarea is nearly empty.
+  const styles = window.getComputedStyle(field);
+  const borderSize = (Number.parseFloat(styles.borderTopWidth) || 0) + (Number.parseFloat(styles.borderBottomWidth) || 0);
+  const neededHeight = field.scrollHeight + borderSize;
+  field.style.height = Math.min(COMPOSER_MAX_HEIGHT, Math.max(COMPOSER_MIN_HEIGHT, neededHeight)) + 'px';
+  field.style.overflowY = neededHeight > COMPOSER_MAX_HEIGHT ? 'auto' : 'hidden';
+}
 
 function formatSize(bytes: number) {
   return bytes < 1024 * 1024 ? Math.max(1, Math.ceil(bytes / 1024)) + ' KB' : (bytes / (1024 * 1024)).toFixed(1) + ' MB';
@@ -71,11 +87,24 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
     };
   }, []);
 
-  useEffect(() => {
-    if (!textareaRef.current) return;
-    textareaRef.current.style.height = 'auto';
-    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 144) + 'px';
+  useLayoutEffect(() => {
+    if (textareaRef.current) resizeMessageField(textareaRef.current);
   }, [text]);
+
+  useEffect(() => {
+    const row = textareaRef.current?.parentElement;
+    if (!row || typeof ResizeObserver === 'undefined') return;
+
+    let previousWidth = row.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = row.clientWidth;
+      if (nextWidth === previousWidth) return;
+      previousWidth = nextWidth;
+      if (textareaRef.current) resizeMessageField(textareaRef.current);
+    });
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, []);
 
   function replacePending(next: DemoAttachment | null) {
     if (stagedRef.current) URL.revokeObjectURL(stagedRef.current.url);
@@ -231,7 +260,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
         <Button type="button" variant={isRecording ? 'destructive' : 'ghost'} size="icon" className="size-11 shrink-0" aria-label={isRecording ? 'Finalizar gravação' : 'Gravar áudio'} onClick={() => void toggleRecording()} title={isRecording ? 'Finalizar gravação' : 'Gravar áudio pelo microfone'}>
           {isRecording ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-5" />}
         </Button>
-        <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={text} onChange={event => setText(event.target.value)} onKeyDown={handleKeyDown} placeholder={placeholder} maxLength={2000} disabled={isRecording} className="min-h-11 max-h-36 min-w-0 flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
+        <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={text} onChange={event => setText(event.target.value)} onKeyDown={handleKeyDown} placeholder={placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
         <Button type="submit" aria-label="Enviar mensagem de demonstração" size="icon" disabled={isRecording || (!text.trim() && !pending)} className="size-11 shrink-0"><Send className="size-4" /></Button>
       </div>
       <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>
