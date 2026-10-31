@@ -124,7 +124,7 @@ const en: Record<string, string> = {
   'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.': 'Private chats between two people, with a simple, familiar interface.',
   'Um espaço contínuo para textos, fotos e vídeos da sua rede.': 'A continuous stream of text, photos and videos from your network.',
   'Grupos com canais de texto e salas de voz organizados por assunto.': 'Communities with text channels and voice rooms organized by topic.',
-  'Identidade Uorqui': 'Your Uorqui identity', 'Bem-vindo ao Uorqui': 'Welcome to Uorqui',
+  'Identidade Uorqui': 'Your Uorqui identity',
   'Criar sua conta': 'Create your account', 'Recuperar acesso': 'Recover access',
   'Confirme seu e-mail': 'Confirm your email', 'Definir nova senha': 'Set a new password',
   'Entrar': 'Sign in', 'Seu perfil no Uorqui.': 'Your Uorqui profile.',
