@@ -12,9 +12,17 @@ const profileFields = {
   isPublic: profiles.isPublic, createdAt: users.createdAt,
 };
 
-function sanitizedImageUrl(value: unknown): string | null | undefined {
+const UUID_RE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const mediaPath = new RegExp('^/media/profile/(' + UUID_RE + ')/(avatar|cover)/(' + UUID_RE + ')\\.(webp|jpg|png)$');
+
+function sanitizedImageUrl(value: unknown, ownerId: string, kind: 'avatar' | 'cover'): string | null | undefined {
   if (value === undefined || value === null || value === '') return value === undefined ? undefined : null;
   if (typeof value !== 'string' || value.length > 2000) throw new Error('INVALID_IMAGE_URL');
+  const match = mediaPath.exec(value);
+  if (match) {
+    if (match[1] !== ownerId || match[2] !== kind) throw new Error('INVALID_IMAGE_URL');
+    return value;
+  }
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) throw new Error();
@@ -77,6 +85,37 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
     }
   });
 
+  app.get('/api/v1/media/access/:userId/:kind/:asset', {
+    schema: { params: {
+      type: 'object', additionalProperties: false,
+      required: ['userId', 'kind', 'asset'],
+      properties: {
+        userId: { type: 'string', format: 'uuid' },
+        kind: { type: 'string', enum: ['avatar', 'cover'] },
+        asset: { type: 'string', pattern: '^' + UUID_RE + '\\.(webp|jpg|png)$' },
+      },
+    } },
+  }, async (request, reply) => {
+    const { userId, kind, asset } = request.params as { userId: string; kind: 'avatar' | 'cover'; asset: string };
+    const expected = '/media/profile/' + userId + '/' + kind + '/' + asset;
+    try {
+      const [record] = await createDatabase().select({
+        isPublic: profiles.isPublic, avatarUrl: profiles.avatarUrl, coverUrl: profiles.coverUrl,
+      }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+      if (!record || (kind === 'avatar' ? record.avatarUrl : record.coverUrl) !== expected) {
+        return reply.status(404).send({ allowed: false });
+      }
+      if (!record.isPublic) {
+        const session = await readSession(request);
+        if (!session || session.user.id !== userId) return reply.status(404).send({ allowed: false });
+      }
+      return reply.header('Cache-Control', 'no-store').send({ allowed: true });
+    } catch (error) {
+      request.log.error({ err: error }, 'Media access validation failed');
+      return reply.status(503).send({ allowed: false });
+    }
+  });
+
   app.patch('/api/v1/me/profile', {
     schema: {
       body: {
@@ -111,8 +150,8 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
     let avatarUrl: string | null | undefined;
     let coverUrl: string | null | undefined;
     try {
-      avatarUrl = sanitizedImageUrl(body.avatarUrl);
-      coverUrl = sanitizedImageUrl(body.coverUrl);
+      avatarUrl = sanitizedImageUrl(body.avatarUrl, session.user.id, 'avatar');
+      coverUrl = sanitizedImageUrl(body.coverUrl, session.user.id, 'cover');
     } catch {
       return reply.status(400).send({ error: 'Image URL must be a valid HTTPS address' });
     }

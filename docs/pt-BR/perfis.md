@@ -6,7 +6,7 @@ Os perfis usam o login existente (Better Auth), o PostgreSQL Neon e as tabelas `
 
 ### Meu perfil
 - Nome exibido, @usuário (3–32 caracteres, minúsculas, único), biografia (até 500 caracteres).
-- Foto de perfil e capa via URL **HTTPS**. Upload binário nativo ainda não está disponível e deverá usar armazenamento dedicado.
+- Foto de perfil e capa via URL **HTTPS**. Upload direto disponível com Cloudflare R2, recorte e compressão no navegador.
 - Botão Perfil público: desativar oculta a pessoa das pesquisas e retorna 404 na rota pública. O proprietário mantém acesso privado em Meu perfil.
 - Atualizações validadas no servidor, em transação SQL; não aceitar campos arbitrários.
 
@@ -31,5 +31,17 @@ Os perfis usam o login existente (Better Auth), o PostgreSQL Neon e as tabelas `
 ## Banco e implantação
 Migração Drizzle `0002_profile_visibility_media` adiciona `avatar_url`, `cover_url` e `is_public` (padrão TRUE). Rodar primeiro no banco, então publicar a API e o frontend, evitando erros por coluna ausente. O UI Kit continua somente na documentação.
 
+
+## Upload de fotos e Cloudflare R2
+
+- Bucket novo e privado: `uorqui-profile-media`; não reutilizar `uorqui-media` ou `uorqui-chat-media`.
+- Binding do Worker: `PROFILE_MEDIA`; as rotas `/api/media/profile/avatar` e `/api/media/profile/cover` recebem POST com arquivo processado (WebP/JPEG/PNG, até 3 MB) ou DELETE para remover.
+- O editor de recorte no navegador salva avatar 640×640 e capa 1440×480, priorizando WebP.
+- A validação de sessão e a escrita do perfil continuam no Fastify/Neon, usando somente referências. Arquivos ficam no R2.
+- Leitura `/media/profile/{id}/{avatar|cover}/{asset}.{ext}` feita pelo Worker: consulta a API para confirmar que a imagem é a atual e que o perfil é público ou pertence à sessão autorizada.
+- Não habilitar domínio público do R2, acesso direto ao bucket nem cache público. Ao substituir/remover, URLs anteriores são invalidadas.
+- A configuração R2 exige vínculo no Cloudflare Worker em produção. A interface deve informar erros quando indisponível.
+- Links HTTPS externos antigos ainda são aceitos pela API para compatibilidade com perfis existentes.
+
 ## Próximas melhorias
-Upload de foto/capa com tratamento e hospedagem no R2 (ou storage equivalente), compressão, moderação, segurança de links externos e integração real do botão Conversar ao sistema de mensagens.
+Moderação de imagens, segurança de links externos antigos e integração real do botão Conversar ao sistema de mensagens.
