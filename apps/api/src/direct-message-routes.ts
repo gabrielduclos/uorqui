@@ -114,7 +114,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const query=[
         'SELECT c.id, c.created_at AS "createdAt", u.handle AS "peerHandle",',
         'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl",',
-        `COALESCE(NULLIF(m.body,''), CASE WHEN m.attachment_name IS NOT NULL THEN '📎 ' || m.attachment_name END) AS "lastBody", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",`,
+        `NULLIF(m.body,'') AS "lastBody", m.attachment_type AS "lastAttachmentType", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",`,
         'reaction.emoji AS "lastReactionEmoji", reaction.notified_at AS "lastReactionAt", reaction.message_id AS "lastReactionMessageId",',
         'reaction.user_id AS "lastReactionAuthorId",',
         '(COALESCE(unread.n,0) + COALESCE(unread_reactions.n,0))::int AS "unreadCount",',
@@ -123,7 +123,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'FROM direct_conversations c',
         'JOIN users u ON u.id=CASE WHEN c.participant_a_id=$1 THEN c.participant_b_id ELSE c.participant_a_id END',
         'JOIN profiles p ON p.user_id=u.id',
-        'LEFT JOIN LATERAL (SELECT body,attachment_name,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
+        'LEFT JOIN LATERAL (SELECT body,attachment_type,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
         'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL) unread ON true',
         'LEFT JOIN LATERAL (SELECT MAX(COALESCE(edited_at,created_at)) AS pending_received_at FROM direct_messages',
         ' WHERE conversation_id=c.id AND author_id<>$1 AND deleted_at IS NULL AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at))) incoming ON true',
@@ -175,7 +175,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         (SELECT emoji, COUNT(*)::int AS n FROM direct_message_reactions WHERE message_id=dm.id GROUP BY emoji ORDER BY emoji) grouped), '[]'::json) AS reactions`;
       const query='SELECT '+messageColumns+', '+reactions+
         ', (SELECT emoji FROM direct_message_reactions WHERE message_id=dm.id AND user_id=$2) AS "myReaction"'+
-        ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN COALESCE(NULLIF(original.body,\'\'),\'📎 \' || original.attachment_name) ELSE \'\' END,'+
+        ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN COALESCE(NULLIF(original.body,\'\'),CASE WHEN original.attachment_type LIKE \'image/%\' THEN \'📷 Foto\' WHEN original.attachment_type LIKE \'video/%\' THEN \'🎬 Vídeo\' WHEN original.attachment_type LIKE \'audio/%\' THEN \'🎤 Áudio\' WHEN original.attachment_type IS NOT NULL THEN \'📎 Arquivo\' END) ELSE \'\' END,'+
         '\'authorId\',original.author_id,\'deleted\',original.deleted_at IS NOT NULL) FROM direct_messages original'+
         ' WHERE original.id=dm.reply_to_id AND original.conversation_id=dm.conversation_id) AS "replyTo"'+
         (anchor
