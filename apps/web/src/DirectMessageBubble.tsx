@@ -1,13 +1,14 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Check, CheckCheck, Copy, Forward, MoreHorizontal, Pencil, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Forward, LoaderCircle, MoreHorizontal, Pencil, Reply, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type DirectChatMessage = {
   id: string; conversationId: string; authorId: string; body: string;
   clientId: string | null; createdAt: string; readAt: string | null;
-  editedAt: string | null; deletedAt: string | null; forwarded: boolean;
+  deliveredAt: string | null; editedAt: string | null; deletedAt: string | null; forwarded: boolean;
+  pendingStatus?: 'sending' | 'failed';
   reactions: { emoji: string; count: number }[]; myReaction: string | null;
 };
 
@@ -45,13 +46,14 @@ function SwipeToQuote({ children, onQuote }: { children: ReactNode; onQuote: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, onQuote, onEdit, onDelete, onForward, onReact, disabled }: {
+export function DirectMessageBubble({ message, mine, locale, onQuote, onEdit, onDelete, onForward, onReact, onRetry, disabled }: {
   message: DirectChatMessage; mine: boolean; locale: string;
   onQuote: (message: DirectChatMessage) => void;
   onEdit: (message: DirectChatMessage) => void;
   onDelete: (message: DirectChatMessage) => void;
   onForward: (message: DirectChatMessage) => void;
   onReact: (message: DirectChatMessage, emoji: string | null) => void;
+  onRetry: (message: DirectChatMessage) => void;
   disabled?: boolean;
 }) {
   const pt = locale === 'pt-BR';
@@ -121,16 +123,23 @@ export function DirectMessageBubble({ message, mine, locale, onQuote, onEdit, on
           <span className="block font-semibold">{pt ? 'Mensagem citada' : 'Quoted message'}</span>
           <span className="mt-0.5 block max-w-full truncate opacity-80">{quote[1]}</span>
         </blockquote>}
-        {message.deletedAt
-          ? <p className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</p>
-          : <p className="whitespace-pre-wrap break-words">{quote ? quote[2] : message.body}</p>}
-        <div className={cn('mt-1 flex items-center justify-end gap-1.5 text-[11px]', mine ? 'text-primary-foreground/75' : 'text-muted-foreground')}>
-          {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
-          <time dateTime={message.createdAt}>{timeLabel}</time>
-          {mine && (message.readAt
-            ? <CheckCheck className="size-3.5 text-sky-300" aria-label={pt ? 'Lida' : 'Read'}/>
-            : <Check className="size-3.5" aria-label={pt ? 'Enviada' : 'Sent'}/>)}
-        </div>
+
+        <p className="whitespace-pre-wrap break-words">
+          {message.deletedAt
+            ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
+            : (quote ? quote[2] : message.body)}
+          {' '}
+          <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap align-baseline text-[10px] opacity-80', mine ? 'text-primary-foreground' : 'text-muted-foreground')}>
+            {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
+            <time dateTime={message.createdAt}>{timeLabel}</time>
+            {mine && !message.deletedAt && (
+              message.pendingStatus === 'sending' ? <><LoaderCircle aria-label={pt ? 'Enviando' : 'Sending'} className="size-3 animate-spin"/><span>{pt ? 'Enviando' : 'Sending'}</span></>
+              : message.pendingStatus === 'failed' ? <button type="button" onClick={() => onRetry(message)}
+                  className="rounded border border-current px-1 font-semibold underline" aria-label={pt ? 'Falha ao enviar. Tentar novamente' : 'Failed to send. Retry'}>{pt ? 'Reenviar' : 'Retry'}</button>
+              : <span>{message.readAt ? (pt ? 'Lida' : 'Read') : message.deliveredAt ? (pt ? 'Recebida' : 'Received') : (pt ? 'Enviada' : 'Sent')}</span>
+            )}
+          </span>
+        </p>
       </div>
       {!!message.reactions?.length && !message.deletedAt && <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'justify-end' : 'justify-start')}>
         {message.reactions.map(reaction => <button key={reaction.emoji} type="button"
@@ -143,7 +152,7 @@ export function DirectMessageBubble({ message, mine, locale, onQuote, onEdit, on
         </button>)}
       </div>}
     </SwipeToQuote>
-    {!message.deletedAt && <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
+    {!message.deletedAt && !message.pendingStatus && <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
       aria-label={pt ? 'Opções da mensagem' : 'Message options'} aria-haspopup="menu" aria-expanded={open}
       disabled={disabled}
       className={cn('grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-opacity hover:bg-accent focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100',mine && 'order-first')}>
