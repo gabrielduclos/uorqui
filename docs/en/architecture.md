@@ -19,6 +19,16 @@ Start with a **modular monolith**: one API deployment with clear bounded modules
 
 These choices are **approved for the new Uorqui project**, but **the Neon database, initial schema migration and development scaffold are ready; production app deployment is still pending**.
 
+## Authentication decisions
+
+**Chosen:** Better Auth (email/password and cookie sessions), using Fastify and the Drizzle PostgreSQL adapter. The auth schema has separate `user`, `account`, `session` and `verification` tables, while the social schema keeps `users`, `profiles`, direct messages and communities. Social user UUIDs are created from the authenticated account's UUID during the protected onboarding flow.
+
+- Auth tables are versioned in migration `0001`, tested in a temporary Neon branch; **not yet applied to main**.
+- Fastify uses a PostgreSQL connection pool; Better Auth has a dedicated configuration, strict trusted origins, secure-cookie behavior, server-side session checks and 12-character minimum passwords.
+- No runtime credentials are in the public repository; `AUTH_SECRET` and `DATABASE_URL` must stay private.
+- Signup is disabled by default and disabled unconditionally in production until email verification, password reset, durable abuse controls, and security tests are completed.
+- Sign-in, sign-up, sign-out and profile creation have passed compile/type checks, but **have not been proven end to end against main**.
+
 ### Remaining technical evaluations
 
 | Layer | Candidate | Status |

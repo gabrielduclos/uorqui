@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Status: development scaffold / pre-MVP.** Uorqui is a new project built from scratch. A local React/Fastify starter exists, but the social platform and database have not been implemented or deployed.
+> **Status: pre-MVP development.** The React/Fastify app now includes authentication screens and server endpoints. The social product is not launched, and the second database migration (authentication tables) is pending approval.
 
 ## What is Uorqui?
 
@@ -38,8 +38,9 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 ## Current state
 
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
-- **Not done:** authentication, application data endpoints, real-time messaging, video delivery, voice infrastructure, application deployment, and user validation.
-- **Next:** decide authentication, implement secure API data access and incrementally build a usable MVP.
+- **In code, not yet enabled end-to-end:** Better Auth email/password, cookie sessions, protected profile endpoints and onboarding. Requires private environment settings and approval of the second migration.
+- **Not done:** production-ready email verification, password recovery, social messaging, feed, video, voice, production deployment and user validation.
+- **Next:** approve/apply the four-table authentication migration, set private local credentials, verify login/session behavior, then add email verification and abuse protection before opening registration.
 
 The architecture documents distinguish **confirmed core stack decisions** from **proposed integrations**; neither implies working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
 

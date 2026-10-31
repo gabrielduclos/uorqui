@@ -18,7 +18,10 @@
 - [x] Gerar e versionar SQL inicial e snapshot de migração do Drizzle.
 - [x] Testar tabelas, enums, chaves estrangeiras e índices em branch temporária da Neon.
 - [x] Aplicar primeira migração na branch Neon `main`; verificar seis tabelas, chaves, índices e histórico do Drizzle.
-- [ ] Abrir issues e definir autenticação.
+- [x] Escolher Better Auth, implementar fluxos Fastify/React e versionar migração 0001.
+- [x] Testar migração de autenticação em branch temporária Neon e passar pelo CI de tipagem/build/schema.
+- [ ] Pedir autorização para aplicar a migração 0001 em main, configurar segredos e validar cadastro/login ponta a ponta.
+- [ ] Implementar confirmação de e-mail, recuperação de senha e controles seguros antes de abrir acesso.
 
 **Critério:** interesse real de comunidades-piloto, escopo e limites operacionais definidos.
 

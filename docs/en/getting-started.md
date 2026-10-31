@@ -2,7 +2,7 @@
 
 [English](getting-started.md) · [Português](../pt-BR/primeiros-passos.md)
 
-> This starter is a development scaffold, **not a functional social network**. Auth, persistence endpoints, community voice and content feeds are not implemented.
+> This is a development prototype, **not a functional social network**. Auth code is present, but it needs configuration and the pending migration. Voice, messaging and feeds remain unimplemented.
 
 ## Requirements
 
@@ -24,16 +24,21 @@ npm run dev
 
 `/health` verifies **the API process only** and does not test the database.
 
-## Connect to the existing Neon database
+## Connect the existing Neon database and auth (local development only)
 
-1. In your Neon console, open the existing `uorqui` project (São Paulo region); the PostgreSQL database `uorqui` has been provisioned and verified with a read-only SQL query. The initial six application tables and the Drizzle migration journal **have been applied to main and verified**.
-2. Copy `apps/api/.env.example` to `apps/api/.env`.
-3. Set `DATABASE_URL` to the full database connection URI from Neon.
-4. Review the **already generated** initial migration at `apps/api/drizzle/0000_nice_machine_man.sql` and its tracking metadata under `apps/api/drizzle/meta/`. Use `npm run db:generate` only when the Drizzle schema changes.
-5. The initial migration **has already been applied** to Neon `main` and recorded in `drizzle.__drizzle_migrations` (verified). **Do not run the initial SQL manually again.**
-6. For future schema changes, generate a new migration with `npm run db:generate`, review the new SQL and run `npm run db:migrate` with a private `DATABASE_URL` on the intended environment.
+The Neon project `uorqui` already has the **six social tables** and migration `0000` applied to its main branch. The new **Better Auth tables** (`user`, `session`, `account`, `verification`) are defined in migration `0001`, which has been **tested on a temporary Neon branch only**. Do **not** manually apply migration 0001, run `db:migrate` against main, or start real registrations until that migration is approved and applied.
 
-Migrations **change database structure** and are not run automatically during normal application startup. The schema currently describes users, profiles, direct conversations/messages, communities and members, without API or authentication implementations.
+1. Copy `apps/api/.env.example` to `apps/api/.env`.
+2. Set `DATABASE_URL` to the private connection string from the Neon console; never paste it into source, CI logs, or issues.
+3. Generate `AUTH_SECRET` with `openssl rand -base64 48` and keep it private. Configure `AUTH_BASE_URL=http://localhost:3001` and `WEB_ORIGIN=http://localhost:5173`.
+4. **After the approved 0001 migration is verified in main**, set `ENABLE_DEV_SIGNUP=true` for local development only and run `npm run dev`.
+5. Open `http://localhost:5173`; sign up, log in, inspect your own session, choose a handle, and sign out. Verify `http://localhost:3001/health/db` reports `connected` before using auth.
+
+The runtime automatically rejects requests to unconfigured authentication endpoints with a 503 error. Registration is disabled by default and **always disabled for `NODE_ENV=production`**. This prototype has **no email-delivery/verification or password-reset implementation**; those are required before any public launch. Better Auth manages password hashing and session cookies; the API checks authenticated sessions before profile creation.
+
+`GET /health` checks the API process, `GET /health/db` checks PostgreSQL, `GET /api/v1/me` requires a session, and `POST /api/v1/onboarding` creates a social identity for the currently logged-in account.
+
+For future schema changes, run `npm run db:generate`, review and commit SQL plus metadata, test in a temporary database branch and apply with `npm run db:migrate` only to the intended environment. Never re-run already applied migrations by pasting SQL.
 
 ## Checks
 

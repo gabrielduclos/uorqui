@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Status: estrutura de desenvolvimento / pré-MVP.** O Uorqui está sendo criado do zero. Há uma base local com React/Fastify, mas as funcionalidades sociais e o banco ainda não foram implementados ou publicados.
+> **Status: desenvolvimento pré-MVP.** A base React/Fastify já contém telas e endpoints de autenticação. A rede social ainda não foi lançada, e a segunda migração (tabelas de autenticação) aguarda aprovação.
 
 ## O que é o Uorqui?
 
@@ -38,8 +38,9 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 ## Situação atual
 
 - **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
-- **Ainda não implementado:** autenticação, endpoints funcionais de dados, mensagens em tempo real, vídeos, salas de voz, deploy da aplicação e validação com usuários.
-- **Próximo:** definir autenticação, implementar acesso seguro aos dados na API e desenvolver gradualmente um MVP utilizável.
+- **No código, ainda sem validação ponta a ponta:** Better Auth com e-mail/senha, sessões por cookie, rotas protegidas de perfil e onboarding. Requer configurações privadas e aplicação autorizada da segunda migração.
+- **Pendentes:** verificação de e-mail, recuperação de senha, mensagens, feed, vídeos, voz, deploy em produção e validação com usuários.
+- **Próximo:** aprovar/aplicar a migração das quatro tabelas de autenticação, configurar credenciais locais em segredo, testar cadastro/login/sessão e implementar verificação de e-mail antes de abrir inscrições.
 
 A documentação técnica distingue **tecnologias principais aprovadas** de **integrações ainda propostas**, sem declarar funcionalidades implementadas. O planejamento comercial, as hipóteses de preço e as projeções financeiras ficam separados deste repositório público.
 

@@ -18,7 +18,10 @@
 - [x] Generate and commit initial Drizzle SQL migration and schema snapshot.
 - [x] Verify the SQL creates tables, enums, foreign keys and indexes on a temporary Neon branch.
 - [x] Apply the initial migration to Neon `main`; verify six tables, foreign keys, indexes and the Drizzle migration record.
-- [ ] Create implementation issues and decide authentication.
+- [x] Choose Better Auth, implement Fastify/React authentication flows and commit migration 0001.
+- [x] Test auth migration on a temporary Neon branch and pass CI type/build/schema checks.
+- [ ] Request approval to apply migration 0001 to main; configure secrets and verify registration/login end-to-end.
+- [ ] Implement email verification, password recovery and production-safe signup controls before opening access.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
 
