@@ -118,7 +118,7 @@ export default function SocialShell({ account, onLogout }: {
     contact.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))
   ), [search]);
   const communityKey = communityId + '/' + channelId;
-  const visibleChannelMessages = channelExamples[communityKey] ?? [
+  const visibleChannelMessages: DemoMessage[] = channelExamples[communityKey] ?? [
     { id: 100, mine: false, text: 'Este canal demonstra como os bate-papos de comunidades serão organizados.', time: 'Exemplo' },
   ];
 
