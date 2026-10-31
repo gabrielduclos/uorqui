@@ -154,7 +154,16 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           </span>
         </p>
       </div>
-
+      {!!message.reactions?.length && !message.deletedAt && <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'justify-end' : 'justify-start')}>
+        {message.reactions.map(reaction => <button key={reaction.emoji} type="button"
+          disabled={disabled || mine}
+          aria-label={(pt ? 'Reação' : 'Reaction') + ' ' + reaction.emoji + ': ' + reaction.count}
+          aria-pressed={message.myReaction === reaction.emoji}
+          onClick={() => onReact(message, message.myReaction === reaction.emoji ? null : reaction.emoji)}
+          className={cn('inline-flex min-h-7 items-center gap-1 border border-border bg-card px-2 text-xs', message.myReaction === reaction.emoji && 'border-primary bg-primary/10', !mine && 'hover:bg-accent')}>
+          <span>{reaction.emoji}</span><span>{reaction.count}</span>
+        </button>)}
+      </div>}
     </SwipeToReply>
     {!message.deletedAt && !message.pendingStatus && <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
       aria-label={pt ? 'Opções da mensagem' : 'Message options'} aria-haspopup="menu" aria-expanded={open}
