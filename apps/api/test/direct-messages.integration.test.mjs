@@ -602,6 +602,8 @@ test('saved contacts: personal, idempotent, no reciprocal save or DM deletion', 
   // Reuse the authenticated accounts created by the first test.
   // Better Auth limits repeated signup attempts in one integration suite.
   const one = alice, two = bob, stranger = other;
+  // Earlier DM privacy tests made Bob private; saved contacts require a public profile.
+  assert.equal((await two('/api/v1/me/profile','PATCH',{isPublic:true})).status,200);
 
   assert.equal((await anon('/api/v1/contacts')).status, 401);
   assert.equal((await one('/api/v1/contacts','POST',{handle:'dm_bob'},false)).status,403);
@@ -617,6 +619,10 @@ test('saved contacts: personal, idempotent, no reciprocal save or DM deletion', 
   assert.equal(saved.data.contacts[0].email,undefined);
   assert.equal((await two('/api/v1/contacts')).data.contacts.length,0,'saving is not reciprocal');
   assert.equal((await stranger('/api/v1/contacts')).data.contacts.length,0,'another user cannot read my contacts');
+  assert.equal((await two('/api/v1/me/profile','PATCH',{isPublic:false})).status,200);
+  assert.equal((await one('/api/v1/contacts')).data.contacts.length,0,'hidden profiles are not exposed in the saved directory');
+  assert.equal((await two('/api/v1/me/profile','PATCH',{isPublic:true})).status,200);
+  assert.equal((await one('/api/v1/contacts')).data.contacts.length,1,'saving persists when a profile is private then public');
 
   const chat=await one('/api/v1/dm/conversations','POST',{handle:'dm_bob'});
   assert.equal(chat.status,200);
