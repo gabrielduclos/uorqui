@@ -103,4 +103,12 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - Editor de fotos **antes de enviar**: desenho, retângulo, círculo, seta, cores, desfazer e limpar. Salvar gera um PNG novo sem alterar o original.
 - Visualizador de foto/vídeo com rolagem por mídias da conversa, botões anterior/próxima, teclado (←, → e Esc) e opção de salvar; vídeo tem controles nativos.
 - O limite é restaurado para **50 MB** com migração Drizzle `0008_dm_attachment_50mb`, trocando somente a restrição `dm_attachment_consistency`. A mudança requer migração no Neon principal antes de publicar o Worker/API do PR #31; nenhum arquivo existente é apagado.
-- Localização é enviada como texto especial com link OpenStreetMap depois da permissão e confirmação da prévia; não existe rastreamento contínuo.
+- Localização é enviada como texto especial com link Google Maps depois da permissão e confirmação da prévia; não existe rastreamento contínuo.
+
+
+### Ajustes do kit — mídias do chat
+
+- Menu + de anexos: **4 itens**, Galeria / Câmera / Arquivo / Localização. Dentro da Câmera há Tirar foto e Gravar vídeo; o botão Vídeo redundante foi retirado.
+- Nada de nomes técnicos `IMG_2026...`, `gravacao-...` ou IDs R2 nas mídias. Mostrar **Foto / Vídeo / Áudio / Documento PDF** conforme idioma, preservando metadados para download.
+- Player de áudio em **bg-card + text-foreground**, Play em **bg-primary**, controles de velocidade em **bg-secondary** e barra de progresso `accent-primary` para contraste adequado no Light/Dark.
+- A prévia e o visualizador compartilham URLs Blob de cache privado limitado à aba. A localização abre o Google Maps, inclusive para mensagens antigas com link OpenStreetMap.
