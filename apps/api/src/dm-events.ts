@@ -28,9 +28,16 @@ function scheduleRetry() {
 async function ensureListener(): Promise<void> {
   if (closing || listener || subscribers.size === 0) return;
   if (starting) return starting;
-  const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
-  if (!url) return;
-  const connection = new Client({ connectionString: url, connectionTimeoutMillis: 8000 });
+  const raw = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
+  if (!raw) return;
+  // Neon transaction-pooler endpoints cannot reliably maintain LISTEN sessions.
+  // Use an explicit unpooled URL when provided, otherwise convert Neon's
+  // documented -pooler hostname to its direct equivalent for this one client.
+  const address = new URL(raw);
+  if (!process.env.DATABASE_DIRECT_URL && /\\-pooler(?=\\.)/.test(address.hostname)) {
+    address.hostname = address.hostname.replace(/\\-pooler(?=\\.)/, '');
+  }
+  const connection = new Client({ connectionString: address.toString(), connectionTimeoutMillis: 8000 });
   starting = (async () => {
     try {
       connection.on('notification', packet => {
