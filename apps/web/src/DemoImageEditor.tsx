@@ -153,8 +153,8 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
 
   const tools = [
     { id: 'pen' as Tool, Icon: Pencil, label: t("Desenhar à mão livre") },
-    { id: 'rectangle' as Tool, Icon: Square, label: 'Retângulo' },
-    { id: 'ellipse' as Tool, Icon: Circle, label: 'Círculo' },
+    { id: 'rectangle' as Tool, Icon: Square, label: t("Retângulo") },
+    { id: 'ellipse' as Tool, Icon: Circle, label: t("Círculo") },
     { id: 'arrow' as Tool, Icon: ArrowUpRight, label: t("Seta") },
   ];
 
@@ -164,8 +164,8 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
       <span className="mx-1 h-7 w-px bg-white/25" />
       {COLORS.map(item => <button key={item} type="button" aria-label={t('Cor ') + item} aria-pressed={color === item} title={item} onClick={() => setColor(item)} className="size-7 shrink-0 rounded-full border-2 border-white/50 outline-offset-2 focus-visible:outline-2 focus-visible:outline-white" style={{ backgroundColor: item, outline: color === item ? '2px solid white' : undefined }} />)}
       <span className="flex-1" />
-      <Button type="button" variant="outline" size="sm" onClick={undo} disabled={!marks.length || saving}><Undo2 className="size-4" />Desfazer</Button>
-      <Button type="button" variant="outline" size="sm" onClick={() => { setMarks([]); setWorking(null); }} disabled={!marks.length || saving}><RotateCcw className="size-4" />Limpar</Button>
+      <Button type="button" variant="outline" size="sm" onClick={undo} disabled={!marks.length || saving}><Undo2 className="size-4" />{t("Desfazer")}</Button>
+      <Button type="button" variant="outline" size="sm" onClick={() => { setMarks([]); setWorking(null); }} disabled={!marks.length || saving}><RotateCcw className="size-4" />{t("Limpar")}</Button>
     </div>
     <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/40">
       <canvas ref={canvas} onPointerDown={start} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} style={{ touchAction: 'none', maxHeight: '65dvh', maxWidth: '100%', width: 'auto', height: 'auto', cursor: 'crosshair' }} aria-label={t('Área de desenho sobre a foto')} />
@@ -173,7 +173,7 @@ export function DemoImageEditor({ src, onCancel, onSave }: {
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
     <div className="flex shrink-0 justify-end gap-2">
       <Button type="button" variant="outline" onClick={onCancel} disabled={saving}><X className="size-4" />{t("Cancelar")}</Button>
-      <Button type="button" onClick={save} disabled={!ready || saving}><Check className="size-4" />{saving ? 'Salvando…' : 'Salvar edição'}</Button>
+      <Button type="button" onClick={save} disabled={!ready || saving}><Check className="size-4" />{saving ? t("Salvando…") : t("Salvar edição")}</Button>
     </div>
     <p className="text-center text-xs text-white/60">{t("Desenhe com o mouse ou toque; a foto original só é substituída após salvar nesta prévia.")}</p>
   </section>;
