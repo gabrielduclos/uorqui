@@ -50,3 +50,12 @@ Sem vazamento de conteúdo privado; mensagens não podem desaparecer silenciosam
 ## Fora do MVP inicial
 
 Grupos tradicionais, lives em grande escala, pagamentos para criadores, marketplace, personalização prioritariamente por IA, federação completa, chamadas de vídeo 1:1 e mídia/voz gratuitas ilimitadas.
+
+## Comunidades reais — etapa inicial
+
+- O Uorqui permite criar comunidades **públicas** (entrada imediata), **por aprovação** (solicitação aceita por owner/admin) e **privadas** (visíveis apenas a membros e convidados). A criação registra automaticamente o proprietário, um canal de texto `#geral` e uma sala de voz `Sala de voz`.
+- A lista de comunidades exibe espaços descobríveis e a participação da conta; espaços privados não aparecem para terceiros. Os administradores podem convidar por @usuário, aprovar solicitações de comunidades moderadas e criar até 50 canais de texto/voz.
+- Mensagens de texto são persistidas no PostgreSQL, com autor, data, identificador idempotente e limite de 4.000 caracteres. Somente membros podem ler/escrever; atualização da conversa a cada cinco segundos enquanto o canal estiver ativo.
+- A sala de voz é um canal **real de estrutura/metadados**, mas a entrada em áudio **ainda depende da etapa WebRTC/RTC**. A interface informa isso explicitamente e não simula chamadas. Anexos e moderação avançada dos canais são próximos incrementos, não funcionalidades prontas.
+- Entrada, convites, solicitações e canais possuem autorizações aplicadas na API, sem depender de botões ocultos. Fotos/nomes de perfis privados e fotos bloqueadas nos canais respeitam as autorizações atuais.
+- Migração Drizzle `0011_live_communities` acrescenta `communities.description`, `community_channels`, `community_messages` e `community_join_requests`, preservando as tabelas base `communities` e `community_members`.

@@ -82,3 +82,13 @@
 ## Decisões pendentes
 
 Prioridades, licenças de dependências, fornecedores de tempo real/voz/mídias, algoritmo do feed, moderação, nome do modo Vídeos, implantação e futura migração de domínio.
+
+### Comunidades (trabalho incremental)
+
+- [x] Persistência e regras de visibilidade de comunidades públicas, por aprovação e privadas
+- [x] Criação, descoberta, membros, convites, aprovação e saída (exceto proprietário)
+- [x] Canais de texto e salas de voz persistidos; texto real para membros
+- [ ] Voz em tempo real (WebRTC/TURN, presenças, conexão, áudio, mute e saída)
+- [ ] Moderação completa: expulsar membro, permissões granulares, edição/remoção de mensagens
+- [ ] Anexos no canal e otimização de mídia no R2
+- [ ] PWA e notificações push de comunidades (após a base funcional)
