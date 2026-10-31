@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
-import { Copy, MoreHorizontal, Pencil, Reply, Trash2 } from 'lucide-react';
+import { Copy, MapPin, MoreHorizontal, Pencil, Reply, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { DemoAttachmentView, type DemoAttachment } from './DemoMessageComposer';
+import { DemoAttachmentView, type DemoAttachment, type DemoLocation } from './DemoMessageComposer';
 
 /** Local preview data only. Production messaging will use its own API-backed message model. */
 export type DemoMessage = {
@@ -12,6 +12,7 @@ export type DemoMessage = {
   text: string;
   time: string;
   attachment?: DemoAttachment;
+  location?: DemoLocation;
   replyTo?: number;
   edited?: boolean;
   myReaction?: string;
@@ -21,6 +22,7 @@ const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as co
 
 export function messagePreview(message: DemoMessage): string {
   if (message.text.trim()) return message.text.trim().replace(/\s+/g, ' ').slice(0, 120);
+  if (message.location) return 'Localização';
   switch (message.attachment?.kind) {
     case 'image': return 'Foto';
     case 'video': return 'Vídeo';
@@ -67,6 +69,16 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
   </div>;
 }
 
+export function DemoLocationCard({ location }: { location: DemoLocation }) {
+  const latitude = location.latitude.toFixed(6);
+  const longitude = location.longitude.toFixed(6);
+  const mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude);
+  return <a href={mapUrl} target="_blank" rel="noopener noreferrer" aria-label="Abrir localização compartilhada no mapa" className="mt-1 flex min-w-[190px] max-w-sm items-center gap-3 border border-current/20 bg-black/10 p-3 hover:bg-black/20 focus-visible:outline-2 focus-visible:outline-ring">
+    <span className="grid size-10 shrink-0 place-items-center bg-current/10"><MapPin className="size-5" /></span>
+    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">Localização</span><span className="block text-xs opacity-75">Abrir no mapa</span></span>
+  </a>;
+}
+
 export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onLocateReply, onReact, onOpenMedia }: {
   message: DemoMessage;
   quoted?: DemoMessage;
@@ -110,6 +122,7 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
         </button>}
         {message.text && <p className="wrap-break-word whitespace-pre-wrap leading-6">{message.text}</p>}
         {message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={onOpenMedia} />}
+        {message.location && <DemoLocationCard location={message.location} />}
         <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', message.mine ? 'text-white/75' : 'text-muted-foreground')}>
           {message.edited && <span>editada ·</span>}
           <time>{message.time}</time>
