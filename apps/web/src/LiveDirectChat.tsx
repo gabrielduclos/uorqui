@@ -665,6 +665,24 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     jumpToLast('smooth');
     void submitPending(pending);
   }
+  function sendLocation(latitude:number,longitude:number,caption:string) {
+    const conversationId=activeIdRef.current;
+    if(!conversationId || busy || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+       || Math.abs(latitude)>90 || Math.abs(longitude)>180)return;
+    const lat=latitude.toFixed(6),lon=longitude.toFixed(6);
+    const link='https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lon+'#map=15/'+lat+'/'+lon;
+    const body='📍 '+(pt?'Localização compartilhada':'Shared location')+'\n'+link+(caption?'\n'+caption:'');
+    const clientId=crypto.randomUUID(),createdAt=new Date().toISOString();
+    const pending:PendingMessage={
+      id:clientId,clientId,conversationId,authorId:myId,body,
+      createdAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
+      forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:createdAt,
+      replyToId:replySource?.id??null,
+      replyTo:replySource?{id:replySource.id,body:replySource.body,authorId:replySource.authorId,deleted:false}:null,
+    };
+    setPendingMessages(prev=>[...prev,pending]);setReplySource(null);
+    jumpToLast('smooth');void submitPending(pending);
+  }
   async function send() {
     const id = activeId;
     const body = draft.trim();
@@ -872,7 +890,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             </button>
           </div>}
           <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
-            onAttach={sendAttachment} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
+            onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
         </div>
         {cancelTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"
