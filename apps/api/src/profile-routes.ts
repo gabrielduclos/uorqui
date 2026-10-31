@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq, ilike, or } from 'drizzle-orm';
-import { createDatabase } from './db/client.js';
+import { createDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
@@ -76,7 +76,18 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
         .innerJoin(profiles, eq(users.id, profiles.userId))
         .where(eq(users.handle, handle.replace(/^@/, '').toLowerCase()))
         .limit(1);
-      if (!record || !record.isPublic) return reply.status(404).send({ error: 'Profile not found' });
+      if (!record) return reply.status(404).send({ error: 'Profile not found' });
+      if (!record.isPublic) {
+        const session = await readSession(request);
+        if (!session) return reply.status(404).send({ error: 'Profile not found' });
+        const friendship = await getPool().query(
+          "SELECT 1 FROM user_friendships WHERE user_a_id=LEAST($1::uuid,$2::uuid) " +
+          "AND user_b_id=GREATEST($1::uuid,$2::uuid) AND status='accepted'",
+          [record.id,session.user.id],
+        );
+        if (session.user.id !== record.id && !friendship.rowCount)
+          return reply.status(404).send({ error: 'Profile not found' });
+      }
       const { isPublic: _visibility, ...publicData } = record;
       return reply.header('Cache-Control', 'no-store').send({ profile: publicData });
     } catch (error) {
@@ -107,7 +118,15 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
       }
       if (!record.isPublic) {
         const session = await readSession(request);
-        if (!session || session.user.id !== userId) return reply.status(404).send({ allowed: false });
+        if (!session) return reply.status(404).send({ allowed: false });
+        if (session.user.id !== userId) {
+          const friendship = await getPool().query(
+            "SELECT 1 FROM user_friendships WHERE user_a_id=LEAST($1::uuid,$2::uuid) " +
+            "AND user_b_id=GREATEST($1::uuid,$2::uuid) AND status='accepted'",
+            [session.user.id,userId],
+          );
+          if (!friendship.rowCount) return reply.status(404).send({ allowed: false });
+        }
       }
       return reply.header('Cache-Control', 'no-store').send({ allowed: true });
     } catch (error) {
