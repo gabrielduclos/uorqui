@@ -33,7 +33,7 @@ All routes require a valid session; message endpoints validate membership. Write
 ### Real-time synchronization (SSE)
 
 - `GET /api/v1/dm/events` provides SSE over the existing Better Auth cookie session; no URL auth tokens.
-- The browser maintains an EventSource while visible and reconnects automatically. `message`, `read`, `received`, `update`, and `conversation` notifications trigger immediate authorized list/history fetching.
+- The browser maintains an EventSource while visible and reconnects automatically. `message`, `read`, `received`, `update`, and `conversation` notifications trigger immediate authorized list/history fetching. **Global badge delivery:** once an unread message is included in the navigation badge's successful conversation fetch, the connected client acknowledges `/received` regardless of the current app area; it **never calls `/read`** or clears unread count. Edited content receives a new delivery acknowledgement.
 - One process-wide PostgreSQL `LISTEN uorqui_dm_events` connection handles `NOTIFY` events across Fastify instances. A direct Neon connection is needed for session-scoped LISTEN; set `DATABASE_DIRECT_URL` when necessary.
 - SSE contains only event type and conversation ID, never message text. All actual content is fetched through participant-authorized APIs.
 - 15-second heartbeat, 5-minute maximum stream lifetime for session revalidation, disconnect while the page is hidden.
