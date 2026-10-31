@@ -7,6 +7,25 @@ export function useUnreadDirectMessages() {
   useEffect(() => {
     let mounted = true;
     let requestId = 0;
+    const acknowledging = new Set<string>();
+    const acknowledged = new Set<string>();
+
+    // Once the incoming message contributes to the global unread badge,
+    // the recipient's connected client has received it. This acknowledgement
+    // never calls /read and must not clear the unread notification.
+    async function acknowledgeDelivery(conversationId: string, revision: string) {
+      const key = conversationId + ':' + revision;
+      if (!mounted || acknowledging.has(conversationId) || acknowledged.has(key)) return;
+      acknowledging.add(conversationId);
+      try {
+        const response = await fetch('/api/v1/dm/conversations/' + encodeURIComponent(conversationId) + '/received', {
+          method: 'POST', credentials: 'same-origin', cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (response.ok) acknowledged.add(key);
+      } catch { /* Retry on the next visible inbox/badge refresh. */ }
+      finally { acknowledging.delete(conversationId); }
+    }
 
     async function refresh() {
       if (document.visibilityState === 'hidden') return;
@@ -17,11 +36,19 @@ export function useUnreadDirectMessages() {
         });
         if (!response.ok) return;
         const payload = await response.json() as {
-          conversations?: { unreadCount: number }[];
+          conversations?: { id: string; unreadCount: number; pendingReceivedAt?: string | null }[];
         };
         if (mounted && id === requestId && Array.isArray(payload.conversations)) {
-          setUnread(payload.conversations.reduce((sum, thread) =>
-            sum + Math.max(0, Number(thread.unreadCount) || 0), 0));
+          const count = payload.conversations.reduce((sum, thread) =>
+            sum + Math.max(0, Number(thread.unreadCount) || 0), 0);
+          setUnread(count);
+          // A successful fetch which actually feeds the badge is the delivery
+          // milestone — independent of whether the conversation panel is open.
+          for (const thread of payload.conversations) {
+            if (Number(thread.unreadCount) > 0 && thread.pendingReceivedAt) {
+              void acknowledgeDelivery(thread.id, thread.pendingReceivedAt);
+            }
+          }
         }
       } catch { /* Keep the last known unread count during network failures. */ }
     }
