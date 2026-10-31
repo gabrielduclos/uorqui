@@ -34,8 +34,8 @@ async function ensureListener(): Promise<void> {
   // Use an explicit unpooled URL when provided, otherwise convert Neon's
   // documented -pooler hostname to its direct equivalent for this one client.
   const address = new URL(raw);
-  if (!process.env.DATABASE_DIRECT_URL && /\\-pooler(?=\\.)/.test(address.hostname)) {
-    address.hostname = address.hostname.replace(/\\-pooler(?=\\.)/, '');
+  if (!process.env.DATABASE_DIRECT_URL && /-pooler(?=\.)/.test(address.hostname)) {
+    address.hostname = address.hostname.replace(/-pooler(?=\.)/, '');
   }
   const connection = new Client({ connectionString: address.toString(), connectionTimeoutMillis: 8000 });
   starting = (async () => {
