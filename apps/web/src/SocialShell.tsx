@@ -15,6 +15,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import DemoMessageComposer, { DemoAttachmentView, type ComposePayload } from './DemoMessageComposer';
 import { DemoChatBubble, messagePreview, type DemoMessage } from './DemoChatBubble';
+import { DemoMediaViewer, type PreviewMediaItem } from './DemoChatMedia';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -100,6 +101,8 @@ export default function SocialShell({ account, onLogout }: {
   const [conversations, setConversations] = useState<Record<string, DemoMessage[]>>(exampleMessages);
   const [replyTarget, setReplyTarget] = useState<DemoMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<DemoMessage | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [mediaViewerId, setMediaViewerId] = useState<number | null>(null);
   const [communityId, setCommunityId] = useState<string>('estudio');
   const [channelId, setChannelId] = useState<string>('geral');
   const [channelOpened, setChannelOpened] = useState(false);
@@ -123,6 +126,27 @@ export default function SocialShell({ account, onLogout }: {
   const visibleChannelMessages: DemoMessage[] = channelExamples[communityKey] ?? [
     { id: 100, mine: false, text: 'Este canal demonstra como os bate-papos de comunidades serão organizados.', time: 'Exemplo' },
   ];
+  const activeMessages = area === 'conversations' ? (conversations[conversationId] ?? []) : visibleChannelMessages;
+  const mediaItems: PreviewMediaItem[] = activeMessages.flatMap(message =>
+    message.attachment && (message.attachment.kind === 'image' || message.attachment.kind === 'video')
+      ? [{ id: message.id, attachment: message.attachment }]
+      : []
+  );
+
+  function updateDraft(key: string, value: string) {
+    setDrafts(previous => ({ ...previous, [key]: value }));
+  }
+
+  function reactToDemoMessage(id: number, emoji: string) {
+    setConversations(previous => ({
+      ...previous,
+      [conversationId]: (previous[conversationId] ?? []).map(message =>
+        message.id === id && !message.mine
+          ? { ...message, myReaction: message.myReaction === emoji ? undefined : emoji }
+          : message
+      ),
+    }));
+  }
 
   function move(next: Area) {
     setArea(next);
@@ -131,6 +155,7 @@ export default function SocialShell({ account, onLogout }: {
     setChannelOpened(false);
     setReplyTarget(null);
     setEditingMessage(null);
+    setMediaViewerId(null);
   }
 
   function sendDemoMessage({ text, attachment }: ComposePayload) {
@@ -170,6 +195,7 @@ export default function SocialShell({ account, onLogout }: {
       ...previous,
       [conversationId]: (previous[conversationId] ?? []).filter(item => item.id !== message.id),
     }));
+    if (mediaViewerId === message.id) setMediaViewerId(null);
     if (replyTarget?.id === message.id) setReplyTarget(null);
     if (editingMessage?.id === message.id) setEditingMessage(null);
   }
@@ -275,9 +301,11 @@ export default function SocialShell({ account, onLogout }: {
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="p-2">
                       {visibleContacts.map(contact => (
-                        <Button key={contact.id} type="button" variant={contact.id === conversationId && conversationOpened ? 'secondary' : 'ghost'} onClick={() => { setConversationId(contact.id); setConversationOpened(true); setReplyTarget(null); setEditingMessage(null); }} className={cn('h-auto w-full justify-start gap-3 rounded-xl px-3 py-3 text-left md:py-4', contact.id === conversationId && 'md:bg-accent/40')}>
+                        <Button key={contact.id} type="button" variant={contact.id === conversationId && conversationOpened ? 'secondary' : 'ghost'} onClick={() => { setConversationId(contact.id); setConversationOpened(true); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className={cn('h-auto w-full justify-start gap-3 rounded-xl px-3 py-3 text-left md:py-4', contact.id === conversationId && 'md:bg-accent/40')}>
                           <Avatar className="size-11"><AvatarFallback className={cn('text-white', contact.color)}>{contact.initials}</AvatarFallback></Avatar>
-                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{contact.name} <span className="font-normal text-muted-foreground">(exemplo)</span></span><span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">{contact.topic}</span></span>
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{contact.name} <span className="font-normal text-muted-foreground">(exemplo)</span></span><span className={cn('mt-0.5 block truncate text-xs font-normal', drafts['dm/' + contact.id]?.trim() ? 'text-primary' : 'text-muted-foreground')}>
+                              {drafts['dm/' + contact.id]?.trim() ? 'Rascunho: ' + drafts['dm/' + contact.id].trim() : contact.topic}
+                            </span></span>
                         </Button>
                       ))}
                       {visibleContacts.length === 0 && <EmptyState icon={Search} title="Nenhuma conversa encontrada" description="Tente outro nome. Esta lista é apenas uma prévia visual." />}
@@ -286,7 +314,7 @@ export default function SocialShell({ account, onLogout }: {
                 </section>
                 <section aria-label="Conversa demonstrativa" className={cn('min-w-0 flex-1 flex-col', conversationOpened ? 'flex' : 'hidden md:flex')}>
                   <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-                    <Button variant="ghost" size="icon" aria-label="Voltar às conversas" onClick={() => { setConversationOpened(false); setReplyTarget(null); setEditingMessage(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Voltar às conversas" onClick={() => { setConversationOpened(false); setReplyTarget(null); setEditingMessage(null); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
                     <Avatar className="size-9"><AvatarFallback className={cn('text-white',activeContact.color)}>{activeContact.initials}</AvatarFallback></Avatar>
                     <div className="min-w-0"><div className="truncate text-sm font-semibold">{activeContact.name} <span className="font-normal text-muted-foreground">· exemplo</span></div><p className="text-xs text-muted-foreground">Conversa individual</p></div>
                   </div>
@@ -298,6 +326,8 @@ export default function SocialShell({ account, onLogout }: {
                           onReply={() => { setEditingMessage(null); setReplyTarget(message); }}
                           onEdit={() => { if (message.mine && !message.attachment) { setReplyTarget(null); setEditingMessage(message); } }}
                           onDelete={() => deleteDemoMessage(message)}
+                          onReact={emoji => reactToDemoMessage(message.id, emoji)}
+                          onOpenMedia={message.attachment && (message.attachment.kind === 'image' || message.attachment.kind === 'video') ? () => setMediaViewerId(message.id) : undefined}
                           onLocateReply={id => { document.getElementById('dm-message-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
                       ))}
                     </div>
@@ -306,7 +336,9 @@ export default function SocialShell({ account, onLogout }: {
                     replyPreview={replyTarget ? { author: replyTarget.mine ? 'Você' : activeContact.name, text: messagePreview(replyTarget) } : null}
                     onCancelReply={() => setReplyTarget(null)}
                     editing={editingMessage}
-                    onCancelEditing={() => setEditingMessage(null)} />
+                    onCancelEditing={() => setEditingMessage(null)}
+                    draftText={drafts['dm/' + conversationId] ?? ''}
+                    onDraftChange={next => updateDraft('dm/' + conversationId, next)} />
                 </section>
               </div>
             )}
@@ -314,7 +346,7 @@ export default function SocialShell({ account, onLogout }: {
             {area === 'communities' && (
               <div className="flex h-full min-w-0">
                 <div className="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-border bg-card/50 py-4" aria-label="Comunidades de demonstração">
-                  {demoCommunities.map(group => <Button key={group.id} type="button" size="icon" variant={communityId === group.id ? 'secondary' : 'ghost'} className={cn('size-11 rounded-2xl text-lg font-bold', communityId === group.id && 'ring-2 ring-primary/70')} onClick={() => { setCommunityId(group.id); setChannelId(group.channels[0].id); setChannelOpened(false); }} aria-label={'Comunidade ' + group.name} aria-pressed={communityId === group.id}>
+                  {demoCommunities.map(group => <Button key={group.id} type="button" size="icon" variant={communityId === group.id ? 'secondary' : 'ghost'} className={cn('size-11 rounded-2xl text-lg font-bold', communityId === group.id && 'ring-2 ring-primary/70')} onClick={() => { setCommunityId(group.id); setChannelId(group.channels[0].id); setChannelOpened(false); setMediaViewerId(null); }} aria-label={'Comunidade ' + group.name} aria-pressed={communityId === group.id}>
                     <span className={cn('flex size-9 items-center justify-center rounded-xl text-white',group.className)}>{group.monogram}</span>
                   </Button>)}
                   <Separator className="w-7" />
@@ -329,17 +361,17 @@ export default function SocialShell({ account, onLogout }: {
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="space-y-4 p-3">
                       <div><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Canais de texto</p>
-                        {activeCommunity.channels.filter(ch => ch.kind === 'text').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); }}><Hash className="size-4 text-muted-foreground" />{ch.label}</Button>)}
+                        {activeCommunity.channels.filter(ch => ch.kind === 'text').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); setMediaViewerId(null); }}><Hash className="size-4 text-muted-foreground" />{ch.label}</Button>)}
                       </div>
                       <div><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Canais de voz</p>
-                        {activeCommunity.channels.filter(ch => ch.kind === 'voice').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); }}><Volume2 className="size-4 text-muted-foreground" />{ch.label}</Button>)}
+                        {activeCommunity.channels.filter(ch => ch.kind === 'voice').map(ch => <Button key={ch.id} variant={ch.id === channelId ? 'secondary' : 'ghost'} className="mb-1 h-10 w-full justify-start gap-2" onClick={() => { setChannelId(ch.id); setChannelOpened(true); setMediaViewerId(null); }}><Volume2 className="size-4 text-muted-foreground" />{ch.label}</Button>)}
                       </div>
                     </div>
                   </ScrollArea>
                 </section>
                 <section aria-label="Conteúdo do canal" className={cn('min-w-0 flex-1 flex-col', channelOpened ? 'flex' : 'hidden md:flex')}>
                   <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-                    <Button size="icon" variant="ghost" aria-label="Voltar aos canais" onClick={() => setChannelOpened(false)} className="md:hidden"><ArrowLeft className="size-5" /></Button>
+                    <Button size="icon" variant="ghost" aria-label="Voltar aos canais" onClick={() => { setChannelOpened(false); setMediaViewerId(null); }} className="md:hidden"><ArrowLeft className="size-5" /></Button>
                     {activeChannel.kind === 'voice' ? <Volume2 className="size-5 text-muted-foreground" /> : <Hash className="size-5 text-muted-foreground" />}
                     <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.label}</h2><p className="text-xs text-muted-foreground">{activeCommunity.name} · exemplo</p></div>
                   </div>
@@ -355,11 +387,13 @@ export default function SocialShell({ account, onLogout }: {
                           <EmptyState icon={Hash} title={'Bem-vindo a #' + activeChannel.label} description="Os canais de texto organizam conversas públicas ou privadas conforme as permissões de cada comunidade." />
                           {visibleChannelMessages.map(message => <div className="flex gap-3" key={message.id}>
                             <ProfileAvatar name={message.mine ? account.user.name : 'Equipe'} className="size-8" />
-                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? 'Você (prévia)' : 'Equipe Uorqui (exemplo)'} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{message.text}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} />}</div>
+                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? 'Você (prévia)' : 'Equipe Uorqui (exemplo)'} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{message.text}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={message.attachment.kind === 'image' || message.attachment.kind === 'video' ? () => setMediaViewerId(message.id) : undefined} />}</div>
                           </div>)}
                         </div>
                       </ScrollArea>
-                      <DemoMessageComposer key={'channel-' + communityKey + '-' + channelOpened} onSend={sendDemoChannel} ariaLabel="Mensagem de canal de exemplo" placeholder={'Mensagem em #' + activeChannel.label + ' (prévia)'} />
+                      <DemoMessageComposer key={'channel-' + communityKey + '-' + channelOpened} onSend={sendDemoChannel} ariaLabel="Mensagem de canal de exemplo" placeholder={'Mensagem em #' + activeChannel.label + ' (prévia)'}
+                        draftText={drafts['channel/' + communityKey] ?? ''}
+                        onDraftChange={next => updateDraft('channel/' + communityKey, next)} />
                     </>
                   )}
                 </section>
@@ -398,6 +432,7 @@ export default function SocialShell({ account, onLogout }: {
           })}
         </nav>}
       </div>
+      <DemoMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId} onClose={() => setMediaViewerId(null)} />
     </div>
   );
 }
