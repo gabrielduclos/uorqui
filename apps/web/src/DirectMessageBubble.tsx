@@ -48,15 +48,17 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onEdit, onDelete, onForward, onReact, onRetry, disabled }: {
+export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onRetry, disabled, highlighted }: {
   message: DirectChatMessage; mine: boolean; locale: string; myId: string; peerName: string;
   onReply: (message: DirectChatMessage) => void;
+  onJumpToReply: (messageId: string) => void;
   onEdit: (message: DirectChatMessage) => void;
-  onDelete: (message: DirectChatMessage) => void;
+  onCancel: (message: DirectChatMessage) => void;
   onForward: (message: DirectChatMessage) => void;
   onReact: (message: DirectChatMessage, emoji: string | null) => void;
   onRetry: (message: DirectChatMessage) => void;
   disabled?: boolean;
+  highlighted?: boolean;
 }) {
   const pt = locale === 'pt-BR';
   const [open, setOpen] = useState(false);
@@ -118,15 +120,18 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
 
   return <div data-direct-message-id={message.id} className={cn('group relative flex min-w-0 items-start gap-1.5', mine ? 'justify-end' : 'justify-start')}>
     <SwipeToReply onReply={() => { if (!message.deletedAt && !message.pendingStatus) onReply(message); }}>
-      <div className={cn('min-w-0 max-w-[calc(100vw-108px)] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]',
+      <div className={cn('min-w-0 max-w-[calc(100vw-108px)] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]', highlighted && 'outline outline-2 outline-primary outline-offset-2',
         mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
         {message.forwarded && !message.deletedAt && <span className="mb-1 flex items-center gap-1 text-[11px] opacity-75"><Forward className="size-3"/> {pt ? 'Encaminhada' : 'Forwarded'}</span>}
-        {message.replyTo && !message.deletedAt && <div className={cn('mb-2 rounded-sm border-l-2 px-2 py-1 text-xs',mine?'border-white/60 bg-white/10':'border-primary/70 bg-background/60')}>
+        {message.replyTo && !message.deletedAt && <button type="button"
+          onClick={() => onJumpToReply(message.replyTo!.id)}
+          aria-label={pt ? 'Ir para a mensagem respondida' : 'Jump to replied message'}
+          className={cn('mb-2 block w-full rounded-sm border-l-2 px-2 py-1 text-left text-xs transition-colors hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-current',mine?'border-white/60 bg-white/10':'border-primary/70 bg-background/60')}>
           <span className="block font-semibold">{pt ? 'Resposta a ' : 'Reply to '}{message.replyTo.authorId === myId ? (pt ? 'você' : 'you') : peerName}</span>
           <span className="mt-0.5 block max-w-full truncate opacity-80">
             {message.replyTo.deleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : message.replyTo.body}
           </span>
-        </div>}
+        </button>}
         {quote && !message.replyToId && !message.deletedAt && <blockquote className={cn('mb-2 border-l-2 px-2 py-1 text-xs',mine?'border-white/60 bg-white/10':'border-primary/70 bg-background/60')}>
           <span className="block font-semibold">{pt ? 'Resposta antiga' : 'Legacy reply'}</span>
           <span className="mt-0.5 block max-w-full truncate opacity-80">{quote[1]}</span>
@@ -149,16 +154,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           </span>
         </p>
       </div>
-      {!!message.reactions?.length && !message.deletedAt && <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'justify-end' : 'justify-start')}>
-        {message.reactions.map(reaction => <button key={reaction.emoji} type="button"
-          disabled={disabled || mine}
-          aria-label={(pt ? 'Reação' : 'Reaction') + ' ' + reaction.emoji + ': ' + reaction.count}
-          aria-pressed={message.myReaction === reaction.emoji}
-          onClick={() => onReact(message, message.myReaction === reaction.emoji ? null : reaction.emoji)}
-          className={cn('inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs', message.myReaction === reaction.emoji && 'border-primary bg-primary/10', !mine && 'hover:bg-accent')}>
-          <span>{reaction.emoji}</span><span>{reaction.count}</span>
-        </button>)}
-      </div>}
+
     </SwipeToReply>
     {!message.deletedAt && !message.pendingStatus && <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
       aria-label={pt ? 'Opções da mensagem' : 'Message options'} aria-haspopup="menu" aria-expanded={open}
@@ -189,8 +185,8 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Forward className="size-4"/>{pt ? 'Encaminhar' : 'Forward'}</button>
         {mine && <button role="menuitem" type="button" onClick={() => { setOpen(false); onEdit(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Pencil className="size-4"/>{pt ? 'Editar' : 'Edit'}</button>}
-        {mine && <button role="menuitem" type="button" onClick={() => { setOpen(false); onDelete(message); }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-accent"><Trash2 className="size-4"/>{pt ? 'Excluir para todos' : 'Delete for everyone'}</button>}
+        {mine && !message.readAt && <button role="menuitem" type="button" onClick={() => { setOpen(false); onCancel(message); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-accent"><Trash2 className="size-4"/>{pt ? 'Cancelar mensagem' : 'Cancel message'}</button>}
         <button role="menuitem" type="button" onClick={() => setOpen(false)}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><X className="size-4"/>{pt ? 'Fechar' : 'Close'}</button>
       </div>
