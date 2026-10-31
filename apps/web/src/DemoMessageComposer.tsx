@@ -1,3 +1,4 @@
+import { useUorquiPreferences } from './UorquiPreferences';
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { Camera, FileText, Images, MapPin, Mic, Play, Plus, Send, Smile, Square, Video, X, Reply, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
@@ -47,15 +48,16 @@ function formatSize(bytes: number) {
 }
 
 export function DemoAttachmentView({ attachment, onOpenMedia }: { attachment: DemoAttachment; onOpenMedia?: () => void }) {
+  const { t } = useUorquiPreferences();
   if (attachment.kind === 'image') {
-    const image = <img src={attachment.url} alt="Foto compartilhada" loading="lazy" className="max-h-72 max-w-full object-contain" />;
+    const image = <img src={attachment.url} alt={t("Foto compartilhada")} loading="lazy" className="max-h-72 max-w-full object-contain" />;
     return onOpenMedia
       ? <button type="button" aria-label="Abrir foto" onClick={onOpenMedia} className="mt-1 block max-w-full overflow-hidden focus-visible:outline-2 focus-visible:outline-ring">{image}</button>
       : <a href={attachment.url} download={attachment.name} aria-label="Baixar foto" className="mt-1 block w-fit max-w-full">{image}</a>;
   }
   if (attachment.kind === 'video') {
     return onOpenMedia
-      ? <button type="button" onClick={onOpenMedia} aria-label="Abrir vídeo" className="relative mt-1 block max-w-full overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-ring">
+      ? <button type="button" onClick={onOpenMedia} aria-label={t("Abrir vídeo")} className="relative mt-1 block max-w-full overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-ring">
           <video src={attachment.url} muted playsInline preload="metadata" aria-hidden="true" className="pointer-events-none max-h-72 max-w-full" />
           <span className="absolute inset-0 grid place-items-center bg-black/20"><Play className="size-9 text-white" fill="currentColor" /></span>
         </button>
@@ -82,6 +84,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
   draftText?: string;
   onDraftChange?: (text: string) => void;
 }) {
+  const { t } = useUorquiPreferences();
   const [text, setText] = useState('');
   const [editText, setEditText] = useState('');
   const activeText = editing ? editText : draftText ?? text;
@@ -164,7 +167,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
 
   function saveEditedPhoto(blob: Blob) {
     if (blob.size === 0 || blob.size > MAX_FILE_BYTES) {
-      setError('Não foi possível preparar a foto. O limite é ' + MAX_FILE_LABEL + '.');
+      setError(t("Não foi possível preparar a foto. O limite é ") + MAX_FILE_LABEL + '.');
       return;
     }
     replacePending({
@@ -250,7 +253,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
     setPickerOpen(false);
     setCameraOptions(false);
     if (!navigator.geolocation) {
-      setError('Localização não disponível neste navegador.');
+      setError(t("Localização não disponível neste navegador."));
       return;
     }
     const requestId = ++locationRequestRef.current;
@@ -265,7 +268,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       },
       error => {
         if (!mountedRef.current || locationRequestRef.current !== requestId) return;
-        setError(error.code === 1 ? 'Permissão de localização negada. Autorize no navegador para compartilhar.' : 'Não foi possível obter a localização. Tente novamente.');
+        setError(error.code === 1 ? t("Permissão de localização negada. Autorize no navegador para compartilhar.") : t("Não foi possível obter a localização. Tente novamente."));
         setLocating(false);
       },
       { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 },
@@ -275,11 +278,11 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
   function stageFile(file: File, kind: AttachmentKind) {
     if (editing) return;
     if ((kind !== 'file' && !file.type.startsWith(kind + '/')) || file.size === 0) {
-      setError('Selecione um arquivo válido para a opção escolhida.');
+      setError(t("Selecione um arquivo válido para a opção escolhida."));
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      setError('O limite desta prévia é ' + MAX_FILE_LABEL + ' por arquivo.');
+      setError(t("O limite desta prévia é ") + MAX_FILE_LABEL + t(" por arquivo."));
       return;
     }
     const actualKind: AttachmentKind = kind === 'file' ? (file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'file') : kind;
@@ -311,7 +314,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setError('A gravação de áudio não está disponível neste navegador ou conexão.');
+      setError(t("A gravação de áudio não está disponível neste navegador ou conexão."));
       return;
     }
     let stream: MediaStream | null = null;
@@ -338,11 +341,11 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
         const blob = new Blob(audioChunksRef.current, { type: mimeType });
         audioChunksRef.current = [];
         if (blob.size === 0) {
-          setError('Nenhum áudio foi capturado. Tente novamente.');
+          setError(t("Nenhum áudio foi capturado. Tente novamente."));
           return;
         }
         if (blob.size > MAX_FILE_BYTES) {
-          setError('Gravação excedeu o limite de ' + MAX_FILE_LABEL + '.');
+          setError(t("Gravação excedeu o limite de ") + MAX_FILE_LABEL + '.');
           return;
         }
         const extension = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
@@ -357,7 +360,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       };
       recorder.onerror = () => {
         audioChunksRef.current = [];
-        setError('Não foi possível concluir a gravação.');
+        setError(t("Não foi possível concluir a gravação."));
       };
       recorder.start();
       setIsRecording(true);
@@ -367,7 +370,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       streamRef.current = null;
       recorderRef.current = null;
       setIsRecording(false);
-      setError('Não foi possível acessar o microfone. Confira a permissão do navegador.');
+      setError(t("Não foi possível acessar o microfone. Confira a permissão do navegador."));
     }
   }
 
@@ -415,43 +418,43 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       {(editing || replyPreview) && <div className="flex items-center gap-3 border-l-2 border-primary bg-muted/55 px-3 py-2 text-sm">
         {editing ? <Pencil className="size-4 shrink-0 text-primary" /> : <Reply className="size-4 shrink-0 text-primary" />}
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold">{editing ? 'Editando mensagem' : 'Respondendo a ' + replyPreview?.author}</p>
+          <p className="text-xs font-semibold">{editing ? 'Editando mensagem' : t("Respondendo a ") + replyPreview?.author}</p>
           <p className="truncate text-xs text-muted-foreground">{editing?.text ?? replyPreview?.text}</p>
         </div>
-        <Button type="button" size="icon-sm" variant="ghost" aria-label={editing ? 'Cancelar edição' : 'Cancelar resposta'} onClick={() => editing ? onCancelEditing?.() : onCancelReply?.()}><X className="size-4" /></Button>
+        <Button type="button" size="icon-sm" variant="ghost" aria-label={editing ? t("Cancelar edição") : 'Cancelar resposta'} onClick={() => editing ? onCancelEditing?.() : onCancelReply?.()}><X className="size-4" /></Button>
       </div>}
       {pending && <div className="flex max-w-full items-start gap-3 rounded-xl border border-border bg-muted/60 p-3">
         <div className="min-w-0 flex-1">
-          <p className="mb-2 text-xs font-medium">{attachmentTitle(pending)} · {formatSize(pending.size)}</p>
+          <p className="mb-2 text-xs font-medium">{t(attachmentTitle(pending))} · {formatSize(pending.size)}</p>
           <DemoAttachmentView attachment={pending} onOpenMedia={pending.kind === 'image' ? () => setPhotoEditorOpen(true) : undefined} />
-          {pending.kind === 'image' && <Button type="button" variant="outline" size="sm" onClick={() => setPhotoEditorOpen(true)} className="mt-2 h-9 rounded-none"><Pencil className="size-4" />Editar foto antes de enviar</Button>}
+          {pending.kind === 'image' && <Button type="button" variant="outline" size="sm" onClick={() => setPhotoEditorOpen(true)} className="mt-2 h-9 rounded-none"><Pencil className="size-4" />{t("Editar foto antes de enviar")}</Button>}
         </div>
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Remover anexo" onClick={() => replacePending(null)}><X className="size-4" /></Button>
       </div>}
       {pendingLocation && <div className="flex items-center gap-3 border border-border bg-muted/50 px-3 py-2 text-sm">
         <MapPin className="size-5 shrink-0 text-primary" />
-        <span className="min-w-0 flex-1">Localização selecionada — pronta para compartilhar</span>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remover localização" onClick={() => setPendingLocation(null)}><X className="size-4" /></Button>
+        <span className="min-w-0 flex-1">{t("Localização selecionada — pronta para compartilhar")}</span>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label={t("Remover localização")} onClick={() => setPendingLocation(null)}><X className="size-4" /></Button>
       </div>}
       {isRecording && <p role="status" className="flex items-center gap-2 text-xs text-destructive">
         <span className="size-2 animate-pulse rounded-full bg-destructive" /> Gravando áudio — toque no botão quadrado para finalizar
       </p>}
-      {locating && <p role="status" className="text-xs text-muted-foreground">Solicitando localização ao navegador…</p>}
+      {locating && <p role="status" className="text-xs text-muted-foreground">{t("Solicitando localização ao navegador…")}</p>}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
       <div ref={controlsRef} className="relative flex min-w-0 items-end gap-1 sm:gap-2">
         {pickerOpen && <div role="dialog" aria-label="Adicionar à conversa" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setPickerOpen(false); setCameraOptions(false); } }} className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-[520px] rounded-none border border-border bg-popover p-2 text-popover-foreground shadow-xl">
           <div className="mb-1 flex items-center justify-between gap-2 px-1">
             <p className="truncate text-xs font-medium">{cameraOptions ? 'Câmera' : 'Adicionar'}</p>
-            <button type="button" aria-label="Fechar anexos" onClick={() => { setPickerOpen(false); setCameraOptions(false); }} className="grid size-7 shrink-0 place-items-center hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-4" /></button>
+            <button type="button" aria-label={t("Fechar anexos")} onClick={() => { setPickerOpen(false); setCameraOptions(false); }} className="grid size-7 shrink-0 place-items-center hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-4" /></button>
           </div>
           {cameraOptions ? <div className="grid grid-cols-3 gap-1">
-            <button type="button" onClick={() => chooseCamera('image')} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Camera className="size-5 text-primary" />Foto</button>
+            <button type="button" onClick={() => chooseCamera('image')} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Camera className="size-5 text-primary" />{t("Foto")}</button>
             <button type="button" onClick={() => chooseCamera('video')} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Video className="size-5 text-primary" />Vídeo</button>
             <button type="button" onClick={() => setCameraOptions(false)} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-5 text-muted-foreground" />Voltar</button>
           </div> : <div className="grid grid-cols-4 gap-1">
             {([
               { label: 'Câmera', Icon: Camera, action: () => setCameraOptions(true) },
-              { label: 'Galeria', Icon: Images, action: chooseGallery },
+              { label: t("Galeria"), Icon: Images, action: chooseGallery },
               { label: 'Arquivos', Icon: FileText, action: chooseFile },
               { label: 'Localização', Icon: MapPin, action: chooseLocation },
             ] as const).map(item => <button key={item.label} type="button" onClick={item.action} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-0.5 text-[10px] sm:text-xs hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
@@ -461,26 +464,26 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
         </div>}
         <div className="shrink-0">
           <input ref={fileInputRef} type="file" className="sr-only" tabIndex={-1} aria-label="Selecionar anexo" onChange={fileSelected} />
-          <input ref={cameraInputRef} type="file" capture="environment" className="sr-only" tabIndex={-1} aria-label="Capturar mídia com a câmera" onChange={cameraFileSelected} />
-          <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 sm:size-11" aria-label="Adicionar anexo" aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={isRecording || !!editing} onClick={() => { setPickerOpen(open => !open); setEmojiOpen(false); setCameraOptions(false); }}><Plus className="size-6" /></Button>
+          <input ref={cameraInputRef} type="file" capture="environment" className="sr-only" tabIndex={-1} aria-label={t("Capturar mídia com a câmera")} onChange={cameraFileSelected} />
+          <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 sm:size-11" aria-label={t("Adicionar anexo")} aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={isRecording || !!editing} onClick={() => { setPickerOpen(open => !open); setEmojiOpen(false); setCameraOptions(false); }}><Plus className="size-6" /></Button>
         </div>
         <div className="relative min-w-0 flex-1">
           <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => updateText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="block min-h-12 max-h-52 w-full min-w-0 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
           {emojiOpen && <div role="dialog" aria-label="Lista de emojis" onKeyDown={event => { if (event.key === 'Escape') setEmojiOpen(false); }} className="absolute bottom-full right-0 z-50 mb-2 w-[min(340px,calc(100vw-24px))] rounded-none border border-border bg-popover p-3 text-popover-foreground shadow-xl">
-            <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold">Emojis</p><button type="button" aria-label="Fechar emojis" onClick={() => setEmojiOpen(false)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
+            <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold">{t("Emojis")}</p><button type="button" aria-label="Fechar emojis" onClick={() => setEmojiOpen(false)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
             <div className="max-h-64 overflow-y-auto">
-              {EMOJI_GROUPS.map(group => <section key={group.label} className="mb-3">
+              {EMOJI_GROUPS.map(group => <section key={t(group.label)} className="mb-3">
                 <p className="mb-1 text-xs text-muted-foreground">{group.label}</p>
-                <div className="grid grid-cols-6 gap-1">{group.emojis.map(emoji => <button type="button" key={emoji} aria-label={'Inserir emoji ' + emoji} onMouseDown={event => event.preventDefault()} onClick={() => { updateText(activeText + emoji); textareaRef.current?.focus(); }} className="grid size-10 place-items-center text-xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{emoji}</button>)}</div>
+                <div className="grid grid-cols-6 gap-1">{group.emojis.map(emoji => <button type="button" key={emoji} aria-label={t('Emojis') + ' ' + emoji} onMouseDown={event => event.preventDefault()} onClick={() => { updateText(activeText + emoji); textareaRef.current?.focus(); }} className="grid size-10 place-items-center text-xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{emoji}</button>)}</div>
               </section>)}
             </div>
           </div>}
         </div>
-        <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 sm:size-11" aria-label="Abrir lista de emojis" aria-haspopup="dialog" aria-expanded={emojiOpen} disabled={isRecording || !!editing} onClick={() => { setEmojiOpen(open => !open); setPickerOpen(false); }}><Smile className="size-5" /></Button>
+        <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0 sm:size-11" aria-label={t("Abrir lista de emojis")} aria-haspopup="dialog" aria-expanded={emojiOpen} disabled={isRecording || !!editing} onClick={() => { setEmojiOpen(open => !open); setPickerOpen(false); }}><Smile className="size-5" /></Button>
         <Button type={isRecording || !canSend ? 'button' : 'submit'} variant={isRecording ? 'destructive' : !canSend ? 'ghost' : 'default'} size="icon"
-          aria-label={isRecording ? 'Finalizar gravação' : canSend ? (editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração') : 'Gravar áudio'}
+          aria-label={isRecording ? t("Finalizar gravação") : canSend ? (editing ? t("Salvar edição da mensagem") : 'Enviar mensagem de demonstração') : 'Gravar áudio'}
           disabled={locating || (!!editing && !canSend)}
-          title={isRecording ? 'Finalizar gravação' : canSend ? 'Enviar' : 'Gravar áudio'}
+          title={isRecording ? t("Finalizar gravação") : canSend ? t("Enviar") : 'Gravar áudio'}
           onClick={isRecording || !canSend ? () => void toggleRecording() : undefined}
           className="size-10 shrink-0 sm:size-11">
           {isRecording ? <Square className="size-4" fill="currentColor" /> : canSend ? <Send className="size-5" /> : <Mic className="size-5" />}
@@ -488,10 +491,10 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       </div>
       {photoEditorOpen && pending?.kind === 'image' && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-2 text-white sm:p-5">
-          <div ref={editorDialogRef} role="dialog" aria-modal="true" aria-label="Editar foto antes de enviar" onKeyDown={editorKeyDown} className="flex h-full max-h-[96dvh] w-full max-w-6xl min-w-0 flex-col overflow-hidden">
+          <div ref={editorDialogRef} role="dialog" aria-modal="true" aria-label={t("Editar foto antes de enviar")} onKeyDown={editorKeyDown} className="flex h-full max-h-[96dvh] w-full max-w-6xl min-w-0 flex-col overflow-hidden">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/15 px-1 py-2">
-              <p className="text-sm font-semibold">Editar foto antes de enviar</p>
-              <button ref={closeEditorRef} type="button" aria-label="Fechar editor de foto" onClick={() => setPhotoEditorOpen(false)} className="grid size-10 place-items-center hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><X className="size-5" /></button>
+              <p className="text-sm font-semibold">{t("Editar foto antes de enviar")}</p>
+              <button ref={closeEditorRef} type="button" aria-label={t("Fechar editor de foto")} onClick={() => setPhotoEditorOpen(false)} className="grid size-10 place-items-center hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"><X className="size-5" /></button>
             </div>
             <DemoImageEditor key={pending.url} src={pending.url} onCancel={() => setPhotoEditorOpen(false)} onSave={saveEditedPhoto} />
           </div>
