@@ -58,7 +58,7 @@ Interface: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. Não 
 
 ## Front-end no Cloudflare Workers
 
-O React está preparado para **Workers Static Assets** no arquivo `apps/web/wrangler.jsonc`. O Worker encaminha `/api/*` à API Fastify separada quando ela existir; sem `API_ORIGIN`, as rotas retornam HTTP 503. **Ainda não houve deploy do novo Worker.** Consulte o [guia de hospedagem](docs/pt-BR/cloudflare-workers.md).
+O React usa **Workers Static Assets** em `apps/web/wrangler.jsonc`. O Worker Cloudflare **`main`** já está conectado ao GitHub, e o **Cloudflare Builds** executará build e deploy após commits na branch `main`. O proxy `/api/*` continua retornando 503 enquanto não houver `API_ORIGIN` configurada. Consulte o [guia de hospedagem](docs/pt-BR/cloudflare-workers.md).
 
 ## Código aberto
 

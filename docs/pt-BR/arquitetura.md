@@ -23,7 +23,7 @@ Essas escolhas estão **aprovadas para o novo Uorqui**, mas **banco Neon, migra�
 
 O **React está configurado para Cloudflare Workers Static Assets** (`apps/web/wrangler.jsonc`), com fallback SPA e um pequeno Worker que encaminha `/api/*` e `/health*` à API Fastify. As chamadas continuam no mesmo domínio do front-end, facilitando cookies de sessão de primeira parte. A API Node.js/Fastify permanece separada, com conexão PostgreSQL Neon; o Worker não executa o servidor Fastify nem contém credenciais do banco.
 
-O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de API retornam 503, não o HTML da SPA. Para login real, `AUTH_BASE_URL` e `WEB_ORIGIN` devem coincidir com a origem pública do novo Worker. **Nenhum Worker foi publicado, a hospedagem da API não foi escolhida e o domínio legado não foi migrado.** [Guia Workers](cloudflare-workers.md).
+O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de API retornam 503, não o HTML da SPA. Para login real, `AUTH_BASE_URL` e `WEB_ORIGIN` devem coincidir com a origem pública do novo Worker. **O Worker `main` está conectado ao GitHub para deploy automático pelo Cloudflare Builds; a hospedagem da API não foi escolhida e o domínio legado não foi migrado.** [Guia Workers](cloudflare-workers.md).
 
 ## Decisões de autenticação
 

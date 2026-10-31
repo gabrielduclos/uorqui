@@ -1,10 +1,18 @@
-name: Code checks
+name: API checks
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/api/**"
+      - "package.json"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "apps/api/**"
+      - "package.json"
+      - ".github/workflows/ci.yml"
 jobs:
-  build-and-typecheck:
+  api-build-and-migrations:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -15,12 +23,10 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Build
-        run: npm run build
-      - name: Validate Cloudflare Worker bundle without deploying
-        run: npm run check:worker -w @uorqui/web
+      - name: Typecheck API
+        run: npm run typecheck -w @uorqui/api
+      - name: Build API
+        run: npm run build -w @uorqui/api
       - name: Check Drizzle migration files for schema drift
         shell: bash
         run: |

@@ -23,7 +23,7 @@ These choices are **approved for the new Uorqui project**, but **the Neon databa
 
 The **React SPA is configured for Cloudflare Workers Static Assets** (`apps/web/wrangler.jsonc`) with SPA fallback and a small Worker proxy for `/api/*` and `/health*`. API calls use the same web origin, allowing normal first-party session cookies. The Node.js/Fastify backend stays a separate service and still connects to Neon; the Worker does not run the Fastify server or use Neon credentials.
 
-The Worker requires `API_ORIGIN` before it can forward requests. Without it, API paths return 503 rather than serving an incorrect HTML page. Authentication `AUTH_BASE_URL` and `WEB_ORIGIN` must be configured to the actual public Worker origin before real sign-in. **No Worker deploy, API host or domain cutover has occurred.** Keep the old Uorqui domain and workers untouched. [Workers deployment guide](cloudflare-workers.md).
+The Worker requires `API_ORIGIN` before it can forward requests. Without it, API paths return 503 rather than serving an incorrect HTML page. Authentication `AUTH_BASE_URL` and `WEB_ORIGIN` must be configured to the actual public Worker origin before real sign-in. **Cloudflare Worker `main` is connected to GitHub for automatic deployment via Cloudflare Builds; the API host and any domain cutover are still pending.** Keep the old Uorqui domain and workers untouched. [Workers deployment guide](cloudflare-workers.md).
 
 ## Authentication decisions
 

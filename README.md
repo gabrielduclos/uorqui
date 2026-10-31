@@ -58,7 +58,7 @@ Web: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. The databas
 
 ## Cloudflare Workers web hosting
 
-The React SPA has a **Cloudflare Workers Static Assets** configuration under `apps/web/wrangler.jsonc`. The Worker handles `/api/*` as a reverse proxy when a separate Fastify API is available; without `API_ORIGIN`, API requests correctly return HTTP 503. **No Worker has been deployed.** See the [Workers setup](docs/en/cloudflare-workers.md).
+The React SPA uses **Cloudflare Workers Static Assets** via `apps/web/wrangler.jsonc`. Cloudflare Worker **`main`** is connected to GitHub, and **Cloudflare Builds** runs the frontend build/deploy after commits to `main`. Without `API_ORIGIN`, proxied API requests return HTTP 503. See the [Workers setup](docs/en/cloudflare-workers.md).
 
 ## Open source
 

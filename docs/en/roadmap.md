@@ -12,6 +12,7 @@
 - [ ] Verify trademark strategy and plan isolation from the legacy production domain.
 - [x] Decide core stack: React, TypeScript, Tailwind CSS, Node.js, Fastify, Neon PostgreSQL and Drizzle.
 - [x] Choose Cloudflare Workers Static Assets for the frontend, prepare Wrangler/SPA routing and an isolated future API proxy.
+- [x] Connect Cloudflare Worker `main` to the GitHub repository, configure Cloudflare Builds root `/apps/web` and web build/deploy commands, and limit GitHub Actions to API checks.
 - [ ] Select API hosting, configure `API_ORIGIN` and private auth secrets, validate the Worker and backend together before any public deployment.
 - [ ] Set operating budget, design conventions, data privacy principles and remaining realtime/voice/media providers.
 - [x] Commit the initial React/Tailwind, Fastify and Drizzle development scaffold.
