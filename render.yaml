@@ -1,0 +1,28 @@
+# Optional deployment blueprint for the separate Fastify API.
+# Import this Blueprint into Render only after choosing the hosting plan.
+# This service is not the Cloudflare Workers frontend and does not touch Uorqui legacy.
+services:
+  - type: web
+    name: uorqui-social-api
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm install --no-audit --no-fund && npm run build -w @uorqui/api
+    startCommand: node apps/api/dist/server.js
+    healthCheckPath: /health/db
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: ENABLE_DEV_SIGNUP
+        value: "false"
+      - key: AUTH_BASE_URL
+        value: https://main.uorqui1.workers.dev
+      - key: WEB_ORIGIN
+        value: https://main.uorqui1.workers.dev
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
