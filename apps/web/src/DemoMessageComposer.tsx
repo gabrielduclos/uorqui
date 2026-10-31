@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
-import { FileAudio, FileText, Image, Mic, Paperclip, Send, Square, Video, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
+import { FileAudio, FileText, Image, Mic, Paperclip, Send, Square, Video, X, Reply, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export type AttachmentKind = 'image' | 'video' | 'audio' | 'file';
@@ -54,12 +54,18 @@ export function DemoAttachmentView({ attachment }: { attachment: DemoAttachment 
   </a>;
 }
 
-export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: {
+export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, replyPreview, onCancelReply, editing, onCancelEditing }: {
   onSend: (payload: ComposePayload) => void;
   placeholder: string;
   ariaLabel: string;
+  replyPreview?: { author: string; text: string } | null;
+  onCancelReply?: () => void;
+  editing?: { id: number; text: string } | null;
+  onCancelEditing?: () => void;
 }) {
   const [text, setText] = useState('');
+  const [editText, setEditText] = useState('');
+  const activeText = editing ? editText : text;
   const [pending, setPending] = useState<DemoAttachment | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -87,9 +93,16 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
     };
   }, []);
 
+  useEffect(() => {
+    if (!editing) return;
+    setEditText(editing.text);
+    if (stagedRef.current) replacePending(null);
+    textareaRef.current?.focus();
+  }, [editing?.id]);
+
   useLayoutEffect(() => {
     if (textareaRef.current) resizeMessageField(textareaRef.current);
-  }, [text]);
+  }, [activeText]);
 
   useEffect(() => {
     const row = textareaRef.current?.parentElement;
@@ -121,11 +134,8 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
     input.click();
   }
 
-  function fileSelected(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (!file) return;
-    const kind = selectedKindRef.current;
+  function stageFile(file: File, kind: AttachmentKind) {
+    if (editing) return;
     if ((kind !== 'file' && !file.type.startsWith(kind + '/')) || file.size === 0) {
       setError('Selecione um arquivo válido para a opção escolhida.');
       return;
@@ -136,6 +146,20 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
     }
     replacePending({ kind, name: file.name, url: URL.createObjectURL(file), size: file.size, mimeType: file.type });
     setError('');
+  }
+
+  function fileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) stageFile(file, selectedKindRef.current);
+  }
+
+  function pasteAttachment(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (editing) return;
+    const image = Array.from(event.clipboardData.items).find(item => item.kind === 'file' && item.type.startsWith('image/'))?.getAsFile();
+    if (!image) return;
+    event.preventDefault();
+    stageFile(image, 'image');
   }
 
   async function toggleRecording() {
@@ -210,19 +234,26 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isRecording) return;
-    const value = text.trim();
-    if (!value && !pending) return;
-    onSend({ text: value, attachment: pending ?? undefined });
-    // A mensagem passa a ser dona da URL; só arquivos não enviados são revogados aqui.
-    stagedRef.current = null;
+    const value = activeText.trim();
+    if (!value && (editing || !pending)) return;
+    onSend({ text: value, attachment: editing ? undefined : pending ?? undefined });
+    // The sent message owns the object URL; otherwise revoke any discarded attachment.
+    if (!editing) stagedRef.current = null;
     setPending(null);
-    setText('');
+    if (editing) setEditText('');
+    else setText('');
     setPickerOpen(false);
     setError('');
     textareaRef.current?.focus();
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Escape' && (editing || replyPreview)) {
+      event.preventDefault();
+      if (editing) onCancelEditing?.();
+      else onCancelReply?.();
+      return;
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       event.currentTarget.form?.requestSubmit();
@@ -231,6 +262,14 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
 
   return <form onSubmit={submit} className="shrink-0 border-t border-border bg-card/60 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4 lg:px-8">
     <div className="flex w-full min-w-0 flex-col gap-2">
+      {(editing || replyPreview) && <div className="flex items-center gap-3 border-l-2 border-primary bg-muted/55 px-3 py-2 text-sm">
+        {editing ? <Pencil className="size-4 shrink-0 text-primary" /> : <Reply className="size-4 shrink-0 text-primary" />}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold">{editing ? 'Editando mensagem' : 'Respondendo a ' + replyPreview?.author}</p>
+          <p className="truncate text-xs text-muted-foreground">{editing?.text ?? replyPreview?.text}</p>
+        </div>
+        <Button type="button" size="icon-sm" variant="ghost" aria-label={editing ? 'Cancelar edição' : 'Cancelar resposta'} onClick={() => editing ? onCancelEditing?.() : onCancelReply?.()}><X className="size-4" /></Button>
+      </div>}
       {pending && <div className="flex max-w-full items-start gap-3 rounded-xl border border-border bg-muted/60 p-3">
         <div className="min-w-0 flex-1">
           <p className="mb-2 truncate text-xs font-medium">{pending.name} · {formatSize(pending.size)}</p>
@@ -245,7 +284,7 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
       <div className="flex min-w-0 items-end gap-2">
         <div className="relative shrink-0">
           <input ref={fileInputRef} type="file" className="sr-only" tabIndex={-1} aria-label="Selecionar anexo" onChange={fileSelected} />
-          <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Adicionar anexo" aria-haspopup="menu" aria-expanded={pickerOpen} disabled={isRecording} onClick={() => setPickerOpen(open => !open)}><Paperclip className="size-5" /></Button>
+          <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Adicionar anexo" aria-haspopup="menu" aria-expanded={pickerOpen} disabled={isRecording || !!editing} onClick={() => setPickerOpen(open => !open)}><Paperclip className="size-5" /></Button>
           {pickerOpen && <div role="menu" aria-label="Escolher tipo de anexo" onKeyDown={event => { if (event.key === 'Escape') setPickerOpen(false); }} className="absolute bottom-full left-0 z-40 mb-2 w-52 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
             {([
               { kind: 'image', label: 'Foto', Icon: Image },
@@ -257,11 +296,11 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel }: 
             </button>)}
           </div>}
         </div>
-        <Button type="button" variant={isRecording ? 'destructive' : 'ghost'} size="icon" className="size-11 shrink-0" aria-label={isRecording ? 'Finalizar gravação' : 'Gravar áudio'} onClick={() => void toggleRecording()} title={isRecording ? 'Finalizar gravação' : 'Gravar áudio pelo microfone'}>
+        <Button type="button" variant={isRecording ? 'destructive' : 'ghost'} size="icon" className="size-11 shrink-0" aria-label={isRecording ? 'Finalizar gravação' : 'Gravar áudio'} onClick={() => void toggleRecording()} disabled={!!editing} title={isRecording ? 'Finalizar gravação' : 'Gravar áudio pelo microfone'}>
           {isRecording ? <Square className="size-4" fill="currentColor" /> : <Mic className="size-5" />}
         </Button>
-        <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={text} onChange={event => setText(event.target.value)} onKeyDown={handleKeyDown} placeholder={placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
-        <Button type="submit" aria-label="Enviar mensagem de demonstração" size="icon" disabled={isRecording || (!text.trim() && !pending)} className="size-11 shrink-0"><Send className="size-4" /></Button>
+        <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => editing ? setEditText(event.target.value) : setText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="min-h-12 max-h-52 min-w-0 flex-1 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
+        <Button type="submit" aria-label={editing ? 'Salvar edição da mensagem' : 'Enviar mensagem de demonstração'} size="icon" disabled={isRecording || (!activeText.trim() && (editing || !pending))} className="size-11 shrink-0"><Send className="size-4" /></Button>
       </div>
       <p className="hidden text-right text-[11px] text-muted-foreground md:block">Enter para enviar · Shift+Enter para nova linha · Anexos limitados à prévia local</p>
     </div>
