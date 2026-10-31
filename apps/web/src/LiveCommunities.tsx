@@ -45,6 +45,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const [createOpen,setCreateOpen]=useState(false);
   const [createName,setCreateName]=useState('');
   const [createSlug,setCreateSlug]=useState('');
+  const [slugTouched,setSlugTouched]=useState(false);
   const [createDescription,setCreateDescription]=useState('');
   const [createVisibility,setCreateVisibility]=useState<Visibility>('public');
   const [newChannelOpen,setNewChannelOpen]=useState(false);
@@ -151,7 +152,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
       }));
       await loadList();
       selectCommunity(result.id);
-      setCreateName('');setCreateSlug('');setCreateDescription('');
+      setCreateName('');setCreateSlug('');setSlugTouched(false);setCreateDescription('');
     }catch(reason){setError(reason instanceof Error&&reason.message==='SLUG_TAKEN'
       ?(pt?'Este endereço já pertence a uma comunidade.':'This slug already exists.')
       :(pt?'Falha ao criar comunidade.':'Could not create community.'));}
@@ -231,10 +232,10 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
         <div className={hidden+' p-3'}>
           {createOpen?<form onSubmit={event=>void create(event)} className="space-y-3">
             <label className="block text-xs font-medium">{pt?'Nome':'Name'}
-              <Input value={createName} onChange={e=>{setCreateName(e.target.value);if(!createSlug)setCreateSlug(e.target.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9-]+/g,'-').replace(/^-+/,'').slice(0,64));}}
+              <Input value={createName} onChange={e=>{setCreateName(e.target.value);if(!slugTouched)setCreateSlug(e.target.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9-]+/g,'-').replace(/^-+/,'').slice(0,64));}}
                 required minLength={2} maxLength={120} className="mt-1 text-base" placeholder={pt?'Minha comunidade':'My community'}/></label>
             <label className="block text-xs font-medium">{pt?'Endereço':'Slug'}
-              <Input required value={createSlug} onChange={e=>setCreateSlug(e.target.value.toLowerCase())} maxLength={64}
+              <Input required value={createSlug} onChange={e=>{setSlugTouched(true);setCreateSlug(e.target.value.toLowerCase());}} maxLength={64}
                 className="mt-1 text-base" placeholder="minha-comunidade"/></label>
             <label className="block text-xs font-medium">{pt?'Descrição':'Description'}
               <textarea value={createDescription} onChange={e=>setCreateDescription(e.target.value)} maxLength={500} rows={3}
