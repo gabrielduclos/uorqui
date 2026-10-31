@@ -396,3 +396,76 @@ test('real DM replies: referenced originals, conversation isolation, idempotency
   const afterBlocked=await bob(path+'/messages');
   assert.ok(afterBlocked.data.messages.some(message=>message.id===readProtected.data.message.id));
 });
+
+
+test('edited DMs restart sent/received/read without erasing the original read protection',async()=>{
+  const list=await alice('/api/v1/dm/conversations');
+  const thread=list.data.conversations.find(c=>c.peerHandle==='dm_bob');
+  assert.ok(thread);
+  const path='/api/v1/dm/conversations/'+thread.id;
+  const initial=await alice(path+'/messages','POST',{
+    body:'Versão inicial para confirmar',clientId:crypto.randomUUID(),
+  });
+  assert.equal(initial.status,201,JSON.stringify(initial.data));
+  const item=path+'/messages/'+initial.data.message.id;
+
+  const delivery=await bob(path+'/received','POST');
+  assert.equal(delivery.status,200);
+  const firstRead=await bob(path+'/read','POST');
+  assert.equal(firstRead.status,200);
+  const before=await alice(path+'/messages');
+  const original=before.data.messages.find(m=>m.id===initial.data.message.id);
+  assert.ok(original.readAt && original.deliveredAt);
+
+  const edited=await alice(item,'PATCH',{body:'Versão revisada, precisa de novo recibo'});
+  assert.equal(edited.status,200,JSON.stringify(edited.data));
+  assert.ok(edited.data.message.editedAt);
+  assert.ok(Date.parse(edited.data.message.editedAt)>Date.parse(original.readAt));
+  assert.equal(edited.data.message.readAt,original.readAt,
+    'retain historical read timestamp so cancel cannot be re-enabled');
+  assert.equal(edited.data.message.deliveredAt,original.deliveredAt);
+  const unreadAgain=await bob('/api/v1/dm/conversations');
+  const changed=unreadAgain.data.conversations.find(c=>c.id===thread.id);
+  assert.ok(changed.unreadCount>=1,'edited revision becomes unread again');
+
+  const history=await bob(path+'/messages');
+  const revised=history.data.messages.find(m=>m.id===original.id);
+  assert.equal(revised.body,'Versão revisada, precisa de novo recibo');
+  const afterHistory=await bob('/api/v1/dm/conversations');
+  assert.ok(afterHistory.data.conversations.find(c=>c.id===thread.id).unreadCount>=1,
+    'history fetch must not read edited content');
+
+  const cancel=await alice(item,'DELETE');
+  assert.equal(cancel.status,409,'already-read message cannot be canceled after editing');
+
+  const redelivered=await bob(path+'/received','POST');
+  assert.equal(redelivered.status,200);
+  assert.ok(redelivered.data.received>=1);
+  const updatedReceipt=await alice(path+'/messages');
+  const receivedVersion=updatedReceipt.data.messages.find(m=>m.id===original.id);
+  assert.ok(Date.parse(receivedVersion.deliveredAt)>=Date.parse(receivedVersion.editedAt),
+    'recipient acknowledges delivery of the edited revision');
+  assert.ok(Date.parse(receivedVersion.readAt)<Date.parse(receivedVersion.editedAt),
+    'old read still does not mean edited revision was read');
+
+  const reread=await bob(path+'/read','POST');
+  assert.equal(reread.status,200);
+  assert.ok(reread.data.read>=1);
+  const finalMessages=await alice(path+'/messages');
+  const final=finalMessages.data.messages.find(m=>m.id===original.id);
+  assert.ok(Date.parse(final.readAt)>=Date.parse(final.editedAt),
+    'edited revision must have a new read timestamp');
+  const afterAck=await bob('/api/v1/dm/conversations');
+  assert.equal(afterAck.data.conversations.find(c=>c.id===thread.id).unreadCount,0);
+  const stillBlocked=await alice(item,'DELETE');
+  assert.equal(stillBlocked.status,409);
+
+  const editedAgain=await alice(item,'PATCH',{body:'Nova edição exige nova leitura'});
+  assert.equal(editedAgain.status,200);
+  const secondChange=await bob('/api/v1/dm/conversations');
+  assert.equal(secondChange.data.conversations.find(c=>c.id===thread.id).unreadCount,1);
+  const finalRead=await bob(path+'/read','POST');
+  assert.ok(finalRead.data.read>=1);
+  const finalInbox=await bob('/api/v1/dm/conversations');
+  assert.equal(finalInbox.data.conversations.find(c=>c.id===thread.id).unreadCount,0);
+});
