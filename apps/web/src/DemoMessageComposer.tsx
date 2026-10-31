@@ -395,6 +395,26 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
       {locating && <p role="status" className="text-xs text-muted-foreground">Solicitando localização ao navegador…</p>}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
       <div ref={controlsRef} className="relative flex min-w-0 items-end gap-1 sm:gap-2">
+        {pickerOpen && <div role="dialog" aria-label="Adicionar à conversa" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setPickerOpen(false); setCameraOptions(false); } }} className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-[520px] rounded-none border border-border bg-popover p-2 text-popover-foreground shadow-xl">
+          <div className="mb-1 flex items-center justify-between gap-2 px-1">
+            <p className="truncate text-xs font-medium">{cameraOptions ? 'Câmera' : 'Adicionar'}</p>
+            <button type="button" aria-label="Fechar anexos" onClick={() => { setPickerOpen(false); setCameraOptions(false); }} className="grid size-7 shrink-0 place-items-center hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-4" /></button>
+          </div>
+          {cameraOptions ? <div className="grid grid-cols-3 gap-1">
+            <button type="button" onClick={() => chooseCamera('image')} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Camera className="size-5 text-primary" />Foto</button>
+            <button type="button" onClick={() => chooseCamera('video')} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Video className="size-5 text-primary" />Vídeo</button>
+            <button type="button" onClick={() => setCameraOptions(false)} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><X className="size-5 text-muted-foreground" />Voltar</button>
+          </div> : <div className="grid grid-cols-4 gap-1">
+            {([
+              { label: 'Câmera', Icon: Camera, action: () => setCameraOptions(true) },
+              { label: 'Galeria', Icon: Images, action: chooseGallery },
+              { label: 'Arquivos', Icon: FileText, action: chooseFile },
+              { label: 'Localização', Icon: MapPin, action: chooseLocation },
+            ] as const).map(item => <button key={item.label} type="button" onClick={item.action} className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 border border-border px-0.5 text-[10px] sm:text-xs hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+              <item.Icon className="size-5 shrink-0 text-primary" />{item.label}
+            </button>)}
+          </div>}
+        </div>}
         <div className="shrink-0">
           <input ref={fileInputRef} type="file" className="sr-only" tabIndex={-1} aria-label="Selecionar anexo" onChange={fileSelected} />
           <input ref={cameraInputRef} type="file" capture="environment" className="sr-only" tabIndex={-1} aria-label="Capturar mídia com a câmera" onChange={cameraFileSelected} />
@@ -402,23 +422,6 @@ export default function DemoMessageComposer({ onSend, placeholder, ariaLabel, re
         </div>
         <div className="relative min-w-0 flex-1">
           <textarea ref={textareaRef} rows={1} aria-label={ariaLabel} value={activeText} onChange={event => updateText(event.target.value)} onKeyDown={handleKeyDown} onPaste={pasteAttachment} placeholder={editing ? 'Edite sua mensagem…' : placeholder} maxLength={2000} disabled={isRecording} className="block min-h-12 max-h-52 w-full min-w-0 resize-none overflow-y-hidden rounded-xl border border-input bg-background px-3 py-2.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40" />
-          {pickerOpen && <div role="dialog" aria-label="Adicionar à conversa" onKeyDown={event => { if (event.key === 'Escape') { setPickerOpen(false); setCameraOptions(false); } }} className="absolute bottom-full left-0 z-50 mb-2 w-[min(100%,360px)] min-w-0 rounded-none border border-border bg-popover p-2 text-popover-foreground shadow-xl">
-            <div className="mb-1 flex items-center justify-between gap-1"><p className="truncate text-xs font-semibold">{cameraOptions ? 'Câmera' : 'Adicionar'}</p><button type="button" aria-label="Fechar anexos" onClick={() => { setPickerOpen(false); setCameraOptions(false); }} className="grid size-7 shrink-0 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
-            {cameraOptions ? <div className="grid grid-cols-2 gap-1">
-              <button type="button" onClick={() => chooseCamera('image')} className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 py-1.5 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Camera className="size-4" />Foto</button>
-              <button type="button" onClick={() => chooseCamera('video')} className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 py-1.5 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Video className="size-4" />Vídeo</button>
-              <button type="button" className="col-span-2 py-1 text-xs text-muted-foreground hover:bg-accent" onClick={() => setCameraOptions(false)}>Voltar</button>
-            </div> : <div className="grid grid-cols-2 gap-1">
-              {([
-                { label: 'Câmera', Icon: Camera, action: () => setCameraOptions(true) },
-                { label: 'Galeria', Icon: Images, action: chooseGallery },
-                { label: 'Arquivos', Icon: FileText, action: chooseFile },
-                { label: 'Localização', Icon: MapPin, action: chooseLocation },
-              ] as const).map(item => <button key={item.label} type="button" onClick={item.action} className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border border-border px-1 py-1.5 text-[11px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
-                <item.Icon className="size-4 text-primary" />{item.label}
-              </button>)}
-            </div>}
-          </div>}
           {emojiOpen && <div role="dialog" aria-label="Lista de emojis" onKeyDown={event => { if (event.key === 'Escape') setEmojiOpen(false); }} className="absolute bottom-full right-0 z-50 mb-2 w-[min(340px,calc(100vw-24px))] rounded-none border border-border bg-popover p-3 text-popover-foreground shadow-xl">
             <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold">Emojis</p><button type="button" aria-label="Fechar emojis" onClick={() => setEmojiOpen(false)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-4" /></button></div>
             <div className="max-h-64 overflow-y-auto">
