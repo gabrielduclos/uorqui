@@ -24,6 +24,10 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 
 ## Documentation
 
+**UI kit / Design system:** [English](docs/en/ui-kit.md) · [Português (Brasil)](docs/pt-BR/ui-kit.md) — documentation only; no app page.
+
+
+
 | Topic | English | Português |
 | --- | --- | --- |
 | Run locally | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
