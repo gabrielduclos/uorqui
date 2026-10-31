@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Forward, LoaderCircle, MoreHorizontal, Pencil, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Forward, LoaderCircle, MoreHorizontal, Pencil, Reply, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type DirectChatMessage = {
@@ -12,6 +12,8 @@ export type DirectChatMessage = {
   replyToId?: string | null;
   replyTo?: { id: string; body: string; authorId: string; deleted: boolean } | null;
   reactions: { emoji: string; count: number }[]; myReaction: string | null;
+  attachment?: { id: string; name: string; type: string; size: number } | null;
+  attachmentUrl?: string;
 };
 
 function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () => void }) {
@@ -62,10 +64,15 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
 }) {
   const pt = locale === 'pt-BR';
   const [open, setOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [position, setPosition] = useState<{ left: number; top: number; width: number } | null>(null);
   const [conversationBounds, setConversationBounds] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const asset = message.attachment;
+  const assetUrl = asset && (message.attachmentUrl || '/media/dm/' + message.conversationId + '/' + asset.id);
+  const isImage = !!asset?.type.startsWith('image/');
+  const isVideo = !!asset?.type.startsWith('video/');
   const time = new Date(message.createdAt);
   const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
   const timeLabel = Number.isFinite(time.getTime())
@@ -137,6 +144,21 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           <span className="mt-0.5 block max-w-full truncate opacity-80">{quote[1]}</span>
         </blockquote>}
 
+        {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0">
+          {isImage ? <button type="button" onClick={() => setPreviewOpen(true)}
+            aria-label={pt ? 'Ampliar imagem' : 'Open image'}
+            className="block max-w-full focus-visible:outline-2 focus-visible:outline-current">
+            <img src={assetUrl} alt={asset.name} loading="lazy" decoding="async"
+              className="max-h-[360px] w-auto max-w-full object-contain" />
+          </button> : isVideo ? <video src={assetUrl} controls playsInline preload="metadata"
+            className="max-h-[320px] max-w-full" aria-label={asset.name}/> :
+            <a href={assetUrl} download={asset.name}
+              className="flex min-w-0 items-center gap-2 border border-current/20 px-2 py-2 hover:underline">
+              <FileText className="size-5 shrink-0"/><span className="min-w-0 flex-1 truncate text-xs">{asset.name}</span>
+              <Download className="size-4 shrink-0"/>
+            </a>}
+          {(isImage || isVideo) && <p className="mt-1 max-w-full truncate text-[11px] opacity-75">{asset.name}</p>}
+        </div>}
         <p className="whitespace-pre-wrap break-words">
           {message.deletedAt
             ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
@@ -171,6 +193,17 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
       className={cn('grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-opacity hover:bg-accent focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100',mine && 'order-first')}>
       <MoreHorizontal className="size-[18px]"/>
     </button>}
+    {previewOpen && isImage && assetUrl && typeof document !== 'undefined' && createPortal(
+      <div role="dialog" aria-modal="true" aria-label={asset?.name}
+        className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4"
+        onKeyDown={e => { if(e.key === 'Escape') setPreviewOpen(false); }}>
+        <button type="button" onClick={() => setPreviewOpen(false)}
+          aria-label={pt ? 'Fechar imagem' : 'Close image'}
+          className="absolute right-4 top-4 grid size-11 place-items-center text-white"><X className="size-6"/></button>
+        <img src={assetUrl} alt={asset?.name} className="max-h-[85dvh] max-w-[95vw] object-contain"/>
+        <a href={assetUrl} download={asset?.name} className="mt-3 flex items-center gap-2 text-sm text-white underline">
+          <Download className="size-4"/>{pt ? 'Salvar imagem' : 'Save image'}</a>
+      </div>,document.body)}
     {open && !message.deletedAt && typeof document !== 'undefined' && createPortal(<>
       <div aria-hidden="true" className="fixed z-[90] bg-background/15 backdrop-blur-[4px]" style={conversationBounds ?? { inset: 0 }} onClick={() => setOpen(false)}/>
       <div ref={menu} role="menu" aria-label={pt ? 'Ações da mensagem' : 'Message actions'}
@@ -188,11 +221,11 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         </div>}
         <button role="menuitem" type="button" onClick={() => { setOpen(false); onReply(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Reply className="size-4"/>{pt ? 'Responder' : 'Reply'}</button>
-        <button role="menuitem" type="button" onClick={() => void copyText()}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Copy className="size-4"/>{pt ? 'Copiar' : 'Copy'}</button>
-        <button role="menuitem" type="button" onClick={() => { setOpen(false); onForward(message); }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Forward className="size-4"/>{pt ? 'Encaminhar' : 'Forward'}</button>
-        {mine && <button role="menuitem" type="button" onClick={() => { setOpen(false); onEdit(message); }}
+        {!!message.body && <button role="menuitem" type="button" onClick={() => void copyText()}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Copy className="size-4"/>{pt ? 'Copiar' : 'Copy'}</button>}
+        {!asset && <button role="menuitem" type="button" onClick={() => { setOpen(false); onForward(message); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Forward className="size-4"/>{pt ? 'Encaminhar' : 'Forward'}</button>}
+        {mine && !asset && <button role="menuitem" type="button" onClick={() => { setOpen(false); onEdit(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Pencil className="size-4"/>{pt ? 'Editar' : 'Edit'}</button>}
         {mine && !message.readAt && <button role="menuitem" type="button" onClick={() => { setOpen(false); onCancel(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-accent"><Trash2 className="size-4"/>{pt ? 'Cancelar mensagem' : 'Cancel message'}</button>}
