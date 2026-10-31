@@ -259,7 +259,7 @@ export default function SocialShell({ account, onLogout }: {
                   </div>
                   <DemoNotice>As mensagens enviadas aqui ficam apenas nesta prévia, até atualizar a página.</DemoNotice>
                   <ScrollArea className="min-h-0 flex-1">
-                    <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-6 sm:px-8">
+                    <div className="flex w-full min-w-0 flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">
                       {(conversations[conversationId] ?? []).map(message => (
                         <div key={message.id} className={cn('flex', message.mine ? 'justify-end' : 'justify-start')}>
                           <div className={cn('max-w-[85%] rounded-md px-3.5 py-2.5 sm:max-w-[72%]', message.mine ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted text-foreground')}>
@@ -316,7 +316,7 @@ export default function SocialShell({ account, onLogout }: {
                   ) : (
                     <>
                       <ScrollArea className="min-h-0 flex-1">
-                        <div className="mx-auto max-w-3xl space-y-5 px-5 py-6">
+                        <div className="w-full min-w-0 space-y-5 px-4 py-6 sm:px-6 lg:px-8">
                           <EmptyState icon={Hash} title={'Bem-vindo a #' + activeChannel.label} description="Os canais de texto organizam conversas públicas ou privadas conforme as permissões de cada comunidade." />
                           {visibleChannelMessages.map(message => <div className="flex gap-3" key={message.id}>
                             <ProfileAvatar name={message.mine ? account.user.name : 'Equipe'} className="size-8" />
