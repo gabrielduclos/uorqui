@@ -131,7 +131,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me) return reply.code(401).send({error:'Unauthorized'});
       const query=[
         'SELECT c.id, c.created_at AS "createdAt", u.handle AS "peerHandle",',
-        'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl", (p.is_public=true OR f.status=\'accepted\') AS "canMessage",',
+        'p.display_name AS "peerName", p.avatar_url AS "peerAvatarUrl", (p.is_public=true OR COALESCE(f.status=\'accepted\',false)) AS "canMessage",',
         `NULLIF(m.body,'') AS "lastBody", m.attachment_type AS "lastAttachmentType", m.created_at AS "lastAt", m.author_id AS "lastAuthorId", (m.deleted_at IS NOT NULL) AS "lastDeleted",`,
         'reaction.emoji AS "lastReactionEmoji", reaction.notified_at AS "lastReactionAt", reaction.message_id AS "lastReactionMessageId",',
         'reaction.user_id AS "lastReactionAuthorId",',
