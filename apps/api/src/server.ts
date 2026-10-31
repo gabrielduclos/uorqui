@@ -7,6 +7,7 @@ import { getAuth } from './auth/auth.js';
 import { isDevelopmentSignupEnabled, isPublicSignupEnabled, isRegistrationAvailable, verifyRegistrationChallenge } from './auth/registration.js';
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
+import { registerProfileRoutes } from './profile-routes.js';
 
 const app = Fastify({
   logger: {
@@ -147,6 +148,9 @@ app.get('/api/v1/me', async (request, reply) => {
         handle: users.handle,
         displayName: profiles.displayName,
         bio: profiles.bio,
+        avatarUrl: profiles.avatarUrl,
+        coverUrl: profiles.coverUrl,
+        isPublic: profiles.isPublic,
       })
       .from(users)
       .leftJoin(profiles, eq(users.id, profiles.userId))
@@ -210,6 +214,8 @@ app.post('/api/v1/onboarding', {
     return reply.status(503).send({ error: 'Service unavailable' });
   }
 });
+
+registerProfileRoutes(app, async request => readSession(request));
 
 const port = Number(process.env.PORT ?? 3001);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
