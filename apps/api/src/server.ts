@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import { fromNodeHeaders } from 'better-auth/node';
 import { eq } from 'drizzle-orm';
 import { getAuth } from './auth/auth.js';
+import { isDevelopmentSignupEnabled } from './auth/registration.js';
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 
@@ -32,8 +33,26 @@ app.get('/health/db', async (_request, reply) => {
     return reply.status(503).send({ ok: false, database: 'not_configured' });
   }
   try {
-    await getPool().query('SELECT 1');
-    return { ok: true, database: 'connected' };
+    // Verify the app schema and migration journal, not only TCP connectivity.
+    const result = await getPool().query<{
+      social_ready: boolean;
+      auth_ready: boolean;
+      migration_count: string;
+    }>(`
+      SELECT
+        to_regclass('public.users') IS NOT NULL
+          AND to_regclass('public.profiles') IS NOT NULL AS social_ready,
+        to_regclass('public.user') IS NOT NULL
+          AND to_regclass('public.account') IS NOT NULL
+          AND to_regclass('public.session') IS NOT NULL
+          AND to_regclass('public.verification') IS NOT NULL AS auth_ready,
+        (SELECT count(*) FROM drizzle.__drizzle_migrations)::text AS migration_count
+    `);
+    const row = result.rows[0];
+    if (!row?.social_ready || !row?.auth_ready || Number(row.migration_count) < 2) {
+      return reply.status(503).send({ ok: false, database: 'schema_incomplete' });
+    }
+    return { ok: true, database: 'connected', schema: 'ready' };
   } catch (error) {
     app.log.error({ err: error }, 'Database health check failed');
     return reply.status(503).send({ ok: false, database: 'unavailable' });
@@ -45,6 +64,7 @@ app.get('/api/v1/status', async () => ({
   stage: 'auth-development',
   featuresEnabled: ['auth-scaffold'],
   publicRegistration: false,
+  developmentRegistrationEnabled: isDevelopmentSignupEnabled(),
 }));
 
 // Better Auth uses Fetch API Request/Response semantics; Fastify handles the network.
@@ -135,7 +155,7 @@ app.post('/api/v1/onboarding', {
   const { handle, displayName } = request.body as { handle: string; displayName: string };
   const forbidden = new Set(['admin', 'support', 'uorqui', 'system', 'moderator', 'root']);
   if (forbidden.has(handle)) return reply.status(400).send({ error: 'Handle unavailable' });
-  if (!displayName.trim()) return reply.status(400).send({ error: 'Invalid display name' });
+  if (displayName.trim().length < 2) return reply.status(400).send({ error: 'Invalid display name' });
 
   try {
     await createDatabase().transaction(async (tx) => {

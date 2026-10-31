@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+type ApiStatus = { developmentRegistrationEnabled?: boolean };
+
 type Account = {
   user: { id: string; email: string; name: string };
   profile: { handle: string; displayName: string; bio: string | null } | null;
@@ -26,6 +28,7 @@ function readableError(data: unknown, fallback: string) {
 export default function AuthPanel() {
   const [account, setAccount] = useState<Account | null>(null);
   const [view, setView] = useState<'login' | 'register'>('login');
+  const [canRegister, setCanRegister] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -54,14 +57,21 @@ export default function AuthPanel() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    void requestJson('/api/v1/status').then(({ response, body }) => {
+      if (response.ok) {
+        setCanRegister((body as ApiStatus).developmentRegistrationEnabled === true);
+      }
+    }).catch(() => setCanRegister(false));
+  }, [refresh]);
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setMessage('');
     try {
-      const signup = view === 'register';
+      const signup = view === 'register' && canRegister;
       const { response, body } = await requestJson(
         signup ? '/api/auth/sign-up/email' : '/api/auth/sign-in/email',
         {
@@ -156,8 +166,9 @@ export default function AuthPanel() {
         <>
           <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-900/80 p-1">
             <button type="button" aria-pressed={view === 'login'} onClick={() => { setView('login'); setMessage(''); }} className={view === 'login' ? 'rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold' : 'rounded-lg px-3 py-2 text-sm text-slate-300'}>Entrar</button>
-            <button type="button" aria-pressed={view === 'register'} onClick={() => { setView('register'); setMessage(''); }} className={view === 'register' ? 'rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold' : 'rounded-lg px-3 py-2 text-sm text-slate-300'}>Criar conta</button>
+            <button type="button" disabled={!canRegister} aria-pressed={view === 'register'} onClick={() => { if (canRegister) { setView('register'); setMessage(''); } }} className={view === 'register' ? 'rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold' : 'rounded-lg px-3 py-2 text-sm text-slate-300 disabled:cursor-not-allowed disabled:opacity-40'}>Criar conta</button>
           </div>
+          {!canRegister && <p className="mb-4 text-xs text-slate-400">Novas inscrições estão fechadas. O acesso está reservado aos testes de desenvolvimento.</p>}
           <form className="space-y-3" onSubmit={authenticate}>
             {view === 'register' && (
               <div>
@@ -172,7 +183,7 @@ export default function AuthPanel() {
             <div>
               <label className="mb-1.5 block text-xs font-medium text-slate-300" htmlFor="auth-password">Senha</label>
               <input id="auth-password" type="password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} maxLength={128} autoComplete={view === 'register' ? 'new-password' : 'current-password'} />
-              {view === 'register' && <p className="mt-1 text-xs text-slate-400">Mínimo de 12 caracteres. Cadastro liberado apenas no ambiente local de desenvolvimento.</p>}
+              {view === 'register' && <p className="mt-1 text-xs text-slate-400">Mínimo de 12 caracteres. Cadastro restrito ao ambiente de desenvolvimento.</p>}
             </div>
             <button type="submit" disabled={busy} className={buttonClass}>{busy ? 'Aguarde…' : view === 'login' ? 'Entrar' : 'Criar conta'}</button>
           </form>

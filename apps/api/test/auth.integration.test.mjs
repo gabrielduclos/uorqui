@@ -65,6 +65,12 @@ async function send(path, { method = 'GET', body, useCookie = true } = {}) {
 test('Auth + social profile local integration', async () => {
   const health = await send('/health/db');
   assert.equal(health.response.status, 200, 'db health');
+  assert.equal(health.data.schema, 'ready');
+
+  const status = await send('/api/v1/status');
+  assert.equal(status.response.status, 200);
+  assert.equal(status.data.publicRegistration, false);
+  assert.equal(status.data.developmentRegistrationEnabled, true);
 
   const blocked = await send('/api/v1/me', { useCookie: false });
   assert.equal(blocked.response.status, 401, 'anonymous request denied');
@@ -107,9 +113,21 @@ test('Auth + social profile local integration', async () => {
   });
   assert.equal(duplicate.response.status, 409);
 
+  // Invalid credentials must not authenticate another caller.
+  const badSignIn = await send('/api/auth/sign-in/email', {
+    method: 'POST',
+    useCookie: false,
+    body: { email: 'uorqui-test@example.invalid', password: 'completely-incorrect-password' },
+  });
+  assert.equal(badSignIn.response.ok, false, 'wrong password should not succeed');
+
   const logout = await send('/api/auth/sign-out', { method: 'POST', body: {} });
   assert.equal(logout.response.status, 200, JSON.stringify(logout.data));
 
   const noSession = await send('/api/v1/me', { useCookie: false });
   assert.equal(noSession.response.status, 401);
+
+  const afterLogout = await send('/api/v1/me');
+  assert.equal(afterLogout.response.status, 401, 'signed-out session must be rejected');
+
 });

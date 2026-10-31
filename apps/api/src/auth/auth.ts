@@ -3,6 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { authPolicy } from './auth-policy.js';
 import { createDatabase } from '../db/client.js';
 import * as authSchema from '../db/auth-schema.js';
+import { isDevelopmentSignupEnabled } from './registration.js';
 
 function buildAuth() {
   const secret = process.env.AUTH_SECRET;
@@ -31,7 +32,7 @@ function buildAuth() {
       ...authPolicy.emailAndPassword,
       // No email-verification/reset provider has been configured yet.
       // Disable public registrations until that work is finished.
-      disableSignUp: isProduction || process.env.ENABLE_DEV_SIGNUP !== 'true',
+      disableSignUp: !isDevelopmentSignupEnabled(),
     },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
