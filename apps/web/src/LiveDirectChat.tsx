@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type UIEvent } from 'react';
-import { ArrowDown, ArrowLeft, CheckCheck, MessageCircle, Search, Send, Smile, UserPlus, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
+import { ArrowDown, ArrowLeft, MessageCircle, Search, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
+import { LiveMessageComposer } from './LiveMessageComposer';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,6 @@ type Conversation = {
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
 type IncomingNotice = { id: string; name: string; preview: string };
-const EMOJIS = ['😀', '😂', '😍', '🥰', '😊', '😎', '😢', '😭', '😮', '🤔', '👍', '👏', '🙏', '❤️', '💙', '🔥', '🎉', '✅'];
 const NEAR_BOTTOM_PX = 96;
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
@@ -57,7 +57,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(0);
   const [incoming, setIncoming] = useState<IncomingNotice | null>(null);
-  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [quoteSource, setQuoteSource] = useState<Message | null>(null);
   const realtimeConnected = useRef(false);
   const lastThreadFallback = useRef(0);
   const lastMessageFallback = useRef(0);
@@ -139,7 +139,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     previousLastRef.current = '';
     setChatError('');
     setIncoming(null);
-    setEmojiOpen(false);
+    setQuoteSource(null);
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
     sendId.current = null;
@@ -153,7 +153,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setMessagesLoading(false);
     setNewBelow(0);
     positionedRef.current = false;
-    setEmojiOpen(false);
+    setQuoteSource(null);
     setDraft('');
     sendId.current = null;
   }, []);
@@ -330,29 +330,21 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     return () => window.clearTimeout(timer);
   }, [incoming]);
 
-  useLayoutEffect(() => {
-    const node = textareaRef.current;
-    if (!node) return;
-    node.style.height = 'auto';
-    node.style.height = Math.min(node.scrollHeight, 160) + 'px';
-    node.style.overflowY = node.scrollHeight > 160 ? 'auto' : 'hidden';
-  }, [draft, activeId]);
-
   useEffect(() => {
     const onEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (emojiOpen) { setEmojiOpen(false); return; }
+      if (quoteSource) { setQuoteSource(null); return; }
       if (activeIdRef.current) { event.preventDefault(); closeThread(); }
     };
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
-  }, [emojiOpen, closeThread]);
+  }, [quoteSource, closeThread]);
 
-  async function send(event?: FormEvent) {
-    event?.preventDefault();
-    const body = draft.trim(), id = activeId;
-    if (!id || !body || busy || body.length > 4000) return;
-    setBusy(true); setChatError(''); setEmojiOpen(false);
+  async function send() {
+    const body = (quoteSource ? '> ' + quoteSource.body.replace(/\s+/g, ' ').slice(0, 160) + '\n\n' : '') + draft.trim();
+    const id = activeId;
+    if (!id || !draft.trim() || busy || body.length > 4000) return;
+    setBusy(true); setChatError('');
     const clientId = sendId.current ?? crypto.randomUUID();
     sendId.current = clientId;
     try {
@@ -362,6 +354,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       });
       sendId.current = null;
       setDraft('');
+      setQuoteSource(null);
       await Promise.all([loadMessages(id), loadThreads()]);
       jumpToLast('smooth');
       textareaRef.current?.focus({ preventScroll: true });
@@ -373,15 +366,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     if (sendId.current) sendId.current = null;
     setDraft(value);
   }
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      void send();
-    }
-  }
   function quote(message: Message) {
-    const oneLine = message.body.replace(/\s+/g, ' ').slice(0, 160);
-    onDraftChange('> ' + oneLine + '\n' + (draft ? '\n' + draft : ''));
+    setQuoteSource(message);
     textareaRef.current?.focus({ preventScroll: true });
   }
   const active = threads.find(c => c.id === activeId);
@@ -393,7 +379,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
 
   return <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
     <section aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
-      'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/30 md:flex md:w-82 md:shrink-0',
+      'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card md:flex md:w-[336px] md:shrink-0 xl:w-[370px]',
       mobileOpened ? 'hidden' : 'flex'
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-5">
@@ -487,11 +473,11 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollBox} onScroll={onMessagesScroll}
-            data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-2.5">
+            data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
+            <div className="flex w-full min-w-0 flex-col gap-2.5">
               {messagesLoading && <div className="space-y-3 py-4" role="status" aria-label={pt ? 'Carregando mensagens' : 'Loading messages'}>
-                <div className="h-12 w-1/2 animate-pulse self-start rounded-xl bg-muted"/>
-                <div className="h-12 w-2/3 animate-pulse self-end rounded-xl bg-muted"/>
+                <div className="h-12 w-1/2 animate-pulse self-start bg-muted"/>
+                <div className="h-12 w-2/3 animate-pulse self-end bg-muted"/>
               </div>}
               {!messagesLoading && !messages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
               {messages.map(message => <DirectMessageBubble key={message.id} message={message}
@@ -510,27 +496,20 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             </button>
           </div>}
         </div>
-        <div className="relative z-10 shrink-0 border-t border-border bg-card/95 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
-          {chatError && <p role="alert" className="mx-auto mb-2 max-w-3xl text-xs text-destructive">{chatError}</p>}
-          {emojiOpen && <div role="group" aria-label={pt ? 'Escolher emoji' : 'Choose emoji'}
-            className="absolute bottom-full left-3 z-30 mb-2 grid w-72 max-w-[calc(100vw-32px)] grid-cols-6 gap-1 rounded-xl border border-border bg-popover p-2 shadow-xl">
-            {EMOJIS.map(emoji => <button type="button" key={emoji} onClick={() => { onDraftChange(draft + emoji); textareaRef.current?.focus({ preventScroll: true }); }}
-              className="grid size-10 place-items-center rounded-lg text-xl hover:bg-accent" aria-label={emoji}>{emoji}</button>)}
+        <div className="relative z-10 shrink-0 border-t border-border/70 bg-card/95 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+          {chatError && <p role="alert" className="mb-2 text-xs text-destructive">{chatError}</p>}
+          {quoteSource && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
+            <div className="min-w-0 flex-1">
+              <span className="block font-semibold">{pt ? 'Respondendo com citação' : 'Quoting message'}</span>
+              <span className="mt-0.5 block truncate text-muted-foreground">{quoteSource.body}</span>
+            </div>
+            <button type="button" onClick={() => setQuoteSource(null)}
+              aria-label={pt ? 'Cancelar citação' : 'Cancel quote'} className="grid size-9 place-items-center hover:bg-accent">
+              <X className="size-4"/>
+            </button>
           </div>}
-          <form onSubmit={event => void send(event)} className="mx-auto flex max-w-3xl items-end gap-2">
-            <button type="button" onClick={() => setEmojiOpen(v => !v)}
-              aria-expanded={emojiOpen} aria-label={pt ? 'Escolher emoji' : 'Choose emoji'}
-              className="grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent"><Smile className="size-5"/></button>
-            <textarea ref={textareaRef} rows={1} value={draft}
-              onChange={event => onDraftChange(event.target.value)} onKeyDown={onKeyDown}
-              aria-label={pt ? 'Escrever mensagem' : 'Write a message'} maxLength={4000}
-              data-message-composer placeholder={pt ? 'Mensagem…' : 'Message…'}
-              className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-none border-0 bg-transparent px-2 py-3 text-base text-foreground outline-none ring-0 placeholder:text-muted-foreground focus-visible:outline-none"/>
-            <Button type="submit" size="icon" disabled={busy || !draft.trim()}
-              aria-label={pt ? 'Enviar mensagem' : 'Send message'} className="size-11 shrink-0 rounded-xl">
-              <Send className="size-5"/>
-            </Button>
-          </form>
+          <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
+            sending={busy} locale={locale} textareaRef={textareaRef}/>
         </div>
       </> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
         <MessageCircle className="size-10 text-primary"/>
