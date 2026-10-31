@@ -53,35 +53,38 @@ function formatTime(value: string | null | undefined, locale: string) {
 
 type BlockDeliveryState = 'failed' | 'sending' | 'sent' | 'received' | 'read';
 type BlockReceipt = { label: string; updatedAt: string };
-const DELIVERY_ORDER: Record<BlockDeliveryState, number> = {
-  failed: 0, sending: 1, sent: 2, received: 3, read: 4,
-};
+type MessageReceipt = { state: BlockDeliveryState; updatedAt: string };
 
-/** A block is only as delivered/read as its least advanced visible message. */
+/** A receipt predating the current edit belongs to an older version of the text. */
+function currentRevisionAcknowledged(receiptAt: string | null, editedAt: string | null): boolean {
+  return !!receiptAt && (!editedAt || Date.parse(receiptAt) >= Date.parse(editedAt));
+}
+
+function messageReceipt(message: Message): MessageReceipt {
+  if (message.pendingStatus === 'failed' || message.pendingStatus === 'sending') {
+    return { state: message.pendingStatus, updatedAt: message.statusUpdatedAt ?? message.createdAt };
+  }
+  if (currentRevisionAcknowledged(message.readAt, message.editedAt)) {
+    return { state: 'read', updatedAt: message.readAt! };
+  }
+  if (currentRevisionAcknowledged(message.deliveredAt, message.editedAt)) {
+    return { state: 'received', updatedAt: message.deliveredAt! };
+  }
+  // Editing restarts the delivery of that revised text, not its original timestamp.
+  return { state: 'sent', updatedAt: message.editedAt ?? message.createdAt };
+}
+
+/** Each visible status line represents only messages with exactly the same state. */
 function statusForOutgoingBlock(messages: Message[], pt: boolean): BlockReceipt | null {
-  const visible = messages.filter(message => !message.deletedAt);
-  if (!visible.length) return null;
-  const states = visible.map(message => {
-    const state: BlockDeliveryState = message.pendingStatus === 'failed' ? 'failed'
-      : message.pendingStatus === 'sending' ? 'sending'
-      : message.readAt ? 'read' : message.deliveredAt ? 'received' : 'sent';
-    const updatedAt = message.pendingStatus
-      ? (message.statusUpdatedAt ?? message.createdAt)
-      : state === 'read' ? message.readAt!
-      : state === 'received' ? message.deliveredAt!
-      : message.createdAt;
-    return { state, updatedAt };
-  });
-  const least = states.reduce((current, item) =>
-    DELIVERY_ORDER[item.state] < DELIVERY_ORDER[current] ? item.state : current, states[0].state);
-  const updatedAt = states.filter(item => item.state === least)
-    .map(item => item.updatedAt)
-    .reduce((latest, value) => value > latest ? value : latest);
-  const many = visible.length > 1;
+  if (!messages.length) return null;
+  const state = messageReceipt(messages[0]).state;
+  const updatedAt = messages.map(message => messageReceipt(message).updatedAt)
+    .reduce((latest, value) => Date.parse(value) > Date.parse(latest) ? value : latest);
+  const many = messages.length > 1;
   const label = pt
     ? ({ failed: 'Falha no envio', sending: 'Enviando', sent: many ? 'Enviadas' : 'Enviada',
-        received: many ? 'Recebidas' : 'Recebida', read: many ? 'Lidas' : 'Lida' } as const)[least]
-    : ({ failed: 'Send failed', sending: 'Sending', sent: 'Sent', received: 'Received', read: 'Read' } as const)[least];
+        received: many ? 'Recebidas' : 'Recebida', read: many ? 'Lidas' : 'Lida' } as const)[state]
+    : ({ failed: 'Send failed', sending: 'Sending', sent: 'Sent', received: 'Received', read: 'Read' } as const)[state];
   return { label, updatedAt };
 }
 
@@ -353,14 +356,23 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       ? optimisticReaction(message, reactionOverrides[message.id]) : message);
   const blockReceipts = new Map<string, BlockReceipt>();
   let outgoingBlock: Message[] = [];
-  renderedMessages.forEach((message, index) => {
-    if (message.authorId === myId) outgoingBlock.push(message);
-    if (outgoingBlock.length && (index === renderedMessages.length - 1 || renderedMessages[index + 1].authorId !== myId)) {
-      const status = statusForOutgoingBlock(outgoingBlock, pt);
-      if (status) blockReceipts.set(message.id, status);
-      outgoingBlock = [];
-    }
+  function endBlock() {
+    if (!outgoingBlock.length) return;
+    const status = statusForOutgoingBlock(outgoingBlock, pt);
+    if (status) blockReceipts.set(outgoingBlock[outgoingBlock.length - 1].id, status);
+    outgoingBlock = [];
+  }
+  renderedMessages.forEach(message => {
+    if (message.authorId !== myId) { endBlock(); return; }
+    const previous = outgoingBlock[outgoingBlock.length - 1];
+    // Never mix read, received, sent or pending messages in one system status.
+    // An edited message also starts a fresh receipt block, even next to
+    // another message that happens to have the same state.
+    if (previous && (messageReceipt(previous).state !== messageReceipt(message).state ||
+        !!previous.editedAt || !!message.editedAt)) endBlock();
+    outgoingBlock.push(message);
   });
+  endBlock();
   const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
     if (!activeId || messagesLoading || !scrollBox.current ||
@@ -393,7 +405,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     if (!activeId || messagesLoading || !positionedRef.current || !atBottom ||
         reading.current || Date.now() - lastReadFailure.current < 5000 ||
         !isConversationVisible(activeId)) return;
-    if (!messages.some(m => m.authorId !== myId && !m.readAt) &&
+    if (!messages.some(m => m.authorId !== myId && !currentRevisionAcknowledged(m.readAt, m.editedAt)) &&
         !threads.some(thread => thread.id === activeId && thread.unreadReactionCount > 0)) return;
     reading.current = activeId;
     void api('/api/v1/dm/conversations/' + activeId + '/read', { method: 'POST' })
