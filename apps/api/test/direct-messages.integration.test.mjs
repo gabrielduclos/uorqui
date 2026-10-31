@@ -244,14 +244,41 @@ test('live DM actions: delivery, edit, react, forward, delete and ownership',asy
 
   const selfReaction=await bob(item+'/reaction','PUT',{emoji:'👍'});
   assert.equal(selfReaction.status,404,'author cannot react to their own message');
+  // Reading the original before reacting must not pre-read a future reaction.
+  const priorRead=await alice(path+'/read','POST');
+  assert.equal(priorRead.status,200);
   const react=await alice(item+'/reaction','PUT',{emoji:'❤️'});
   assert.equal(react.status,200);
+  const unreadReaction=await bob('/api/v1/dm/conversations');
+  const reactionThread=unreadReaction.data.conversations.find(c=>c.id===thread.id);
+  assert.equal(reactionThread.previewKind,'reaction');
+  assert.equal(reactionThread.previewReactionEmoji,'❤️');
+  assert.match(reactionThread.previewReactionBody,/Recebido, editado/);
+  assert.ok(reactionThread.previewReactionAt);
+  assert.equal(reactionThread.unreadReactionCount,1,'a reaction must notify as unread');
+  assert.equal(reactionThread.unreadMessageCount,0);
+  assert.equal(reactionThread.unreadCount,1,'the shared unread badge includes reactions');
+  const reactionHistory=await bob(path+'/messages');
+  assert.equal(reactionHistory.data.messages.length,2,'reaction must not become a separate message bubble');
+  const receipt=await bob(path+'/read','POST');
+  assert.equal(receipt.status,200);
+  assert.equal(receipt.data.reactionsRead,1);
+  const readReaction=await bob('/api/v1/dm/conversations');
+  assert.equal(readReaction.data.conversations.find(c=>c.id===thread.id).unreadCount,0);
   const reacted=await alice(path+'/messages');
   const reactedMessage=reacted.data.messages.find(m=>m.id===reply.id);
   assert.equal(reactedMessage.myReaction,'❤️');
   assert.deepEqual(reactedMessage.reactions,[{emoji:'❤️',count:1}]);
+  const changed=await alice(item+'/reaction','PUT',{emoji:'😂'});
+  assert.equal(changed.status,200);
+  const changedThread=await bob('/api/v1/dm/conversations');
+  assert.equal(changedThread.data.conversations.find(c=>c.id===thread.id).previewReactionEmoji,'😂');
+  assert.equal(changedThread.data.conversations.find(c=>c.id===thread.id).unreadReactionCount,1,'changing reaction notifies again');
   const undo=await alice(item+'/reaction','DELETE');
   assert.equal(undo.status,200);
+  const afterUndo=await bob('/api/v1/dm/conversations');
+  assert.equal(afterUndo.data.conversations.find(c=>c.id===thread.id).unreadReactionCount,0,'undo removes unread reaction');
+  assert.notEqual(afterUndo.data.conversations.find(c=>c.id===thread.id).previewKind,'reaction','undo removes reaction preview');
   const unreacted=await alice(path+'/messages');
   assert.equal(unreacted.data.messages.find(m=>m.id===reply.id).myReaction,null);
 
