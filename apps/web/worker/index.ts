@@ -12,6 +12,7 @@ interface Env {
   API_ORIGIN?: string;
   PROFILE_MEDIA?: ProfileMediaBucket;
   DM_ATTACHMENTS?: ProfileMediaBucket;
+  DM_ATTACHMENT_PROOF_SECRET?: string;
   ASSETS: { fetch(input: Request | URL | string): Promise<Response> };
 }
 
@@ -48,9 +49,10 @@ function apiHeaders(request: Request): Headers {
   return headers;
 }
 
-async function callApi(request: Request, origin: URL, path: string, method: 'GET' | 'PATCH' | 'POST' | 'DELETE' = 'GET', body?: object): Promise<Response> {
+async function callApi(request: Request, origin: URL, path: string, method: 'GET' | 'PATCH' | 'POST' | 'DELETE' = 'GET', body?: object, extraHeaders?: Record<string,string>): Promise<Response> {
   const headers = apiHeaders(request);
   if (body) headers.set('content-type', 'application/json');
+  if(extraHeaders) for(const [name,value] of Object.entries(extraHeaders))headers.set(name,value);
   if (method !== 'GET' && request.headers.get('origin')) headers.set('origin', request.headers.get('origin')!);
   return fetch(new URL(path, origin), {
     method, headers,
@@ -186,6 +188,8 @@ async function handleMediaRead(request: Request, env: Env, origin: URL, matched:
 // The API performs both upload membership and live message download authorization.
 async function handleDmUpload(request: Request, env: Env, current: URL, origin: URL, conversationId: string): Promise<Response> {
   if (!env.DM_ATTACHMENTS) return jsonError(503, 'Attachment storage is not configured');
+  if(!env.DM_ATTACHMENT_PROOF_SECRET || env.DM_ATTACHMENT_PROOF_SECRET.length<32)
+    return jsonError(503,'Attachment signing is not configured');
   if (!validWriteOrigin(request, current)) return jsonError(403, 'Invalid upload origin');
   const clientId = request.headers.get('x-uorqui-client-id') ?? '';
   if (!/^[0-9a-f-]{36}$/.test(clientId)) return jsonError(400, 'Invalid message id');
@@ -217,6 +221,11 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
       ((type === 'video/mp4' || type === 'video/quicktime' || type === 'image/heic' || type === 'image/heif') && magic.slice(4, 8) !== 'ftyp')) return jsonError(415, 'Invalid attachment format');
 
   const attachmentId = crypto.randomUUID();
+  const proofContent=JSON.stringify([conversationId,clientId,attachmentId,name,type,bytes.byteLength]);
+  const hmacKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.DM_ATTACHMENT_PROOF_SECRET),
+    {name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const signature=await crypto.subtle.sign('HMAC',hmacKey,new TextEncoder().encode(proofContent));
+  const proof=Array.from(new Uint8Array(signature),byte=>byte.toString(16).padStart(2,'0')).join('');
   const key = 'dm/' + conversationId + '/' + attachmentId;
   try { await env.DM_ATTACHMENTS.put(key, bytes, { httpMetadata: { contentType: type } }); }
   catch { return jsonError(503, 'Attachment storage unavailable'); }
@@ -225,7 +234,7 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
     const saved = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/messages','POST',{
       body:'',clientId,...(replyToId ? {replyToId} : {}),
       attachment:{id:attachmentId,name,type,size:bytes.byteLength},
-    });
+    },{'x-uorqui-attachment-proof':proof});
     if (!saved.ok) {
       await env.DM_ATTACHMENTS.delete(key).catch(() => {});
       return jsonError(saved.status === 401 ? 401 : saved.status === 404 ? 404 : saved.status === 400 ? 400 : 503,
