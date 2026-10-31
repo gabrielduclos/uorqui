@@ -28,16 +28,21 @@ Os testes do GitHub Actions executam o Worker real por Wrangler, Fastify e Postg
 
 O Worker do front-end e o backend são dois serviços distintos. A API não deve carregar arquivos `.env` públicos; o `HOST` padrão em produção é `0.0.0.0` para que o provedor consiga acessá-la. Em desenvolvimento, o Fastify permanece restrito a `127.0.0.1`.
 
-O formulário **Criar conta** é sempre navegável, mas a API só autoriza novos usuários em produção depois da ativação explícita. A implementação de verificação de e-mail, recuperação de senha e desafio Turnstile já está versionada, porém exige validação dos fornecedores em produção. O Render faz auto deploy a partir da `main`, mas CI verde não substitui validação real.
+O formulário **Criar conta** é sempre navegável e a API recebeu autorização explícita de cadastro em produção em 31/10/2026; verificação humana e entrega de e-mail ainda precisam de teste real. A implementação de verificação de e-mail, recuperação de senha e desafio Turnstile já está versionada, porém exige validação dos fornecedores em produção. O Render faz auto deploy a partir da `main`, mas CI verde não substitui validação real.
 
 Não conectar ao domínio `uorqui.app`, ao Worker `uorqui-chat` ou a bancos do mensageiro empresarial legado.
 
-## Habilitar cadastro público (ainda pendente)
+## Cadastro público habilitado — validação humana pendente
 
 1. No [Resend](https://resend.com), verificar um domínio remetente e criar a chave de envio; definir `RESEND_API_KEY` e `AUTH_EMAIL_FROM` (por exemplo, `Uorqui <conta@dominio-verificado.example>`) **somente no Render → Environment**.
 2. No [Cloudflare Turnstile](https://dash.cloudflare.com/), criar widget para o domínio real do front-end (`main.uorqui1.workers.dev`, enquanto não houver migração de domínio); definir `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` **no Render**. A API valida os tokens com o serviço Turnstile, inclusive em chamadas diretamente ao endereço do Render.
 3. Validar envio/entrega de verificação, link de confirmação, recuperação, reenvio, CAPTCHA e rejeição de tentativas inválidas usando contas de teste, sem copiar senhas/links de verificação para logs e chats.
-4. Somente depois, definir `ENABLE_PUBLIC_SIGNUP=true` no Render e fazer deploy; verificar que `GET /api/v1/status` retorna `publicRegistration:true` e que o fluxo real de inscrição funciona.
+4. **Aplicado em 31/10/2026:** `ENABLE_PUBLIC_SIGNUP=true` no Render, com `publicRegistration:true` confirmado pelo Worker. Falta validar o fluxo de uma pessoa real (Turnstile aprovado, e-mail entregue e confirmado).
 5. Para suspender novas contas, definir `ENABLE_PUBLIC_SIGNUP=false` e publicar novamente. Isso não remove contas existentes.
 
 O modo de desenvolvimento (`ENABLE_DEV_SIGNUP=true`) continua restrito a `NODE_ENV=development|test`; não libera produção. As senhas continuam com mínimo de 12 caracteres para preservar a política existente. A interface segue as regras globais relevantes: criação primeiro, login alternativo, inputs de 16px, senha visível sob demanda, spinner em ações e formulário preservado em erro. `uorqui.app` e `uorqui-chat` legados não são alterados.
+
+### Evidência de ativação (31/10/2026)
+
+- GitHub Actions [smoke de produção 41205954207](https://github.com/gabrielduclos/uorqui/actions/runs/41205954207): três testes aprovados, incluindo health Worker/Render/Neon, perfil anônimo 401, `publicRegistration:true` com e-mail e recuperação habilitados, e rejeição HTTP 403 de tokens Turnstile inválidos para cadastro, recuperação, reenvio e acesso direto ao Render.
+- **Atenção:** este teste não executa um desafio humano real e não verifica a entrega de uma mensagem do Resend. Antes de divulgar o cadastro, realizar teste manual com conta própria e verificar inbox/spam, confirmação e login. Se a inscrição falhar, desabilitar imediatamente `ENABLE_PUBLIC_SIGNUP` e investigar os logs sem expor tokens.

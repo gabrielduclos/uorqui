@@ -31,7 +31,8 @@
 - [x] Apply Better Auth migration 0001 to Neon main, verify 10 application tables and the second Drizzle journal entry, and remove the temporary branch.
 - [x] Configure private runtime secrets and check health, status and anonymous access against Neon main (live account sign-in remains to be tested).
 - [x] Commit email verification, recovery, server-side Turnstile gating and signup-first UI.
-- [ ] Configure verified email sender and Turnstile, complete production signup E2E, and explicitly enable public registrations.
+- [x] Configure Resend and Turnstile, enable `ENABLE_PUBLIC_SIGNUP=true` and pass live readiness and fake-token rejection tests without creating accounts.
+- [ ] Validate a real human signup, email delivery/verification, login, and password recovery end-to-end.
 
 **Exit condition:** credible pilot interest, defined scope and operating constraints.
 

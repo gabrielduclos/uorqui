@@ -31,7 +31,8 @@
 - [x] Aplicar migração 0001 na Neon main e verificar dez tabelas, dois registros Drizzle e limpeza da branch de teste.
 - [x] Configurar segredos privados e validar health, status e bloqueio de sessão anônima na Neon main (login de uma conta real ainda pendente).
 - [x] Versionar fluxos de e-mail, recuperação, verificação Turnstile e interface de cadastro/boas-vindas seguindo padrões globais.
-- [ ] Configurar Resend e Turnstile, testar e habilitar cadastro público com `ENABLE_PUBLIC_SIGNUP=true`.
+- [x] Configurar Resend e Turnstile, habilitar `ENABLE_PUBLIC_SIGNUP=true` e passar testes públicos de saúde/bloqueio anti-bot sem criação de contas.
+- [ ] Validar cadastro humano completo, entrega/confirmação do e-mail, login e recuperação de senha com Resend.
 
 **Critério:** interesse real de comunidades-piloto, escopo e limites operacionais definidos.
 
