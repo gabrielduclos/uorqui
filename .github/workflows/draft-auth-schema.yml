@@ -1,10 +1,9 @@
-name: Draft Better Auth schema (one-time)
+name: Draft auth Drizzle migration (one-time)
 on:
   push:
     paths:
-      - 'apps/api/src/auth/auth.cli.ts'
-      - 'apps/api/src/auth/auth-policy.ts'
-      - 'apps/api/package.json'
+      - 'apps/api/src/db/auth-schema.ts'
+      - 'apps/api/drizzle.config.ts'
       - '.github/workflows/draft-auth-schema.yml'
 permissions:
   contents: read
@@ -17,15 +16,20 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
-      - name: Generate offline Better Auth schema
-        working-directory: apps/api
-        run: npx --yes auth@1.7.14 generate --config ./src/auth/auth.cli.ts --adapter drizzle --dialect postgresql --output ./src/db/auth-schema.ts --yes
-      - name: Print generated schema for versioning
+      - name: Generate Drizzle migration (no database connection)
+        run: npm run db:generate
+      - name: Print new migration and metadata for versioning
         shell: bash
         run: |
-          file=apps/api/src/db/auth-schema.ts
-          test -s "$file"
-          echo "AUTH_SCHEMA_BEGIN"
-          base64 -w0 "$file"
-          echo
-          echo "AUTH_SCHEMA_END"
+          shopt -s nullglob
+          files=(apps/api/drizzle/0001_*.sql apps/api/drizzle/meta/0001_snapshot.json apps/api/drizzle/meta/_journal.json)
+          if (( ${#files[@]} != 3 )); then
+            echo 'Expected one SQL migration, a snapshot and a journal' >&2
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            echo "DBFILE_START:${file}"
+            base64 -w0 "${file}"
+            echo
+            echo "DBFILE_END:${file}"
+          done
