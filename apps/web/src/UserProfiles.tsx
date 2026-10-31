@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { PreferencesControls } from './PreferencesControls';
+import { ContactToggleButton } from './ContactToggleButton';
 import { navigateBackFromPublicProfile, navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 
@@ -280,7 +281,10 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
           <UserAvatar name={profile.displayName} image={profile.avatarUrl} size="lg" />
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h1 className="text-2xl font-bold">{profile.displayName}</h1><p className="mt-1 text-sm text-muted-foreground">@{profile.handle}</p></div>
-            <Button disabled={!onMessage} onClick={() => onMessage?.(profile.handle)} title={!onMessage ? (pt ? 'Entre na sua conta para conversar.' : 'Sign in to send a message.') : undefined}><MessageCircle className="size-4" />{pt ? 'Conversar' : 'Message'}</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {onMessage && <ContactToggleButton handle={profile.handle} />}
+              <Button disabled={!onMessage} onClick={() => onMessage?.(profile.handle)} title={!onMessage ? (pt ? 'Entre na sua conta para conversar.' : 'Sign in to send a message.') : undefined}><MessageCircle className="size-4" />{pt ? 'Conversar' : 'Message'}</Button>
+            </div>
           </div>
           <Separator />
           <p className="whitespace-pre-wrap text-sm leading-7">{profile.bio || (pt ? 'Este usuário ainda não escreveu uma biografia.' : 'This user has not added a bio yet.')}</p>

@@ -6,6 +6,7 @@ import { LiveMessageComposer } from './LiveMessageComposer';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
+import { SavedContacts } from './SavedContacts';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -101,6 +102,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [threads, setThreads] = useState<Conversation[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [search, setSearch] = useState('');
+  const [listView, setListView] = useState<'conversations' | 'contacts'>('conversations');
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpened, setMobileOpened] = useState(false);
@@ -211,6 +213,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   }, [search]);
 
   const openThread = useCallback((id: string) => {
+    setListView('conversations');
     setActiveId(id);
     setMobileOpened(true);
     setMessages([]);
@@ -738,11 +741,23 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-5">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <div><h2 className="text-[23px] font-semibold tracking-tight">{pt ? 'Conversas' : 'Messages'}</h2>
+          <div><h2 className="text-[23px] font-semibold tracking-tight">{listView === 'contacts' ? (pt ? 'Contatos' : 'Contacts') : (pt ? 'Conversas' : 'Messages')}</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Tudo perto. Tudo em um lugar.' : 'Close conversations, all in one place.'}</p>
           </div>
 
         </div>
+        <div role="tablist" aria-label={pt ? 'Áreas do mensageiro' : 'Messenger sections'}
+          className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-secondary/70 p-1">
+          {(['conversations', 'contacts'] as const).map(view => (
+            <button key={view} type="button" role="tab" aria-selected={listView === view}
+              onClick={() => { setListView(view); setSearch(''); }}
+              className={cn('min-h-10 rounded-lg px-3 text-sm font-medium transition-colors',
+                listView === view ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+              {view === 'conversations' ? (pt ? 'Conversas' : 'Chats') : (pt ? 'Contatos' : 'Contacts')}
+            </button>
+          ))}
+        </div>
+        {listView === 'conversations' && <>
         <div className="relative">
           <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
           <Input value={search} onChange={e => setSearch(e.target.value)}
@@ -760,8 +775,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             {value === 'unread' && unreadThreads > 0 && <span className="rounded bg-current/10 px-1 text-[10px]">{unreadThreads}</span>}
           </button>)}
         </div>
+        </>}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3">
+        {listView === 'contacts' ? <SavedContacts onMessage={startPerson} busy={busy} /> : <>
         {error && <div role="alert" className="m-2 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{error}
           <Button className="ml-2" size="sm" variant="outline" onClick={() => void loadThreads().catch(() => {})}>{pt ? 'Tentar novamente' : 'Retry'}</Button>
         </div>}
@@ -810,6 +827,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
           <h3 className="mt-3 font-semibold">{filter === 'unread' ? (pt ? 'Tudo em dia' : 'All caught up') : (pt ? 'Comece uma conversa' : 'Start a conversation')}</h3>
           <p className="mt-2 text-sm text-muted-foreground">{pt ? 'Busque uma pessoa pelo nome ou @usuário.' : 'Search people by name or @username.'}</p>
         </div>}
+        </>}
       </div>
     </section>
 
