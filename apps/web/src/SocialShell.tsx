@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import DemoMessageComposer, { DemoAttachmentView, type ComposePayload } from './DemoMessageComposer';
-import { DemoChatBubble, messagePreview, type DemoMessage } from './DemoChatBubble';
+import { DemoChatBubble, DemoLocationCard, messagePreview, type DemoMessage } from './DemoChatBubble';
 import { DemoMediaViewer, type PreviewMediaItem } from './DemoChatMedia';
 
 export type SignedInAccount = {
@@ -158,7 +158,7 @@ export default function SocialShell({ account, onLogout }: {
     setMediaViewerId(null);
   }
 
-  function sendDemoMessage({ text, attachment }: ComposePayload) {
+  function sendDemoMessage({ text, attachment, location }: ComposePayload) {
     if (editingMessage) {
       if (!text) return;
       setConversations(previous => ({
@@ -172,12 +172,12 @@ export default function SocialShell({ account, onLogout }: {
       setEditingMessage(null);
       return;
     }
-    if (!text && !attachment) return;
+    if (!text && !attachment && !location) return;
     if (attachment) attachmentUrls.current.add(attachment.url);
     setConversations(previous => ({
       ...previous,
       [conversationId]: [...(previous[conversationId] ?? []), {
-        id: Date.now() + Math.random(), mine: true, text, attachment,
+        id: Date.now() + Math.random(), mine: true, text, attachment, location,
         replyTo: replyTarget?.id,
         time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       }],
@@ -200,16 +200,66 @@ export default function SocialShell({ account, onLogout }: {
     if (editingMessage?.id === message.id) setEditingMessage(null);
   }
 
-  function sendDemoChannel({ text, attachment }: ComposePayload) {
-    if (!text && !attachment) return;
+  function sendDemoChannel({ text, attachment, location }: ComposePayload) {
+    if (!text && !attachment && !location) return;
     if (attachment) attachmentUrls.current.add(attachment.url);
     setChannelExamples(previous => ({
       ...previous,
       [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
-        id: Date.now() + Math.random(), mine: true, text, attachment,
+        id: Date.now() + Math.random(), mine: true, text, attachment, location,
         time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       }],
     }));
+  }
+
+  function saveEditedImage(id: number, image: Blob) {
+    const current = activeMessages.find(message => message.id === id);
+    if (!current?.attachment || current.attachment.kind !== 'image') return;
+    const url = URL.createObjectURL(image);
+    attachmentUrls.current.add(url);
+    const attachment = {
+      kind: 'image' as const, name: 'foto-editada.png',
+      url, size: image.size, mimeType: 'image/png',
+    };
+    if (area === 'conversations') {
+      if (current.mine) {
+        setConversations(previous => ({
+          ...previous,
+          [conversationId]: (previous[conversationId] ?? []).map(message =>
+            message.id === id ? { ...message, attachment, edited: true } : message
+          ),
+        }));
+      } else {
+        const newId = Date.now() + Math.random();
+        setConversations(previous => ({
+          ...previous,
+          [conversationId]: [...(previous[conversationId] ?? []), {
+            id: newId, mine: true, text: '', attachment, replyTo: id,
+            time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          }],
+        }));
+        setMediaViewerId(newId);
+      }
+    } else if (activeChannel.kind === 'text') {
+      if (current.mine) {
+        setChannelExamples(previous => ({
+          ...previous,
+          [communityKey]: (previous[communityKey] ?? visibleChannelMessages).map(message =>
+            message.id === id ? { ...message, attachment, edited: true } : message
+          ),
+        }));
+      } else {
+        const newId = Date.now() + Math.random();
+        setChannelExamples(previous => ({
+          ...previous,
+          [communityKey]: [...(previous[communityKey] ?? visibleChannelMessages), {
+            id: newId, mine: true, text: '', attachment,
+            time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          }],
+        }));
+        setMediaViewerId(newId);
+      }
+    }
   }
 
   async function logout() {
@@ -387,7 +437,7 @@ export default function SocialShell({ account, onLogout }: {
                           <EmptyState icon={Hash} title={'Bem-vindo a #' + activeChannel.label} description="Os canais de texto organizam conversas públicas ou privadas conforme as permissões de cada comunidade." />
                           {visibleChannelMessages.map(message => <div className="flex gap-3" key={message.id}>
                             <ProfileAvatar name={message.mine ? account.user.name : 'Equipe'} className="size-8" />
-                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? 'Você (prévia)' : 'Equipe Uorqui (exemplo)'} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{message.text}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={message.attachment.kind === 'image' || message.attachment.kind === 'video' ? () => setMediaViewerId(message.id) : undefined} />}</div>
+                            <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{message.mine ? 'Você (prévia)' : 'Equipe Uorqui (exemplo)'} <span className="ml-2 font-normal text-muted-foreground">{message.time}</span></p>{message.text && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 wrap-break-word">{message.text}</p>}{message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={message.attachment.kind === 'image' || message.attachment.kind === 'video' ? () => setMediaViewerId(message.id) : undefined} />}{message.location && <DemoLocationCard location={message.location} />}</div>
                           </div>)}
                         </div>
                       </ScrollArea>
@@ -432,7 +482,7 @@ export default function SocialShell({ account, onLogout }: {
           })}
         </nav>}
       </div>
-      <DemoMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId} onClose={() => setMediaViewerId(null)} />
+      <DemoMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId} onClose={() => setMediaViewerId(null)} onImageEdited={saveEditedImage} />
     </div>
   );
 }
