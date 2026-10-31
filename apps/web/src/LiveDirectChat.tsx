@@ -459,6 +459,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     textareaRef.current?.focus({preventScroll:true});
     void submitPending(pending);
   }
+  function onDraftChange(value: string) { setDraft(value); }
   function quote(message: Message) {
     if (editing) cancelEdit();
     setQuoteSource(message);
