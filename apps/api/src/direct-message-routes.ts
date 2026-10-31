@@ -212,6 +212,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       return reply.header('Cache-Control',noCache).send({allowed:true});
     }catch(e){request.log.error({err:e},'DM attachment upload access');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -368,6 +369,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,messageId}=request.params as {id:string;messageId:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
       await getPool().query('DELETE FROM direct_message_reactions WHERE message_id=$1 AND user_id=$2 AND EXISTS (SELECT 1 FROM direct_messages WHERE id=$1 AND conversation_id=$3)',[messageId,me,id]);
       await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM reaction notification failed'));
       return reply.header('Cache-Control',noCache).send({emoji:null});
