@@ -17,7 +17,7 @@ type Conversation = {
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
-type PendingMessage = Message & { pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
+type PendingMessage = Message & { clientId: string; pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
 type IncomingNotice = { id: string; name: string; preview: string };
 function optimisticReaction(message: Message, next: string | null): Message {
   const prior = message.myReaction;
