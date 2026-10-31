@@ -470,7 +470,7 @@ export default function SocialShell({ account, onLogout }: {
                     <CardHeader><CardTitle className="text-base">{t('Sua conta')}</CardTitle><CardDescription>{t("Informações privadas, visíveis apenas para você nesta página.")}</CardDescription></CardHeader>
                     <CardContent className="space-y-3"><div className="text-sm"><span className="text-muted-foreground">{t("E-mail")}</span><p className="mt-1 break-all font-medium">{account.user.email}</p></div><Separator /><div className="flex items-center gap-2"><Badge variant="outline">{t('Conta ativa')}</Badge><span className="text-xs text-muted-foreground">{t("Edição de perfil em desenvolvimento")}</span></div></CardContent>
                   </Card>
-                  <Button className="w-full md:hidden" variant="outline" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>{loggingOut ? <Spinner /> : <LogOut className="size-4" />}{loggingOut ? t("Saindo…") : 'Sair da conta'}</Button>
+                  <Button className="w-full md:hidden" variant="outline" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>{loggingOut ? <Spinner /> : <LogOut className="size-4" />}{loggingOut ? t("Saindo…") : t("Sair da conta")}</Button>
                 </div>
               </ScrollArea>
             )}
