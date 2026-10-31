@@ -15,7 +15,7 @@ type Conversation = {
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
-type PendingMessage = Message & { pendingStatus: 'sending' | 'failed' };
+type PendingMessage = Message & { pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
 type IncomingNotice = { id: string; name: string; preview: string };
 const NEAR_BOTTOM_PX = 96;
 
@@ -32,6 +32,40 @@ function formatTime(value: string | null | undefined, locale: string) {
   const date = new Date(value);
   return Number.isFinite(date.getTime())
     ? date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
+}
+
+type BlockDeliveryState = 'failed' | 'sending' | 'sent' | 'received' | 'read';
+type BlockReceipt = { label: string; updatedAt: string };
+const DELIVERY_ORDER: Record<BlockDeliveryState, number> = {
+  failed: 0, sending: 1, sent: 2, received: 3, read: 4,
+};
+
+/** A block is only as delivered/read as its least advanced visible message. */
+function statusForOutgoingBlock(messages: Message[], pt: boolean): BlockReceipt | null {
+  const visible = messages.filter(message => !message.deletedAt);
+  if (!visible.length) return null;
+  const states = visible.map(message => {
+    const state: BlockDeliveryState = message.pendingStatus === 'failed' ? 'failed'
+      : message.pendingStatus === 'sending' ? 'sending'
+      : message.readAt ? 'read' : message.deliveredAt ? 'received' : 'sent';
+    const updatedAt = message.pendingStatus
+      ? (message.statusUpdatedAt ?? message.createdAt)
+      : state === 'read' ? message.readAt!
+      : state === 'received' ? message.deliveredAt!
+      : message.createdAt;
+    return { state, updatedAt };
+  });
+  const least = states.reduce((current, item) =>
+    DELIVERY_ORDER[item.state] < DELIVERY_ORDER[current] ? item.state : current, states[0].state);
+  const updatedAt = states.filter(item => item.state === least)
+    .map(item => item.updatedAt)
+    .reduce((latest, value) => value > latest ? value : latest);
+  const many = visible.length > 1;
+  const label = pt
+    ? ({ failed: 'Falha no envio', sending: 'Enviando', sent: many ? 'Enviadas' : 'Enviada',
+        received: many ? 'Recebidas' : 'Recebida', read: many ? 'Lidas' : 'Lida' } as const)[least]
+    : ({ failed: 'Send failed', sending: 'Sending', sent: 'Sent', received: 'Received', read: 'Read' } as const)[least];
+  return { label, updatedAt };
 }
 
 export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobileOpenChange }: {
@@ -238,6 +272,16 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   // The Uorqui-chat behavior: start at the latest message, preserve scroll when
   // reading older ones, and show a downward arrow for messages arriving below.
   const renderedMessages: Message[] = [...messages, ...pendingMessages.filter(p => p.conversationId === activeId && !messages.some(m => m.clientId === p.clientId))].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+  const blockReceipts = new Map<string, BlockReceipt>();
+  let outgoingBlock: Message[] = [];
+  renderedMessages.forEach((message, index) => {
+    if (message.authorId === myId) outgoingBlock.push(message);
+    if (outgoingBlock.length && (index === renderedMessages.length - 1 || renderedMessages[index + 1].authorId !== myId)) {
+      const status = statusForOutgoingBlock(outgoingBlock, pt);
+      if (status) blockReceipts.set(message.id, status);
+      outgoingBlock = [];
+    }
+  });
   const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
     if (!activeId || messagesLoading || !scrollBox.current ||
@@ -417,7 +461,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     finally { setActionBusy(false); }
   }
   async function submitPending(pending: PendingMessage) {
-    setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'sending'} : p));
+    setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'sending',statusUpdatedAt:new Date().toISOString()} : p));
     try {
       await api('/api/v1/dm/conversations/' + pending.conversationId + '/messages', {
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -427,7 +471,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       void loadThreads().catch(() => {});
       setPendingMessages(prev => prev.filter(p => p.clientId !== pending.clientId));
     } catch {
-      setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed'} : p));
+      setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed',statusUpdatedAt:new Date().toISOString()} : p));
     }
   }
   async function send() {
@@ -448,10 +492,11 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       return;
     }
     const clientId = crypto.randomUUID();
+    const sentAt = new Date().toISOString();
     const pending: PendingMessage = {
       id:clientId, clientId,conversationId:id,authorId:myId,body,
-      createdAt:new Date().toISOString(),readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
-      forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',
+      createdAt:sentAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
+      forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
     };
     setPendingMessages(prev => [...prev,pending]);
     setDraft(''); setQuoteSource(null);
@@ -571,15 +616,28 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                 <div className="h-12 w-2/3 animate-pulse self-end bg-muted"/>
               </div>}
               {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
-              {renderedMessages.map(message => <DirectMessageBubble key={message.id} message={message}
-                mine={message.authorId === myId} locale={locale} onQuote={quote}
-                disabled={actionBusy || busy} onEdit={beginEdit} onDelete={setDeleteTarget}
-                onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
-                onReact={(message, emoji) => void react(message, emoji)}
-                onRetry={message => {
-                  const pending = pendingMessages.find(p => p.clientId === message.clientId);
-                  if (pending) void submitPending(pending);
-                }}/>)}
+              {renderedMessages.map(message => {
+                const status = blockReceipts.get(message.id);
+                return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
+                  <DirectMessageBubble message={message}
+                    mine={message.authorId === myId} locale={locale} onQuote={quote}
+                    disabled={actionBusy || busy} onEdit={beginEdit} onDelete={setDeleteTarget}
+                    onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
+                    onReact={(message, emoji) => void react(message, emoji)}
+                    onRetry={message => {
+                      const pending = pendingMessages.find(p => p.clientId === message.clientId);
+                      if (pending) void submitPending(pending);
+                    }}/>
+                  {status && <div role="note" className="flex justify-center py-0.5">
+                    <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1.5 rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
+                      <span>{status.label}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{pt ? 'Atualizado às' : 'Updated at'}</span>
+                      <time dateTime={status.updatedAt}>{formatTime(status.updatedAt, locale)}</time>
+                    </span>
+                  </div>}
+                </div>;
+              })}
             </div>
           </div>
           {!atBottom && <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
