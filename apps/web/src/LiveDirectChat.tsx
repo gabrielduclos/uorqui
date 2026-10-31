@@ -163,7 +163,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setQuoteSource(null);
     setEditing(null); setDeleteTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
     setDraft('');
-    sendId.current = null;
+
   }, []);
 
   const startPerson = useCallback(async (handle: string) => {
