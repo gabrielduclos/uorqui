@@ -225,8 +225,8 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
   const proofContent=JSON.stringify([conversationId,clientId,attachmentId,name,type,bytes.byteLength]);
   const hmacKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.DM_ATTACHMENT_PROOF_SECRET),
     {name:'HMAC',hash:'SHA-256'},false,['sign']);
-  const signature=await crypto.subtle.sign('HMAC',hmacKey,new TextEncoder().encode(proofContent));
-  const proof=Array.from(new Uint8Array(signature),byte=>byte.toString(16).padStart(2,'0')).join('');
+  const proofSignature=await crypto.subtle.sign('HMAC',hmacKey,new TextEncoder().encode(proofContent));
+  const proof=Array.from(new Uint8Array(proofSignature),byte=>byte.toString(16).padStart(2,'0')).join('');
   const key = 'dm/' + conversationId + '/' + attachmentId;
   try { await env.DM_ATTACHMENTS.put(key, bytes, { httpMetadata: { contentType: type } }); }
   catch { return jsonError(503, 'Attachment storage unavailable'); }
