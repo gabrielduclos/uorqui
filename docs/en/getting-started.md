@@ -40,6 +40,10 @@ The runtime automatically rejects requests to unconfigured authentication endpoi
 
 For future schema changes, run `npm run db:generate`, review and commit SQL plus metadata, test in a temporary database branch and apply with `npm run db:migrate` only to the intended environment. Never re-run already applied migrations by pasting SQL.
 
+## Automated integration test
+
+A separate GitHub Actions job spins up an **ephemeral PostgreSQL container**, applies migrations 0000 and 0001 and exercises authentication and profile onboarding with disposable credentials. This job passed; no Neon database secret is used and it does **not** apply migration 0001 to Neon main. See [API auth integration](https://github.com/gabrielduclos/uorqui/actions/workflows/auth-integration.yml).
+
 ## Checks
 
 ```sh

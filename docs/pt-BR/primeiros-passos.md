@@ -40,6 +40,10 @@ Endpoints de autenticação sem configuração retornam 503. O cadastro vem desa
 
 Para futuras alterações, gere uma nova migração com `npm run db:generate`, revise e versione os arquivos, teste em uma branch temporária e aplique com `npm run db:migrate` somente no ambiente autorizado. Não cole manualmente migrações já aplicadas.
 
+## Teste automático de integração
+
+Um workflow do GitHub Actions inicia **PostgreSQL temporário**, executa as migrações 0000 e 0001 e testa cadastro, sessão e onboarding com credenciais descartáveis. O teste passou, sem usar segredos da Neon e **sem aplicar a migração 0001 à Neon main**. Veja [integração de autenticação](https://github.com/gabrielduclos/uorqui/actions/workflows/auth-integration.yml).
+
 ## Verificações
 
 ```sh

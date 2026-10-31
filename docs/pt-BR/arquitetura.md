@@ -27,7 +27,7 @@ Essas escolhas estão **aprovadas para o novo Uorqui**, mas **banco Neon, migra�
 - A API usa pool PostgreSQL, origem confiável restrita, cookies de sessão, validação no servidor e mínimo de 12 caracteres para senhas.
 - `AUTH_SECRET` e `DATABASE_URL` não entram no repositório público.
 - Novos cadastros ficam desabilitados por padrão e **sempre bloqueados em produção** até existir verificação de e-mail, recuperação de senha, proteção contra abuso e testes de segurança.
-- Cadastro, login, logout e onboarding passaram por tipagem/compilação, mas **ainda não foram validados ponta a ponta em main**.
+- Cadastro, sessão, leitura protegida, onboarding, entradas inválidas, duplicidade e logout **passaram em teste de integração com PostgreSQL temporário no GitHub Actions**; ainda não foram testados na Neon main.
 
 ### Integrações ainda em avaliação
 

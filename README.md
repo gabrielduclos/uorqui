@@ -38,7 +38,7 @@ Uorqui starts by validating use cases among gaming communities, particularly MMO
 ## Current state
 
 - **Done:** project creation, MIT license, initial bilingual product and technical documentation.
-- **In code, not yet enabled end-to-end:** Better Auth email/password, cookie sessions, protected profile endpoints and onboarding. Requires private environment settings and approval of the second migration.
+- **Validated in temporary PostgreSQL CI:** Better Auth email/password, cookie sessions, protected profile endpoints, handle onboarding and logout. Not yet connected end-to-end to Neon main; requires private settings and approval of the second migration.
 - **Not done:** production-ready email verification, password recovery, social messaging, feed, video, voice, production deployment and user validation.
 - **Next:** approve/apply the four-table authentication migration, set private local credentials, verify login/session behavior, then add email verification and abuse protection before opening registration.
 

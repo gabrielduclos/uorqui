@@ -38,7 +38,7 @@ A validação começa com comunidades gamers, especialmente de MMORPG, mas a mar
 ## Situação atual
 
 - **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
-- **No código, ainda sem validação ponta a ponta:** Better Auth com e-mail/senha, sessões por cookie, rotas protegidas de perfil e onboarding. Requer configurações privadas e aplicação autorizada da segunda migração.
+- **Validado no PostgreSQL temporário do CI:** Better Auth com e-mail/senha, sessões por cookie, endpoints protegidos de perfil, onboarding e logout. Ainda não foi testado ponta a ponta na Neon main; requer segredos privados e migração autorizada.
 - **Pendentes:** verificação de e-mail, recuperação de senha, mensagens, feed, vídeos, voz, deploy em produção e validação com usuários.
 - **Próximo:** aprovar/aplicar a migração das quatro tabelas de autenticação, configurar credenciais locais em segredo, testar cadastro/login/sessão e implementar verificação de e-mail antes de abrir inscrições.
 

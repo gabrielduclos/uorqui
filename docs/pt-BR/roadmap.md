@@ -20,6 +20,7 @@
 - [x] Aplicar primeira migração na branch Neon `main`; verificar seis tabelas, chaves, índices e histórico do Drizzle.
 - [x] Escolher Better Auth, implementar fluxos Fastify/React e versionar migração 0001.
 - [x] Testar migração de autenticação em branch temporária Neon e passar pelo CI de tipagem/build/schema.
+- [x] Validar cadastro, sessão, perfil, proteção contra duplicidade e logout em teste real com PostgreSQL temporário no GitHub Actions.
 - [ ] Pedir autorização para aplicar a migração 0001 em main, configurar segredos e validar cadastro/login ponta a ponta.
 - [ ] Implementar confirmação de e-mail, recuperação de senha e controles seguros antes de abrir acesso.
 

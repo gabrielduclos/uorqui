@@ -19,7 +19,8 @@
 - [x] Verify the SQL creates tables, enums, foreign keys and indexes on a temporary Neon branch.
 - [x] Apply the initial migration to Neon `main`; verify six tables, foreign keys, indexes and the Drizzle migration record.
 - [x] Choose Better Auth, implement Fastify/React authentication flows and commit migration 0001.
-- [x] Test auth migration on a temporary Neon branch and pass CI type/build/schema checks.
+- [x] Test auth migration on temporary Neon and pass CI type/build/schema checks.
+- [x] Pass a real signup, session, profile, duplicate protection and logout integration test using ephemeral PostgreSQL in GitHub Actions.
 - [ ] Request approval to apply migration 0001 to main; configure secrets and verify registration/login end-to-end.
 - [ ] Implement email verification, password recovery and production-safe signup controls before opening access.
 

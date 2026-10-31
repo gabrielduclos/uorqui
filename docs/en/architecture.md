@@ -27,7 +27,7 @@ These choices are **approved for the new Uorqui project**, but **the Neon databa
 - Fastify uses a PostgreSQL connection pool; Better Auth has a dedicated configuration, strict trusted origins, secure-cookie behavior, server-side session checks and 12-character minimum passwords.
 - No runtime credentials are in the public repository; `AUTH_SECRET` and `DATABASE_URL` must stay private.
 - Signup is disabled by default and disabled unconditionally in production until email verification, password reset, durable abuse controls, and security tests are completed.
-- Sign-in, sign-up, sign-out and profile creation have passed compile/type checks, but **have not been proven end to end against main**.
+- Sign-up, signed-in session, protected reads, profile creation, invalid inputs, duplicate protection and sign-out **passed an end-to-end test against temporary CI PostgreSQL**. The tests have **not** been run against Neon main.
 
 ### Remaining technical evaluations
 
