@@ -481,11 +481,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
           <div><h2 className="text-[23px] font-semibold tracking-tight">{pt ? 'Conversas' : 'Messages'}</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Tudo perto. Tudo em um lugar.' : 'Close conversations, all in one place.'}</p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
-            title={live ? (pt ? 'Mensagens ao vivo' : 'Live messages') : (pt ? 'Sincronização automática' : 'Automatic sync')}>
-            <span className={cn('size-1.5 rounded-full', live ? 'bg-emerald-500' : 'bg-muted-foreground')}/>
-            {live ? (pt ? 'Ao vivo' : 'Live') : '1:1'}
-          </span>
+
         </div>
         <div className="relative">
           <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
@@ -563,7 +559,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             <span className="min-w-0"><span className="block truncate text-sm font-semibold">{active.peerName}</span>
               <span className="block truncate text-xs text-muted-foreground">@{active.peerHandle}</span></span>
           </a>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{live ? (pt ? 'Ao vivo' : 'Live') : ''}</span>
+
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollBox} onScroll={onMessagesScroll}
@@ -573,9 +569,16 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                 <div className="h-12 w-1/2 animate-pulse self-start bg-muted"/>
                 <div className="h-12 w-2/3 animate-pulse self-end bg-muted"/>
               </div>}
-              {!messagesLoading && !messages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
-              {messages.map(message => <DirectMessageBubble key={message.id} message={message}
-                mine={message.authorId === myId} locale={locale} onQuote={quote}/>)}
+              {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
+              {renderedMessages.map(message => <DirectMessageBubble key={message.id} message={message}
+                mine={message.authorId === myId} locale={locale} onQuote={quote}
+                disabled={actionBusy || busy} onEdit={beginEdit} onDelete={setDeleteTarget}
+                onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
+                onReact={(message, emoji) => void react(message, emoji)}
+                onRetry={message => {
+                  const pending = pendingMessages.find(p => p.clientId === message.clientId);
+                  if (pending) void submitPending(pending);
+                }}/>)}
             </div>
           </div>
           {!atBottom && <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
@@ -592,7 +595,15 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         </div>
         <div className="relative z-10 shrink-0 border-t border-border/70 bg-card/95 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
           {chatError && <p role="alert" className="mb-2 text-xs text-destructive">{chatError}</p>}
-          {quoteSource && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
+          {actionNotice && <p role="status" className="mb-2 text-xs text-primary">{actionNotice}</p>}
+          {editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/70 px-3 py-2 text-xs">
+            <div className="min-w-0 flex-1"><strong className="block">{pt ? 'Editando mensagem' : 'Editing message'}</strong>
+              <span className="block truncate text-muted-foreground">{editing.body}</span>
+            </div>
+            <button type="button" onClick={cancelEdit} aria-label={pt ? 'Cancelar edição' : 'Cancel edit'}
+              className="grid size-9 place-items-center hover:bg-accent"><X className="size-4"/></button>
+          </div>}
+          {quoteSource && !editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
             <div className="min-w-0 flex-1">
               <span className="block font-semibold">{pt ? 'Respondendo com citação' : 'Quoting message'}</span>
               <span className="mt-0.5 block truncate text-muted-foreground">{quoteSource.body}</span>
@@ -603,8 +614,43 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             </button>
           </div>}
           <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
-            sending={busy} locale={locale} textareaRef={textareaRef}/>
+            sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
         </div>
+        {deleteTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"
+            className="w-full max-w-sm rounded-xl border border-border bg-popover p-5 text-popover-foreground shadow-2xl">
+            <h3 id="delete-direct-message-title" className="text-base font-semibold">{pt ? 'Excluir mensagem?' : 'Delete message?'}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{pt ? 'Esta mensagem será excluída para as duas pessoas da conversa.' : 'This message will be deleted for both people in the conversation.'}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" disabled={actionBusy} onClick={() => setDeleteTarget(null)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
+              <Button variant="destructive" disabled={actionBusy} onClick={() => void deleteMessage()}>{pt ? 'Excluir' : 'Delete'}</Button>
+            </div>
+          </div>
+        </div>}
+        {forwardTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="forward-direct-message-title"
+            className="flex max-h-[min(520px,75dvh)] w-full max-w-md flex-col rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <h3 id="forward-direct-message-title" className="font-semibold">{pt ? 'Encaminhar mensagem' : 'Forward message'}</h3>
+              <button type="button" aria-label={pt ? 'Cancelar encaminhamento' : 'Cancel forward'} disabled={actionBusy}
+                onClick={() => { setForwardTarget(null); forwardAttempt.current = null; }} className="grid size-9 place-items-center rounded-md hover:bg-accent"><X className="size-4"/></button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{pt ? 'Escolha uma conversa de destino.' : 'Select a destination conversation.'}</p>
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
+              {threads.filter(thread => thread.id !== activeId).map(thread => <button type="button" key={thread.id}
+                disabled={actionBusy} onClick={() => void forward(thread.id)}
+                className="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-accent disabled:opacity-50">
+                <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
+                <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{thread.peerName}</strong>
+                  <span className="block truncate text-xs text-muted-foreground">@{thread.peerHandle}</span></span>
+              </button>)}
+              {threads.length <= 1 && <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+                {pt ? 'Abra outra conversa para poder encaminhar uma mensagem.' : 'Start another conversation to forward this message.'}
+              </p>}
+            </div>
+            {chatError && <p role="alert" className="mt-2 text-xs text-destructive">{chatError}</p>}
+          </div>
+        </div>}
       </> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
         <MessageCircle className="size-10 text-primary"/>
         <h3 className="font-semibold">{pt ? 'Selecione uma conversa' : 'Select a conversation'}</h3>
