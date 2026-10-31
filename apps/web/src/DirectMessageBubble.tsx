@@ -8,7 +8,7 @@ export type DirectChatMessage = {
   id: string; conversationId: string; authorId: string; body: string;
   clientId: string | null; createdAt: string; readAt: string | null;
   deliveredAt: string | null; editedAt: string | null; deletedAt: string | null; forwarded: boolean;
-  pendingStatus?: 'sending' | 'failed';
+  pendingStatus?: 'sending' | 'failed'; statusUpdatedAt?: string;
   reactions: { emoji: string; count: number }[]; myReaction: string | null;
 };
 
@@ -133,10 +133,10 @@ export function DirectMessageBubble({ message, mine, locale, onQuote, onEdit, on
             {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
             <time dateTime={message.createdAt}>{timeLabel}</time>
             {mine && !message.deletedAt && (
-              message.pendingStatus === 'sending' ? <><LoaderCircle aria-label={pt ? 'Enviando' : 'Sending'} className="size-3 animate-spin"/><span>{pt ? 'Enviando' : 'Sending'}</span></>
+              message.pendingStatus === 'sending' ? <LoaderCircle aria-label={pt ? 'Enviando' : 'Sending'} className="size-3 animate-spin"/>
               : message.pendingStatus === 'failed' ? <button type="button" onClick={() => onRetry(message)}
                   className="rounded border border-current px-1 font-semibold underline" aria-label={pt ? 'Falha ao enviar. Tentar novamente' : 'Failed to send. Retry'}>{pt ? 'Reenviar' : 'Retry'}</button>
-              : <span>{message.readAt ? (pt ? 'Lida' : 'Read') : message.deliveredAt ? (pt ? 'Recebida' : 'Received') : (pt ? 'Enviada' : 'Sent')}</span>
+              : null
             )}
           </span>
         </p>

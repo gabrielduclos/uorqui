@@ -9,7 +9,7 @@ O mensageiro individual usa autenticação Better Auth, PostgreSQL no Neon e as 
 - Uma conversa única por par de usuários, independentemente de quem inicia.
 - Envia texto até 4.000 caracteres e guarda histórico persistente (últimas 100 mensagens na primeira versão).
 - ID único criado no cliente impede duplicação no reenvio.
-- Indica **Enviando, Enviada, Recebida e Lida** no mesmo fluxo da linha do texto e da hora. O estado Recebida depende da confirmação de entrega no cliente, separada da leitura. Contadores não lidos atualizados.
+- O horário original aparece junto ao texto de cada mensagem. Os estados **Enviando, Enviada, Recebida e Lida** aparecem **ao final de cada bloco consecutivo de mensagens enviadas**, como um aviso neutro de sistema centralizado com a **hora da atualização**. O status do bloco representa a menor confirmação alcançada entre suas mensagens não excluídas (não informa Lida antes de todas serem lidas). O estado Recebida depende da confirmação de entrega no cliente, separada da leitura. Contadores não lidos atualizados.
 - Atualização instantânea via **SSE e PostgreSQL LISTEN/NOTIFY**, com polling de segurança quando necessário. Ainda não há push com o aplicativo fechado nem presença online.
 - Interface mobile-first preservando header fixo e teclado; campo de digitação com contraste em Light/Dark e sem indicador “Ao vivo”.
 - Balão otimista e spinner no envio, sem bloquear o compositor; reenvio após falhas usa o mesmo `clientId`.

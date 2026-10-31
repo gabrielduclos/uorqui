@@ -8,7 +8,7 @@ Direct messages use Better Auth, Neon PostgreSQL, `direct_conversations`, and `d
 - Search public users by name/@username and start a conversation from a public profile.
 - Exactly one conversation for each pair of participants.
 - Persistent text history (latest 100 messages), 4,000-character limit, idempotent `clientId` retries.
-- Inline timestamp and textual Sending/Sent/Received/Read indicators; delivery acknowledgement does not mark a message read.
+- Each message retains its inline timestamp. Sending/Sent/Received/Read appears as one centered system-style status row with the time of the latest relevant update after each consecutive outgoing message block. The block conservatively reflects the least advanced non-deleted message, so it cannot claim Read before all messages are read. Delivery acknowledgement does not mark a message read.
 - Optimistic message bubble with spinner and retry (same client ID) while the composer remains available.
 - Edit, delete for both participants (tombstone), forward to another existing conversation, and persist reactions to received messages.
 - **SSE push signaling backed by PostgreSQL LISTEN/NOTIFY**, with polling safety fallback. WebSocket, background push and presence are not yet included.
