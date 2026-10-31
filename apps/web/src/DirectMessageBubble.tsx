@@ -93,7 +93,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
     return()=>observer.disconnect();
   },[isImage,assetUrl]);
   const cachedSrc=useCachedChatMedia(assetUrl,isImage && imageNearViewport);
-  const visibleSrc=cachedSrc || assetUrl;
+  const visibleSrc=cachedSrc || assetUrl || undefined;
   const mediaLabel=attachmentLabel(asset?.type,locale);
   const time = new Date(message.createdAt);
   const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
