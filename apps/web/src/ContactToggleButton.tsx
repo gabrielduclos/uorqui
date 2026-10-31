@@ -3,7 +3,7 @@ import { Check, UserMinus, UserPlus, Clock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUorquiPreferences } from './UorquiPreferences';
 
-type Relation = 'none' | 'sent' | 'received' | 'friends';
+type Relation = 'none' | 'sent' | 'received' | 'friends' | 'blocked';
 
 export function ContactToggleButton({ handle }: { handle: string }) {
   const {locale}=useUorquiPreferences();
@@ -27,7 +27,7 @@ export function ContactToggleButton({ handle }: { handle: string }) {
   },[refresh,pt]);
 
   async function action(){
-    if(status===null||busy)return;
+    if(status===null||status==='blocked'||busy)return;
     const path=status==='none'?'/api/v1/friends/requests'
       :status==='received'?'/api/v1/friends/requests/'+encodeURIComponent(handle)+'/accept'
       :'/api/v1/friends/'+encodeURIComponent(handle);
@@ -50,11 +50,12 @@ export function ContactToggleButton({ handle }: { handle: string }) {
   const label=status==='none'?(pt?'Adicionar amigo':'Add friend')
     :status==='sent'?(pt?'Cancelar pedido':'Cancel request')
     :status==='received'?(pt?'Aceitar pedido':'Accept request')
-    :status==='friends'?(pt?'Desfazer amizade':'Unfriend'):(pt?'Carregando…':'Loading…');
+    :status==='friends'?(pt?'Desfazer amizade':'Unfriend')
+    :status==='blocked'?(pt?'Conta bloqueada':'Blocked account'):(pt?'Carregando…':'Loading…');
   const Icon=status==='friends'?UserMinus:status==='sent'?X:status==='received'?Check:status===null?Clock:UserPlus;
 
   return <div className="flex flex-col gap-1">
-    <Button type="button" variant="outline" disabled={status===null||busy} onClick={()=>void action()}>
+    <Button type="button" variant="outline" disabled={status===null||status==='blocked'||busy} onClick={()=>void action()}>
       <Icon className="size-4"/>{label}
     </Button>
     {error&&<span role="alert" className="max-w-52 text-xs text-destructive">{error}</span>}
