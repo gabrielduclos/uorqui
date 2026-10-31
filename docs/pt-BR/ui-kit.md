@@ -83,5 +83,5 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - O formato dos **balões de mensagem é reto** (`rounded-none`), mesmo com outras superfícies suavemente arredondadas.
 - A prévia de uma resposta é clicável: rola até a origem e a destaca; se for antiga, a API permite consultar `?around=id` mantendo controle de acesso.
 - **Cancelar mensagem** substitui excluir: opção disponível somente para mensagens próprias ainda não lidas, remoção definitiva sem aviso ou tombstone. A API rejeita cancelamentos após `read_at` (HTTP 409).
-- Reações surgem como um balão/evento separado no histórico, permanecem otimistas e possuem ação para desfazer.
-- O ícone de conversas na navegação mobile/desktop mostra **quantidade total de mensagens não lidas** (não número de conversas); SSE com fallback de polling mantém o número sincronizado.
+- Reações **não** criam balões ou eventos no histórico: ficam ligadas ao balão original, com atualização otimista e ação para desfazer. A reação mais recente aparece na **prévia da lista de conversas** e é uma notificação não lida para o autor da mensagem até a conversa ser lida.
+- O ícone de conversas na navegação mobile/desktop mostra a **soma de mensagens e reações não lidas** (não número de conversas); SSE com fallback de polling mantém o número sincronizado.
