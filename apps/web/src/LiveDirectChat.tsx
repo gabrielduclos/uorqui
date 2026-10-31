@@ -6,7 +6,7 @@ import { LiveMessageComposer } from './LiveMessageComposer';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
-import { SavedContacts } from './SavedContacts';
+import { FriendsPanel } from './FriendsPanel';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
   lastBody: string | null; lastAttachmentType?: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
   unreadReactionCount: number; lastReactionEmoji: string | null; lastReactionAt: string | null; lastReactionMessageId: string | null; lastReactionAuthorId: string | null;
-  pendingReceivedAt: string | null;
+  pendingReceivedAt: string | null; canMessage: boolean;
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
@@ -263,8 +263,10 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       await loadThreads();
       openThread(result.id);
       setSearch('');
-    } catch {
-      setError(pt ? 'Não foi possível iniciar esta conversa.' : 'Could not open this conversation.');
+    } catch (e) {
+      setError(e instanceof Error && e.message === 'HTTP_403'
+        ? (pt ? 'Este perfil é privado. É preciso aceitar uma solicitação de amizade antes de conversar.' : 'This private profile must accept your friend request before you can message them.')
+        : (pt ? 'Não foi possível iniciar esta conversa.' : 'Could not open this conversation.'));
     } finally { setBusy(false); }
   }, [loadThreads, openThread, pt]);
 
@@ -741,7 +743,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-5">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <div><h2 className="text-[23px] font-semibold tracking-tight">{listView === 'contacts' ? (pt ? 'Contatos' : 'Contacts') : (pt ? 'Conversas' : 'Messages')}</h2>
+          <div><h2 className="text-[23px] font-semibold tracking-tight">{listView === 'contacts' ? (pt ? 'Amigos' : 'Friends') : (pt ? 'Conversas' : 'Messages')}</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Tudo perto. Tudo em um lugar.' : 'Close conversations, all in one place.'}</p>
           </div>
 
@@ -753,7 +755,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
               onClick={() => { setListView(view); setSearch(''); }}
               className={cn('min-h-10 rounded-lg px-3 text-sm font-medium transition-colors',
                 listView === view ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-              {view === 'conversations' ? (pt ? 'Conversas' : 'Chats') : (pt ? 'Contatos' : 'Contacts')}
+              {view === 'conversations' ? (pt ? 'Conversas' : 'Chats') : (pt ? 'Amigos' : 'Friends')}
             </button>
           ))}
         </div>
@@ -778,7 +780,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         </>}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3">
-        {listView === 'contacts' ? <SavedContacts onMessage={startPerson} busy={busy} /> : <>
+        {listView === 'contacts' ? <FriendsPanel onMessage={startPerson} busy={busy} /> : <>
         {error && <div role="alert" className="m-2 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{error}
           <Button className="ml-2" size="sm" variant="outline" onClick={() => void loadThreads().catch(() => {})}>{pt ? 'Tentar novamente' : 'Retry'}</Button>
         </div>}
@@ -863,7 +865,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                     onOpenMedia={setMediaViewerId}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
-                    disabled={actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
+                    disabled={!active.canMessage || actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
                     onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
                     onReact={(message, emoji) => void react(message, emoji)}
                     onRetry={message => {
@@ -914,8 +916,14 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
               <X className="size-4"/>
             </button>
           </div>}
-          <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
-            onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/>
+          {active.canMessage ? <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
+            onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/> :
+            <div role="status" className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-center text-sm text-muted-foreground">
+              {pt ? 'Este perfil é privado. Somente amigos podem enviar novas mensagens.' : 'This profile is private. Only friends can send new messages.'}
+              <div className="mt-2"><button type="button" className="text-primary underline" onClick={() => { closeThread(); setListView('contacts'); }}>
+                {pt ? 'Ver solicitações de amizade' : 'View friend requests'}
+              </button></div>
+            </div>}
         </div>
         {cancelTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"

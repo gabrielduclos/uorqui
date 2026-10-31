@@ -1,48 +1,62 @@
-import { useEffect, useState } from 'react';
-import { Check, UserMinus, UserPlus } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Check, UserMinus, UserPlus, Clock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUorquiPreferences } from './UorquiPreferences';
 
+type Relation = 'none' | 'sent' | 'received' | 'friends';
+
 export function ContactToggleButton({ handle }: { handle: string }) {
-  const { locale } = useUorquiPreferences();
-  const pt = locale === 'pt-BR';
-  const [saved, setSaved] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const {locale}=useUorquiPreferences();
+  const pt=locale==='pt-BR';
+  const [status,setStatus]=useState<Relation|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    async function check() {
-      const response = await fetch('/api/v1/contacts', { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
-      if (!response.ok) throw new Error('CONTACTS');
-      const data = await response.json() as { contacts: { handle: string }[] };
-      if (!controller.signal.aborted) setSaved(data.contacts.some(c => c.handle === handle));
-    }
-    void check().catch(() => { if (!controller.signal.aborted) setError(pt ? 'Contatos indisponíveis.' : 'Contacts unavailable.'); });
-    return () => controller.abort();
-  }, [handle, pt]);
+  const refresh=useCallback(async(signal?:AbortSignal)=>{
+    const r=await fetch('/api/v1/friends/relationship/'+encodeURIComponent(handle),{credentials:'same-origin',cache:'no-store',signal});
+    if(!r.ok)throw new Error('FAILED');
+    const body=await r.json() as {status:Relation};
+    if(!signal?.aborted)setStatus(body.status);
+  },[handle]);
+  useEffect(()=>{
+    const ctrl=new AbortController();
+    void refresh(ctrl.signal).catch(()=>{if(!ctrl.signal.aborted)setError(pt?'Solicitações indisponíveis.':'Friend requests unavailable.');});
+    const changed=()=>void refresh(ctrl.signal).catch(()=>{});
+    window.addEventListener('uorqui:friends-updated',changed);
+    return ()=>{ctrl.abort();window.removeEventListener('uorqui:friends-updated',changed);};
+  },[refresh,pt]);
 
-  async function toggle() {
-    if (saved === null || busy) return;
-    setBusy(true); setError('');
-    try {
-      const response = await fetch(saved ? '/api/v1/contacts/' + encodeURIComponent(handle) : '/api/v1/contacts', {
-        method: saved ? 'DELETE' : 'POST', credentials: 'same-origin', cache: 'no-store',
-        ...(!saved ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handle }) } : {}),
-      });
-      if (!response.ok) throw new Error('CONTACT');
-      setSaved(!saved);
-      window.dispatchEvent(new Event('uorqui:contacts-updated'));
-    } catch { setError(pt ? 'Não foi possível alterar o contato.' : 'Could not update contact.'); }
-    finally { setBusy(false); }
+  async function action(){
+    if(status===null||busy)return;
+    const path=status==='none'?'/api/v1/friends/requests'
+      :status==='received'?'/api/v1/friends/requests/'+encodeURIComponent(handle)+'/accept'
+      :'/api/v1/friends/'+encodeURIComponent(handle);
+    const opt:RequestInit=status==='sent'||status==='friends'?{method:'DELETE'}
+      :status==='none'?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle})}
+      :{method:'POST'};
+    setBusy(true);setError('');
+    try{
+      const r=await fetch(path,{credentials:'same-origin',cache:'no-store',...opt});
+      if(!r.ok)throw new Error('HTTP_'+r.status);
+      await refresh();
+      window.dispatchEvent(new Event('uorqui:friends-updated'));
+    }catch(e){
+      setError(e instanceof Error&&e.message==='HTTP_429'
+        ?(pt?'Aguarde antes de enviar outra solicitação.':'Please wait before requesting again.')
+        :(pt?'Não foi possível atualizar a amizade.':'Could not update friendship.'));
+    }finally{setBusy(false);}
   }
 
+  const label=status==='none'?(pt?'Adicionar amigo':'Add friend')
+    :status==='sent'?(pt?'Cancelar pedido':'Cancel request')
+    :status==='received'?(pt?'Aceitar pedido':'Accept request')
+    :status==='friends'?(pt?'Desfazer amizade':'Unfriend'):(pt?'Carregando…':'Loading…');
+  const Icon=status==='friends'?UserMinus:status==='sent'?X:status==='received'?Check:status===null?Clock:UserPlus;
+
   return <div className="flex flex-col gap-1">
-    <Button type="button" size="default" variant="outline" disabled={saved === null || busy || !!error} onClick={() => void toggle()}
-      aria-pressed={saved === true}>
-      {saved ? <UserMinus className="size-4"/> : saved === null ? <Check className="size-4"/> : <UserPlus className="size-4"/>}
-      {saved ? (pt ? 'Remover contato' : 'Remove contact') : (pt ? 'Adicionar contato' : 'Save contact')}
+    <Button type="button" variant="outline" disabled={status===null||busy} onClick={()=>void action()}>
+      <Icon className="size-4"/>{label}
     </Button>
-    {error && <span role="alert" className="max-w-40 text-xs text-destructive">{error}</span>}
+    {error&&<span role="alert" className="max-w-52 text-xs text-destructive">{error}</span>}
   </div>;
 }

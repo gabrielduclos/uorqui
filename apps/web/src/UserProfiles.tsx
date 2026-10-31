@@ -273,7 +273,13 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
     </header>
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
       {status === 'loading' && <p role="status" className="py-16 text-center text-sm text-muted-foreground">{pt ? 'Carregando perfil…' : 'Loading profile…'}</p>}
-      {status === 'missing' && <div className="flex flex-col items-center gap-3 py-16 text-center"><LockKeyhole className="size-10 text-muted-foreground" /><h1 className="text-xl font-semibold">{pt ? 'Perfil indisponível' : 'Profile unavailable'}</h1><p className="text-sm text-muted-foreground">{pt ? 'Este perfil não existe ou não é público.' : 'This profile does not exist or is not public.'}</p><Button variant="outline" asChild><a href="/" onClick={navigateBackFromPublicProfile}>{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button></div>}
+      {status === 'missing' && <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <LockKeyhole className="size-10 text-muted-foreground"/>
+          <h1 className="text-xl font-semibold">{pt ? 'Perfil privado ou indisponível' : 'Private or unavailable profile'}</h1>
+          <p className="max-w-sm text-sm text-muted-foreground">{pt ? 'Se você conhece este @usuário, pode enviar uma solicitação de amizade. O perfil só será mostrado após a aceitação.' : 'If you know this @username, send a friend request. The profile becomes available after acceptance.'}</p>
+          {onMessage && <ContactToggleButton handle={handle}/>}
+          <Button variant="outline" asChild><a href="/" onClick={navigateBackFromPublicProfile}>{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button>
+        </div>}
       {status === 'error' && <div role="alert" className="py-16 text-center text-sm text-destructive">{pt ? 'Não foi possível carregar o perfil.' : 'Could not load profile.'}</div>}
       {status === 'ready' && profile && <Card className="gap-0 overflow-hidden p-0">
         <Cover url={profile.coverUrl} name={pt ? 'Capa do perfil' : 'Profile cover'} />
