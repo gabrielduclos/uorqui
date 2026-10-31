@@ -103,7 +103,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         channels=result.rows;
         if(manager(data.myRole)){
           const waiting=await getPool().query(
-            'SELECT u.handle,p.display_name AS "displayName",r.created_at AS "requestedAt" '+
+            'SELECT u.handle,CASE WHEN p.is_public THEN p.display_name ELSE u.handle END AS "displayName",r.created_at AS "requestedAt" '+
             'FROM community_join_requests r JOIN users u ON u.id=r.user_id JOIN profiles p ON p.user_id=u.id '+
             'WHERE r.community_id=$1 AND r.kind=\'join\' AND r.status=\'pending\' ORDER BY r.created_at LIMIT 100',[id]);
           pendingRequests=waiting.rows;
@@ -253,9 +253,14 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       if(!check.rowCount)return reply.code(404).send({error:'Text channel not found'});
       const result=await getPool().query(
         'SELECT m.id,m.client_id AS "clientId",m.body,m.created_at AS "createdAt",'+
-        'u.handle AS "authorHandle",p.display_name AS "authorName",p.avatar_url AS "authorAvatar" '+
+        'u.handle AS "authorHandle",'+
+        'CASE WHEN p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "authorName",'+
+        'CASE WHEN (p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\') AND '+
+        'NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=m.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=m.author_id)) '+
+        'THEN p.avatar_url ELSE NULL END AS "authorAvatar" '+
         'FROM community_messages m JOIN users u ON u.id=m.author_id JOIN profiles p ON p.user_id=m.author_id '+
-        'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId]);
+        'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
+        'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
       return reply.header('Cache-Control',noCache).send({messages:result.rows.reverse()});
     }catch(error){request.log.error({err:error},'Read community messages');return reply.code(503).send({error:'Unavailable'});}
   });
