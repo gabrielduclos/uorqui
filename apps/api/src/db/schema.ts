@@ -43,6 +43,7 @@ export const communities = pgTable('communities', {
   name: varchar('name', { length: 120 }).notNull(),
   ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   visibility: communityVisibility('visibility').notNull().default('public'),
+  description: varchar('description', { length: 500 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -129,4 +130,44 @@ export const userBlocks = pgTable('user_blocks', {
   primaryKey({ columns: [table.blockerId, table.blockedId] }),
   index('user_blocks_blocked_idx').on(table.blockedId),
   check('user_blocks_not_self', sql`${table.blockerId} <> ${table.blockedId}`),
+]);
+
+/** Persistent community channels. Voice membership and RTC will follow separately. */
+export const communityChannels = pgTable('community_channels', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 64 }).notNull(),
+  kind: varchar('kind', { length: 8 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex('community_channels_unique_name').on(table.communityId, table.name),
+  index('community_channels_community_idx').on(table.communityId),
+  check('community_channels_kind', sql`${table.kind} IN ('text', 'voice')`),
+]);
+
+export const communityMessages = pgTable('community_messages', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id, { onDelete: 'cascade' }),
+  authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  clientId: uuid('client_id').notNull().unique(),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index('community_messages_channel_created_idx').on(table.channelId, table.createdAt),
+  check('community_messages_length', sql`length(${table.body}) BETWEEN 1 AND 4000`),
+]);
+
+/** Approval requests and invites do not grant access until accepted. */
+export const communityJoinRequests = pgTable('community_join_requests', {
+  communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: varchar('kind', { length: 8 }).notNull(),
+  status: varchar('status', { length: 10 }).notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  primaryKey({ columns: [table.communityId, table.userId] }),
+  index('community_join_requests_user_idx').on(table.userId),
+  check('community_join_requests_kind', sql`${table.kind} IN ('join', 'invite')`),
+  check('community_join_requests_status', sql`${table.status} IN ('pending', 'approved', 'declined')`),
 ]);

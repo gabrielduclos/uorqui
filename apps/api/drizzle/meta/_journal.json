@@ -78,6 +78,13 @@
       "when": 1793491400000,
       "tag": "0010_user_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793493200000,
+      "tag": "0011_live_communities",
+      "breakpoints": true
     }
   ]
 }
