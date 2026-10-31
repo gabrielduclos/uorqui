@@ -271,7 +271,7 @@ export default function SocialShell({ account, onLogout }: {
                       ))}
                     </div>
                   </ScrollArea>
-                  <DemoMessageComposer key={'dm-' + conversationId} onSend={sendDemoMessage} ariaLabel="Mensagem de demonstração" placeholder="Digite uma mensagem…" />
+                  <DemoMessageComposer key={'dm-' + conversationId + '-' + conversationOpened} onSend={sendDemoMessage} ariaLabel="Mensagem de demonstração" placeholder="Digite uma mensagem…" />
                 </section>
               </div>
             )}
@@ -324,7 +324,7 @@ export default function SocialShell({ account, onLogout }: {
                           </div>)}
                         </div>
                       </ScrollArea>
-                      <DemoMessageComposer key={'channel-' + communityKey} onSend={sendDemoChannel} ariaLabel="Mensagem de canal de exemplo" placeholder={'Mensagem em #' + activeChannel.label + ' (prévia)'} />
+                      <DemoMessageComposer key={'channel-' + communityKey + '-' + channelOpened} onSend={sendDemoChannel} ariaLabel="Mensagem de canal de exemplo" placeholder={'Mensagem em #' + activeChannel.label + ' (prévia)'} />
                     </>
                   )}
                 </section>
