@@ -451,7 +451,7 @@
       "checkConstraints": {
         "dm_attachment_consistency": {
           "name": "dm_attachment_consistency",
-          "value": "((attachment_id IS NULL AND attachment_name IS NULL AND attachment_type IS NULL AND attachment_size IS NULL) OR (attachment_id IS NOT NULL AND attachment_name IS NOT NULL AND attachment_type IS NOT NULL AND attachment_size > 0 AND attachment_size <= 20971520))"
+          "value": "(\n    (\"direct_messages\".\"attachment_id\" IS NULL AND \"direct_messages\".\"attachment_name\" IS NULL AND \"direct_messages\".\"attachment_type\" IS NULL AND \"direct_messages\".\"attachment_size\" IS NULL)\n    OR\n    (\"direct_messages\".\"attachment_id\" IS NOT NULL AND \"direct_messages\".\"attachment_name\" IS NOT NULL AND \"direct_messages\".\"attachment_type\" IS NOT NULL AND \"direct_messages\".\"attachment_size\" > 0 AND \"direct_messages\".\"attachment_size\" <= 20971520)\n  )"
         }
       },
       "isRLSEnabled": false
