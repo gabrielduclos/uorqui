@@ -1,8 +1,10 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { Copy, Download, FileText, Forward, LoaderCircle, MapPin, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
+import { attachmentLabel } from './chatAttachmentLabels';
+import { useCachedChatMedia } from './chatMediaCache';
 import { cn } from '@/lib/utils';
 
 export type DirectChatMessage = {
@@ -76,9 +78,32 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   const isImage = !!asset?.type.startsWith('image/');
   const isVideo = !!asset?.type.startsWith('video/');
   const isAudio = !!asset?.type.startsWith('audio/');
+  const imageRef=useRef<HTMLButtonElement>(null);
+  const [imageNearViewport,setImageNearViewport]=useState(false);
+  useEffect(()=>{
+    if(!isImage){setImageNearViewport(false);return;}
+    const node=imageRef.current;
+    if(!node || typeof IntersectionObserver==='undefined'){setImageNearViewport(true);return;}
+    const observer=new IntersectionObserver(records=>{
+      if(records.some(entry=>entry.isIntersecting)){
+        setImageNearViewport(true);observer.disconnect();
+      }
+    },{rootMargin:'300px'});
+    observer.observe(node);
+    return()=>observer.disconnect();
+  },[isImage,assetUrl]);
+  const cachedSrc=useCachedChatMedia(assetUrl,isImage && imageNearViewport);
+  const visibleSrc=cachedSrc || assetUrl || undefined;
+  const mediaLabel=attachmentLabel(asset?.type,locale);
   const time = new Date(message.createdAt);
   const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
-  const locationMessage=/^📍 (?:Localização compartilhada|Shared location)\n(https:\/\/www\.openstreetmap\.org\/\?mlat=[-\d.]+&mlon=[-\d.]+#map=[-\d./]+)(?:\n([\s\S]*))?$/.exec(message.body);
+  // Old OpenStreetMap shares remain readable, but now always open Google Maps.
+  const locationMessage=/^📍 (?:Localização compartilhada|Shared location)\nhttps:\/\/(?:www\.openstreetmap\.org\/\?mlat=([-\d.]+)&mlon=([-\d.]+)#map=[-\d./]+|www\.google\.com\/maps\?q=([-\d.]+),([-\d.]+))(?:\n([\s\S]*))?$/.exec(message.body);
+  const latitude=Number(locationMessage?.[1]??locationMessage?.[3]);
+  const longitude=Number(locationMessage?.[2]??locationMessage?.[4]);
+  const mapHref=locationMessage && Number.isFinite(latitude) && Number.isFinite(longitude) &&
+    Math.abs(latitude)<=90 && Math.abs(longitude)<=180
+    ? 'https://www.google.com/maps?q='+latitude+','+longitude : null;
   const timeLabel = Number.isFinite(time.getTime())
     ? time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -149,25 +174,27 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         </blockquote>}
 
         {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0">
-          {isImage ? <button type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
+          {isImage ? <button ref={imageRef} type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
             aria-label={pt ? 'Ampliar imagem' : 'Open image'}
             className="block max-w-full focus-visible:outline-2 focus-visible:outline-current">
-            <img src={assetUrl} alt={asset.name} loading="lazy" decoding="async"
-              className="max-h-[360px] w-auto max-w-full object-contain" />
+            {cachedSrc || !assetUrl.startsWith('/media/dm/')
+              ? <img src={visibleSrc} alt={mediaLabel} loading="lazy" decoding="async"
+                className="max-h-[360px] w-auto max-w-full object-contain" />
+              : <span role="status" aria-label={pt?'Carregando foto':'Loading photo'}
+                className="block h-36 w-44 animate-pulse bg-muted" />}
           </button> : isVideo ? <button type="button" onClick={() => onOpenMedia?.(message.id)}
               aria-label={pt?'Abrir vídeo':'Open video'}
               className="relative block max-w-full bg-black focus-visible:outline-2 focus-visible:outline-current">
-              <video src={assetUrl} muted playsInline preload="metadata" className="pointer-events-none max-h-[320px] max-w-full"/>
+              <video src={visibleSrc} muted playsInline preload="metadata" className="pointer-events-none max-h-[320px] max-w-full"/>
               <span className="absolute inset-0 grid place-items-center bg-black/20"><Play className="size-10 text-white" fill="currentColor"/></span>
             </button> : isAudio ? <ChatAudioPlayer src={assetUrl}/> :
             <a href={assetUrl} download={asset.name}
               className="flex min-w-0 items-center gap-2 border border-current/20 px-2 py-2 hover:underline">
-              <FileText className="size-5 shrink-0"/><span className="min-w-0 flex-1 truncate text-xs">{asset.name}</span>
+              <FileText className="size-5 shrink-0"/><span className="min-w-0 flex-1 truncate text-xs">{mediaLabel}</span>
               <Download className="size-4 shrink-0"/>
             </a>}
-          {(isImage || isVideo) && <p className="mt-1 max-w-full truncate text-[11px] opacity-75">{asset.name}</p>}
         </div>}
-        {locationMessage && !message.deletedAt && <a href={locationMessage[1]} target="_blank" rel="noopener noreferrer"
+        {mapHref && !message.deletedAt && <a href={mapHref} target="_blank" rel="noopener noreferrer"
           className="mb-2 flex items-center gap-2 border border-current/25 bg-current/5 px-3 py-3 hover:underline"
           aria-label={pt?'Abrir localização no mapa':'Open location on map'}>
           <MapPin className="size-6 shrink-0"/>
@@ -176,7 +203,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         <p className="whitespace-pre-wrap break-words">
           {message.deletedAt
             ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
-            : (locationMessage ? (locationMessage[2]??'') : quote && !message.replyToId ? quote[2] : message.body)}
+            : (locationMessage ? (locationMessage[5]??'') : quote && !message.replyToId ? quote[2] : message.body)}
           {' '}
           <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap align-baseline text-[10px] opacity-80', mine ? 'text-primary-foreground' : 'text-muted-foreground')}>
             {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
@@ -208,13 +235,13 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
       <MoreHorizontal className="size-[18px]"/>
     </button>}
     {previewOpen && isImage && assetUrl && typeof document !== 'undefined' && createPortal(
-      <div role="dialog" aria-modal="true" aria-label={asset?.name}
+      <div role="dialog" aria-modal="true" aria-label={mediaLabel}
         className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4"
         onKeyDown={e => { if(e.key === 'Escape') setPreviewOpen(false); }}>
         <button type="button" onClick={() => setPreviewOpen(false)}
           aria-label={pt ? 'Fechar imagem' : 'Close image'}
           className="absolute right-4 top-4 grid size-11 place-items-center text-white"><X className="size-6"/></button>
-        <img src={assetUrl} alt={asset?.name} className="max-h-[85dvh] max-w-[95vw] object-contain"/>
+        <img src={visibleSrc} alt={mediaLabel} className="max-h-[85dvh] max-w-[95vw] object-contain"/>
         <a href={assetUrl} download={asset?.name} className="mt-3 flex items-center gap-2 text-sm text-white underline">
           <Download className="size-4"/>{pt ? 'Salvar imagem' : 'Save image'}</a>
       </div>,document.body)}

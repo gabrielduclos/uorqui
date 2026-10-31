@@ -6,6 +6,7 @@ import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
 import { clearProfileImageCache } from './profileImageCache';
+import { clearChatMediaCache } from './chatMediaCache';
 import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
@@ -104,7 +105,7 @@ function AppContent() {
     window.dispatchEvent(new CustomEvent<string>('uorqui:open-dm', { detail: handle }));
   }, []);
 
-  const onAuthenticated = useCallback((next: Account) => setAccount(next), []);
+  const onAuthenticated = useCallback((next: Account) => { clearChatMediaCache(); setAccount(next); }, []);
   const signOut = useCallback(async () => {
     const response = await fetch('/api/auth/sign-out', {
       method: 'POST',
@@ -114,6 +115,7 @@ function AppContent() {
     });
     if (!response.ok) throw new Error('Logout failed');
     clearProfileImageCache();
+    clearChatMediaCache();
     setAccount(null);
   }, []);
 

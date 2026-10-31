@@ -74,4 +74,13 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 - Image annotation editor **before send** provides freehand pen, rectangle, ellipse, arrows, colors, undo and clear; saving creates a new PNG without modifying the original.
 - Photo/video carousel navigates conversation media with prev/next controls, ← → Esc, and download; videos have native controls.
 - The restored **50 MB** cap requires migration `0008_dm_attachment_50mb` changing only `dm_attachment_consistency`; apply Neon production migration before publishing API/Worker. No existing files are removed.
-- Location requires user-triggered browser permission and staged confirmation; one normal DM carries an OpenStreetMap link, with no background tracking.
+- Location requires user-triggered browser permission and staged confirmation; one normal DM carries a Google Maps link, with no background tracking.
+
+
+### Private media caching, filenames and Google Maps (PR #32)
+
+- Attachment menu shows **Gallery, Camera, File and Location** only. Record video from the Camera submenu, not a duplicated top-level picker.
+- Hide technical filenames in bubbles, attachment staging, fullscreen media and conversation preview. Use localized **Photo, Video, Audio, PDF document** labels; keep the original filename only as download metadata.
+- Chat media is cached in **bounded tab memory** using shared object URLs: **90 MiB total**, **50 MiB per media**, **36 entries**, **10-minute lifetime**, deduplicated authorized requests. Images prefetch when their bubble mounts, audio enters the cache on playback, and opened videos are cached for repeat viewing. No persistent cache, Service Worker, IndexedDB or localStorage. Every initial request checks Worker access and blobs are cleared on logout/account change and invalidated when messages are canceled.
+- Audio player uses Light/Dark semantic high-contrast colors, distinct primary Play/Pause button, legible slider and playback speed.
+- Locations open **Google Maps** without API key. Previously sent OpenStreetMap coordinates are displayed with a Google Maps link, without changing or losing historical messages.

@@ -546,6 +546,11 @@ test('private DM attachment metadata is scoped to both participants and canceled
   },true,{'x-uorqui-attachment-proof':proof(thread.id,clientId,validAttachment)});
   assert.equal(sent.status,201,JSON.stringify(sent.data));
   assert.deepEqual(sent.data.message.attachment,{id:uploadId,name:'imagem de exemplo.png',type:'image/png',size:1024});
+  const inbox=await bob('/api/v1/dm/conversations');
+  const card=inbox.data.conversations.find(x=>x.id===thread.id);
+  assert.equal(card.lastAttachmentType,'image/png',
+    'inbox must expose MIME for a generic localized photo label');
+  assert.equal(card.lastBody,null,'private filename must not become visible conversation preview');
   const bobMessages=await bob(path+'/messages');
   assert.deepEqual(bobMessages.data.messages.find(m=>m.id===sent.data.message.id).attachment,sent.data.message.attachment);
   const access=await bob(path+'/attachments/'+uploadId+'/access');

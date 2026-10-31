@@ -89,4 +89,13 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 - Editor de fotos **antes de enviar**: desenho, retângulo, círculo, seta, cores, desfazer e limpar. Salvar gera um PNG novo sem alterar o original.
 - Visualizador de foto/vídeo com rolagem por mídias da conversa, botões anterior/próxima, teclado (←, → e Esc) e opção de salvar; vídeo tem controles nativos.
 - O limite é restaurado para **50 MB** com migração Drizzle `0008_dm_attachment_50mb`, trocando somente a restrição `dm_attachment_consistency`. A mudança requer migração no Neon principal antes de publicar o Worker/API do PR #31; nenhum arquivo existente é apagado.
-- Localização é enviada como texto especial com link OpenStreetMap depois da permissão e confirmação da prévia; não existe rastreamento contínuo.
+- Localização é enviada como texto especial com link Google Maps depois da permissão e confirmação da prévia; não existe rastreamento contínuo.
+
+
+### Mídias privadas, rótulos e mapa (PR #32)
+
+- O modal de anexos apresenta **Galeria, Câmera, Arquivo e Localização**. O vídeo é gravado pelo submenu da Câmera; não existe outro botão Vídeo.
+- Nomes técnicos de fotos, vídeos, gravações e documentos **não aparecem** nos balões, na prévia de envio, no visualizador ou na lista. A interface usa rótulos traduzidos como **Foto, Vídeo, Áudio, Documento PDF**; o nome real permanece apenas no metadado para salvar o arquivo.
+- Mídias do chat possuem **cache em memória da aba** com URL Blob compartilhada entre balão e visualizador, limite agregado **90 MiB**, **50 MiB por item**, **36 itens**, tempo de vida **10 min** e deduplicação de requisições. Imagens carregam sob demanda na interface; áudio é buscado para cache quando o usuário inicia a reprodução; vídeos são armazenados ao abrir o visualizador. Nunca gravar no service worker, Cache Storage, IndexedDB ou localStorage. O primeiro acesso sempre passa pela autorização privada do Worker; logout/troca de conta limpa URLs Blob e requisições em andamento. Cancelar uma mensagem invalida seu objeto em cache.
+- Player de áudio usa cores semânticas **bg-card/text-foreground** e botão **bg-primary/text-primary-foreground**, trilha em cor primária e texto de tempo/velocidade com alto contraste em Light e Dark.
+- Localização agora abre **Google Maps** (`https://www.google.com/maps?q=latitude,longitude`), sem chave API. Cartões antigos do OpenStreetMap continuam reconhecidos e também passam a abrir o Google Maps. O aplicativo pede permissão somente quando a pessoa seleciona Localização, nunca em segundo plano.

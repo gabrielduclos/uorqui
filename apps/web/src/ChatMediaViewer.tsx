@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Pencil, X } from 'lucide-react';
 import { ChatImageEditor } from './ChatImageEditor';
+import { attachmentLabel } from './chatAttachmentLabels';
+import { useCachedChatMedia } from './chatMediaCache';
 import { createPortal } from 'react-dom';
 import type { DirectChatMessage } from './DirectMessageBubble';
 
@@ -43,16 +45,24 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
     window.addEventListener('keydown',handle);
     return()=>window.removeEventListener('keydown',handle);
   },[selectedId,index,items,onSelect,onClose,editing]);
-  if(!active || !selectedId || typeof document==='undefined')return null;
+  // Hooks must run even when the modal is closed, otherwise reopening it
+  // changes the hook order and can crash the chat.
+  const url=active ? active.attachmentUrl || '/media/dm/'+active.conversationId+'/'+active.attachment.id : null;
+  const cached=useCachedChatMedia(url,!!selectedId && !!active);
+  const [videoPlaying,setVideoPlaying]=useState(false);
+  const [videoSrc,setVideoSrc]=useState<string | null>(null);
+  useEffect(()=>{setVideoPlaying(false);setVideoSrc(url);},[url]);
+  useEffect(()=>{if(cached && !videoPlaying)setVideoSrc(cached);},[cached,videoPlaying]);
+  if(!active || !selectedId || !url || typeof document==='undefined')return null;
   const image=active.attachment.type.startsWith('image/');
-  const url=active.attachmentUrl || '/media/dm/'+active.conversationId+'/'+active.attachment.id;
+  const displayedName=attachmentLabel(active.attachment.type,locale);
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-3 text-white sm:p-6"
       onMouseDown={e=>{if(e.currentTarget===e.target)onClose();}}>
       <div id="uorqui-chat-media-viewer" role="dialog" aria-modal="true"
         aria-label={pt?'Visualizador de mídias':'Media viewer'} className="flex h-full max-h-[94dvh] w-full max-w-6xl flex-col">
         <div className="flex shrink-0 items-center gap-3 border-b border-white/15 pb-3">
-          <p className="min-w-0 flex-1 truncate text-sm">{active.attachment.name}</p>
+          <p className="min-w-0 flex-1 truncate text-sm">{displayedName}</p>
           <span className="shrink-0 text-xs text-white/70">{index+1} / {items.length}</span>
           {image && onSendEdited && !editing && !active.pendingStatus && <button type="button"
             onClick={()=>setEditing(true)} className="flex min-h-10 items-center gap-1 border border-white/20 px-2 text-xs hover:bg-white/15"
@@ -73,10 +83,11 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"
             aria-label={pt?'Mídia anterior':'Previous media'}><ChevronLeft className="size-6"/></button>
           <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
-            {image?<img key={active.id} src={url} alt={active.attachment.name}
+            {image?<img key={active.id} src={cached || url} alt={displayedName}
               className="max-h-[76dvh] max-w-full object-contain"/>:
-              <video key={active.id} src={url} controls playsInline preload="metadata"
-                className="max-h-[76dvh] max-w-full" aria-label={active.attachment.name}/>}
+              <video key={active.id} src={videoSrc || url} controls playsInline preload="metadata"
+                onPlay={()=>setVideoPlaying(true)} onPause={()=>setVideoPlaying(false)}
+                className="max-h-[76dvh] max-w-full" aria-label={displayedName}/>}
           </div>
           <button type="button" onClick={()=>{if(index<items.length-1)onSelect(items[index+1].id);}} disabled={index>=items.length-1}
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"
