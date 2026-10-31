@@ -76,9 +76,9 @@ export function DemoLocationCard({ location }: { location: DemoLocation }) {
   const latitude = location.latitude.toFixed(6);
   const longitude = location.longitude.toFixed(6);
   const mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude);
-  return <a href={mapUrl} target="_blank" rel="noopener noreferrer" aria-label="Abrir localização compartilhada no mapa" className="mt-1 flex min-w-[190px] max-w-sm items-center gap-3 border border-current/20 bg-black/10 p-3 hover:bg-black/20 focus-visible:outline-2 focus-visible:outline-ring">
+  return <a href={mapUrl} target="_blank" rel="noopener noreferrer" aria-label={t('Abrir localização compartilhada no mapa')} className="mt-1 flex min-w-[190px] max-w-sm items-center gap-3 border border-current/20 bg-black/10 p-3 hover:bg-black/20 focus-visible:outline-2 focus-visible:outline-ring">
     <span className="grid size-10 shrink-0 place-items-center bg-current/10"><MapPin className="size-5" /></span>
-    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">Localização</span><span className="block text-xs opacity-75">{t("Abrir no mapa")}</span></span>
+    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t('Localização')}</span><span className="block text-xs opacity-75">{t("Abrir no mapa")}</span></span>
   </a>;
 }
 
@@ -187,11 +187,11 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
       </Button>
       {open && typeof document !== 'undefined' && createPortal(<>
         <div aria-hidden="true" className="fixed z-[80] bg-background/15 backdrop-blur-[4px]" style={conversationBounds ?? { inset: 0 }} onClick={() => setOpen(false)} />
-        <div ref={menuRef} role="menu" aria-label="Ações da mensagem" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setOpen(false); triggerRef.current?.focus(); } }} style={{ left: menuPosition?.left ?? -9999, top: menuPosition?.top ?? -9999, width: menuPosition?.width ?? 264, visibility: menuPosition ? 'visible' : 'hidden' }}
+        <div ref={menuRef} role="menu" aria-label={t('Ações da mensagem')} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setOpen(false); triggerRef.current?.focus(); } }} style={{ left: menuPosition?.left ?? -9999, top: menuPosition?.top ?? -9999, width: menuPosition?.width ?? 264, visibility: menuPosition ? 'visible' : 'hidden' }}
           className="fixed z-[81] max-h-[calc(100dvh-16px)] overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-2xl">
         <button type="button" role="menuitem" onClick={() => { setOpen(false); onReply(); }} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"><Reply className="size-4" />{t("Responder")}</button>
         {!message.mine && onReact && <div className="border-b border-border px-1.5 pb-1.5">
-          <p className="px-1.5 py-1 text-[11px] text-muted-foreground">Reagir à mensagem</p>
+          <p className="px-1.5 py-1 text-[11px] text-muted-foreground">{t('Reagir à mensagem')}</p>
           <div className="flex items-center gap-0.5">
             {QUICK_REACTIONS.map(emoji => <button key={emoji} type="button" aria-label={t('Reagir à mensagem') + ' ' + emoji} aria-pressed={message.myReaction === emoji} onClick={() => { onReact(emoji); setOpen(false); }} className={cn('grid size-9 place-items-center text-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring', message.myReaction === emoji && 'bg-primary/15')}>
               {emoji}
