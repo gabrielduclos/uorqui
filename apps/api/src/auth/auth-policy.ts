@@ -6,7 +6,7 @@ export const authPolicy = {
   appName: 'Uorqui',
   emailAndPassword: {
     enabled: true,
-    minPasswordLength: 12,
+    minPasswordLength: 8,
     maxPasswordLength: 128,
   },
   advanced: {
