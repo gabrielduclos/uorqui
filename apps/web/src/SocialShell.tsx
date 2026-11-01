@@ -55,6 +55,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const [conversationOpened, setConversationOpened] = useState(false);
   const [channelOpened, setChannelOpened] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutConfirm,setLogoutConfirm]=useState(false);
   const [logoutError, setLogoutError] = useState('');
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     setLoggingOut(true);
     setLogoutError('');
     try { await onLogout(); }
-    catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false); }
+    catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 
   const title = area === 'profile' ? t('Perfil') : t(navigation.find(item => item.id === area)?.label ?? 'Uorqui');
@@ -108,7 +109,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} />
             <span className="min-w-0"><span className="block truncate text-sm font-medium">{account.profile?.displayName ?? account.user.name}</span><span className="block truncate text-xs text-muted-foreground">{account.profile ? '@' + account.profile.handle : t('Conta Uorqui')}</span></span>
           </button>
-          <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => void logout()} disabled={loggingOut} aria-busy={loggingOut}>
+          <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => setLogoutConfirm(true)} disabled={loggingOut} aria-busy={loggingOut}>
             {loggingOut ? <Spinner /> : <LogOut aria-hidden="true" className="size-4" />}{loggingOut ? t("Saindo…") : t('Sair')}
           </Button>
         </div>
@@ -152,6 +153,13 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
+                <div className="mx-auto flex w-full max-w-3xl justify-end px-4 pt-4 sm:px-7">
+                  <Button type="button" variant="outline" onClick={()=>setLogoutConfirm(true)}
+                    disabled={loggingOut} aria-label={t('Sair da conta')}
+                    className="min-h-11 gap-2 rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10">
+                    <LogOut className="size-4"/>{t('Sair da conta')}
+                  </Button>
+                </div>
                 <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })} />
               </ScrollArea>
             )}
@@ -160,6 +168,21 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         </div>
 
         {logoutError && <div role="alert" className="border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-foreground">{logoutError}</div>}
+        {logoutConfirm&&<div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title"
+            className="w-full max-w-sm space-y-4 rounded-xl border border-border bg-card p-5 shadow-2xl">
+            <h2 id="logout-confirm-title" className="text-lg font-semibold">{locale==='pt-BR'?'Sair da conta?':'Sign out?'}</h2>
+            <p className="text-sm text-muted-foreground">{locale==='pt-BR'?'Você poderá entrar novamente quando quiser.':'You can sign back in at any time.'}</p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={loggingOut} onClick={()=>setLogoutConfirm(false)}>
+                {locale==='pt-BR'?'Cancelar':'Cancel'}</Button>
+              <Button type="button" disabled={loggingOut} onClick={()=>void logout()} className="gap-2">
+                {loggingOut?<Spinner className="size-4"/>:<LogOut className="size-4"/>}
+                {loggingOut?(locale==='pt-BR'?'Saindo…':'Signing out…'):t('Sair da conta')}
+              </Button>
+            </div>
+          </section>
+        </div>
 
         {!showSubpage && !feedTyping && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
