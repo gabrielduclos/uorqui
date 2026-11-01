@@ -224,6 +224,17 @@ export const communityMessages = pgTable('community_messages', {
   )),
 ]);
 
+/** Per-user, per-channel read cursor so unread counts work across devices. */
+export const communityChannelReads = pgTable('community_channel_reads', {
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id, {onDelete:'cascade'}),
+  userId: uuid('user_id').notNull().references(() => users.id, {onDelete:'cascade'}),
+  lastReadAt: timestamp('last_read_at', {withTimezone:true}).notNull(),
+  updatedAt: timestamp('updated_at', {withTimezone:true}).defaultNow().notNull(),
+}, table => [
+  primaryKey({columns:[table.channelId,table.userId]}),
+  index('community_channel_reads_user_idx').on(table.userId),
+]);
+
 /** Emoji reactions on community messages: each member can react once per emoji. */
 export const communityMessageReactions = pgTable('community_message_reactions', {
   messageId: uuid('message_id').notNull().references(() => communityMessages.id, { onDelete: 'cascade' }),
