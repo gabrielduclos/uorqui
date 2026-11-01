@@ -18,6 +18,7 @@ interface Env {
 }
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+const MAX_COMMUNITY_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_DM_BYTES = 50 * 1024 * 1024;
 const COMMUNITY_AVATAR_PATH = /^\/media\/community\/([0-9a-f-]{36})\/([0-9a-f-]{36})\.(webp|jpg|png)$/;
 const COMMUNITY_AVATAR_WRITE = /^\/api\/media\/community\/([0-9a-f-]{36})$/;
@@ -334,7 +335,7 @@ async function writeCommunityImage(request: Request,env: Env,current: URL,api: U
   }
   const type=request.headers.get('content-type')?.split(';')[0]?.toLowerCase().trim()??'';
   const ext=TYPE_EXTENSION[type];if(!ext)return jsonError(415,'Only WebP, PNG and JPEG images supported');
-  const bytes=await boundedBody(request,MAX_IMAGE_BYTES);
+  const bytes=await boundedBody(request,MAX_COMMUNITY_IMAGE_BYTES);
   if(!bytes)return jsonError(413,'Image too large');
   if(!validImage(new Uint8Array(bytes),type))return jsonError(415,'Invalid image');
   const url='/media/community/'+id+'/'+crypto.randomUUID()+'.'+ext;
