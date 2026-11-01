@@ -141,3 +141,11 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - A coluna lateral de canais mostra os participantes ativos do canal em uso. Ao sair, a lista e os estados locais são limpos.
 - Remover da tela da chamada textos técnicos explicativos de WebRTC, STUN, TURN e armazenamento de áudio. Essas informações permanecem na documentação técnica e só aparecem ao usuário quando houver erro real de conexão.
 - Preservar o header de contexto fixo, a área rolável interna, o tema claro/escuro, os controles de pelo menos 44px e a navegação mobile sem deslocamento com teclado.
+
+## Indicadores ao vivo e sons das salas de voz
+
+- Som de **entrada**: dois tons suaves ascendentes. Som de **saída**: dois tons suaves descendentes. São gerados no próprio navegador, sem assets externos. Tocar somente quando a sessão entra de verdade ou sai voluntariamente; para participantes remotos, usar mudanças reais na lista de presença, sem repetir sons após a carga inicial. Não tocar por tentativa fracassada, sincronização normal nem ao mudar uma tela sem confirmar a entrada.
+- A detecção de fala usa os **níveis reais** das trilhas WebRTC locais e remotas (analisador Web Audio, sem gravar, transmitir ou armazenar o conteúdo). Exibir apenas uma **borda verde pulsante** enquanto a pessoa fala, preservando estático o nome e a foto. Muted não mostra atividade.
+- Na grade e na lista lateral, exibir **microfone desligado** com `MicOff` vermelho e **áudio desativado (deafen)** com `VolumeX` vermelho. Deafen desativa reprodução e microfone; ao voltar, restaura o estado anterior do microfone.
+- `community_voice_sessions.deafened` sincroniza o estado do áudio em tempo real via heartbeat, ao lado de `muted`. O estado é somente da sessão atual, não configuração de perfil. Migração `0014_voice_deafen_status`.
+- Não tocar sons se o usuário está com deafen ativado. Sem autorização de autoplay, o navegador pode silenciar os efeitos; a chamada não deve falhar por isso.

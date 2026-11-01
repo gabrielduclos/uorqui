@@ -68,3 +68,7 @@ Grupos tradicionais, lives em grande escala, pagamentos para criadores, marketpl
 - Proprietários/admins podem renomear canais e excluí-los, mantendo **pelo menos um canal de texto** por comunidade. Excluir um canal remove as mensagens daquele canal; por isso a interface exige confirmação.
 - O autor pode editar e cancelar suas mensagens; proprietários, administradores e moderadores podem cancelar mensagens de outros membros. Mensagens canceladas retornam como marcação sem conteúdo, preservando a referência e o registro original no banco. Operações são validadas na API.
 - Painel **Moderação** aparece apenas para equipes autorizadas, com membros, cargos, bans e gerenciamento de canais; está traduzido em PT/EN e usa os componentes do UI Kit. Banimentos em `community_bans` e edição/cancelamento em `community_messages.edited_at/deleted_at/deleted_by_id`, migração Drizzle `0013_community_moderation`.
+
+## Experiência de presença da sala de voz
+
+O cartão de um participante mostra uma borda verde pulsante apenas quando um analisador Web Audio detecta atividade na trilha WebRTC recebida ou enviada. O estado visual de mute e deafen é derivado da própria sessão e sincronizado entre os participantes (migração `0014_voice_deafen_status`). Efeitos discretos de entrada e saída são gerados localmente, sem arquivos e sem gravação. Indicadores também aparecem na lista lateral de canais. O áudio da chamada continua pelo WebRTC, sem novas gravações ou armazenamento de voz.
