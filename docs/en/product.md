@@ -100,3 +100,9 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Private media is checked for access and uploaded as a **new destination-scoped attachment**, never by reusing a private URL across conversations. The 50 MB upload limits still apply. Text forwarding uses the idempotent authorized forwarding API.
 - **Feed posts and videos** can be shared as internal authorized links to friends and existing conversations; the recipient can open them in the mounted feed without a full reload. External sharing and copying post links remain available. A private post does not become public through link sharing.
 - A **Sign out** button is now visible at the top of the account profile on mobile and desktop and shows a confirmation dialog. Signing out clears session-scoped media and feed caches.
+
+### Voice-room presence and login resilience (November 2026)
+
+- The community's main channel screen now shows **who is in each voice room** without joining it, including privacy-authorized avatars, names, participant totals, microphone-muted and audio-disabled states. Presence revalidates about every 5 seconds while visible (15 seconds while in the background), omits expired sessions and respects account blocks/privacy. Live speaking activity remains available only in the connected WebRTC room; it is never invented for other rooms.
+- `GET /api/v1/communities/:id/voice/presence` is authenticated and member-only and groups active participants by channel. Integration tests cover anonymous/nonmember denial, sessions, mute/deafen, blocks and departure.
+- The sign-in entry no longer waits up to 20 seconds for session initialization; the form appears after a short initial attempt. Session/status probes are bounded, and users may retry sign-in after a transient readiness failure. Both `/` and `/index.html` are served with no-store headers to prevent stale HTML references to replaced JS bundles. Authentication remains enforced by the API.
