@@ -10,7 +10,7 @@ O mensageiro individual usa autenticação Better Auth, PostgreSQL no Neon e as 
 - Envia texto até 4.000 caracteres e guarda histórico persistente (últimas 100 mensagens na primeira versão).
 - ID único criado no cliente impede duplicação no reenvio.
 - O horário original aparece junto ao texto de cada mensagem. Os estados **Enviando, Enviada, Recebida e Lida** aparecem **ao final de cada bloco consecutivo de mensagens enviadas**, como um aviso neutro de sistema centralizado com a **hora da atualização**. O status do bloco representa a menor confirmação alcançada entre suas mensagens não excluídas (não informa Lida antes de todas serem lidas). O estado Recebida depende da confirmação de entrega no cliente, separada da leitura. Contadores não lidos atualizados.
-- Atualização instantânea via **SSE e PostgreSQL LISTEN/NOTIFY**, com polling de segurança quando necessário. Ainda não há push com o aplicativo fechado nem presença online.
+- Atualização instantânea via **SSE e PostgreSQL LISTEN/NOTIFY**, com polling de segurança quando necessário. O Web Push para mensagens foi implementado, mas entrega com PWA fechado depende de permissões e das restrições do dispositivo; presença online geral ainda não é garantida.
 - Interface mobile-first preservando header fixo e teclado; campo de digitação com contraste em Light/Dark e sem indicador “Ao vivo”.
 - Balão otimista e spinner no envio, sem bloquear o compositor; reenvio após falhas usa o mesmo `clientId`.
 - Editar texto próprio, excluir para ambos com tombstone, encaminhar mensagens entre conversas existentes e reagir a mensagens recebidas com atualização SSE. Reações são otimistas e revertidas em caso de erro.\n- **Responder** vincula a nova mensagem ao ID da mensagem original, mostrando sua prévia clicável no balão sem duplicar o texto no corpo. Toque na prévia para rolar até a mensagem original, inclusive carregando uma janela mais antiga do histórico, com destaque temporário. As prévias de origens excluídas não revelam o texto apagado.\n- Com a **lista de conversas aberta, visível e em foco**, as mensagens recebidas são marcadas como **Recebidas**, mesmo sem entrar na conversa; **Lida** exige conversa aberta, visível e em foco.
@@ -37,7 +37,7 @@ O mensageiro individual usa autenticação Better Auth, PostgreSQL no Neon e as 
 - Um listener PostgreSQL `LISTEN uorqui_dm_events` por processo recebe `NOTIFY` enviado pelas rotas Fastify. Uma ligação direta ao Neon é necessária para `LISTEN`; definir `DATABASE_DIRECT_URL` quando a URL principal usar PgBouncer.
 - O SSE transmite apenas o tipo de mudança e o ID da conversa. O texto continua acessível apenas pelas rotas autenticadas, com checagem de participação.
 - Heartbeat a cada 15 segundos, desconexão e nova validação de sessão a cada 5 minutos. A conexão é fechada com a aba oculta.
-- O cliente conserva polling de segurança a cada 25 a 30 segundos enquanto conectado e retorna a 3/4 segundos se o stream falhar. Não há suporte a notificações push com aplicativo fechado.
+- O cliente conserva polling de segurança a cada 25 a 30 segundos enquanto conectado e retorna a 3/4 segundos se o stream falhar. Notificações Web Push em segundo plano estão implementadas, mas devem ser validadas em PWAs instalados no iOS e Android; a entrega não é garantida.
 
 
 ### Contrato da interface real (não regredir)
