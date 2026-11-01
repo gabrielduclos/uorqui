@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, LogOut, Mic, MicOff, RefreshCw, Volume2, VolumeX, Users } from 'lucide-react';
+import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 
-type VoicePeer={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;joinedAt:string;isSelf:boolean};
+export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;isSelf:boolean};
+type VoicePeer=CommunityVoiceParticipant & {joinedAt:string};
 type VoiceSignal={id:string;senderSessionId:string;kind:'offer'|'answer'|'candidate';payload:RTCSessionDescriptionInit|RTCIceCandidateInit};
 type VoiceJoin={sessionId:string;peers:VoicePeer[];rtc:{iceServers:RTCIceServer[];relayAvailable:boolean};maxParticipants:number};
 type VoiceState={peers:VoicePeer[];signals:VoiceSignal[];cursor:string};
@@ -17,12 +18,12 @@ async function req<T>(url:string,init?:RequestInit):Promise<T>{
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
-export default function CommunityVoiceRoom({communityId,channelId}:{communityId:string;channelId:string}){
+export default function CommunityVoiceRoom({communityId,channelId,onParticipantsChange}:{communityId:string;channelId:string;onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void}){
   const {locale}=useUorquiPreferences();const pt=locale==='pt-BR';
   const [phase,setPhase]=useState<'idle'|'joining'|'joined'>('idle');
   const [peers,setPeers]=useState<VoicePeer[]>([]);
   const [muted,setMuted]=useState(false);
-  const [relayAvailable,setRelayAvailable]=useState(false);
+  const [deafened,setDeafened]=useState(false);
   const [connections,setConnections]=useState<Record<string,RTCPeerConnectionState>>({});
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
@@ -39,6 +40,8 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
   const polling=useRef(false);
   const timers=useRef<number[]>([]);
   const mutedRef=useRef(false);
+  const deafenedRef=useRef(false);
+  const priorMuteRef=useRef(false);
   const ownJoinedAt=useRef('');
   const base='/api/v1/communities/'+communityId+'/channels/'+channelId+'/voice';
 
@@ -51,8 +54,8 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
     pcMap.current.clear();candidateQueue.current.clear();
     for(const el of audioMap.current.values()){el.pause();el.srcObject=null;el.remove();}
     audioMap.current.clear();local.current?.getTracks().forEach(track=>track.stop());local.current=null;
-    cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;
-    setPhase('idle');setMuted(false);setPeers([]);setConnections({});setAudioBlocked(false);
+    cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;deafenedRef.current=false;priorMuteRef.current=false;
+    setPhase('idle');setMuted(false);setDeafened(false);setPeers([]);setConnections({});setAudioBlocked(false);
     if(sessionId&&notify){
       void fetch(base+'/sessions/'+sessionId,{method:'DELETE',credentials:'same-origin',cache:'no-store',keepalive:true}).catch(()=>{});
     }
@@ -95,7 +98,7 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
       if(!element){
         element=document.createElement('audio');element.autoplay=true;
         element.setAttribute('playsinline','');
-        element.style.display='none';
+        element.style.display='none';element.muted=deafenedRef.current;
         document.body.appendChild(element);
         audioMap.current.set(id,element);
       }
@@ -202,7 +205,6 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
       }
       local.current=stream;selfSession.current=sessionId;
       config.current=result.rtc.iceServers;
-      setRelayAvailable(result.rtc.relayAvailable);
       ownJoinedAt.current=result.peers.find(peer=>peer.sessionId===sessionId)?.joinedAt??new Date().toISOString();
       running.current=true;cursor.current='0';setPeers(result.peers);setPhase('joined');
       for(const peer of result.peers)if(!peer.isSelf)void connect(peer.sessionId,true);
@@ -227,9 +229,20 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
     }finally{joining.current=false;}
   }
   function toggleMute(){
+    if(deafenedRef.current)return;
     const next=!mutedRef.current;mutedRef.current=next;setMuted(next);
     local.current?.getAudioTracks().forEach(track=>{track.enabled=!next;});
     if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:next})).catch(()=>{});
+  }
+  function toggleDeafen(){
+    const next=!deafenedRef.current;
+    if(next)priorMuteRef.current=mutedRef.current;
+    deafenedRef.current=next;setDeafened(next);
+    for(const player of audioMap.current.values())player.muted=next;
+    const nextMute=next?true:priorMuteRef.current;
+    mutedRef.current=nextMute;setMuted(nextMute);
+    local.current?.getAudioTracks().forEach(track=>{track.enabled=!nextMute;});
+    if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:nextMute})).catch(()=>{});
   }
   function enableAudio(){
     void Promise.all([...audioMap.current.values()].map(el=>el.play())).then(()=>setAudioBlocked(false))
@@ -246,62 +259,96 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
     };
   },[stop]);
 
-  return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4 pb-8 sm:p-6">
-    <div className="mx-auto w-full max-w-xl space-y-5">
-      <div className="space-y-2 text-center">
-        <Headphones className="mx-auto size-9 text-primary"/>
-        <h3 className="text-lg font-semibold">{pt?'Sala de voz':'Voice room'}</h3>
-        <p className="text-xs leading-5 text-muted-foreground">{pt?
-          'Áudio entre participantes da comunidade. O microfone só é ativado quando você entra.':
-          'Live audio between community members. The microphone turns on only after you join.'}</p>
-      </div>
-      {phase==='idle'?<Button className="mx-auto flex min-h-11" disabled={joining.current} onClick={()=>void join()}>
-        <Headphones className="size-4"/>{pt?'Entrar na sala de voz':'Join voice room'}
-      </Button>:phase==='joining'?<p role="status" className="text-center text-sm text-muted-foreground">
-        {pt?'Solicitando microfone e conectando…':'Requesting microphone and connecting…'}</p>:<>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button variant={muted?'outline':'secondary'} className="min-h-11" onClick={toggleMute}>
-            {muted?<MicOff className="size-4"/>:<Mic className="size-4"/>}
-            {muted?(pt?'Microfone desligado':'Mic muted'):(pt?'Microfone ligado':'Mic on')}
-          </Button>
-          <Button variant="destructive" className="min-h-11" onClick={()=>stop()}>
-            <LogOut className="size-4"/>{pt?'Sair':'Leave'}
-          </Button>
-          {audioBlocked&&<Button variant="outline" onClick={enableAudio}><Volume2 className="size-4"/>
-            {pt?'Ativar som':'Enable sound'}</Button>}
-        </div>
-        <p role="status" className="text-center text-xs text-muted-foreground">{relayAvailable?
-          (pt?'Conexão direta ou relay TURN disponível.':'Direct or TURN relay connection available.'):
-          (pt?'Conexão direta STUN: redes restritas podem precisar de TURN.':'STUN-only: restrictive networks may require TURN.')}</p>
-      </>}
-      {error&&<div role="alert" className="rounded-xl border border-destructive/35 bg-destructive/5 px-3 py-2 text-center text-xs text-destructive">
-        {error==='VOICE_NETWORK_RETRY'?(pt?'Reconectando sinalização…':'Reconnecting signaling…'):error}
-      </div>}
-      {phase==='joined'&&<div className="space-y-3 rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold"><Users className="size-4 text-primary"/>
-          {pt?'Participantes':'Participants'} <span className="text-xs font-normal text-muted-foreground">({peers.length}/6)</span></div>
-        {peers.map(peer=><div key={peer.sessionId} className="flex items-center gap-3">
-          <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="sm"/>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">{peer.displayName}{peer.isSelf&&<span className="ml-2 text-xs text-muted-foreground">{pt?'(você)':'(you)'}</span>}</div>
-            <p className="truncate text-[11px] text-muted-foreground">@{peer.handle} · {peer.isSelf?
-              (pt?'Conectado':'Connected'):
-              connections[peer.sessionId]==='connected'?(pt?'Áudio conectado':'Audio connected'):
-              connections[peer.sessionId]==='failed'?(pt?'Falha na conexão':'Connection failed'):
-              (pt?'Conectando…':'Connecting…')}</p>
+  // Send real presence to the channel list; do not invent participants.
+  useEffect(()=>{onParticipantsChange?.(phase==='joined'?peers:[]);},[onParticipantsChange,phase,peers]);
+  useEffect(()=>()=>onParticipantsChange?.([]),[onParticipantsChange]);
+
+  const count=phase==='joined'?peers.length:0;
+  const remoteReady=peers.filter(p=>!p.isSelf&&connections[p.sessionId]==='connected').length;
+  return <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Volume2 className="size-5"/></div>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold">{pt?'Conversa por voz':'Voice chat'}</h3>
+            <p className="text-xs text-muted-foreground">{phase==='joined'?(pt?count+' na sala':count+' in room'):
+              phase==='joining'?(pt?'Entrando…':'Joining…'):(pt?'Conecte-se para conversar':'Connect to join the conversation')}</p>
           </div>
-          {peer.muted?<MicOff aria-label={pt?'Silenciado':'Muted'} className="size-4 text-muted-foreground"/>:
-            <Mic aria-label={pt?'Microfone ativo':'Microphone active'} className="size-4 text-primary"/>}
-        </div>)}
-      </div>}
-      <div className="flex items-start gap-2 rounded-xl border border-border/80 bg-secondary/30 p-3 text-xs leading-5 text-muted-foreground">
-        {phase==='joined'?<Volume2 className="mt-0.5 size-4 shrink-0"/>:<VolumeX className="mt-0.5 size-4 shrink-0"/>}
-        <p>{pt?
-          'A chamada utiliza WebRTC: o Uorqui transmite apenas a sinalização pelo servidor; o áudio não é gravado nem salvo. Em conexões restritas, configure o TURN para maior confiabilidade.':
-          'WebRTC transmits audio peer-to-peer. Uorqui stores only temporary signaling, never recorded audio. Configure TURN for better reliability on restricted networks.'}</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground" role="status">
+          <span className={'size-2 rounded-full '+(phase==='joined'?'bg-emerald-500':phase==='joining'?'bg-amber-500':'bg-muted-foreground/40')}/>
+          {phase==='joined'?(pt?'Conectado':'Connected'):phase==='joining'?(pt?'Conectando':'Connecting'):(pt?'Desconectado':'Disconnected')}
+        </div>
       </div>
-      {phase==='joined'&&<Button variant="ghost" size="sm" className="mx-auto flex" onClick={()=>void sync()}>
-        <RefreshCw className="size-4"/>{pt?'Atualizar participantes':'Refresh participants'}</Button>}
+      {error&&<div role="alert" className="mx-auto mt-4 max-w-5xl rounded-xl border border-destructive/35 bg-destructive/5 p-3 text-xs text-destructive">
+        {error==='VOICE_NETWORK_RETRY'?(pt?'Reconectando…':'Reconnecting…'):error}</div>}
+      {phase!=='joined'?<div className="flex min-h-[280px] flex-col items-center justify-center gap-4 py-12 text-center">
+        <div className="grid size-24 place-items-center rounded-[2rem] border border-border bg-card shadow-sm"><Headphones className="size-11 text-primary"/></div>
+        <div className="space-y-1">
+          <h4 className="text-base font-semibold">{pt?'Entre no canal de voz':'Join voice channel'}</h4>
+          <p className="max-w-sm text-sm text-muted-foreground">{pt?'Converse com os membros que estiverem conectados.':'Talk with other members in the room.'}</p>
+        </div>
+        <Button className="min-h-11 rounded-xl px-6" disabled={phase==='joining'} onClick={()=>void join()}>
+          <Headphones className="size-4"/>{phase==='joining'?(pt?'Conectando…':'Connecting…'):(pt?'Conectar':'Connect')}</Button>
+      </div>:<div className="mx-auto mt-6 max-w-5xl">
+        <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Users className="size-4"/><span>{pt?'Participantes':'Participants'} · {count}/6</span>
+          {remoteReady>0&&<span className="ml-auto">{remoteReady} {pt?'áudio conectado':'audio connected'}</span>}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          {peers.map(peer=>{
+            const connection=connections[peer.sessionId];
+            const ready=peer.isSelf||connection==='connected';
+            return <div key={peer.sessionId}
+              className="relative flex min-h-44 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-border/70 bg-card px-3 py-5 text-center shadow-sm transition-colors sm:min-h-48">
+              <div className={'rounded-full p-1 '+(ready?'ring-2 ring-emerald-500/55':'ring-2 ring-border')}>
+                <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="lg"/>
+              </div>
+              <div className="min-w-0 max-w-full">
+                <p className="truncate text-sm font-semibold">{peer.displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">{peer.isSelf?(pt?'Você':'You'):'@'+peer.handle}</p>
+              </div>
+              <span className="absolute right-3 top-3 grid size-8 place-items-center rounded-full border border-border/50 bg-background/90"
+                title={peer.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
+                {peer.muted?<MicOff className="size-4 text-destructive"/>:<Mic className="size-4 text-muted-foreground"/>}
+              </span>
+              {!ready&&<span className="absolute bottom-2 text-[11px] text-muted-foreground">
+                {connection==='failed'?(pt?'Falha na conexão':'Connection failed'):(pt?'Conectando…':'Connecting…')}</span>}
+            </div>;
+          })}
+        </div>
+      </div>}
     </div>
-  </div>;
+
+    {phase==='joined'&&<div className="z-10 shrink-0 border-t border-border bg-card/95 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
+        <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+          <span className="size-2 rounded-full bg-emerald-500"/>{pt?'Voz conectada':'Voice connected'}
+        </div>
+        <div className="flex flex-1 items-center justify-center gap-2 sm:flex-initial">
+          <button type="button" onClick={toggleMute} disabled={deafened}
+            className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-60 '+(muted?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
+            aria-label={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}
+            title={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}>
+            {muted?<MicOff className="size-5"/>:<Mic className="size-5"/>}
+          </button>
+          <button type="button" onClick={toggleDeafen}
+            className={'grid size-11 place-items-center rounded-xl border transition-colors '+(deafened?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
+            aria-label={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}
+            title={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}>
+            {deafened?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
+          </button>
+          {audioBlocked&&!deafened&&<Button variant="outline" className="min-h-11 rounded-xl" onClick={enableAudio}>
+            <Volume2 className="size-4"/>{pt?'Ativar som':'Enable sound'}</Button>}
+          <button type="button" onClick={()=>stop()}
+            className="flex min-h-11 items-center gap-2 rounded-xl bg-destructive px-4 font-semibold text-destructive-foreground hover:bg-destructive/90"
+            aria-label={pt?'Desconectar da sala':'Disconnect from room'} title={pt?'Desconectar':'Disconnect'}>
+            <PhoneOff className="size-5"/><span className="text-sm">{pt?'Sair':'Leave'}</span>
+          </button>
+        </div>
+        <div className="hidden text-xs text-muted-foreground sm:block">{count}/6</div>
+      </div>
+    </div>}
+  </section>;
 }
