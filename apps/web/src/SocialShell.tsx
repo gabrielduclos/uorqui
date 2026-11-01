@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Bell, Home, LogOut, MessageCircle, Users,
@@ -19,6 +19,8 @@ import LiveDirectChat from './LiveDirectChat';
 import LiveCommunities from './LiveCommunities';
 import LiveFeed from './LiveFeed';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
+import {useCommunityUnread} from './useCommunityUnread';
+import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -50,6 +52,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const [feedTyping,setFeedTyping]=useState(false);
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
   const unreadMessageCount = useUnreadDirectMessages();
+  const communityUnread = useCommunityUnread();
+  const communityUnreadLabel=communityUnread.total>99?'99+':String(communityUnread.total);
+  const [tourVisible,setTourVisible]=useState(()=>{try{return localStorage.getItem(onboardingStorageKey(account.user.id))!=='done';}catch{return true;}});
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
@@ -79,12 +84,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     return ()=>window.removeEventListener('uorqui:open-feed-post',openSharedPost);
   },[]);
 
-  function move(next: Area) {
+  const move=useCallback((next: Area) => {
     setFeedTyping(false);
     setArea(next);
     setConversationOpened(false);
     setChannelOpened(false);
-  }
+  }, []);
 
   async function logout() {
     if (loggingOut) return;
@@ -111,6 +116,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               <Icon aria-hidden="true" className="size-4" />{t(item.label)}
               {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
                 className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unreadLabel}</span>}
+              {item.id === 'communities' && communityUnread.total>0 && <span aria-hidden="true"
+                className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{communityUnreadLabel}</span>}
             </Button>;
           })}
         </nav>
@@ -159,7 +166,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
 
-            {area === 'communities' && <LiveCommunities myId={account.user.id} onMobileOpenChange={setChannelOpened} initialCommunityId={invitedCommunityId} />}
+            {area === 'communities' && <LiveCommunities myId={account.user.id} onMobileOpenChange={setChannelOpened} initialCommunityId={invitedCommunityId}
+              unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities} />}
 
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
@@ -203,11 +211,17 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 <Icon aria-hidden="true" className="size-5" />
                 {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
                   className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{unreadLabel}</span>}
+                {item.id === 'communities' && communityUnread.total>0 && <span aria-hidden="true"
+                  className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{communityUnreadLabel}</span>}
               </span>{t(item.label)}
             </Button>;
           })}
         </nav>}
       </div>
+      {tourVisible&&account.profile&&<OnboardingTour userId={account.user.id} profile={account.profile}
+        onNavigate={move}
+        onProfileSaved={next=>onAccountUpdate({...account,profile:next})}
+        onFinish={()=>{setTourVisible(false);move('feed');}}/>}
     </div>
   );
 }
