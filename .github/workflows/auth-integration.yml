@@ -52,6 +52,8 @@ jobs:
         run: node --test apps/api/test/direct-messages.integration.test.mjs
       - name: Exercise real community membership and messages
         run: node --test apps/api/test/communities.integration.test.mjs
+      - name: Exercise persistent hybrid feed and signed media permissions
+        run: node --test apps/api/test/feed.integration.test.mjs
       - name: Verify authenticated community voice signaling
         run: node --test apps/api/test/community-voice.integration.test.mjs
       - name: Verify disabled registration is enforced server-side
