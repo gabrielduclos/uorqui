@@ -141,6 +141,13 @@
       "when": 1793507600000,
       "tag": "0019_hybrid_feed",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793509400000,
+      "tag": "0020_feed_follows",
+      "breakpoints": true
     }
   ]
 }
