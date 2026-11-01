@@ -17,6 +17,7 @@ import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
 import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
 import { registerFeedRoutes } from './feed-routes.js';
 import { closeDmEvents } from './dm-events.js';
+import {closeCommunityEvents} from './community-events.js';
 
 const app = Fastify({
   logger: {
@@ -272,6 +273,6 @@ try {
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    void app.close().then(closeDmEvents).then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
+    void app.close().then(closeDmEvents).then(closeCommunityEvents).then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
   });
 }
