@@ -3,8 +3,10 @@ import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX, Users } from 'luci
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
+import { VoiceActivityMonitor } from './VoiceActivityMonitor';
+import { playVoiceRoomCue, unlockVoiceRoomAudio } from './communityVoiceSounds';
 
-export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;isSelf:boolean};
+export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;deafened:boolean;isSelf:boolean;speaking?:boolean};
 type VoicePeer=CommunityVoiceParticipant & {joinedAt:string};
 type VoiceSignal={id:string;senderSessionId:string;kind:'offer'|'answer'|'candidate';payload:RTCSessionDescriptionInit|RTCIceCandidateInit};
 type VoiceJoin={sessionId:string;peers:VoicePeer[];rtc:{iceServers:RTCIceServer[];relayAvailable:boolean};maxParticipants:number};
@@ -25,6 +27,7 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   const [muted,setMuted]=useState(false);
   const [deafened,setDeafened]=useState(false);
   const [connections,setConnections]=useState<Record<string,RTCPeerConnectionState>>({});
+  const [speaking,setSpeaking]=useState<Set<string>>(()=>new Set());
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
   const running=useRef(false);
@@ -36,6 +39,9 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   const pcMap=useRef(new Map<string,RTCPeerConnection>());
   const audioMap=useRef(new Map<string,HTMLAudioElement>());
   const candidateQueue=useRef(new Map<string,RTCIceCandidateInit[]>());
+  const voiceMonitor=useRef<VoiceActivityMonitor|null>(null);
+  const knownPeers=useRef(new Set<string>());
+  const recentPeers=useRef<VoicePeer[]>([]);
   const cursor=useRef('0');
   const polling=useRef(false);
   const timers=useRef<number[]>([]);
@@ -51,7 +57,8 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
     for(const timer of timers.current)window.clearInterval(timer);
     timers.current=[];
     for(const pc of pcMap.current.values())pc.close();
-    pcMap.current.clear();candidateQueue.current.clear();
+    pcMap.current.clear();candidateQueue.current.clear();knownPeers.current.clear();
+    voiceMonitor.current?.dispose();voiceMonitor.current=null;recentPeers.current=[];setSpeaking(new Set());
     for(const el of audioMap.current.values()){el.pause();el.srcObject=null;el.remove();}
     audioMap.current.clear();local.current?.getTracks().forEach(track=>track.stop());local.current=null;
     cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;deafenedRef.current=false;priorMuteRef.current=false;
@@ -74,6 +81,8 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
     const audio=audioMap.current.get(id);
     if(audio){audio.pause();audio.srcObject=null;audio.remove();audioMap.current.delete(id);}
     candidateQueue.current.delete(id);
+    voiceMonitor.current?.remove(id);
+    setSpeaking(old=>{if(!old.has(id))return old;const n=new Set(old);n.delete(id);return n;});
     setConnections(old=>{const next={...old};delete next[id];return next;});
   },[]);
 
@@ -102,7 +111,9 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
         document.body.appendChild(element);
         audioMap.current.set(id,element);
       }
-      element.srcObject=event.streams[0]??new MediaStream([event.track]);
+      const media=event.streams[0]??new MediaStream([event.track]);
+      element.srcObject=media;
+      voiceMonitor.current?.add(id,media);
       void element.play().catch(()=>{if(running.current)setAudioBlocked(true);});
     };
     local.current?.getAudioTracks().forEach(track=>pc.addTrack(track,local.current!));
@@ -161,7 +172,14 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
     try{
       const state=await req<VoiceState>(base+'/state?sessionId='+encodeURIComponent(selfSession.current)+'&after='+cursor.current);
       if(!running.current)return;
-      setPeers(state.peers);
+      setPeers(state.peers);recentPeers.current=state.peers;
+      const currentIds=new Set(state.peers.map(peer=>peer.sessionId));
+      const previous=knownPeers.current;
+      if(!deafenedRef.current){
+        if(state.peers.some(peer=>!peer.isSelf&&!previous.has(peer.sessionId)))playVoiceRoomCue('join');
+        if([...previous].some(id=>id!==selfSession.current&&!currentIds.has(id)))playVoiceRoomCue('leave');
+      }
+      knownPeers.current=currentIds;
       for(const signal of state.signals){
         await handleSignal(signal);
         cursor.current=signal.id;
@@ -188,6 +206,8 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
 
   async function join(){
     if(joining.current||running.current)return;
+    // Unlock during the actual click, before awaiting getUserMedia and the API.
+    unlockVoiceRoomAudio();
     joining.current=true;setPhase('joining');setError('');
     let stream:MediaStream|null=null;
     try{
@@ -204,15 +224,30 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
         return;
       }
       local.current=stream;selfSession.current=sessionId;
+      voiceMonitor.current=new VoiceActivityMonitor();voiceMonitor.current.add(sessionId,stream);
       config.current=result.rtc.iceServers;
       ownJoinedAt.current=result.peers.find(peer=>peer.sessionId===sessionId)?.joinedAt??new Date().toISOString();
-      running.current=true;cursor.current='0';setPeers(result.peers);setPhase('joined');
+      running.current=true;cursor.current='0';knownPeers.current=new Set(result.peers.map(peer=>peer.sessionId));
+      setPeers(result.peers);recentPeers.current=result.peers;setPhase('joined');
+      playVoiceRoomCue('join');
       for(const peer of result.peers)if(!peer.isSelf)void connect(peer.sessionId,true);
       timers.current=[
         window.setInterval(()=>{void sync();},1300),
         window.setInterval(()=>{
+          if(!running.current||!selfSession.current||!voiceMonitor.current)return;
+          const exclusions=new Set<string>();
+          if(mutedRef.current)exclusions.add(selfSession.current);
+          // Disabled remote microphones must not show activity from stale audio.
+          for(const peer of recentPeers.current)if(peer.muted)exclusions.add(peer.sessionId);
+          const next=voiceMonitor.current.sample(exclusions);
+          setSpeaking(old=>{
+            if(old.size===next.size&&[...old].every(id=>next.has(id)))return old;
+            return next;
+          });
+        },90),
+        window.setInterval(()=>{
           if(!running.current||!selfSession.current)return;
-          void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:mutedRef.current}))
+          void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:mutedRef.current,deafened:deafenedRef.current}))
             .catch(()=>{if(running.current)setError('VOICE_NETWORK_RETRY');});
         },12000),
       ];
@@ -228,11 +263,15 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
         (pt?'Não foi possível entrar. Confira o microfone e a conexão.':'Could not join. Check your microphone and connection.'));
     }finally{joining.current=false;}
   }
+  function leaveRoom(){
+    if(running.current&&!deafenedRef.current)playVoiceRoomCue('leave');
+    stop();
+  }
   function toggleMute(){
     if(deafenedRef.current)return;
     const next=!mutedRef.current;mutedRef.current=next;setMuted(next);
     local.current?.getAudioTracks().forEach(track=>{track.enabled=!next;});
-    if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:next})).catch(()=>{});
+    if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:next,deafened:false})).catch(()=>{});
   }
   function toggleDeafen(){
     const next=!deafenedRef.current;
@@ -242,7 +281,7 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
     const nextMute=next?true:priorMuteRef.current;
     mutedRef.current=nextMute;setMuted(nextMute);
     local.current?.getAudioTracks().forEach(track=>{track.enabled=!nextMute;});
-    if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:nextMute})).catch(()=>{});
+    if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:nextMute,deafened:next})).catch(()=>{});
   }
   function enableAudio(){
     void Promise.all([...audioMap.current.values()].map(el=>el.play())).then(()=>setAudioBlocked(false))
@@ -260,7 +299,14 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   },[stop]);
 
   // Send real presence to the channel list; do not invent participants.
-  useEffect(()=>{onParticipantsChange?.(phase==='joined'?peers:[]);},[onParticipantsChange,phase,peers]);
+  const visiblePeers=peers.map(peer=>({
+    ...peer,deafened:peer.isSelf?deafened:peer.deafened,
+    muted:peer.isSelf?muted:peer.muted,
+    speaking:!((peer.isSelf?muted:peer.muted))&&speaking.has(peer.sessionId),
+  }));
+  useEffect(()=>{onParticipantsChange?.(phase==='joined'?visiblePeers:[]);},
+    // The parent receives a new list only as real presence, mute or activity changes.
+    [onParticipantsChange,phase,peers,muted,deafened,speaking]);
   useEffect(()=>()=>onParticipantsChange?.([]),[onParticipantsChange]);
 
   const count=phase==='joined'?peers.length:0;
@@ -297,22 +343,29 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
           {remoteReady>0&&<span className="ml-auto">{remoteReady} {pt?'áudio conectado':'audio connected'}</span>}
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          {peers.map(peer=>{
+          {visiblePeers.map(peer=>{
             const connection=connections[peer.sessionId];
             const ready=peer.isSelf||connection==='connected';
+            const talking=ready&&!!peer.speaking;
             return <div key={peer.sessionId}
-              className="relative flex min-h-44 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-border/70 bg-card px-3 py-5 text-center shadow-sm transition-colors sm:min-h-48">
-              <div className={'rounded-full p-1 '+(ready?'ring-2 ring-emerald-500/55':'ring-2 ring-border')}>
+              className={'relative flex min-h-44 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border bg-card px-3 py-5 text-center shadow-sm transition-[box-shadow,border-color] sm:min-h-48 '+(talking?'border-emerald-500 ring-2 ring-emerald-500/65 shadow-[0_0_16px_rgba(16,185,129,0.35)] animate-pulse':'border-border/70')}>
+              <div className={'rounded-full p-1 '+(talking?'ring-2 ring-emerald-500':ready?'ring-1 ring-border':'ring-2 ring-border')}>
                 <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="lg"/>
               </div>
               <div className="min-w-0 max-w-full">
                 <p className="truncate text-sm font-semibold">{peer.displayName}</p>
                 <p className="truncate text-xs text-muted-foreground">{peer.isSelf?(pt?'Você':'You'):'@'+peer.handle}</p>
               </div>
-              <span className="absolute right-3 top-3 grid size-8 place-items-center rounded-full border border-border/50 bg-background/90"
-                title={peer.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
-                {peer.muted?<MicOff className="size-4 text-destructive"/>:<Mic className="size-4 text-muted-foreground"/>}
-              </span>
+              <div className="absolute right-3 top-3 flex items-center gap-1">
+                {peer.deafened&&<span className="grid size-8 place-items-center rounded-full border border-destructive/30 bg-destructive/10 text-destructive"
+                  title={pt?'Áudio desligado':'Audio disabled'} aria-label={pt?'Áudio desligado':'Audio disabled'}>
+                  <VolumeX className="size-4"/></span>}
+                <span className={'grid size-8 place-items-center rounded-full border '+(peer.muted?'border-destructive/30 bg-destructive/10 text-destructive':'border-border/50 bg-background/90 text-muted-foreground')}
+                  title={peer.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}
+                  aria-label={peer.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
+                  {peer.muted?<MicOff className="size-4"/>:<Mic className="size-4"/>}
+                </span>
+              </div>
               {!ready&&<span className="absolute bottom-2 text-[11px] text-muted-foreground">
                 {connection==='failed'?(pt?'Falha na conexão':'Connection failed'):(pt?'Conectando…':'Connecting…')}</span>}
             </div>;
@@ -341,7 +394,7 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
           </button>
           {audioBlocked&&!deafened&&<Button variant="outline" className="min-h-11 rounded-xl" onClick={enableAudio}>
             <Volume2 className="size-4"/>{pt?'Ativar som':'Enable sound'}</Button>}
-          <button type="button" onClick={()=>stop()}
+          <button type="button" onClick={leaveRoom}
             className="flex min-h-11 items-center gap-2 rounded-xl bg-destructive px-4 font-semibold text-destructive-foreground hover:bg-destructive/90"
             aria-label={pt?'Desconectar da sala':'Disconnect from room'} title={pt?'Desconectar':'Disconnect'}>
             <PhoneOff className="size-5"/><span className="text-sm">{pt?'Sair':'Leave'}</span>
