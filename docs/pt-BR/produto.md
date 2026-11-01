@@ -89,3 +89,13 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - Arquivos (máximo 50 MB, formatos permitidos) e áudio são validados no Worker e armazenados em uma área `community/<communityId>/<channelId>` do bucket R2 privado, reutilizando a infraestrutura assinada de uploads do chat, mas com autorização específica por comunidade/canal.
 - O acesso à mídia exige participação ativa na comunidade e mensagem não cancelada. A API verifica uploads e downloads individualmente, e os uploads só são aceitos com assinatura HMAC produzida pelo Worker.
 - A migração Drizzle `0018_community_message_attachments` adiciona campos de anexo às mensagens comunitárias e permite corpo vazio quando houver anexo. Deve estar aplicada na Neon antes de habilitar uploads em produção; as mensagens de texto existentes são preservadas.
+
+### Implementação inicial do feed (persistente)
+
+- A aba Início agora renderiza a linha do tempo real por paginação baseada em cursor: **Para você** mostra publicações autorizadas (públicas, de amigos e próprias); **Seguindo** reúne, nesta primeira versão, publicações de amigos aceitos e próprias.
+- Criar publicações de texto, até **6 imagens** em carrossel ou **1 vídeo** (limite de 50 MB por mídia), curtir/descurtir, comentar e apagar a própria publicação; perfis privados exigem amizade e bloqueios entre contas ocultam o conteúdo.
+- Uploads passam pelo Worker, que verifica o arquivo e a propriedade do rascunho, armazena no bucket R2 privado e assina os metadados antes da vinculação via API. Publicação com anexos só fica visível quando a quantidade esperada foi confirmada; falhas podem ser retomadas por slot.
+- O **Modo Vídeos** é separado, em tela cheia, abre no vídeo tocado, avança por gesto vertical/teclas e preserva a posição do feed até o retorno. O feed pode reproduzir vídeos visíveis silenciados.
+- Compartilhamento por `/?post=<id>`, modo imagem ampliada e zoom. Compartilhamento de conteúdos privados continua sujeito à autorização da API.
+- Migração `0019_hybrid_feed` cria `feed_posts`, `feed_media`, `feed_likes` e `feed_comments`. A produção precisa dessa migração antes de habilitar os endpoints; o código trata a ausência como `FEED_NOT_READY`.
+- Próximas etapas: verdadeiro sistema de seguir sem amizade, paginação dos comentários, algoritmos de descoberta, transcodificação de vídeos, denúncias, prévias, acessibilidade e limpeza periódica de mídias órfãs de uploads interrompidos.
