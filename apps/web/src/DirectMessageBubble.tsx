@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Download, FileText, Forward, LoaderCircle, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Flag, Forward, LoaderCircle, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { useCachedChatMedia } from './chatMediaCache';
@@ -53,13 +53,14 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onRetry, onOpenMedia, disabled, highlighted }: {
+export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onReport, onRetry, onOpenMedia, disabled, highlighted }: {
   message: DirectChatMessage; mine: boolean; locale: string; myId: string; peerName: string;
   onReply: (message: DirectChatMessage) => void;
   onJumpToReply: (messageId: string) => void;
   onEdit: (message: DirectChatMessage) => void;
   onCancel: (message: DirectChatMessage) => void;
   onForward: (message: DirectChatMessage) => void;
+  onReport: (message: DirectChatMessage) => void;
   onReact: (message: DirectChatMessage, emoji: string | null) => void;
   onRetry: (message: DirectChatMessage) => void;
   onOpenMedia?: (messageId:string)=>void;
@@ -246,7 +247,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
     </SwipeToReply>
     {!message.deletedAt && !message.pendingStatus && <button ref={trigger} type="button" onClick={() => { setPosition(null); setOpen(v => !v); }}
       aria-label={pt ? 'Opções da mensagem' : 'Message options'} aria-haspopup="menu" aria-expanded={open}
-      disabled={disabled}
+      disabled={disabled && mine}
       className={cn('grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-opacity hover:bg-accent focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100',mine && 'order-first')}>
       <MoreHorizontal className="size-[18px]"/>
     </button>}
@@ -286,6 +287,9 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Pencil className="size-4"/>{pt ? 'Editar' : 'Edit'}</button>}
         {mine && !message.readAt && <button role="menuitem" type="button" onClick={() => { setOpen(false); onCancel(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-accent"><Trash2 className="size-4"/>{pt ? 'Cancelar mensagem' : 'Cancel message'}</button>}
+        {!mine && <button role="menuitem" type="button" onClick={() => { setOpen(false); onReport(message); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-accent">
+          <Flag className="size-4"/>{pt ? 'Denunciar mensagem' : 'Report message'}</button>}
         <button role="menuitem" type="button" onClick={() => setOpen(false)}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><X className="size-4"/>{pt ? 'Fechar' : 'Close'}</button>
       </div>

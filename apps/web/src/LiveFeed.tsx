@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type TouchEvent, type WheelEvent } from 'react';
-import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Send, Share2, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Send, Share2, Flag, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
@@ -10,6 +10,7 @@ import { ensureChatMediaCached, invalidateChatMedia, setFeedVideoCacheWindow, us
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { clearFeedSessionCache,readFeedSession,readFeedSessionFilter,writeFeedSession } from './feedSessionCache';
 import { InternalShareDialog, type InternalShareSource } from './InternalShareDialog';
+import { ContentReportDialog, type ContentReportTarget } from './ContentReportDialog';
 
 type Media={id:string;type:string;size:number;position:number};
 type Post={
@@ -227,6 +228,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const [commentDraft,setCommentDraft]=useState('');
   const [commentBusy,setCommentBusy]=useState(false);
   const [deleteCandidate,setDeleteCandidate]=useState<{postId:string;commentId:string}|null>(null);
+  const [reportTarget,setReportTarget]=useState<ContentReportTarget|null>(null);
   const [deleteBusy,setDeleteBusy]=useState(false);
   const commentInputRef=useRef<HTMLInputElement|null>(null);
   const [commentFocused,setCommentFocused]=useState(false);
@@ -760,6 +762,10 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
               <MessageCircle className="size-4"/>{post.commentCount}</Button>
             <Button type="button" size="sm" variant="ghost" onClick={()=>share(post)}>
               <Share2 className="size-4"/>{pt?'Compartilhar':'Share'}</Button>
+            {!post.mine&&<Button type="button" size="sm" variant="ghost"
+              onClick={()=>setReportTarget({targetKind:'post',targetId:post.id})}
+              aria-label={pt?'Denunciar publicação':'Report post'} className="text-muted-foreground">
+              <Flag className="size-4"/>{pt?'Denunciar':'Report'}</Button>}
           </div>
           {openComments===post.id&&<section className="mt-2 space-y-3 border-t border-border pt-3" aria-label={pt?'Comentários':'Comments'}>
             {(comments[post.id]??[]).map(comment=><div key={comment.id} className="flex items-start gap-2 text-sm">
@@ -823,6 +829,9 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
             <MessageCircle className="size-5"/><span className="text-[10px]">{activeVideo.commentCount}</span></button>
           <button type="button" className="grid size-11 place-items-center rounded-full bg-black/60"
             onClick={()=>share(activeVideo)} aria-label={pt?'Compartilhar':'Share'}><Share2 className="size-5"/></button>
+          {!activeVideo.mine&&<button type="button" className="grid size-11 place-items-center rounded-full bg-black/60"
+            onClick={()=>setReportTarget({targetKind:'post',targetId:activeVideo.id})}
+            aria-label={pt?'Denunciar vídeo':'Report video'}><Flag className="size-5"/></button>}
         </div>
       </motion.div>:<div className="absolute inset-0 flex items-center justify-center text-sm">{videoLoading?<Spinner/>:(pt?'Nenhum vídeo disponível.':'No videos yet.')}</div>}
       </AnimatePresence>
@@ -888,6 +897,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         </div>
       </div>
     </div>}
+    <ContentReportDialog target={reportTarget} locale={locale} onClose={()=>setReportTarget(null)}/>
     <InternalShareDialog source={shareSource} onClose={()=>setShareSource(null)}
       onSent={name=>setNotice(pt?'Compartilhado com '+name:'Shared with '+name)}/>
     {zoom&&<div role="dialog" aria-modal="true" aria-label={pt?'Visualizador de foto':'Photo viewer'} className="fixed inset-0 z-[140] flex flex-col bg-black/95 text-white">
