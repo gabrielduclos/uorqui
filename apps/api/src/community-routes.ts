@@ -165,7 +165,6 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           "SELECT $1,$2,'member' WHERE NOT EXISTS (SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2) "+
           "ON CONFLICT DO NOTHING RETURNING user_id",[id,r.rows[0].user_id]);
         if(!added.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'COMMUNITY_BANNED'});}
-        }
         await client.query('COMMIT');
         return reply.header('Cache-Control',noCache).send({status:'member'});
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
@@ -217,6 +216,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
             "SELECT $1,$2,'member' WHERE NOT EXISTS (SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2) "+
             "ON CONFLICT DO NOTHING RETURNING user_id",[id,me]);
           if(!added.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'COMMUNITY_BANNED'});}
+        }
         await client.query('COMMIT');
         return reply.header('Cache-Control',noCache).send({status:action==='accept'?'member':'declined'});
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
