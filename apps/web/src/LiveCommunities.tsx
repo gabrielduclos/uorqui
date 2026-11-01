@@ -235,7 +235,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       showShareToast('error',pt?'Não foi possível copiar o link.':'Could not copy the link.');
     }
   }
-  const closeChannel=()=>{setVoiceTextExpanded(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||!activeChannel||!community?.myRole){
