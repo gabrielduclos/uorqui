@@ -40,7 +40,7 @@ const owner=visitor(),member=visitor(),outsider=visitor(),anonymous=visitor();
 async function signUp(user,handle){
   const r=await user('/api/auth/sign-up/email','POST',{
     name:handle,email:handle+'@example.invalid',password:'correct-horse-battery-staple-demo'
-  });
+  ,termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'});
   assert.equal(r.status,200,JSON.stringify(r.data));
   const onboard=await user('/api/v1/onboarding','POST',{handle,displayName:handle});
   assert.equal(onboard.status,201,JSON.stringify(onboard.data));

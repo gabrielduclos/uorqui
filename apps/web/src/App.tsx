@@ -15,6 +15,8 @@ import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { LegalPage, legalDocumentFromPath } from './LegalPages';
+import { CookieNotice } from './CookieNotice';
 
 function StartupSplash() {
   const { t } = useUorquiPreferences();
@@ -72,7 +74,14 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{t(item.description)}</p>
           </article>)}
         </section>
-        <footer className="mt-4 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground sm:px-0 lg:text-left">{t('Uorqui · Construído em código aberto · Funcionalidades sociais em desenvolvimento')}</footer>
+        <footer className="mt-4 space-y-2 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground sm:px-0 lg:text-left">
+          <p>{t('Uorqui · Construído em código aberto · Funcionalidades sociais em desenvolvimento')}</p>
+          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 lg:justify-start" aria-label={t('Documentos legais')}>
+            <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{t('Termos de Uso')}</a>
+            <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">{t('Política de Privacidade')}</a>
+            <a href="/cookies" target="_blank" rel="noopener noreferrer" className="underline">{t('Política de Cookies')}</a>
+          </nav>
+        </footer>
       </div>
     </main>
   );
@@ -99,6 +108,7 @@ function AppContent() {
   const [inviteBusy,setInviteBusy]=useState(false);
   const [invitedCommunity,setInvitedCommunity]=useState<string|null>(null);
   const [isVerificationResult, setIsVerificationResult] = useState(() => /^\/auth\/email-verification\/?$/.test(window.location.pathname));
+  const [legalDocument,setLegalDocument]=useState(()=>legalDocumentFromPath(window.location.pathname));
   const [publicHandle, setPublicHandle] = useState<string | null>(() => publicProfileHandle(window.location.pathname));
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
@@ -114,6 +124,7 @@ function AppContent() {
       setPublicHandle(publicProfileHandle(window.location.pathname));
       setInviteToken(pendingInvitation());
       setIsVerificationResult(/^\/auth\/email-verification\/?$/.test(window.location.pathname));
+      setLegalDocument(legalDocumentFromPath(window.location.pathname));
     };
     window.addEventListener('popstate', onNavigation);
     return () => window.removeEventListener('popstate', onNavigation);
@@ -185,11 +196,11 @@ function AppContent() {
 
   return (
     <MotionConfig reducedMotion="user">
-      {isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
+      {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
         <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)}
           invitedCommunityId={invitedCommunity} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
-      {inviteToken && !publicHandle && !isVerificationResult && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
+      {inviteToken && !publicHandle && !isVerificationResult && !legalDocument && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
         <button type="button" className="absolute right-2 top-2 rounded-md p-1.5 hover:bg-secondary"
           aria-label="Fechar convite / Dismiss invitation" onClick={()=>{
             try{localStorage.removeItem(INVITE_KEY);}catch{}
@@ -206,11 +217,12 @@ function AppContent() {
             'Entre ou crie sua conta para participar. / Sign in or create an account to join.')}
         </p>
       </div>}
-      {!isVerificationResult && publicHandle && (
+      {!isVerificationResult && !legalDocument && publicHandle && (
         <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-background">
           <PublicProfilePage handle={publicHandle} onMessage={account?.profile && account.profile.handle !== publicHandle ? onPublicProfileMessage : undefined} />
         </div>
       )}
+      <CookieNotice/>
     </MotionConfig>
   );
 }

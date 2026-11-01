@@ -42,7 +42,7 @@ const owner=visitor(),friend=visitor(),stranger=visitor(),guest=visitor();
 async function signup(user,handle){
   let result=await user('/api/auth/sign-up/email','POST',{
     name:handle,email:handle+'@example.invalid',password:'correct-horse-battery-staple-feed'
-  });
+  ,termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'});
   assert.equal(result.status,200,JSON.stringify(result.data));
   result=await user('/api/v1/onboarding','POST',{handle,displayName:handle});
   assert.equal(result.status,201,JSON.stringify(result.data));

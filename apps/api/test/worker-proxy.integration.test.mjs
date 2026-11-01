@@ -107,7 +107,7 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
         name: 'Cloudflare Integration Test',
         email: 'worker-proxy-ci@example.invalid',
         password: 'correct-horse-battery-staple-ci',
-      },
+      termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'},
     });
     assert.equal(signup.response.status, 200, JSON.stringify(signup.body));
     assert.ok(cookie, 'proxy must forward the Better Auth Set-Cookie header');

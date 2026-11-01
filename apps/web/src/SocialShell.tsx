@@ -196,6 +196,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                   </Button>
                 </div>
                 <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })} />
+                <nav className="mx-auto mb-10 flex max-w-3xl flex-wrap justify-center gap-4 border-t border-border px-4 pt-5 text-xs text-primary sm:gap-6"
+                  aria-label={locale==='pt-BR'?'Documentos legais':'Legal documents'}>
+                  <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{locale==='pt-BR'?'Termos de Uso':'Terms of Use'}</a>
+                  <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">{locale==='pt-BR'?'Privacidade / LGPD':'Privacy / LGPD'}</a>
+                  <a href="/cookies" target="_blank" rel="noopener noreferrer" className="underline">{locale==='pt-BR'?'Política de Cookies':'Cookie Policy'}</a>
+                </nav>
               </ScrollArea>
             )}
             </motion.div>}

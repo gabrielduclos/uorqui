@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { user as authUser } from './auth-schema.js';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   check,
@@ -348,4 +349,15 @@ export const moderationReportActions = pgTable('moderation_report_actions', {
 }, table => [
   index('moderation_report_actions_report_idx').on(table.reportId, table.createdAt),
   check('moderation_report_actions_action', sql`${table.action} IN ('review','resolve','dismiss','remove')`),
+]);
+
+/** Records the mandatory terms acceptance and privacy notice acknowledgment. */
+export const accountLegalAcceptances = pgTable('account_legal_acceptances', {
+  userId: uuid('user_id').notNull().references(() => authUser.id, { onDelete: 'cascade' }),
+  termsVersion: varchar('terms_version', { length: 32 }).notNull(),
+  privacyVersion: varchar('privacy_version', { length: 32 }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  primaryKey({ columns: [table.userId, table.termsVersion] }),
+  index('account_legal_acceptances_accepted_idx').on(table.acceptedAt),
 ]);

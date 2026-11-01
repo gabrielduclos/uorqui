@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import pg from 'pg';
 import { spawn } from 'node:child_process';
 import { after, before, test } from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -79,16 +80,37 @@ test('Auth + social profile local integration', async () => {
   const blocked = await send('/api/v1/me', { useCookie: false });
   assert.equal(blocked.response.status, 401, 'anonymous request denied');
 
+  const withoutAgreement = await send('/api/auth/sign-up/email', {
+    method: 'POST',body:{name:'No Agreement',email:'missing-terms@example.invalid',password:'correct-horse-battery-staple-demo'},
+  });
+  assert.equal(withoutAgreement.response.status,400);
+  assert.equal(withoutAgreement.data.error,'LEGAL_ACCEPTANCE_REQUIRED');
+  const wrongVersion = await send('/api/auth/sign-up/email', {
+    method:'POST',body:{name:'Wrong Version',email:'wrong-version@example.invalid',password:'correct-horse-battery-staple-demo',
+      termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2020-01-01',privacyVersion:'2026-11-01'},
+  });
+  assert.equal(wrongVersion.response.status,400);
   const signup = await send('/api/auth/sign-up/email', {
     method: 'POST',
     body: {
       name: 'Uorqui Test',
       email: 'uorqui-test@example.invalid',
       password: 'correct-horse-battery-staple-demo',
-    },
+    termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'},
   });
   assert.equal(signup.response.status, 200, JSON.stringify(signup.data));
   assert.ok(cookie, 'sign-up should set a cookie');
+  const client=new pg.Client({connectionString:process.env.DATABASE_URL});
+  await client.connect();
+  try{
+    const accepted=await client.query(
+      'SELECT a.terms_version,a.privacy_version,a.accepted_at FROM account_legal_acceptances a JOIN "user" u ON u.id=a.user_id WHERE u.email=$1',
+      ['uorqui-test@example.invalid']);
+    assert.equal(accepted.rows.length,1,'accepted legal versions must be persisted');
+    assert.equal(accepted.rows[0].terms_version,'2026-11-01');
+    assert.equal(accepted.rows[0].privacy_version,'2026-11-01');
+    assert.ok(accepted.rows[0].accepted_at);
+  }finally{await client.end();}
 
   const me = await send('/api/v1/me');
   assert.equal(me.response.status, 200, JSON.stringify(me.data));
