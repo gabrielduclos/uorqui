@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
+import { Headphones, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -17,6 +17,15 @@ async function req<T>(url:string,init?:RequestInit):Promise<T>{
   if(!r.ok){const error=await r.json().catch(()=>null) as {error?:string}|null;throw Error(error?.error??'HTTP_'+r.status);}
   return r.status===204?undefined as T:r.json() as Promise<T>;
 }
+function ScreenTile({stream,label}:{stream:MediaStream;label:string}){
+  const el=useRef<HTMLVideoElement|null>(null);
+  useEffect(()=>{const video=el.current;if(!video)return;video.srcObject=stream;void video.play().catch(()=>{});
+    return ()=>{video.pause();video.srcObject=null;};},[stream]);
+  return <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-black">
+    <video ref={el} autoPlay playsInline muted className="aspect-video w-full object-contain" aria-label={label}/>
+    <p className="truncate bg-card px-3 py-2 text-xs font-medium">{label}</p>
+  </div>;
+}
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
@@ -30,6 +39,9 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   const [speaking,setSpeaking]=useState<Set<string>>(()=>new Set());
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
+  const [screenBusy,setScreenBusy]=useState(false);
+  const [sharing,setSharing]=useState(false);
+  const [screens,setScreens]=useState<Record<string,MediaStream>>({});
   const running=useRef(false);
   const disposed=useRef(false);
   const joining=useRef(false);
@@ -38,6 +50,9 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   const config=useRef<RTCIceServer[]>([]);
   const pcMap=useRef(new Map<string,RTCPeerConnection>());
   const audioMap=useRef(new Map<string,HTMLAudioElement>());
+  const screenRef=useRef<MediaStream|null>(null);
+  const screenSenders=useRef(new Map<string,RTCRtpSender>());
+  const negotiations=useRef(new Set<string>());
   const candidateQueue=useRef(new Map<string,RTCIceCandidateInit[]>());
   const voiceMonitor=useRef<VoiceActivityMonitor|null>(null);
   const knownPeers=useRef(new Set<string>());
@@ -55,6 +70,8 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
     running.current=false;
     const sessionId=selfSession.current;selfSession.current=null;
     for(const timer of timers.current)window.clearInterval(timer);
+    screenRef.current?.getTracks().forEach(t=>{t.onended=null;t.stop();});screenRef.current=null;
+    screenSenders.current.clear();negotiations.current.clear();setSharing(false);setScreens({});setScreenBusy(false);
     timers.current=[];
     for(const pc of pcMap.current.values())pc.close();
     pcMap.current.clear();candidateQueue.current.clear();knownPeers.current.clear();
@@ -78,6 +95,8 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   const closePeer=useCallback((id:string)=>{
     const pc=pcMap.current.get(id);
     if(pc){pc.close();pcMap.current.delete(id);}
+    screenSenders.current.delete(id);negotiations.current.delete(id);
+    setScreens(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
     const audio=audioMap.current.get(id);
     if(audio){audio.pause();audio.srcObject=null;audio.remove();audioMap.current.delete(id);}
     candidateQueue.current.delete(id);
@@ -103,6 +122,13 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
     };
     pc.ontrack=event=>{
       if(!running.current)return;
+      if(event.track.kind==='video'){
+        const media=event.streams[0]??new MediaStream([event.track]);
+        const display=()=>{if(running.current)setScreens(old=>({...old,[id]:media}));};
+        const hide=()=>setScreens(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
+        event.track.onunmute=display;event.track.onmute=hide;event.track.onended=hide;
+        display();return;
+      }
       let element=audioMap.current.get(id);
       if(!element){
         element=document.createElement('audio');element.autoplay=true;
@@ -117,6 +143,8 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
       void element.play().catch(()=>{if(running.current)setAudioBlocked(true);});
     };
     local.current?.getAudioTracks().forEach(track=>pc.addTrack(track,local.current!));
+    const video=screenRef.current?.getVideoTracks()[0];
+    if(video&&screenRef.current)screenSenders.current.set(id,pc.addTrack(video,screenRef.current));
     if(initiator){
       try{
         const offer=await pc.createOffer();
@@ -139,10 +167,10 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
       if(signal.kind==='offer'){
         if(!pc)pc=await connect(id,false);
         if(!pc)return;
-        if(pc.signalingState!=='stable'){
-          // Newly joined users initiate, but a stale negotiation should never stay open.
-          closePeer(id);pc=await connect(id,false);if(!pc)return;
-        }
+        if(pc.signalingState==='have-local-offer'){
+          // Roll back a simultaneous local renegotiation; keep existing media tracks.
+          await pc.setLocalDescription({type:'rollback'});
+        }else if(pc.signalingState!=='stable')return;
         await pc.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);
         for(const c of candidateQueue.current.get(id)??[])await pc.addIceCandidate(c);
         candidateQueue.current.delete(id);
@@ -165,6 +193,64 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
       if(running.current)setError(pt?'Falha na negociação de áudio. Tente sair e entrar novamente.':'Audio negotiation failed. Please leave and rejoin.');
     }
   },[connect,sendSignal,closePeer,pt]);
+
+  const renegotiate=useCallback(async(id:string)=>{
+    const pc=pcMap.current.get(id);
+    if(!pc||pc.signalingState==='closed'||negotiations.current.has(id))return;
+    if(pc.signalingState!=='stable'){
+      window.setTimeout(()=>{if(running.current)void renegotiate(id);},250);
+      return;
+    }
+    negotiations.current.add(id);
+    try{
+      const offer=await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await sendSignal(id,'offer',{type:'offer',sdp:pc.localDescription?.sdp??offer.sdp});
+    }catch{if(running.current)setError(pt?'Não foi possível sincronizar a tela.':'Could not synchronize screen sharing.');}
+    finally{negotiations.current.delete(id);}
+  },[sendSignal,pt]);
+
+  function stopScreenShare(){
+    const old=screenRef.current;
+    if(!old)return;
+    screenRef.current=null;
+    for(const track of old.getTracks()){track.onended=null;track.stop();}
+    setSharing(false);
+    if(selfSession.current)setScreens(previous=>{const next={...previous};delete next[selfSession.current!];return next;});
+    for(const [id,sender] of screenSenders.current){
+      const pc=pcMap.current.get(id);
+      if(pc&&pc.signalingState!=='closed'){
+        try{pc.removeTrack(sender);}catch{}
+        void renegotiate(id);
+      }
+    }
+    screenSenders.current.clear();
+  }
+  async function toggleScreenShare(){
+    if(screenRef.current){stopScreenShare();return;}
+    if(!running.current||!navigator.mediaDevices?.getDisplayMedia)return;
+    setScreenBusy(true);setError('');
+    let stream:MediaStream|null=null;
+    try{
+      stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:15},audio:false});
+      if(!running.current||disposed.current){stream.getTracks().forEach(t=>t.stop());return;}
+      const video=stream.getVideoTracks()[0];
+      if(!video)throw Error('No screen video track');
+      screenRef.current=stream;setSharing(true);
+      const own=selfSession.current;
+      if(own)setScreens(old=>({...old,[own]:stream!}));
+      video.onended=()=>stopScreenShare();
+      for(const [id,pc] of pcMap.current){
+        if(pc.signalingState==='closed')continue;
+        screenSenders.current.set(id,pc.addTrack(video,stream));
+        void renegotiate(id);
+      }
+    }catch(e){
+      stream?.getTracks().forEach(t=>t.stop());
+      if(e instanceof Error&&(['NotAllowedError','AbortError'].includes(e.name)))return;
+      setError(pt?'Não foi possível compartilhar a tela.':'Could not share your screen.');
+    }finally{setScreenBusy(false);}
+  }
 
   const sync=useCallback(async()=>{
     if(!running.current||!selfSession.current||polling.current)return;
@@ -329,6 +415,11 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
       </div>
       {error&&<div role="alert" className="mx-auto mt-4 max-w-5xl rounded-xl border border-destructive/35 bg-destructive/5 p-3 text-xs text-destructive">
         {error==='VOICE_NETWORK_RETRY'?(pt?'Reconectando…':'Reconnecting…'):error}</div>}
+      {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-5 grid w-full max-w-5xl grid-cols-1 gap-3 lg:grid-cols-2">
+        {Object.entries(screens).map(([id,stream])=><ScreenTile key={id} stream={stream} label={id===selfSession.current?
+          (pt?'Sua tela':'Your screen'):
+          (pt?'Tela de ':'Screen from ')+(peers.find(p=>p.sessionId===id)?.displayName??'')}/>)}
+      </div>}
       {phase!=='joined'?<div className="flex min-h-[280px] flex-col items-center justify-center gap-4 py-12 text-center">
         <div className="grid size-24 place-items-center rounded-[2rem] border border-border bg-card shadow-sm"><Headphones className="size-11 text-primary"/></div>
         <div className="space-y-1">
@@ -392,6 +483,14 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
             aria-label={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}
             title={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}>
             {deafened?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
+          </button>
+          <button type="button" disabled={screenBusy||!navigator.mediaDevices?.getDisplayMedia} onClick={()=>void toggleScreenShare()}
+            className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-40 '+(sharing?'border-primary/60 bg-primary/15 text-primary':'border-border bg-secondary hover:bg-secondary/70')}
+            aria-label={sharing?(pt?'Parar compartilhamento de tela':'Stop screen sharing'):(pt?'Compartilhar tela':'Share screen')}
+            title={navigator.mediaDevices?.getDisplayMedia?(sharing?(pt?'Parar apresentação':'Stop presenting'):(pt?'Compartilhar tela':'Share screen')):
+              (pt?'Não disponível neste navegador':'Unavailable in this browser')}>
+            {screenBusy?<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"/>:
+              sharing?<MonitorOff className="size-5"/>:<MonitorUp className="size-5"/>}
           </button>
           {audioBlocked&&!deafened&&<Button variant="outline" className="min-h-11 rounded-xl" onClick={enableAudio}>
             <Volume2 className="size-4"/>{pt?'Ativar som':'Enable sound'}</Button>}
