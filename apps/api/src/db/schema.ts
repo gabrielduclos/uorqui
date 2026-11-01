@@ -182,6 +182,8 @@ export const feedComments = pgTable('feed_comments', {
   authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   body: text('body').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedById: uuid('deleted_by_id').references(() => users.id, { onDelete: 'set null' }),
 }, table => [
   index('feed_comments_post_created_idx').on(table.postId, table.createdAt),
   check('feed_comments_length', sql`length(${table.body}) BETWEEN 1 AND 1000`),
