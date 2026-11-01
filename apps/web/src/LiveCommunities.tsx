@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import CommunityVoiceRoom, { type CommunityVoiceParticipant } from './CommunityVoiceRoom';
 import CommunityModerationPanel from './CommunityModerationPanel';
