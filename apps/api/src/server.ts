@@ -13,6 +13,7 @@ import { registerFriendRoutes } from './friend-routes.js';
 import { registerBlockRoutes } from './block-routes.js';
 import { registerCommunityRoutes } from './community-routes.js';
 import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
+import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
 import { closeDmEvents } from './dm-events.js';
 
 const app = Fastify({
@@ -239,6 +240,7 @@ registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));
 registerCommunityRoutes(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
+registerCommunityModerationRoutes(app, async request => readSession(request));
 
 const port = Number(process.env.PORT ?? 3001);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {

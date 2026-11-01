@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import CommunityVoiceRoom from './CommunityVoiceRoom';
+import CommunityModerationPanel from './CommunityModerationPanel';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -15,7 +16,7 @@ type Community={
 type Channel={id:string;name:string;kind:'text'|'voice';createdAt:string};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
-type Message={id:string;clientId:string;body:string;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null};
+type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean};
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
 const allowedSlug=/^[a-z][a-z0-9-]{2,63}$/;
 
@@ -55,6 +56,9 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
   const [draft,setDraft]=useState('');
+  const [editingId,setEditingId]=useState<string|null>(null);
+  const [editingBody,setEditingBody]=useState('');
+  const [deletingId,setDeletingId]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -92,7 +96,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
-  const closeChannel=()=>{setChannelOpen(false);setDraft('');setMessages([]);};
+  const closeChannel=()=>{setChannelOpen(false);setDraft('');setMessages([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){setMessages([]);return;}
@@ -188,6 +192,30 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
       setMessages(updated.messages);
       window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
     }catch{setError(pt?'Falha ao enviar mensagem. O texto foi mantido.':'Could not send; your text was preserved.');}
+    finally{setBusy(false);}
+  }
+  async function updateMessage(event:FormEvent){
+    event.preventDefault();
+    if(!selectedId||!channelId||!editingId||!editingBody.trim()||busy)return;
+    setBusy(true);setError('');
+    try{
+      await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+editingId,{
+        method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:editingBody.trim()})
+      });
+      const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
+      setMessages(updated.messages);setEditingId(null);setEditingBody('');
+    }catch{setError(pt?'Não foi possível editar a mensagem.':'Could not edit message.');}
+    finally{setBusy(false);}
+  }
+  async function removeMessage(messageId:string){
+    if(!selectedId||!channelId||busy)return;
+    if(deletingId!==messageId){setDeletingId(messageId);return;}
+    setBusy(true);setError('');
+    try{
+      await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+messageId,{method:'DELETE'});
+      const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
+      setMessages(updated.messages);setDeletingId(null);
+    }catch{setError(pt?'Não foi possível cancelar a mensagem.':'Could not remove message.');}
     finally{setBusy(false);}
   }
   function onComposerKeyDown(event:KeyboardEvent<HTMLTextAreaElement>){
@@ -322,6 +350,9 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                 </div>)}
               </div>}
             </section>}
+            {['owner','admin','moderator'].includes(community.myRole??'')&&
+              <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
+                channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}/>}
             {community.myRole!=='owner'&&<Button variant="ghost" size="sm" className="w-full text-muted-foreground"
               disabled={busy} onClick={()=>void act(async()=>{
                 await api('/api/v1/communities/'+community.id+'/membership',{method:'DELETE'});closeChannel();setDiscovery(true);setSelectedId(null);setDetail(null);
@@ -359,7 +390,28 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                 <div className="flex flex-wrap items-baseline gap-2"><strong className="text-sm">{message.authorName}</strong>
                   <span className="text-[11px] text-muted-foreground">@{message.authorHandle}</span>
                   <time className="text-[11px] text-muted-foreground">{new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}).format(new Date(message.createdAt))}</time></div>
-                <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>
+                {message.deletedAt?<p className="mt-1 text-sm italic text-muted-foreground">{pt?'Mensagem cancelada':'Message removed'}</p>:
+                  editingId===message.id?<form className="mt-2 space-y-2" onSubmit={event=>void updateMessage(event)}>
+                    <textarea value={editingBody} onChange={event=>setEditingBody(event.target.value)} maxLength={4000} rows={2}
+                      className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={pt?'Editar mensagem':'Edit message'}/>
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm" disabled={busy||!editingBody.trim()}>{pt?'Salvar':'Save'}</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={()=>{setEditingId(null);setEditingBody('');}}>
+                        {pt?'Cancelar':'Cancel'}</Button>
+                    </div>
+                  </form>:<p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>}
+                {!message.deletedAt&&message.editedAt&&<span className="mt-1 block text-[11px] text-muted-foreground">{pt?'Editada':'Edited'}</span>}
+                {!message.deletedAt&&(message.canEdit||message.canDelete)&&<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
+                  {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
+                    onClick={()=>{setEditingId(message.id);setEditingBody(message.body??'');setDeletingId(null);}}>
+                    {pt?'Editar':'Edit'}</button>}
+                  {message.canDelete&&<button type="button" className="hover:text-destructive" disabled={busy}
+                    onClick={()=>void removeMessage(message.id)}>{deletingId===message.id?
+                      (pt?'Confirmar cancelamento':'Confirm removal'):(pt?'Cancelar mensagem':'Remove message')}</button>}
+                  {deletingId===message.id&&<button type="button" className="hover:text-foreground" onClick={()=>setDeletingId(null)}>
+                    {pt?'Voltar':'Back'}</button>}
+                </div>}
               </div>
             </div>)}</div>
           </div>

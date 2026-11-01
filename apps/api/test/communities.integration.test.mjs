@@ -125,3 +125,75 @@ test('private communities are hidden until invitation and accepted membership',a
   assert.equal((await outsider('/api/v1/communities/'+id+'/invite/decline','POST')).status,200);
   assert.equal((await outsider('/api/v1/communities/'+id)).status,404);
 });
+
+test('community moderation: hierarchical roles, persistent bans, channels and message tombstones',async()=>{
+  const newCommunity=await owner('/api/v1/communities','POST',{
+    name:'Moderation Arena',slug:'moderation-arena-test',visibility:'public',
+  });
+  assert.equal(newCommunity.status,201,JSON.stringify(newCommunity.data));
+  const id=newCommunity.data.id,root='/api/v1/communities/'+id;
+  assert.equal((await member(root+'/join','POST')).status,200);
+  assert.equal((await outsider(root+'/join','POST')).status,200);
+  assert.equal((await anonymous(root+'/moderation')).status,401);
+  assert.equal((await member(root+'/moderation')).status,403,'regular members cannot list roles and bans');
+  const original=(await owner(root)).data.channels;
+  const main=original.find(ch=>ch.kind==='text');
+  assert.ok(main);
+  const msgPath=root+'/channels/'+main.id+'/messages';
+  const mine=await member(msgPath,'POST',{clientId:crypto.randomUUID(),body:'Original text'});
+  assert.equal(mine.status,201,JSON.stringify(mine.data));
+  const messageId=mine.data.id;
+  assert.equal((await outsider(msgPath+'/'+messageId,'PATCH',{body:'hijacked'})).status,404,'cannot edit another writer');
+  assert.equal((await outsider(msgPath+'/'+messageId,'DELETE')).status,404,'nonmoderator cannot cancel another writer');
+
+  assert.equal((await member(root+'/members/comm_outsider/role','POST',{role:'moderator'})).status,403);
+  assert.equal((await owner(root+'/members/comm_owner/role','POST',{role:'member'})).status,403,'owner role is protected');
+  assert.equal((await owner(root+'/members/comm_member/role','POST',{role:'admin'},false)).status,403);
+  assert.equal((await owner(root+'/members/comm_member/role','POST',{role:'admin'})).status,200);
+  assert.equal((await member(root+'/members/comm_outsider/role','POST',{role:'admin'})).status,403,'admins cannot promote other admins');
+  assert.equal((await member(root+'/members/comm_outsider/role','POST',{role:'moderator'})).status,200);
+  assert.equal((await outsider(root+'/members/comm_member/role','POST',{role:'member'})).status,403,'moderators cannot change roles');
+  assert.equal((await outsider(root+'/members/comm_owner','DELETE')).status,403,'owner cannot be kicked');
+  assert.equal((await outsider(root+'/members/comm_member','DELETE')).status,403,'moderator cannot kick admin');
+  const admins=await owner(root+'/moderation');
+  assert.equal(admins.status,200);
+  assert.ok(admins.data.members.some(m=>m.handle==='comm_member'&&m.role==='admin'));
+
+  assert.equal((await member(root+'/channels/'+main.id,'PATCH',{name:'not allowed'},false)).status,403);
+  assert.equal((await member(root+'/channels/'+main.id,'PATCH',{name:'general-chat'})).status,200);
+  assert.equal((await outsider(root+'/channels/'+main.id,'PATCH',{name:'bad-name'})).status,403);
+  assert.equal((await member(root+'/channels/'+main.id,'DELETE')).status,409,'last text channel cannot be deleted');
+  const extra=await member(root+'/channels','POST',{name:'temporary-text',kind:'text'});
+  assert.equal(extra.status,201);
+  assert.equal((await member(root+'/channels/'+extra.data.channel.id,'DELETE')).status,204);
+
+  const edit=await member(msgPath+'/'+messageId,'PATCH',{body:'Updated text'});
+  assert.equal(edit.status,200);
+  const edited=(await owner(msgPath)).data.messages.find(m=>m.id===messageId);
+  assert.equal(edited.body,'Updated text');
+  assert.ok(edited.editedAt);
+  assert.equal(edited.canDelete,true,'community owners can remove member messages');
+  assert.equal((await outsider(msgPath+'/'+messageId,'DELETE')).status,204,'moderators may cancel messages');
+  const removed=(await member(msgPath)).data.messages.find(m=>m.id===messageId);
+  assert.equal(removed.body,null,'deleted text must not be disclosed to clients');
+  assert.ok(removed.deletedAt);
+  assert.equal(removed.canEdit,false);
+  assert.equal(removed.canDelete,false);
+  assert.equal((await member(msgPath+'/'+messageId,'PATCH',{body:'restore'})).status,404);
+  assert.equal((await owner(msgPath+'/'+messageId,'DELETE')).status,404);
+
+  assert.equal((await owner(root+'/members/comm_member/role','POST',{role:'member'})).status,200);
+  assert.equal((await outsider(root+'/bans','POST',{handle:'comm_member',reason:'Rule violation'},false)).status,403);
+  assert.equal((await outsider(root+'/bans','POST',{handle:'comm_member',reason:'Rule violation'})).status,200);
+  assert.equal((await member(root+'/join','POST')).status,404,'banned accounts cannot rejoin public communities');
+  assert.equal((await member(root)).status,404,'banned accounts cannot view their former community');
+  assert.equal((await member(msgPath)).status,403,'banned account loses message history access');
+  const view=await owner(root+'/moderation');
+  assert.ok(view.data.bans.some(b=>b.handle==='comm_member'&&b.reason==='Rule violation'));
+  assert.equal((await outsider(root+'/bans/comm_member','DELETE')).status,403,'moderators cannot unban');
+  assert.equal((await owner(root+'/bans/comm_member','DELETE')).status,204);
+  assert.equal((await member(root+'/join','POST')).status,200,'unbanned member may explicitly rejoin');
+  assert.equal((await owner(root+'/members/comm_outsider','DELETE')).status,200,'owner can remove moderator');
+  assert.equal((await outsider(msgPath)).status,403,'kicked participant cannot read messages');
+  assert.equal((await outsider(root+'/moderation')).status,403);
+});

@@ -91,6 +91,7 @@ Prioridades, licenças de dependências, fornecedores de tempo real/voz/mídias,
 - [x] Base WebRTC de áudio em grupos de até 6 (mesh), com presença, sinalização, microfone/mute/saída e integração TURN opcional no backend
 - [ ] Configurar credenciais de TURN no ambiente de produção e validar áudio entre redes móveis/Wi-Fi, Safari e Samsung Internet
 - [ ] Evolução para SFU quando grupos excederem a escala da malha P2P
-- [ ] Moderação completa: expulsar membro, permissões granulares, edição/remoção de mensagens
+- [x] Moderação inicial: cargos hierárquicos, remoção e banimento, edição/cancelamento de mensagens, gerenciamento de canais
+- [ ] Denúncias, apelações, trilha de auditoria completa, filtros antispam e permissões específicas por canal
 - [ ] Anexos no canal e otimização de mídia no R2
 - [ ] PWA e notificações push de comunidades (após a base funcional)
