@@ -147,7 +147,14 @@ test('Auth + social profile local integration', async () => {
   assert.equal(update.data.profile.bio, 'Playing games and building tools.');
 
   const hidden = await send('/api/v1/profiles/uorqui_tester', { useCookie: false });
-  assert.equal(hidden.response.status, 404, 'private profile must not be public');
+  assert.equal(hidden.response.status, 200, 'private profile exposes only its public header and counts');
+  assert.equal(hidden.data.profile.isPrivate,true);
+  assert.equal(hidden.data.profile.followersCount,0);
+  assert.equal(hidden.data.profile.followingCount,0);
+  assert.equal(hidden.data.profile.avatarUrl,null);
+  assert.equal(hidden.data.profile.coverUrl,null);
+  assert.equal(hidden.data.profile.bio,null);
+  assert.equal((await send('/api/v1/profiles/uorqui_tester/follows/followers',{useCookie:false})).response.status,403);
   const hiddenSearch = await send('/api/v1/profiles/search?q=tester', { useCookie: false });
   assert.ok(!hiddenSearch.data.results.some(person => person.handle === 'uorqui_tester'));
 
