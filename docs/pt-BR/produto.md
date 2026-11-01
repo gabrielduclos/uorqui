@@ -92,10 +92,11 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 
 ### Implementação inicial do feed (persistente)
 
-- A aba Início agora renderiza a linha do tempo real por paginação baseada em cursor: **Para você** mostra publicações autorizadas (públicas, de amigos e próprias); **Seguindo** reúne, nesta primeira versão, publicações de amigos aceitos e próprias.
-- Criar publicações de texto, até **6 imagens** em carrossel ou **1 vídeo** (limite de 50 MB por mídia), curtir/descurtir, comentar e apagar a própria publicação; perfis privados exigem amizade e bloqueios entre contas ocultam o conteúdo.
-- Uploads passam pelo Worker, que verifica o arquivo e a propriedade do rascunho, armazena no bucket R2 privado e assina os metadados antes da vinculação via API. Publicação com anexos só fica visível quando a quantidade esperada foi confirmada; falhas podem ser retomadas por slot.
+- A aba Início agora renderiza a linha do tempo real por paginação baseada em cursor: **Para você** mostra publicações autorizadas (públicas, de amigos e próprias); **Seguindo** mostra publicações de contas seguidas explicitamente e próprias; seguir é independente de amizade.
+- Criar publicações de texto, até **6 imagens** em carrossel ou **1 vídeo** (limite de 50 MB por mídia), curtir/descurtir, comentar, editar e apagar a própria publicação; perfis privados exigem amizade e bloqueios entre contas ocultam o conteúdo.
+- Uploads passam pelo Worker, que verifica o arquivo e a propriedade do rascunho, armazena no bucket R2 privado e assina os metadados antes da vinculação via API. Publicação com anexos só fica visível quando a quantidade esperada foi confirmada; falhas podem ser retomadas por slot, com edição da legenda e descarte explícito do rascunho.
 - O **Modo Vídeos** é separado, em tela cheia, abre no vídeo tocado, avança por gesto vertical/teclas e preserva a posição do feed até o retorno. O feed pode reproduzir vídeos visíveis silenciados.
-- Compartilhamento por `/?post=<id>`, modo imagem ampliada e zoom. Compartilhamento de conteúdos privados continua sujeito à autorização da API.
+- Compartilhamento por `/?post=<id>`, modo imagem ampliada e zoom. Imagens privadas usam cache temporário e limitado à aba, apagado ao sair da conta. Compartilhamento de conteúdos privados continua sujeito à autorização da API.
 - Migração `0019_hybrid_feed` cria `feed_posts`, `feed_media`, `feed_likes` e `feed_comments`. A produção precisa dessa migração antes de habilitar os endpoints; o código trata a ausência como `FEED_NOT_READY`.
-- Próximas etapas: verdadeiro sistema de seguir sem amizade, paginação dos comentários, algoritmos de descoberta, transcodificação de vídeos, denúncias, prévias, acessibilidade e limpeza periódica de mídias órfãs de uploads interrompidos.
+- A migração `0020_feed_follows` cria relações de seguir unidirecionais. Perfis privados só podem ser seguidos por amizades aceitas, sem revelar publicações a terceiros; bloqueios prevalecem sobre a relação de seguir. Botões Seguir/Seguindo permitem alternar em cada publicação.
+- Próximas etapas: paginação dos comentários, algoritmos de descoberta, transcodificação de vídeos, denúncias, prévias, acessibilidade e limpeza periódica de mídias órfãs de uploads interrompidos.
