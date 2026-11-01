@@ -164,7 +164,7 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
 
   return <div id={'dm-message-' + message.id} className={cn('group relative flex w-full min-w-0 items-start gap-2', message.mine ? 'justify-end' : 'justify-start')}>
     <SwipeToReply onReply={onReply}>
-      <div className={cn('min-w-0 max-w-[calc(100vw-108px)] rounded-none px-3.5 py-2.5 text-sm sm:max-w-[min(72vw,720px)]', message.mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
+      <div className={cn('min-w-0 max-w-[calc(100vw-108px)] rounded-[5px] px-3.5 py-2.5 text-sm sm:max-w-[min(72vw,720px)]', message.mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
         {typeof message.replyTo === 'number' && <button type="button" onClick={() => onLocateReply(message.replyTo!)} className={cn('mb-2 block w-full border-l-2 px-2 py-1 text-left text-xs focus-visible:outline-2 focus-visible:outline-ring', message.mine ? 'border-white/60 bg-white/10' : 'border-primary/70 bg-background/60')} aria-label={t("Ir para mensagem respondida")}>
           <span className="block font-semibold">{quoted ? quoted.mine ? t('Você') : t('Contato') : t('Mensagem anterior')}</span>
           <span className="mt-0.5 block max-w-full truncate opacity-80">{quoted ? messagePreview(quoted) : t("Mensagem indisponível")}</span>
