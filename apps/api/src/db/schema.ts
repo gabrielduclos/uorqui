@@ -163,6 +163,17 @@ export const communityMessages = pgTable('community_messages', {
   check('community_messages_length', sql`length(${table.body}) BETWEEN 1 AND 4000`),
 ]);
 
+/** Emoji reactions on community messages: each member can react once per emoji. */
+export const communityMessageReactions = pgTable('community_message_reactions', {
+  messageId: uuid('message_id').notNull().references(() => communityMessages.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  emoji: varchar('emoji', { length: 16 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+  index('community_message_reactions_user_idx').on(table.userId),
+]);
+
 /** Approval requests and invites do not grant access until accepted. */
 export const communityJoinRequests = pgTable('community_join_requests', {
   communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
