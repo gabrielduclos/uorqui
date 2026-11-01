@@ -135,7 +135,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           <div className="h-full min-h-0 overflow-hidden">
             {/* Feed remains mounted so changing tabs never resets list, drafts, or scroll position. */}
             <div hidden={area!=='feed'} className="h-full min-h-0">
-              <LiveFeed key={account.user.id} active={area==='feed'}
+              <LiveFeed key={account.user.id} userId={account.user.id} active={area==='feed'}
                 ownName={account.profile?.displayName??account.user.name}
                 ownAvatar={account.profile?.avatarUrl??null}
                 onCommentFocusChange={setFeedTyping}/>
