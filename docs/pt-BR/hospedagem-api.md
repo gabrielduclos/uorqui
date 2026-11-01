@@ -46,3 +46,18 @@ O modo de desenvolvimento (`ENABLE_DEV_SIGNUP=true`) continua restrito a `NODE_E
 
 - GitHub Actions [smoke de produção 41205954207](https://github.com/gabrielduclos/uorqui/actions/runs/41205954207): três testes aprovados, incluindo health Worker/Render/Neon, perfil anônimo 401, `publicRegistration:true` com e-mail e recuperação habilitados, e rejeição HTTP 403 de tokens Turnstile inválidos para cadastro, recuperação, reenvio e acesso direto ao Render.
 - **Atenção:** este teste não executa um desafio humano real e não verifica a entrega de uma mensagem do Resend. Antes de divulgar o cadastro, realizar teste manual com conta própria e verificar inbox/spam, confirmação e login. Se a inscrição falhar, desabilitar imediatamente `ENABLE_PUBLIC_SIGNUP` e investigar os logs sem expor tokens.
+
+## Salas de voz — integração opcional Cloudflare Realtime TURN
+
+O backend valida a presença e as mensagens de sinalização WebRTC para membros de canais de voz. A mídia (áudio) trafega diretamente pelo WebRTC; a API não hospeda um servidor de áudio.
+
+A configuração básica usa apenas `stun:stun.cloudflare.com:3478`; nessa modalidade, algumas redes corporativas e CGNAT/firewalls podem impedir áudio. Para habilitar TURN, crie uma chave no Cloudflare Realtime TURN (pode haver cobrança por tráfego) e configure **somente no serviço Render da API**:
+
+- `CLOUDFLARE_TURN_KEY_ID`: identificador da chave do serviço TURN.
+- `CLOUDFLARE_TURN_API_TOKEN`: token secreto de autenticação do endpoint REST do Cloudflare Realtime.
+
+Na entrada autenticada de uma sala, a API chama `POST https://rtc.live.cloudflare.com/v1/turn/keys/{keyId}/credentials/generate-ice-servers` com `{"ttl":3600}`. Ela envia ao navegador **apenas** credenciais ICE efêmeras, nunca as credenciais da chave principal. Se a geração falhar, o servidor usa STUN apenas e o frontend sinaliza essa limitação.
+
+Limites e operação: até 6 participantes conectados simultaneamente por sala; sessão expira após 45 s sem heartbeat; sinais de negociação expiram após 3 min. A migração `0012_voice_signaling` adiciona `community_voice_sessions` e `community_voice_signals` (sem gravações), com controle de sessão, permissões, taxa e origem.
+
+**Sequência de publicação:** validar CI e migração Drizzle; aplicar `0012` ao Neon; depois integrar/deploy da API e frontend. Antes de divulgar como pronta para uso amplo, testar dois dispositivos e TURN em redes diferentes.

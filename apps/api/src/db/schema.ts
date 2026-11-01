@@ -3,6 +3,8 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   check,
   boolean,
+  bigserial,
+  jsonb,
   index,
   integer,
   pgEnum,
@@ -170,4 +172,32 @@ export const communityJoinRequests = pgTable('community_join_requests', {
   index('community_join_requests_user_idx').on(table.userId),
   check('community_join_requests_kind', sql`${table.kind} IN ('join', 'invite')`),
   check('community_join_requests_status', sql`${table.status} IN ('pending', 'approved', 'declined')`),
+]);
+
+/** Active WebRTC room presence; sessions automatically expire without heartbeats. */
+export const communityVoiceSessions = pgTable('community_voice_sessions', {
+  id: uuid('id').primaryKey(),
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  muted: boolean('muted').notNull().default(false),
+  joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  uniqueIndex('community_voice_one_session_per_user_idx').on(table.channelId, table.userId),
+  index('community_voice_sessions_last_seen_idx').on(table.lastSeenAt),
+]);
+
+/** Ephemeral, receiver-scoped WebRTC negotiation; no audio/media stored in PostgreSQL. */
+export const communityVoiceSignals = pgTable('community_voice_signals', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id, { onDelete: 'cascade' }),
+  senderSessionId: uuid('sender_session_id').notNull(),
+  recipientSessionId: uuid('recipient_session_id').notNull(),
+  kind: varchar('kind', { length: 12 }).notNull(),
+  payload: jsonb('payload').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index('community_voice_signal_recipient_idx').on(table.channelId, table.recipientSessionId, table.id),
+  index('community_voice_signal_created_idx').on(table.createdAt),
+  check('community_voice_signal_kind', sql`${table.kind} IN ('offer', 'answer', 'candidate')`),
 ]);
