@@ -5,6 +5,7 @@ import { createDatabase } from '../db/client.js';
 import * as authSchema from '../db/auth-schema.js';
 import { isRegistrationAvailable, isPublicSignupEnabled } from './registration.js';
 import { sendAccountEmail } from './email.js';
+import { allowedWebOrigins } from './web-origins.js';
 
 function buildAuth() {
   const secret = process.env.AUTH_SECRET;
@@ -14,6 +15,7 @@ function buildAuth() {
 
   const baseURL = process.env.AUTH_BASE_URL ?? 'http://localhost:3001';
   const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:5173';
+  const trustedOrigins = allowedWebOrigins();
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (isProduction && (new URL(baseURL).protocol !== 'https:' || new URL(webOrigin).protocol !== 'https:')) {
@@ -28,7 +30,7 @@ function buildAuth() {
     }),
     secret,
     baseURL,
-    trustedOrigins: [webOrigin],
+    trustedOrigins,
     emailAndPassword: {
       ...authPolicy.emailAndPassword,
       // No email-verification/reset provider has been configured yet.
