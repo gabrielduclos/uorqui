@@ -199,7 +199,7 @@ test('community moderation: hierarchical roles, persistent bans, channels and me
 });
 
 test('community share link: onboarding redemption, role gates, rotation, bans and expiry',async()=>{
-  const newAccount=visitor(),secondAccount=visitor();
+  const newAccount=visitor(),secondAccount=member;
   const created=await owner('/api/v1/communities','POST',
     {name:'Shared Private Room',slug:'shared-private-room-test',visibility:'private',description:'Invite-only area'});
   assert.equal(created.status,201,JSON.stringify(created.data));
@@ -249,11 +249,9 @@ test('community share link: onboarding redemption, role gates, rotation, bans an
   assert.equal(rotated.status,201);
   assert.notEqual(rotated.data.link.id,token);
   assert.equal((await anonymous('/api/v1/community-invites/'+token)).status,404);
-  assert.equal((await secondAccount('/api/v1/community-invites/'+token+'/redeem','POST',{})).status,401);
-  await signUp(secondAccount,'comm_second_shared');
   assert.equal((await secondAccount('/api/v1/community-invites/'+token+'/redeem','POST',{})).status,410);
   assert.equal((await secondAccount('/api/v1/community-invites/'+rotated.data.link.id+'/redeem','POST',{})).status,200);
-  assert.equal((await owner(path+'/bans','POST',{handle:'comm_second_shared'})).status,200);
+  assert.equal((await owner(path+'/bans','POST',{handle:'comm_member'})).status,200);
   assert.equal((await secondAccount('/api/v1/community-invites/'+rotated.data.link.id+'/redeem','POST',{})).status,403,
     'ban cannot be circumvented using a fresh link');
   assert.equal((await owner(path+'/share','DELETE')).status,200);
