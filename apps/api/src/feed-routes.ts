@@ -38,7 +38,7 @@ const fields=`
  EXISTS (SELECT 1 FROM feed_follows ff WHERE ff.followed_id=p.author_id AND ff.follower_id=$1::uuid) AS "following",
  (SELECT COUNT(*)::int FROM feed_likes l WHERE l.post_id=p.id) AS "likeCount",
  EXISTS(SELECT 1 FROM feed_likes l WHERE l.post_id=p.id AND l.user_id=$1::uuid) AS "liked",
- (SELECT COUNT(*)::int FROM feed_comments c WHERE c.post_id=p.id) AS "commentCount",
+ (SELECT COUNT(*)::int FROM feed_comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL) AS "commentCount",
  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'type',m.type,'size',m.size,'position',m.position)
  ORDER BY m.position) FROM feed_media m WHERE m.post_id=p.id),'[]'::jsonb) AS media
 `;
@@ -351,7 +351,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       // Either the commenter or the author of the post can moderate the comment.
       // Keep a tombstone in its original position without exposing deleted content.
       const r=await getPool().query(
-        'UPDATE feed_comments c SET deleted_at=now(),deleted_by_id=$3,body=\'\' '+
+        'UPDATE feed_comments c SET deleted_at=now(),deleted_by_id=$3,body=\'[deleted]\' '+
         'WHERE c.id=$1 AND c.post_id=$2 AND c.deleted_at IS NULL '+
         'AND EXISTS (SELECT 1 FROM feed_posts p WHERE p.id=c.post_id AND p.deleted_at IS NULL '+
         'AND (p.author_id=$3 OR c.author_id=$3)) RETURNING c.id',[commentId,id,me]);
