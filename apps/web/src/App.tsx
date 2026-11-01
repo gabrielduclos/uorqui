@@ -42,15 +42,15 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
   return (
     <main className="relative min-h-[100dvh] overflow-x-clip bg-background">
       <div aria-hidden="true" className="pointer-events-none absolute -top-48 left-1/2 size-120 -translate-x-1/2 rounded-full bg-primary/15 blur-[100px]" />
-      <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col px-3 sm:px-8 lg:px-10">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:py-4">
+      <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col px-0 sm:px-8 lg:px-10">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:px-0 sm:py-4">
           <span className="text-2xl font-bold tracking-tight">uorqui<span className="text-primary">.</span></span>
           <div className="flex shrink-0 items-center gap-2">
             <PreferencesControls />
           </div>
         </header>
 
-        <section className="grid flex-1 content-start items-center gap-5 py-5 sm:gap-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:py-20">
+        <section className="grid flex-1 content-start items-center gap-5 py-4 sm:gap-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:py-20">
           <div className="hidden lg:block">
             <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-primary">{t("Conecte pessoas e interesses")}</p>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">{t('Descubra. Converse.')} <span className="text-primary">{t('Participe.')}</span></h1>
@@ -59,7 +59,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
           </div>
           <div className="mx-auto w-full max-w-[440px] lg:max-w-none">
             <AuthPanel onAuthenticated={onAuthenticated} />
-            <p className="mt-5 text-center text-sm leading-6 text-muted-foreground lg:hidden">
+            <p className="mt-5 px-4 text-center text-sm leading-6 text-muted-foreground lg:hidden">
               {t('Converse, compartilhe e participe de comunidades em um só lugar.')}
             </p>
           </div>
@@ -72,7 +72,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{t(item.description)}</p>
           </article>)}
         </section>
-        <footer className="mt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground lg:text-left">{t('Uorqui · Construído em código aberto · Funcionalidades sociais em desenvolvimento')}</footer>
+        <footer className="mt-4 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground sm:px-0 lg:text-left">{t('Uorqui · Construído em código aberto · Funcionalidades sociais em desenvolvimento')}</footer>
       </div>
     </main>
   );
