@@ -13,7 +13,9 @@ const signalBody={type:'object',additionalProperties:false,required:['sessionId'
   properties:{sessionId:uuid,recipientSessionId:uuid,kind:{type:'string',enum:['offer','answer','candidate']},payload:{type:'object'}}};
 const noCache='private, no-store';
 const allowedOrigin=(r:FastifyRequest)=>r.headers.origin===(process.env.WEB_ORIGIN??'http://localhost:5173');
-const activePresence="s.last_seen_at > now()-interval '45 seconds'";
+// Allow a short mobile/tab suspension without expiring an otherwise active call.
+// Explicit leave still removes the session immediately.
+const activePresence="s.last_seen_at > now()-interval '180 seconds'";
 const voiceAccess='SELECT 1 FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
   "WHERE c.id=$1 AND c.community_id=$2 AND c.kind='voice' LIMIT 1";
 
@@ -114,7 +116,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,54321))',[channelId]);
         const ok=await client.query(voiceAccess,[channelId,id,me]);
         if(!ok.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'MEMBERS_ONLY'});}
-        await client.query("DELETE FROM community_voice_sessions WHERE last_seen_at < now()-interval '45 seconds'");
+        await client.query("DELETE FROM community_voice_sessions WHERE last_seen_at < now()-interval '180 seconds'");
         await client.query("DELETE FROM community_voice_signals WHERE created_at < now()-interval '3 minutes'");
         const seats=await client.query('SELECT user_id FROM community_voice_sessions WHERE channel_id=$1',[channelId]);
         if(seats.rows.length>=6&&!seats.rows.some(row=>row.user_id===me)){
@@ -140,7 +142,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const {sessionId,after='0'}=request.query as {sessionId:string;after?:string};
       if(!await authorized(id,channelId,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
       const found=await getPool().query(
-        "SELECT 1 FROM community_voice_sessions WHERE id=$1 AND channel_id=$2 AND user_id=$3 AND last_seen_at>now()-interval '45 seconds'",
+        "SELECT 1 FROM community_voice_sessions WHERE id=$1 AND channel_id=$2 AND user_id=$3 AND last_seen_at>now()-interval '180 seconds'",
         [sessionId,channelId,me]);
       if(!found.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       const cursor=Number(after);
@@ -153,7 +155,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         "JOIN community_members source_member ON source_member.community_id=channel.community_id AND source_member.user_id=source.user_id "+
         "JOIN community_members target_member ON target_member.community_id=channel.community_id AND target_member.user_id=target.user_id "+
         "WHERE sig.channel_id=$1 AND sig.recipient_session_id=$2 AND sig.id>$3 AND sig.created_at>now()-interval '3 minutes' "+
-        "AND source.last_seen_at>now()-interval '45 seconds' "+
+        "AND source.last_seen_at>now()-interval '180 seconds' "+
         "AND NOT EXISTS (SELECT 1 FROM user_blocks block WHERE (block.blocker_id=source.user_id AND block.blocked_id=target.user_id) "+
         "OR (block.blocker_id=target.user_id AND block.blocked_id=source.user_id)) ORDER BY sig.id ASC LIMIT 150",
         [channelId,sessionId,cursor],
@@ -174,7 +176,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const result=await getPool().query(
         'UPDATE community_voice_sessions s SET last_seen_at=now(),muted=$4,deafened=$6 '+
         'FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
-        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind='voice' AND s.last_seen_at>now()-interval '45 seconds' RETURNING s.id",
+        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind='voice' AND s.last_seen_at>now()-interval '180 seconds' RETURNING s.id",
         [sessionId,channelId,me,muted,id,deafened]);
       if(!result.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
@@ -209,7 +211,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'JOIN community_voice_sessions t ON t.channel_id=s.channel_id AND t.id=$3 '+
         'JOIN community_members theirs ON theirs.community_id=c.community_id AND theirs.user_id=t.user_id '+
         'WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$6 AND c.community_id=$7 AND c.kind=\'voice\' '+
-        "AND s.last_seen_at>now()-interval '45 seconds' AND t.last_seen_at>now()-interval '45 seconds' "+
+        "AND s.last_seen_at>now()-interval '180 seconds' AND t.last_seen_at>now()-interval '180 seconds' "+
         'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=t.user_id) '+
         'OR (b.blocker_id=t.user_id AND b.blocked_id=s.user_id)) RETURNING id',
         [sessionId,channelId,recipientSessionId,kind,payloadText,me,id]);
