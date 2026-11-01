@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Uorqui — Feed, mensagens e comunidades",
+  "short_name": "Uorqui",
+  "description": "Uma rede social aberta para conversar, compartilhar e participar de comunidades.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
