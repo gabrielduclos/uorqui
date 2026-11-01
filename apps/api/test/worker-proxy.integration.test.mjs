@@ -226,6 +226,30 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     const staleImage = await fetch(browserOrigin + imagePath, { headers: { cookie } });
     assert.equal(staleImage.status, 404, 'removed photo must be invalidated');
 
+    // Community avatars use the Worker media route, not the SPA static fallback.
+    const communityCreated=await request('/api/v1/communities',{
+      method:'POST',body:{name:'Worker photo test',slug:'worker-photo-test',visibility:'public'}
+    });
+    assert.equal(communityCreated.response.status,201,JSON.stringify(communityCreated.body));
+    const communityId=communityCreated.body.id;
+    // Larger than the old 3 MB cap while staying within the new 10 MB cap.
+    const largePng=Buffer.concat([png,Buffer.alloc(3*1024*1024)]);
+    const communityImage=await request('/api/media/community/'+communityId,{
+      method:'POST',rawBody:largePng,contentType:'image/png'
+    });
+    assert.equal(communityImage.response.status,200,JSON.stringify(communityImage.body));
+    assert.match(communityImage.body.url,/^\\/media\\/community\\/[0-9a-f-]{36}\\/[0-9a-f-]{36}\\.png$/);
+    const communityPhoto=await fetch(browserOrigin+communityImage.body.url,{headers:{cookie}});
+    assert.equal(communityPhoto.status,200,'community image must reach Worker and R2');
+    assert.equal(communityPhoto.headers.get('content-type'),'image/png');
+    assert.deepEqual(Buffer.from(await communityPhoto.arrayBuffer()),largePng);
+    const anonymousCommunityPhoto=await fetch(browserOrigin+communityImage.body.url);
+    assert.equal(anonymousCommunityPhoto.status,404,'community photos must respect authorization');
+    const oversize=await request('/api/media/community/'+communityId,{
+      method:'POST',rawBody:Buffer.concat([png,Buffer.alloc(10*1024*1024)]),contentType:'image/png'
+    });
+    assert.equal(oversize.response.status,413,'larger than 10 MB cannot be uploaded');
+
     const logout = await request('/api/auth/sign-out', { method: 'POST', body: {} });
     assert.equal(logout.response.status, 200, JSON.stringify(logout.body));
 
