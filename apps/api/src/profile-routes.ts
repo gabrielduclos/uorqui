@@ -131,132 +131,7 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
   app.get('/api/v1/profiles/:handle/follows/:kind', {
     schema:{
       params:{type:'object',additionalProperties:false,required:['handle','kind'],properties:{
-        handle:{type:'string',pattern:'^@?[a-zA-Z][a-zA-Z0-9_]{2,31}
-    schema: { params: {
-      type: 'object', additionalProperties: false,
-      required: ['userId', 'kind', 'asset'],
-      properties: {
-        userId: { type: 'string', format: 'uuid' },
-        kind: { type: 'string', enum: ['avatar', 'cover'] },
-        asset: { type: 'string', pattern: '^' + UUID_RE + '\\.(webp|jpg|png)$' },
-      },
-    } },
-  }, async (request, reply) => {
-    const { userId, kind, asset } = request.params as { userId: string; kind: 'avatar' | 'cover'; asset: string };
-    const expected = '/media/profile/' + userId + '/' + kind + '/' + asset;
-    try {
-      const [record] = await createDatabase().select({
-        isPublic: profiles.isPublic, avatarUrl: profiles.avatarUrl, coverUrl: profiles.coverUrl,
-      }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
-      if (!record || (kind === 'avatar' ? record.avatarUrl : record.coverUrl) !== expected) {
-        return reply.status(404).send({ allowed: false });
-      }
-      const requester = await readSession(request);
-      // Even images of publicly visible profiles are restricted after blocking.
-      if (requester && requester.user.id !== userId) {
-        const blocked = await getPool().query(
-          'SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',
-          [requester.user.id,userId]);
-        if (blocked.rowCount) return reply.status(404).send({ allowed: false });
-      }
-      if (!record.isPublic) {
-        const session = requester;
-        if (!session) return reply.status(404).send({ allowed: false });
-        if (session.user.id !== userId) {
-          const friendship = await getPool().query(
-            "SELECT 1 FROM user_friendships WHERE user_a_id=LEAST($1::uuid,$2::uuid) " +
-            "AND user_b_id=GREATEST($1::uuid,$2::uuid) AND status='accepted'",
-            [session.user.id,userId],
-          );
-          if (!friendship.rowCount) return reply.status(404).send({ allowed: false });
-        }
-      }
-      return reply.header('Cache-Control', 'no-store').send({ allowed: true });
-    } catch (error) {
-      request.log.error({ err: error }, 'Media access validation failed');
-      return reply.status(503).send({ allowed: false });
-    }
-  });
-
-  app.patch('/api/v1/me/profile', {
-    schema: {
-      body: {
-        type: 'object', additionalProperties: false, minProperties: 1,
-        properties: {
-          handle: { type: 'string', pattern: '^[a-z][a-z0-9_]{2,31}$', maxLength: 32 },
-          displayName: { type: 'string', minLength: 2, maxLength: 120 },
-          bio: { anyOf: [{ type: 'string', maxLength: 500 }, { type: 'null' }] },
-          avatarUrl: { anyOf: [{ type: 'string', maxLength: 2000 }, { type: 'null' }] },
-          coverUrl: { anyOf: [{ type: 'string', maxLength: 2000 }, { type: 'null' }] },
-          isPublic: { type: 'boolean' },
-        },
-      },
-    },
-  }, async (request, reply) => {
-    let session: Awaited<ReturnType<SessionReader>>;
-    try { session = await readSession(request); }
-    catch (error) {
-      request.log.error({ err: error }, 'Profile session validation failed');
-      return reply.status(503).send({ error: 'Service unavailable' });
-    }
-    if (!session) return reply.status(401).send({ error: 'Unauthorized' });
-
-    const body = request.body as {
-      handle?: string; displayName?: string; bio?: string | null;
-      avatarUrl?: string | null; coverUrl?: string | null; isPublic?: boolean;
-    };
-    if (body.handle && forbiddenHandles.has(body.handle)) return reply.status(400).send({ error: 'Handle unavailable' });
-    const displayName = body.displayName?.trim();
-    if (displayName !== undefined && displayName.length < 2) return reply.status(400).send({ error: 'Invalid display name' });
-    const bio = body.bio === undefined ? undefined : body.bio?.trim() || null;
-    let avatarUrl: string | null | undefined;
-    let coverUrl: string | null | undefined;
-    try {
-      avatarUrl = sanitizedImageUrl(body.avatarUrl, session.user.id, 'avatar');
-      coverUrl = sanitizedImageUrl(body.coverUrl, session.user.id, 'cover');
-    } catch {
-      return reply.status(400).send({ error: 'Image URL must be a valid HTTPS address' });
-    }
-
-    try {
-      const record = await createDatabase().transaction(async (tx) => {
-        const [owner] = await tx.select({ id: users.id })
-          .from(users).where(eq(users.id, session.user.id)).limit(1);
-        if (!owner) return null;
-        if (body.handle !== undefined) {
-          await tx.update(users).set({ handle: body.handle }).where(eq(users.id, session.user.id));
-        }
-        const changes = {
-          ...(displayName !== undefined ? { displayName } : {}),
-          ...(body.bio !== undefined ? { bio } : {}),
-          ...(body.avatarUrl !== undefined ? { avatarUrl } : {}),
-          ...(body.coverUrl !== undefined ? { coverUrl } : {}),
-          ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
-          updatedAt: new Date(),
-        };
-        await tx.update(profiles).set(changes).where(eq(profiles.userId, session.user.id));
-        const [updated] = await tx.select(profileFields)
-          .from(users).innerJoin(profiles, eq(users.id, profiles.userId))
-          .where(eq(users.id, session.user.id)).limit(1);
-        return updated ?? null;
-      });
-      if (!record) return reply.status(404).send({ error: 'Profile not found' });
-      return reply.header('Cache-Control', 'no-store').send({
-        profile: {
-          handle: record.handle, displayName: record.displayName, bio: record.bio,
-          avatarUrl: record.avatarUrl, coverUrl: record.coverUrl, isPublic: record.isPublic,
-        },
-      });
-    } catch (error) {
-      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
-        return reply.status(409).send({ error: 'Handle unavailable' });
-      }
-      request.log.error({ err: error }, 'Update profile failed');
-      return reply.status(503).send({ error: 'Service unavailable' });
-    }
-  });
-}
-},
+        handle:{type:'string',pattern:'^@?[a-zA-Z][a-zA-Z0-9_]{2,31}$'},
         kind:{type:'string',enum:['followers','following']}
       }},
       querystring:{type:'object',additionalProperties:false,properties:{
@@ -281,7 +156,6 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
         );
         if(blocked.rowCount)return reply.code(404).send({error:'Profile unavailable'});
       }
-      // Private-account relationship identities must not be enumerable even by friends.
       if(!target.is_public)return reply.code(403).send({error:'PRIVATE_FOLLOW_LIST'});
       const role=kind==='followers'?'follower_id':'followed_id';
       const match=kind==='followers'?'followed_id':'follower_id';
