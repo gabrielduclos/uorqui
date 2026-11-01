@@ -111,6 +111,52 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }
   });
 
+  /** Unread text messages are user-scoped, persistent and limited to joined communities. */
+  app.get('/api/v1/communities/unread',async(request,reply)=>{
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const result=await getPool().query(
+        'SELECT ch.community_id AS "communityId",ch.id AS "channelId",'+
+        'COUNT(msg.id)::int AS "unreadCount" '+
+        'FROM community_channels ch '+
+        'JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$1 '+
+        'LEFT JOIN community_channel_reads rd ON rd.channel_id=ch.id AND rd.user_id=$1 '+
+        'LEFT JOIN community_messages msg ON msg.channel_id=ch.id AND msg.author_id<>$1 '+
+        'AND msg.deleted_at IS NULL AND msg.created_at>GREATEST(m.joined_at,COALESCE(rd.last_read_at,m.joined_at)) '+
+        "WHERE ch.kind='text' GROUP BY ch.community_id,ch.id ORDER BY ch.community_id,ch.id",[me]);
+      const channels:Record<string,number>={},communities:Record<string,number>={};
+      let total=0;
+      for(const item of result.rows){
+        const count=Number(item.unreadCount)||0;
+        if(count>0){channels[item.channelId]=count;communities[item.communityId]=(communities[item.communityId]??0)+count;total+=count;}
+      }
+      return reply.header('Cache-Control',noCache).send({total,channels,communities});
+    }catch(error){request.log.error({err:error},'Community unread counts');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  /** A channel is only marked read up to a message the member actually received. */
+  app.post('/api/v1/communities/:id/channels/:channelId/read',{
+    schema:{params:channelParams,body:{type:'object',required:['lastMessageId'],additionalProperties:false,properties:{lastMessageId:uuid}}}
+  },async(request,reply)=>{
+    if(!originValid(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,channelId}=request.params as {id:string;channelId:string};
+      const {lastMessageId}=request.body as {lastMessageId:string};
+      if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const result=await getPool().query(
+        'INSERT INTO community_channel_reads (channel_id,user_id,last_read_at) '+
+        'SELECT ch.id,$3,m.created_at FROM community_channels ch '+
+        "JOIN community_messages m ON m.channel_id=ch.id AND m.id=$4 "+
+        "WHERE ch.id=$1 AND ch.community_id=$2 AND ch.kind='text' "+
+        'ON CONFLICT (channel_id,user_id) DO UPDATE SET '+
+        'last_read_at=GREATEST(community_channel_reads.last_read_at,EXCLUDED.last_read_at),updated_at=now() '+
+        'RETURNING last_read_at AS "lastReadAt"',[channelId,id,me,lastMessageId]);
+      if(!result.rowCount)return reply.code(404).send({error:'Message unavailable'});
+      return reply.header('Cache-Control',noCache).send({lastReadAt:result.rows[0].lastReadAt});
+    }catch(error){request.log.error({err:error},'Mark community channel read');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   app.get('/api/v1/communities/:id',{schema:{params:groupParams}},async(request,reply)=>{
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
