@@ -68,6 +68,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [messages,setMessages]=useState<Message[]>([]);
   const [pendingMessages,setPendingMessages]=useState<PendingMessage[]>([]);
   const [messagesLoading,setMessagesLoading]=useState(false);
+  const [messagesLoadFailed,setMessagesLoadFailed]=useState(false);
   const [detailLoading,setDetailLoading]=useState(false);
   const [draft,setDraft]=useState('');
   const [mediaPicker,setMediaPicker]=useState<'emoji'|'gif'|null>(null);
@@ -140,20 +141,40 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const closeChannel=()=>{setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
-    if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){setMessages([]);return;}
-    let active=true;
+    if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){
+      setMessages([]);setMessagesLoadFailed(false);return;
+    }
+    let active=true,loadedOnce=false,failures=0;
+    let timer:ReturnType<typeof setTimeout>|undefined;
     previousLastMessage.current=null;
-    setReactionPickerId(null);setMessages([]);setMessagesLoading(true);
+    setReactionPickerId(null);setMessages([]);setMessagesLoading(true);setMessagesLoadFailed(false);
     const poll=async()=>{
+      if(!active)return;
       try{
         const result=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
-        if(active){setMessages(result.messages);setPendingMessages(old=>old.filter(p=>p.channelId!==channelId||!result.messages.some(m=>m.clientId===p.clientId)));setMessagesLoading(false);}
-      }catch{if(active){setMessagesLoading(false);setError(pt?'Não foi possível atualizar as mensagens.':'Could not refresh messages.');}}
+        if(active){
+          loadedOnce=true;failures=0;
+          setMessages(result.messages);
+          setPendingMessages(old=>old.filter(p=>p.channelId!==channelId||!result.messages.some(m=>m.clientId===p.clientId)));
+          setMessagesLoading(false);setMessagesLoadFailed(false);
+        }
+      }catch{
+        if(active){
+          failures+=1;setMessagesLoading(false);
+          // Do not overwrite previously loaded messages or spam global alerts
+          // during automatic retries; show the inline error only on first load.
+          if(!loadedOnce)setMessagesLoadFailed(true);
+        }
+      }finally{
+        if(active)timer=setTimeout(()=>{
+          if(document.visibilityState==='visible')void poll();
+          else timer=setTimeout(()=>{if(active)void poll();},15000);
+        },failures?Math.min(30000,5000*Math.pow(2,Math.min(failures,3))):5000);
+      }
     };
     void poll();
-    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void poll();},5000);
-    return ()=>{active=false;window.clearInterval(timer);};
-  },[selectedId,channelId,activeChannel?.kind,community?.myRole,pt]);
+    return ()=>{active=false;if(timer)clearTimeout(timer);};
+  },[selectedId,channelId,activeChannel?.kind,community?.myRole]);
   useEffect(()=>{
     const latest=messages.at(-1)?.id??null;
     if(latest&&latest!==previousLastMessage.current){
@@ -516,6 +537,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
               <p className="mt-2 text-sm text-muted-foreground">{pt?'Mensagens salvas na comunidade, visíveis aos seus membros.':'Messages are saved to the community and visible to its members.'}</p>
             </div>}
             {messagesLoading&&<SkeletonRows rows={4} className="mb-5"/>}
+            {messagesLoadFailed&&!messagesLoading&&<div role="status" className="mb-4 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+              {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
+                'Messages are temporarily unavailable. The channel will reconnect automatically.'}
+            </div>}
             <div className="space-y-4">{renderedMessages.map(message=><div key={message.clientId} className="flex min-w-0 gap-3">
               <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>
               <div className="min-w-0 flex-1">
