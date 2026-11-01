@@ -264,8 +264,8 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Reply className="size-4"/>{pt ? 'Responder' : 'Reply'}</button>
         {!!message.body && <button role="menuitem" type="button" onClick={() => void copyText()}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Copy className="size-4"/>{pt ? 'Copiar' : 'Copy'}</button>}
-        {!asset && <button role="menuitem" type="button" onClick={() => { setOpen(false); onForward(message); }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Forward className="size-4"/>{pt ? 'Encaminhar' : 'Forward'}</button>}
+        <button role="menuitem" type="button" onClick={() => { setOpen(false); onForward(message); }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Forward className="size-4"/>{pt ? 'Compartilhar / Encaminhar' : 'Share / Forward'}</button>
         {mine && !asset && <button role="menuitem" type="button" onClick={() => { setOpen(false); onEdit(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Pencil className="size-4"/>{pt ? 'Editar' : 'Edit'}</button>}
         {mine && !message.readAt && <button role="menuitem" type="button" onClick={() => { setOpen(false); onCancel(message); }}
