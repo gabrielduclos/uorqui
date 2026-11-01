@@ -30,6 +30,7 @@ const friendshipSql=`EXISTS (SELECT 1 FROM user_friendships f
   AND f.status='accepted')`;
 const fields=`
  p.id,p.body,p.media_count AS "mediaCount",p.created_at AS "createdAt",p.published_at AS "publishedAt",
+ to_char(p.published_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorTime",
  u.handle AS "authorHandle",author_profile.display_name AS "authorName",
  CASE WHEN NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id=p.author_id AND b.blocked_id=$1::uuid
    OR b.blocked_id=p.author_id AND b.blocker_id=$1::uuid) THEN author_profile.avatar_url ELSE NULL END AS "authorAvatar",
@@ -86,7 +87,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
         'ORDER BY p.published_at DESC,p.id DESC LIMIT 13',[me,keyTime,keyId]);
       const rows=result.rows.slice(0,12),last=rows.at(-1);
       return reply.header('Cache-Control',cache).send({
-        posts:rows,nextCursor:result.rows.length>12&&last?new Date(last.publishedAt).toISOString()+'|'+last.id:null
+        posts:rows,nextCursor:result.rows.length>12&&last?last.cursorTime+'|'+last.id:null
       });
     }catch(err){return failed(req,reply,err,'Feed list');}
   });
