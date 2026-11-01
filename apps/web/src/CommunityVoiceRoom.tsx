@@ -419,36 +419,31 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const count=phase==='joined'?peers.length:0;
   const activeSpeakers=phase==='joined'?visiblePeers.filter(peer=>peer.speaking):[];
   if(mode==='floating')return <section role="region" aria-label={pt?'Chamada de voz em andamento':'Ongoing voice call'}
-    className="w-full overflow-hidden rounded-2xl border border-primary/30 bg-card shadow-2xl">
-    <div className="flex min-w-0 items-center gap-3 p-3">
-      <div className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
-        <Headphones className="size-5"/><span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card" aria-hidden="true"/>
-      </div>
-      <button type="button" className="min-w-0 flex-1 text-left" onClick={onRestore}
-        aria-label={pt?'Voltar para a sala de voz':'Return to voice room'}>
-        <span className="block truncate text-sm font-semibold">{channelName}</span>
-        <span className="block truncate text-xs text-muted-foreground">{communityName} · {count} {pt?'na sala':'in room'}</span>
+    className="inline-flex max-w-full overflow-hidden rounded-xl border border-primary/30 bg-card shadow-2xl">
+    <div className="flex min-w-0 items-center gap-1 p-1.5">
+      <button type="button" className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-accent"
+        onClick={onRestore} aria-label={pt?'Voltar para a sala de voz':'Return to voice room'}>
+        <span className="relative grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+          <Headphones className="size-4"/>
+          <span className={'absolute -right-0.5 -top-0.5 size-2 rounded-full bg-emerald-500 ring-2 ring-card '+(activeSpeakers.length?'animate-pulse':'')} aria-hidden="true"/>
+        </span>
+        <span className="min-w-0 max-w-24 sm:max-w-32">
+          <span className="block truncate text-xs font-semibold">{channelName}</span>
+          <span className="block truncate text-[10px] text-muted-foreground">{count} {pt?'na sala':'in room'}</span>
+        </span>
+      </button>
+      <button type="button" onClick={onRestore}
+        className="grid size-9 shrink-0 place-items-center rounded-lg text-primary hover:bg-accent"
+        aria-label={pt?'Expandir chamada':'Expand call'} title={pt?'Expandir':'Expand'}>
+        <Maximize2 className="size-4"/>
       </button>
       <button type="button" onClick={toggleMute} disabled={deafened}
-        className={'grid size-10 shrink-0 place-items-center rounded-xl border disabled:opacity-50 '+(muted?'border-destructive/40 text-destructive':'border-border')}
+        className={'grid size-9 shrink-0 place-items-center rounded-lg border disabled:opacity-50 '+(muted?'border-destructive/40 text-destructive':'border-border')}
         aria-label={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}>
         {muted?<MicOff className="size-4"/>:<Mic className="size-4"/>}
       </button>
-      <button type="button" onClick={leaveRoom} className="grid size-10 shrink-0 place-items-center rounded-xl bg-destructive text-destructive-foreground"
+      <button type="button" onClick={leaveRoom} className="grid size-9 shrink-0 place-items-center rounded-lg bg-destructive text-destructive-foreground"
         aria-label={pt?'Desconectar da sala':'Disconnect from room'}><PhoneOff className="size-4"/></button>
-    </div>
-    <div className="flex items-center justify-between gap-2 border-t border-border/70 bg-background/50 px-3 py-2 text-xs">
-      <span className="min-w-0 flex-1 truncate text-muted-foreground" aria-live="off">
-        {activeSpeakers.length?<span className="inline-flex items-center gap-2 text-emerald-500">
-          <span className="size-2 shrink-0 animate-pulse rounded-full bg-emerald-500"/>
-          {activeSpeakers.slice(0,2).map(p=>p.displayName).join(', ')}
-          {activeSpeakers.length>2?' +'+(activeSpeakers.length-2):''}
-        </span>:(pt?'Ninguém falando agora':'Nobody speaking right now')}
-      </span>
-      <button type="button" onClick={onRestore} className="inline-flex shrink-0 items-center gap-1 font-medium text-primary"
-        aria-label={pt?'Expandir chamada':'Expand call'}>
-        <Maximize2 className="size-3.5"/>{pt?'Expandir':'Expand'}
-      </button>
     </div>
   </section>;
   const remoteReady=peers.filter(p=>!p.isSelf&&connections[p.sessionId]==='connected').length;
