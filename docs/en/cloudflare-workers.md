@@ -6,7 +6,7 @@
 
 The Uorqui React/Vite/Tailwind single-page application is built to **static assets** and served by **Cloudflare Workers Static Assets**, not Cloudflare Pages. Its separate Worker handles same-origin `/api/*` and `/health*` requests and forwards them to an independent **Node.js + Fastify** API. The API will connect to **Neon PostgreSQL using Drizzle**.
 
-The Worker **does not** run Fastify or hold `DATABASE_URL`/`AUTH_SECRET`. The Fastify service's hosting provider has not been selected. The new Cloudflare Worker `main` already exists and is connected to the `main` branch of `gabrielduclos/uorqui`; **Cloudflare Builds** now owns the frontend build and deployment. The existing legacy `uorqui.app` domain and Worker remain untouched.
+The Worker **does not** run Fastify or hold `DATABASE_URL`/`AUTH_SECRET`. The Fastify API is deployed separately on Render as `uorqui-social-api`. The new Cloudflare Worker `main` already exists and is connected to the `main` branch of `gabrielduclos/uorqui`; **Cloudflare Builds** now owns the frontend build and deployment. The `uorqui.app` custom-domain cutover is a separate operation: verify its actual Worker routing in Cloudflare before declaring it complete.
 
 ## Files
 
@@ -50,6 +50,6 @@ Cloudflare installs the web workspace dependencies, builds the React SPA, then u
 
 **Important:** the Cloudflare Worker named `main` is not the Git branch `main`. Do not use the legacy `uorqui-chat` Worker or point this project at `uorqui.app` without separately authorizing a migration.
 
-The Node.js API has a [separate deployment guide](api-hosting.md), including an optional root-level Render Blueprint. The product is a pre-MVP. Until a separate secure Fastify origin is set as **runtime** `API_ORIGIN`, `/api/*` returns 503. Later, configure database/auth credentials only on the Fastify API host. To retain first-party cookies, the backend `AUTH_BASE_URL` and `WEB_ORIGIN` must match the public origin of the new frontend. Public registration remains disabled pending email verification and abuse controls.
+The Node.js API is deployed on Render; see [API hosting](api-hosting.md). **Technical beta `0.1.0-beta.1`** uses runtime `API_ORIGIN=https://uorqui-social-api.onrender.com`; without a valid API origin, `/api/*` returns 503. Keep database/auth credentials only on Render. Configure `AUTH_BASE_URL` and `WEB_ORIGIN` for the current canonical frontend origin and use explicit `WEB_EXTRA_ORIGINS` for a staged domain transition. Public signup is enabled behind email and Turnstile controls, but the successful real-email flow still needs device-level validation.
 
 Track builds at **Workers & Pages → main → Builds**. A successful deployment is not proof that social features are finished.

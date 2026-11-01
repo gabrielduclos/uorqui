@@ -4,7 +4,7 @@
 
 Thank you for considering a contribution to Uorqui.
 
-> **Current status:** pre-MVP. A basic web/API development scaffold now exists; the actual social platform, database and deployed service do not. See [Getting started](docs/en/getting-started.md).
+> **Current status:** `0.1.0-beta.1`, an initial technical beta. The PWA, API and database are deployed for controlled testing; real-device and email-delivery checks are still pending. See [Getting started](docs/en/getting-started.md) and [release notes](CHANGELOG.md).
 
 ## Before you start
 
@@ -26,7 +26,7 @@ Thank you for considering a contribution to Uorqui.
 2. Make a focused change and explain **why** it is needed.
 3. Link the relevant issue, if one exists; describe affected product flows.
 4. Update both language versions of related documentation.
-5. When code and test commands become available, run the documented checks and include relevant results.
+5. Run `npm run typecheck`, `npm run build` and the relevant GitHub Actions integration checks; include actual results.
 6. Submit a pull request for review. Maintainers may ask for adjustments before merging.
 
 Do not commit secrets, authentication tokens, production data, third-party proprietary code or media without appropriate licenses.

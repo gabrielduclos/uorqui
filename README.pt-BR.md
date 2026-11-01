@@ -1,76 +1,80 @@
 # Uorqui
 
-**Uma plataforma social open source para conversar, descobrir conteúdos e participar de comunidades.**
+**Plataforma social open source com mensageiro, feed híbrido e comunidades.**
 
-[English](README.md) · [Português (Brasil)](README.pt-BR.md)
+[Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Status: desenvolvimento pré-MVP.** A base React/Fastify já contém telas e endpoints de autenticação. A rede social ainda não foi lançada, e as duas migrações iniciais do banco já foram aplicadas à Neon.
+> **Versão: `0.1.0-beta.1` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, dispositivos reais e a migração do domínio.
 
-## O que é o Uorqui?
+**Acesse a versão atual:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
-O Uorqui reúne três experiências integradas:
+## O produto
 
-1. **Conversas individuais:** mensagens privadas de uma pessoa para outra. Grupos de mensagens tradicionais ficam intencionalmente fora do escopo.
-2. **Feed híbrido:** rolagem vertical contínua com textos, fotos, carrosséis e vídeos. Há um modo imersivo **Vídeos**, dedicado exclusivamente a vídeos, acessível diretamente ou ao abrir um vídeo do feed.
-3. **Comunidades:** espaços públicos ou privados com canais de texto, salas de voz ao vivo, cargos, permissões e moderação.
+O Uorqui reúne três experiências:
 
-O objetivo é conectar **descoberta de conteúdo → participação em comunidades → relacionamentos individuais** sem copiar integralmente nenhuma rede existente.
+- **Conversas individuais:** mensagens privadas 1:1, respostas, reações, anexos, estados de mensagens, push e atualização em tempo real via SSE. Não há grupos tradicionais no mensageiro.
+- **Feed híbrido:** publicações contínuas com texto, fotos e vídeos, com modo imersivo específico para vídeos.
+- **Comunidades:** participação pública/privada, convites, canais de texto, moderação e salas de voz via WebRTC, com chamada minimizável durante a navegação.
 
-A validação começa com comunidades gamers, especialmente de MMORPG, mas a marca e o produto são **de uso geral**.
+O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 
-## Tecnologias principais definidas
+## Situação do beta
 
-**React + TypeScript + Tailwind CSS em Cloudflare Workers Static Assets** (web/PWA), **Node.js + Fastify** (API hospedada separadamente) e **PostgreSQL na Neon + Drizzle ORM** (banco, consultas e migrações). O **banco Neon e as duas migrações Drizzle, com dez tabelas da aplicação, já foram aplicados e verificados**. Endpoints de autenticação e perfil existem, mas a conexão do aplicativo com a Neon ainda precisa de teste real. Tempo real, voz, mídias e hospedagem continuam em avaliação.
+| Área | Estado técnico atual |
+| --- | --- |
+| Cadastro e perfis | Better Auth, verificação/recuperação por e-mail, privacidade e bloqueio implementados; falta validar cadastro real e entrega de e-mails |
+| Mensageiro | Conversas 1:1 persistidas, anexos, reações, estados de leitura/entrega, SSE e Web Push implementados |
+| Feed | Publicações híbridas, mídias, API e banco de dados integrados |
+| Comunidades | Membros, convites, cargos, canais de texto, presença e voz WebRTC |
+| Infraestrutura | PWA React no Worker `main` da Cloudflare, API Fastify no Render e PostgreSQL na Neon |
+| Lançamento amplo | **Ainda pendente:** testes reais no iOS/Android, push, TURN/redes diferentes, monitoramento e domínio |
+
+Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes aprovados não substituem validação do PWA instalado em celulares.**
+
+**Mudança de domínio:** `uorqui.app` está em processo de migração separado. Até a virada ser confirmada, use o endereço de testes acima. O mensageiro empresarial antigo continua em infraestrutura separada; **contas e mensagens anteriores não são importadas automaticamente**.
+
+## Arquitetura
+
+- **Interface:** React, TypeScript, Tailwind CSS, Cloudflare Workers Static Assets, PWA e service worker.
+- **API:** Node.js 22, Fastify, Better Auth e eventos SSE.
+- **Banco:** PostgreSQL na Neon, Drizzle ORM e migrações versionadas.
+- **Mídias:** Cloudflare R2 com autorização.
+- **Voz:** WebRTC P2P; TURN é opcional e requer testes entre redes.
+- **Deploy:** Cloudflare Builds e Render, validados pelo GitHub Actions.
+
+A identificação do beta está nos manifestos npm dos workspaces. Consulte as [notas da versão](CHANGELOG.pt-BR.md) para limitações e pendências.
 
 ## Documentação
 
-**UI Kit / Design System:** [Português (Brasil)](docs/pt-BR/ui-kit.md) · [English](docs/en/ui-kit.md) — somente documentação; sem página no aplicativo.
-
-
-
 | Tema | Português | English |
 | --- | --- | --- |
-| Rodar localmente | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | [Getting started](docs/en/getting-started.md) |
-| Hospedagem Cloudflare Workers | [Guia Workers](docs/pt-BR/cloudflare-workers.md) | [Workers guide](docs/en/cloudflare-workers.md) |
-| Hospedagem API Node.js | [Guia da API](docs/pt-BR/hospedagem-api.md) | [API hosting](docs/en/api-hosting.md) |
-| Visão e princípios | [Visão](docs/pt-BR/visao.md) | [Vision](docs/en/vision.md) |
-| Requisitos do produto | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
-| Arquitetura proposta | [Arquitetura](docs/pt-BR/arquitetura.md) | [Architecture](docs/en/architecture.md) |
-| Etapas do projeto | [Roadmap](docs/pt-BR/roadmap.md) | [Roadmap](docs/en/roadmap.md) |
-| Como contribuir | [Contribuindo](CONTRIBUTING.pt-BR.md) | [Contributing](CONTRIBUTING.md) |
+| Versão beta | [Notas da versão](CHANGELOG.pt-BR.md) | [Changelog](CHANGELOG.md) |
+| Instalação local | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | [Getting started](docs/en/getting-started.md) |
+| API e deploy | [Hospedagem da API](docs/pt-BR/hospedagem-api.md) | [API hosting](docs/en/api-hosting.md) |
+| Worker Cloudflare | [Workers](docs/pt-BR/cloudflare-workers.md) | [Workers](docs/en/cloudflare-workers.md) |
+| Arquitetura | [Arquitetura](docs/pt-BR/arquitetura.md) | [Architecture](docs/en/architecture.md) |
+| Requisitos | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
+| Planejamento | [Roadmap](docs/pt-BR/roadmap.md) | [Roadmap](docs/en/roadmap.md) |
+| Identidade visual | [UI Kit](docs/pt-BR/ui-kit.md) | [UI Kit](docs/en/ui-kit.md) |
+| Migração de domínio | [Plano e reversão](docs/pt-BR/migracao-dominio-uorqui-app.md) | [Migration runbook (PT-BR)](docs/pt-BR/migracao-dominio-uorqui-app.md) |
+| Contribuição | [Contribuindo](CONTRIBUTING.pt-BR.md) | [Contributing](CONTRIBUTING.md) |
 | Segurança | [Segurança](SECURITY.pt-BR.md) | [Security](SECURITY.md) |
-| Convivência | [Código de conduta](CODE_OF_CONDUCT.pt-BR.md) | [Code of conduct](CODE_OF_CONDUCT.md) |
-
-## Situação atual
-
-- **Concluído:** repositório, licença MIT e documentação inicial de produto e tecnologia.
-- **Validado no CI com PostgreSQL temporário:** Worker real, proxy, API Fastify, Better Auth, cookies, endpoints protegidos, onboarding e logout. Ainda não foi testado ponta a ponta na Neon main; requer configurar segredos privados e testar a conexão real com a Neon.
-- **Pendentes:** verificação de e-mail, recuperação de senha, mensagens, feed, vídeos, voz, deploy em produção e validação com usuários.
-- **Próximo:** vincular uma hospedagem Node.js à API (Blueprint Render opcional versionado em `render.yaml`), configurar segredos privados, validar login com a Neon e implementar confirmação de e-mail antes de abrir inscrições.
-
-A documentação técnica distingue **tecnologias principais aprovadas** de **integrações ainda propostas**, sem declarar funcionalidades implementadas. O planejamento comercial, as hipóteses de preço e as projeções financeiras ficam separados deste repositório público.
 
 ## Desenvolvimento
 
-Os workspaces npm iniciais contêm uma **interface React + Tailwind**, um **endpoint de saúde Fastify** e um **schema Drizzle já aplicado à Neon**. Com Node.js 22+:
+É necessário Node.js 22+ e PostgreSQL para testar os recursos autenticados:
 
 ```sh
 npm install
 npm run dev
+npm run typecheck
+npm run build
 ```
 
-Interface: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. Não é necessário banco para visualizar esta estrutura. Veja [Primeiros passos](docs/pt-BR/primeiros-passos.md) para configurar a Neon com segurança.
-
-## Front-end no Cloudflare Workers
-
-O React usa **Workers Static Assets** em `apps/web/wrangler.jsonc`. O Worker Cloudflare **`main`** já está conectado ao GitHub, e o **Cloudflare Builds** executará build e deploy após commits na branch `main`. O proxy `/api/*` continua retornando 503 enquanto não houver `API_ORIGIN` configurada. Consulte o [guia de hospedagem](docs/pt-BR/cloudflare-workers.md).
+Interface: `http://localhost:5173`; API: `http://127.0.0.1:3001`. É possível iniciar a interface sem banco, mas não usar autenticação e dados reais. Siga [Primeiros passos](docs/pt-BR/primeiros-passos.md) para preparar um ambiente de testes sem publicar credenciais.
 
 ## Código aberto
 
-Licença [MIT](LICENSE). Leia [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md) antes de contribuir e [SECURITY.pt-BR.md](SECURITY.pt-BR.md) ao identificar uma vulnerabilidade.
+Licença [MIT](LICENSE). Consulte as [regras para contribuir](CONTRIBUTING.pt-BR.md) e a [política de segurança](SECURITY.pt-BR.md). Não publique segredos, dados de clientes nem detalhes de vulnerabilidades em issues.
 
-O mensageiro empresarial anterior é um **produto legado separado**. O domínio registrado **uorqui.app** não significa que esta nova aplicação já foi lançada.
-
----
-
-**Uorqui — converse, descubra, participe.** *(Slogan provisório.)*
+**Uorqui — converse, descubra, participe.**

@@ -18,7 +18,7 @@ Após conectar o Render ao GitHub, importe o Blueprint para o repositório `gabr
 
 Configure `DATABASE_URL` **no painel privado do Render**, diretamente com a URI do projeto Neon `uorqui`. O Blueprint solicita o valor com `sync: false`, sem incluí-lo no GitHub. O Render pode gerar `AUTH_SECRET` aleatório no momento da criação, via `generateValue: true`. Nunca envie essas credenciais para commits, issues, logs ou chats.
 
-A origem pública atual do front-end (`https://main.uorqui1.workers.dev`) está configurada como `AUTH_BASE_URL` e `WEB_ORIGIN` no Blueprint. Reavalie ambas se o endereço do site for alterado. O provedor da API gera seu próprio domínio HTTPS.
+A origem canônica do frontend é configurada em `AUTH_BASE_URL` e `WEB_ORIGIN` no Render. Na migração, mantenha `WEB_EXTRA_ORIGINS=https://uorqui.app,https://main.uorqui1.workers.dev` como lista explícita; altere ambas as variáveis canônicas juntas somente ao confirmar o roteamento do domínio e reverta-as se houver falha. O provedor da API utiliza endereço HTTPS próprio.
 
 O Worker `main` já utiliza **`API_ORIGIN=https://uorqui-social-api.onrender.com`** (URL pública, sem segredo). Após cada deploy, confirme `GET /health/ready` e teste o fluxo pelo Worker. O Worker encaminhará `/api/*` à API e manterá a sessão no mesmo domínio público do front-end.
 
@@ -30,21 +30,21 @@ O Worker do front-end e o backend são dois serviços distintos. A API não deve
 
 O formulário **Criar conta** é sempre navegável e a API recebeu autorização explícita de cadastro em produção em 31/10/2026; verificação humana e entrega de e-mail ainda precisam de teste real. A implementação de verificação de e-mail, recuperação de senha e desafio Turnstile já está versionada, porém exige validação dos fornecedores em produção. O Render faz auto deploy a partir da `main`, mas CI verde não substitui validação real.
 
-Não conectar ao domínio `uorqui.app`, ao Worker `uorqui-chat` ou a bancos do mensageiro empresarial legado.
+O destino previsto para a rede social é `uorqui.app`; siga o [procedimento de migração e rollback](migracao-dominio-uorqui-app.md) antes de alterar o roteamento e não reutilize bancos, segredos ou bindings do Worker empresarial `uorqui-chat`.
 
 ## Cadastro público habilitado — validação humana pendente
 
 1. No [Resend](https://resend.com), verificar um domínio remetente e criar a chave de envio; definir `RESEND_API_KEY` e `AUTH_EMAIL_FROM` (por exemplo, `Uorqui <conta@dominio-verificado.example>`) **somente no Render → Environment**.
-2. No [Cloudflare Turnstile](https://dash.cloudflare.com/), criar widget para o domínio real do front-end (`main.uorqui1.workers.dev`, enquanto não houver migração de domínio); definir `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` **no Render**. A API valida os tokens com o serviço Turnstile, inclusive em chamadas diretamente ao endereço do Render.
+2. No [Cloudflare Turnstile](https://dash.cloudflare.com/), o widget já autoriza **`main.uorqui1.workers.dev` e `uorqui.app`**; mantenha `TURNSTILE_SITE_KEY` e `TURNSTILE_SECRET_KEY` **no Render**. A API valida os tokens com o serviço Turnstile, inclusive em chamadas diretamente ao endereço do Render.
 3. Validar envio/entrega de verificação, link de confirmação, recuperação, reenvio, CAPTCHA e rejeição de tentativas inválidas usando contas de teste, sem copiar senhas/links de verificação para logs e chats.
 4. **Aplicado em 31/10/2026:** `ENABLE_PUBLIC_SIGNUP=true` no Render, com `publicRegistration:true` confirmado pelo Worker. Falta validar o fluxo de uma pessoa real (Turnstile aprovado, e-mail entregue e confirmado).
 5. Para suspender novas contas, definir `ENABLE_PUBLIC_SIGNUP=false` e publicar novamente. Isso não remove contas existentes.
 
-O modo de desenvolvimento (`ENABLE_DEV_SIGNUP=true`) continua restrito a `NODE_ENV=development|test`; não libera produção. As senhas continuam com mínimo de 12 caracteres para preservar a política existente. A interface segue as regras globais relevantes: criação primeiro, login alternativo, inputs de 16px, senha visível sob demanda, spinner em ações e formulário preservado em erro. `uorqui.app` e `uorqui-chat` legados não são alterados.
+O modo de desenvolvimento (`ENABLE_DEV_SIGNUP=true`) continua restrito a `NODE_ENV=development|test`; não libera produção. As senhas exigem **mínimo de 8 caracteres**, conforme a regra do Better Auth e os formulários de cadastro/recuperação (PR #52). A interface segue as regras globais relevantes: criação primeiro, login alternativo, inputs de 16px, senha visível sob demanda, spinner em ações e formulário preservado em erro. A troca de domínio ocorre em etapa separada; o legado mantém bancos e configurações independentes.
 
-### Evidência de ativação (31/10/2026)
+### Evidência da preparação do beta (01/11/2026)
 
-- GitHub Actions [smoke de produção 41205954207](https://github.com/gabrielduclos/uorqui/actions/runs/41205954207): três testes aprovados, incluindo health Worker/Render/Neon, perfil anônimo 401, `publicRegistration:true` com e-mail e recuperação habilitados, e rejeição HTTP 403 de tokens Turnstile inválidos para cadastro, recuperação, reenvio e acesso direto ao Render.
+- GitHub Actions: [smoke de produção 41333848037](https://github.com/gabrielduclos/uorqui/actions/runs/41333848037) e [integração 41333848001](https://github.com/gabrielduclos/uorqui/actions/runs/41333848001) aprovados. Verificam Worker/API/Neon, autenticação com PostgreSQL temporário e rejeição de tokens Turnstile inválidos; **não** testam entrega real de e-mail nem aprovação humana.
 - **Atenção:** este teste não executa um desafio humano real e não verifica a entrega de uma mensagem do Resend. Antes de divulgar o cadastro, realizar teste manual com conta própria e verificar inbox/spam, confirmação e login. Se a inscrição falhar, desabilitar imediatamente `ENABLE_PUBLIC_SIGNUP` e investigar os logs sem expor tokens.
 
 ## Salas de voz — integração opcional Cloudflare Realtime TURN
@@ -58,9 +58,9 @@ A configuração básica usa apenas `stun:stun.cloudflare.com:3478`; nessa modal
 
 Na entrada autenticada de uma sala, a API chama `POST https://rtc.live.cloudflare.com/v1/turn/keys/{keyId}/credentials/generate-ice-servers` com `{"ttl":3600}`. Ela envia ao navegador **apenas** credenciais ICE efêmeras, nunca as credenciais da chave principal. Se a geração falhar, o servidor usa STUN apenas e o frontend sinaliza essa limitação.
 
-Limites e operação: até 6 participantes conectados simultaneamente por sala; sessão expira após 45 s sem heartbeat; sinais de negociação expiram após 3 min. A migração `0012_voice_signaling` adiciona `community_voice_sessions` e `community_voice_signals` (sem gravações), com controle de sessão, permissões, taxa e origem.
+Limites e operação: até 6 participantes conectados simultaneamente por sala; sessão expira após 180 s sem heartbeat; sinais de negociação expiram após 3 min. A migração `0012_voice_signaling` adiciona `community_voice_sessions` e `community_voice_signals` (sem gravações), com controle de sessão, permissões, taxa e origem.
 
-**Sequência de publicação:** validar CI e migração Drizzle; aplicar `0012` ao Neon; depois integrar/deploy da API e frontend. Antes de divulgar como pronta para uso amplo, testar dois dispositivos e TURN em redes diferentes.
+**Estado do beta:** o backend de voz e a interface já foram publicados. Antes de ampliar o acesso, testar em dois dispositivos e em redes distintas, incluindo TURN real, reconexões e suspensões de navegador. A migração `0012` faz parte do histórico versionado.
 
 
 ## Moderação da plataforma (beta)
@@ -78,7 +78,7 @@ A moderação de conteúdo é separada dos cargos de comunidade: proprietários,
 
 **Ordem de implantação:** aplicar a migração `0023_content_reports` à Neon, verificar `content_reports` e `moderation_report_actions`, depois publicar API e interface. Executar testes em ambiente isolado antes de configurar moderadores reais. Não apontar o projeto novo para o banco do mensageiro empresarial legado.
 
-## PWA e notificações Web Push (novo Uorqui)
+## PWA e notificações Web Push (beta técnico do novo Uorqui)
 
 A implementação é independente do Uorqui empresarial antigo. O frontend no Cloudflare Worker publica `/manifest.webmanifest`, `/sw.js` e ícones 192/512. O service worker mantém somente assets estáticos versionados em cache; **não** armazena API, sessão, mensagens, mídia nem o HTML de entrada. O convite para instalar aparece, no máximo, uma vez ao dia por conta/dispositivo quando ainda não estiver em modo standalone.
 

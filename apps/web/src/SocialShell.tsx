@@ -185,7 +185,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
           </div>
           <div className="flex items-center gap-2">
-             <Badge variant="secondary" className="hidden gap-1.5 font-normal xl:inline-flex">{t('Prévia do MVP')}</Badge>
+             <Badge variant="secondary" className="hidden gap-1.5 font-normal xl:inline-flex">{t('Beta')}</Badge>
              <PreferencesControls />
             <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label={t("Notificações indisponíveis")} title={t("Notificações chegam em uma próxima etapa")} disabled><Bell className="size-4" /></Button>
             <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">

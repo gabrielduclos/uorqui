@@ -6,7 +6,7 @@
 
 A aplicação React/Vite/Tailwind do Uorqui é compilada em **arquivos estáticos**, servidos pelo **Cloudflare Workers Static Assets**, não pelo Cloudflare Pages. Um Worker pequeno recebe as requisições `/api/*` e `/health*` no mesmo domínio e as encaminha à API independente **Node.js + Fastify**, que usa **PostgreSQL Neon com Drizzle**.
 
-O Worker **não executa Fastify** nem recebe `DATABASE_URL` ou `AUTH_SECRET`. Ainda não escolhemos a hospedagem da API. O novo Worker `main` já existe na Cloudflare, vinculado ao repositório `gabrielduclos/uorqui` e à branch `main`; a publicação será feita pelo **Cloudflare Builds**, não pelo GitHub Actions. O domínio e Worker legados do `uorqui.app` permanecem intactos.
+O Worker **não executa Fastify** nem recebe `DATABASE_URL` ou `AUTH_SECRET`. A API Fastify já está publicada no Render como `uorqui-social-api`. O novo Worker `main` já existe na Cloudflare, vinculado ao repositório `gabrielduclos/uorqui` e à branch `main`; a publicação será feita pelo **Cloudflare Builds**, não pelo GitHub Actions. A migração de `uorqui.app` é uma operação separada: confira no Cloudflare qual Worker realmente atende ao domínio antes de declarar a mudança concluída.
 
 ## Arquivos
 
@@ -50,6 +50,6 @@ O Cloudflare instala as dependências do workspace web, compila React/Vite e exe
 
 **Atenção:** o nome técnico `main` corresponde ao Worker já conectado; é diferente da branch Git `main`. Não apontar este projeto para o Worker legado `uorqui-chat` ou para o domínio `uorqui.app` sem migração aprovada.
 
-A API Node.js possui um [guia de deploy independente](../pt-BR/hospedagem-api.md), com um Blueprint Render opcional na raiz do repositório. A aplicação está em pré-MVP. Sem `API_ORIGIN` configurada para uma API Fastify independente e segura, `/api/*` retorna 503. No futuro, configure `API_ORIGIN` nas variáveis **de runtime** do Worker, e configure os segredos de banco/autenticação apenas no host da API. Para cookies no mesmo domínio, `AUTH_BASE_URL` e `WEB_ORIGIN` da API precisarão corresponder à origem pública do novo front-end. Cadastro público continua bloqueado até os requisitos de segurança estarem completos.
+A API Node.js está publicada no Render; veja [Hospedagem da API](hospedagem-api.md). O **beta técnico `0.1.0-beta.1`** usa `API_ORIGIN=https://uorqui-social-api.onrender.com` no Worker; sem origem válida, `/api/*` retorna 503. Credenciais de banco/autenticação ficam apenas no Render. Configure `AUTH_BASE_URL` e `WEB_ORIGIN` para a origem canônica atual e `WEB_EXTRA_ORIGINS` apenas para origens explícitas durante a migração. Cadastro público já está habilitado com controles de e-mail e Turnstile, mas ainda falta validar o fluxo positivo com usuário real.
 
 Acompanhe a execução de cada build no painel **Workers & Pages → main → Builds**. Não confundir um build concluído com funcionalidade social pronta.

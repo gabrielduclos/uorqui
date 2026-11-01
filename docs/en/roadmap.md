@@ -2,7 +2,7 @@
 
 [English](roadmap.md) · [Português](../pt-BR/roadmap.md)
 
-**Status:** proposed milestones; no completion dates or implemented features are claimed.
+**Status:** roadmap for the **technical beta `0.1.0-beta.1`**. Checked items refer to implemented code or CI evidence; real-device/operational acceptance remains separately pending.
 
 ## Phase 0 — Discovery and foundation
 
@@ -38,25 +38,25 @@
 
 ## v0.1 — Social foundation
 
-- [ ] Sign-up/sign-in, profiles, basic discovery and follows.
-- [ ] Secure 1:1 messaging with history, clear receipts and reconnection.
-- [ ] Create/join communities, public/private membership, roles and text channels.
-- [ ] Reporting, blocking, rate limiting and server-side authorization.
+- [x] Implement sign-up/sign-in, profiles, basic discovery and follows (human email-delivery acceptance still pending).
+- [x] Implement persisted 1:1 messages, media, status and SSE reconnection handling; validate real-world reliability separately.
+- [x] Implement community creation/membership, invitations, roles and text channels.
+- [x] Implement initial reports, blocking, rate limits and server-side checks; operational moderation still needs testing.
 
 **Exit condition:** mobile workflows are reliable and private content stays private.
 
 ## v0.2 — Voice communities
 
-- [ ] Join/leave voice, mute and participant list.
-- [ ] Permissions, reconnection, moderation and operating limits.
+- [x] Implement joining/leaving voice, mute and participant list.
+- [x] Implement voice permissions, WebRTC signaling, session grace and small-room limits; test TURN/mobile reconnection.
 - [ ] Test on desktop, Android browser/PWA and iOS browser/PWA.
 
 **Exit condition:** stable small-group voice calls and measurable costs.
 
 ## v0.3 — Hybrid discovery
 
-- [ ] Continuous mixed feed supporting text, images, carousels and videos.
-- [ ] Standalone immersive video-only mode with correct direct entry and back navigation.
+- [x] Implement the mixed post feed with text, images, carousels and video.
+- [x] Implement immersive video-only navigation; verify behavior on real devices.
 - [ ] Cross-sharing and public community discovery; enforce privacy boundaries.
 - [ ] Video quotas, processing pipeline, adaptive loading and moderation.
 
@@ -70,7 +70,7 @@
 
 **Exit condition:** stable workflows, responsible moderation and acceptable operational performance.
 
-## v1.0 — Public beta readiness
+## v1.0 — Stable public release readiness
 
 - [ ] Automated tests and CI/CD, metrics, backups, restore drills and release rollback.
 - [ ] Accessible UI, privacy policy, terms, moderation procedures and age-related safeguards.
@@ -81,4 +81,4 @@
 
 ## Open decisions
 
-Feature priority, third-party dependency licenses, remaining realtime/voice/media providers, recommendation ranking, moderation policy, video mode naming, deployment and future domain migration.
+Feature priorities, dependency licenses, operating budgets/quotas, video recommendation, moderation procedures, TURN quality and domain cutover acceptance. The initial realtime/SSE, WebRTC and media/R2 implementations are no longer hypothetical.

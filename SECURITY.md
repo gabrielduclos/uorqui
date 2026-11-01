@@ -4,7 +4,7 @@
 
 ## Project status
 
-Uorqui is currently **pre-MVP**. No new Uorqui service has been deployed from this repository. A development scaffold is present. The legacy business messenger is a separate product; this document does not describe its security practices.
+Uorqui is currently **`0.1.0-beta.1` (technical beta)**. A new web PWA, Fastify API and Neon database are deployed for controlled testing; the product has not completed independent security or real-device certification. The legacy business messenger is separate, and this policy does not cover it.
 
 ## Reporting a vulnerability
 
@@ -14,7 +14,7 @@ If GitHub's private vulnerability reporting is enabled for this repository, use 
 
 A maintainer should assess reports before publishing technical details. Response timelines and supported-version guarantees are **not yet defined**; we will update this document when a security process is in place.
 
-## Security requirements for future implementation
+## Security requirements for the beta and future releases
 
 - Enforce permissions on the server, including private communities, private channels, posts, media access and notifications.
 - Apply input validation, abuse protection, request limits and safe upload handling.

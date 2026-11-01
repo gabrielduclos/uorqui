@@ -2,7 +2,7 @@
 
 [Português](roadmap.md) · [English](../en/roadmap.md)
 
-**Status:** marcos propostos, sem datas prometidas nem funcionalidades declaradas como prontas.
+**Status:** roadmap do **beta técnico `0.1.0-beta.1`**. Itens marcados indicam implementação ou teste CI, não aprovação automática em celulares reais ou operação.
 
 ## Fase 0 — Descoberta e fundação
 
@@ -38,25 +38,25 @@
 
 ## v0.1 — Base social
 
-- [ ] Cadastro/login, perfis, descoberta e seguidores.
-- [ ] Mensageiro 1:1 seguro com histórico, estados claros e reconexão.
-- [ ] Comunidades, entrada pública/privada, cargos e canais de texto.
-- [ ] Denúncias, bloqueio, limites e autorização no servidor.
+- [x] Implementar cadastro/login, perfis, descoberta e seguidores (a confirmação humana de e-mail continua pendente).
+- [x] Implementar mensagens 1:1 persistidas, mídias, status e reconexão SSE; validar estabilidade real em campo.
+- [x] Implementar comunidades, acesso público/privado, convites, cargos e canais de texto.
+- [x] Implementar denúncias iniciais, bloqueios, limites e autorização no servidor; falta validar operação da moderação.
 
 **Critério:** fluxos confiáveis no celular, com conteúdo privado protegido.
 
 ## v0.2 — Voz em comunidades
 
-- [ ] Entrar/sair da voz, mutar, visualizar participantes.
-- [ ] Permissões, reconexão, moderação e limites operacionais.
+- [x] Implementar entrada/saída da voz, mute e lista de participantes.
+- [x] Implementar permissões, sinalização WebRTC, tolerância de sessão e limites para salas pequenas; validar TURN e reconexão mobile.
 - [ ] Testar em desktop, Android navegador/PWA e iOS navegador/PWA.
 
 **Critério:** voz estável em grupos pequenos e custos mensuráveis.
 
 ## v0.3 — Descoberta híbrida
 
-- [ ] Feed misto contínuo com textos, imagens, carrosséis e vídeos.
-- [ ] Modo imersivo somente de vídeos, acesso direto e retorno coerente ao feed.
+- [x] Implementar feed híbrido com texto, imagens, carrosséis e vídeos.
+- [x] Implementar navegação imersiva por vídeos; testar retorno nos aparelhos reais.
 - [ ] Compartilhamento e descoberta de comunidades públicas, respeitando a privacidade.
 - [ ] Cotas, processamento e carregamento adaptativo de vídeos; moderação.
 
@@ -70,7 +70,7 @@
 
 **Critério:** fluxos estáveis, moderação responsável e desempenho operacional aceitável.
 
-## v1.0 — Preparação para beta público
+## v1.0 — Preparação para versão pública estável
 
 - [ ] Testes, CI/CD, métricas, backups, restauração e rollback.
 - [ ] Acessibilidade, política de privacidade, termos, moderação e proteção conforme faixa etária.
@@ -81,7 +81,7 @@
 
 ## Decisões pendentes
 
-Prioridades, licenças de dependências, fornecedores de tempo real/voz/mídias, algoritmo do feed, moderação, nome do modo Vídeos, implantação e futura migração de domínio.
+Prioridades, licenças de dependências, custos e cotas, recomendação de vídeos, processo de moderação, qualidade do TURN e validação da mudança de domínio. SSE, WebRTC e R2 já têm implementação inicial.
 
 ### Comunidades (trabalho incremental)
 
@@ -92,6 +92,6 @@ Prioridades, licenças de dependências, fornecedores de tempo real/voz/mídias,
 - [ ] Configurar credenciais de TURN no ambiente de produção e validar áudio entre redes móveis/Wi-Fi, Safari e Samsung Internet
 - [ ] Evolução para SFU quando grupos excederem a escala da malha P2P
 - [x] Moderação inicial: cargos hierárquicos, remoção e banimento, edição/cancelamento de mensagens, gerenciamento de canais
-- [ ] Denúncias, apelações, trilha de auditoria completa, filtros antispam e permissões específicas por canal
-- [ ] Anexos no canal e otimização de mídia no R2
-- [ ] PWA e notificações push de comunidades (após a base funcional)
+- [ ] Ampliar denúncias para apelações, trilha completa, antispam e permissões específicas por canal
+- [x] Anexos no canal usando R2; continuar otimizando mídia e custos
+- [x] Implementar PWA e Web Push para canais; validar entrega em iOS/Android instalados
