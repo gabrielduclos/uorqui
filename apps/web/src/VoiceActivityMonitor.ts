@@ -26,7 +26,7 @@ export class VoiceActivityMonitor {
       analyser.smoothingTimeConstant=0.55;
       source.connect(analyser);
       analyser.connect(this.sink!);
-      this.streams.set(id,{source,analyser,values:new Uint8Array(analyser.fftSize),lastSound:0});
+      this.streams.set(id,{source,analyser,values:new Uint8Array(analyser.fftSize),lastSound:Number.NEGATIVE_INFINITY});
     }catch{/* Unsupported/blocked audio analysis should not break the call. */}
   }
   remove(id:string){
