@@ -36,16 +36,16 @@ export function useUnreadDirectMessages() {
         });
         if (!response.ok) return;
         const payload = await response.json() as {
-          conversations?: { id: string; unreadCount: number; pendingReceivedAt?: string | null }[];
+          conversations?: { id: string; unreadCount: number; archived?: boolean; pendingReceivedAt?: string | null }[];
         };
         if (mounted && id === requestId && Array.isArray(payload.conversations)) {
           const count = payload.conversations.reduce((sum, thread) =>
-            sum + Math.max(0, Number(thread.unreadCount) || 0), 0);
+            sum + (thread.archived ? 0 : Math.max(0, Number(thread.unreadCount) || 0)), 0);
           setUnread(count);
           // A successful fetch which actually feeds the badge is the delivery
           // milestone — independent of whether the conversation panel is open.
           for (const thread of payload.conversations) {
-            if (Number(thread.unreadCount) > 0 && thread.pendingReceivedAt) {
+            if (!thread.archived && Number(thread.unreadCount) > 0 && thread.pendingReceivedAt) {
               void acknowledgeDelivery(thread.id, thread.pendingReceivedAt);
             }
           }

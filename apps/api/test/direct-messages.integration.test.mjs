@@ -234,6 +234,40 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   }
 });
 
+test('conversation actions are per-user: archive, unarchive, clear and revival',async()=>{
+  const sender=visitor(),recipient=visitor(),outsider=visitor();
+  await createUser(sender,'Archive Sender','dm_archive_sender');
+  await createUser(recipient,'Archive Receiver','dm_archive_receiver');
+  await createUser(outsider,'Archive Outsider','dm_archive_outsider');
+  const opened=await sender('/api/v1/dm/conversations','POST',{handle:'dm_archive_receiver'});
+  assert.equal(opened.status,200);
+  const id=opened.data.id,path='/api/v1/dm/conversations/'+id;
+  const first=await sender(path+'/messages','POST',{body:'old history',clientId:crypto.randomUUID()});
+  assert.equal(first.status,201);
+  assert.equal((await outsider(path+'/archive','PUT',{archived:true})).status,404);
+  assert.equal((await recipient(path+'/archive','PUT',{archived:true},false)).status,403);
+  assert.equal((await recipient(path+'/archive','PUT',{archived:true})).status,200);
+  const own=(await recipient('/api/v1/dm/conversations')).data.conversations.find(x=>x.id===id);
+  assert.equal(own.archived,true);
+  const other=(await sender('/api/v1/dm/conversations')).data.conversations.find(x=>x.id===id);
+  assert.equal(other.archived,false,'archive never changes the peer inbox');
+  assert.equal((await recipient(path+'/archive','PUT',{archived:false})).data.archived,false);
+  assert.equal((await recipient('/api/v1/dm/conversations')).data.conversations.find(x=>x.id===id).archived,false);
+  assert.equal((await recipient(path,'DELETE',undefined,false)).status,403);
+  assert.equal((await outsider(path,'DELETE')).status,404);
+  assert.equal((await recipient(path,'DELETE')).status,200);
+  assert.equal((await recipient('/api/v1/dm/conversations')).data.conversations.some(x=>x.id===id),false);
+  assert.equal((await recipient(path+'/messages')).data.messages.length,0,'old history hidden for self');
+  assert.equal((await sender(path+'/messages')).data.messages.length,1,'other participant retains history');
+  assert.equal((await recipient(path+'/read','POST')).data.read,0,'cleared history is not marked read');
+  const newMessage=await sender(path+'/messages','POST',{body:'new after clear',clientId:crypto.randomUUID()});
+  assert.equal(newMessage.status,201);
+  assert.equal((await recipient('/api/v1/dm/conversations')).data.conversations.some(x=>x.id===id),true);
+  const history=await recipient(path+'/messages');
+  assert.deepEqual(history.data.messages.map(x=>x.body),['new after clear']);
+  assert.equal((await sender(path+'/messages')).data.messages.length,2);
+});
+
 test('live DM actions: delivery, edit, react, forward, delete and ownership',async()=>{
   const list=await alice('/api/v1/dm/conversations');
   const thread=list.data.conversations.find(c=>c.peerHandle==='dm_bob');

@@ -1,17 +1,16 @@
 import { Spinner } from '@/components/ui/spinner';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
-import { ArrowDown, ArrowLeft, MessageCircle, Search, UserPlus, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import { attachmentLabel } from './chatAttachmentLabels';
-import { invalidateChatMedia } from './chatMediaCache';
+import { clearChatMediaCache, invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
 import { InternalShareDialog } from './InternalShareDialog';
 import { ContentReportDialog } from './ContentReportDialog';
 import { FriendsPanel } from './FriendsPanel';
-import { AccountBlockButton } from './AccountBlockButton';
 import { clearProfileImageCache } from './profileImageCache';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -23,7 +22,7 @@ type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
   lastBody: string | null; lastAttachmentType?: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
   unreadReactionCount: number; lastReactionEmoji: string | null; lastReactionAt: string | null; lastReactionMessageId: string | null; lastReactionAuthorId: string | null;
-  pendingReceivedAt: string | null; canMessage: boolean;
+  pendingReceivedAt: string | null; canMessage: boolean; archived: boolean;
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
@@ -109,7 +108,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [people, setPeople] = useState<Person[]>([]);
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'conversations' | 'contacts'>('conversations');
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'archived'>('all');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpened, setMobileOpened] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -145,6 +144,11 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionNotice, setActionNotice] = useState('');
+  const [conversationMenuOpen,setConversationMenuOpen]=useState(false);
+  const [conversationConfirm,setConversationConfirm]=useState<'delete'|'block'|null>(null);
+  const [conversationBusy,setConversationBusy]=useState(false);
+  const [blockedHandles,setBlockedHandles]=useState<string[]>([]);
+  const conversationMenuRef=useRef<HTMLDivElement>(null);
   const draftBeforeEdit = useRef('');
   const realtimeConnected = useRef(false);
   const lastThreadFallback = useRef(0);
@@ -166,6 +170,22 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   atBottomRef.current = atBottom;
 
   useEffect(() => onMobileOpenChange?.(mobileOpened), [mobileOpened, onMobileOpenChange]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    void fetch('/api/v1/blocks',{credentials:'same-origin',cache:'no-store',signal:controller.signal})
+      .then(async response=>response.ok?response.json() as Promise<{blocked:{handle:string}[]}>:{blocked:[]})
+      .then(result=>{if(!controller.signal.aborted)setBlockedHandles(result.blocked.map(b=>b.handle));})
+      .catch(()=>{});
+    return ()=>controller.abort();
+  },[activeId]);
+  useEffect(()=>{
+    if(!conversationMenuOpen)return;
+    const dismiss=(event:PointerEvent)=>{if(!conversationMenuRef.current?.contains(event.target as Node))setConversationMenuOpen(false);};
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setConversationMenuOpen(false);};
+    document.addEventListener('pointerdown',dismiss);
+    document.addEventListener('keydown',escape);
+    return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape);};
+  },[conversationMenuOpen]);
 
   /** A selected list row is not a read receipt: only the visible chat panel counts. */
   const isConversationVisible = useCallback((id: string) => {
@@ -182,7 +202,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     const result = await api<{ conversations: Conversation[] }>('/api/v1/dm/conversations');
     setThreads(result.conversations);
     window.dispatchEvent(new CustomEvent('uorqui:dm-unread-count', {
-      detail: result.conversations.reduce((total, thread) => total + Math.max(0, thread.unreadCount), 0),
+      detail: result.conversations.reduce((total, thread) => total + (thread.archived ? 0 : Math.max(0, thread.unreadCount)), 0),
     }));
     setError('');
     setLoading(false);
@@ -220,6 +240,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 
   const openThread = useCallback((id: string) => {
     setListView('conversations');
+    setConversationMenuOpen(false);setConversationConfirm(null);
     setActiveId(id);
     try{navigator.serviceWorker?.controller?.postMessage({type:'uorqui:clear-dm-push',conversationId:id});}catch{}
     setMobileOpened(true);
@@ -245,6 +266,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     if(initialConversationId&&/^[0-9a-f-]{36}$/i.test(initialConversationId))openThread(initialConversationId);
   },[initialConversationId,openThread]);
   const closeThread = useCallback(() => {
+    setConversationMenuOpen(false);setConversationConfirm(null);
     setActiveId(null);
     activeIdRef.current = null;
     setMobileOpened(false);
@@ -724,12 +746,54 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setReplySource(message);
     textareaRef.current?.focus({ preventScroll: true });
   }
+  async function archiveConversation(thread:Conversation){
+    if(conversationBusy)return;
+    setConversationBusy(true);setConversationMenuOpen(false);setChatError('');
+    try{
+      await api('/api/v1/dm/conversations/'+encodeURIComponent(thread.id)+'/archive',{
+        method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:!thread.archived})
+      });
+      closeThread();
+      await loadThreads();
+    }catch{setChatError(pt?'Não foi possível atualizar o arquivo de conversas.':'Could not update archived chats.');}
+    finally{setConversationBusy(false);}
+  }
+  async function deleteConversation(thread:Conversation){
+    if(conversationBusy)return;
+    setConversationBusy(true);setChatError('');
+    try{
+      await api('/api/v1/dm/conversations/'+encodeURIComponent(thread.id),{method:'DELETE'});
+      clearChatMediaCache();
+      setPendingMessages(previous=>previous.filter(p=>p.conversationId!==thread.id));
+      closeThread();setFilter('all');
+      await loadThreads();
+    }catch{setChatError(pt?'Não foi possível apagar esta conversa.':'Could not delete this conversation.');}
+    finally{setConversationBusy(false);setConversationConfirm(null);}
+  }
+  async function toggleBlockConversation(thread:Conversation){
+    if(conversationBusy)return;
+    const wasBlocked=blockedHandles.includes(thread.peerHandle);
+    setConversationBusy(true);setChatError('');
+    try{
+      await api(wasBlocked?'/api/v1/blocks/'+encodeURIComponent(thread.peerHandle):'/api/v1/blocks',{
+        method:wasBlocked?'DELETE':'POST',
+        ...(!wasBlocked?{headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:thread.peerHandle})}:{})
+      });
+      setBlockedHandles(old=>wasBlocked?old.filter(x=>x!==thread.peerHandle):[...old,thread.peerHandle]);
+      window.dispatchEvent(new Event('uorqui:blocks-updated'));
+      setConversationMenuOpen(false);setConversationConfirm(null);
+      await loadThreads();
+    }catch{setChatError(pt?'Não foi possível atualizar o bloqueio.':'Could not change blocking status.');}
+    finally{setConversationBusy(false);}
+  }
+
   const active = threads.find(c => c.id === activeId);
   const query = search.trim().toLocaleLowerCase(locale);
   const visibleThreads = threads.filter(c =>
-    (filter === 'all' || c.unreadCount > 0) &&
+    (filter === 'archived' ? c.archived : !c.archived && (filter === 'all' || c.unreadCount > 0)) &&
     (c.peerName + ' ' + c.peerHandle).toLocaleLowerCase(locale).includes(query));
-  const unreadThreads = threads.filter(c => c.unreadCount > 0).length;
+  const unreadThreads = threads.filter(c => !c.archived && c.unreadCount > 0).length;
+  const archivedThreads = threads.filter(c=>c.archived).length;
 
   return <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
     <section ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
@@ -765,11 +829,12 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent"><X className="size-4"/></button>}
         </div>
         <div className="mt-3 flex gap-1" role="group" aria-label={pt ? 'Filtrar conversas' : 'Filter conversations'}>
-          {(['all', 'unread'] as const).map(value => <button type="button" key={value} onClick={() => setFilter(value)}
+          {(['all', 'unread', 'archived'] as const).map(value => <button type="button" key={value} onClick={() => setFilter(value)}
             aria-pressed={filter === value} className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium',
               filter === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary')}>
-            {value === 'all' ? (pt ? 'Todas' : 'All') : (pt ? 'Não lidas' : 'Unread')}
+            {value === 'all' ? (pt ? 'Todas' : 'All') : value === 'unread' ? (pt ? 'Não lidas' : 'Unread') : (pt ? 'Arquivadas' : 'Archived')}
             {value === 'unread' && unreadThreads > 0 && <span className="rounded bg-current/10 px-1 text-[10px]">{unreadThreads}</span>}
+             {value === 'archived' && archivedThreads > 0 && <span className="rounded bg-current/10 px-1 text-[10px]">{archivedThreads}</span>}
           </button>)}
         </div>
         </>}
@@ -821,7 +886,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         </button>)}
         {!loading && !visibleThreads.length && query.length < 2 && <div className="px-5 py-14 text-center">
           <MessageCircle className="mx-auto size-9 text-primary"/>
-          <h3 className="mt-3 font-semibold">{filter === 'unread' ? (pt ? 'Tudo em dia' : 'All caught up') : (pt ? 'Comece uma conversa' : 'Start a conversation')}</h3>
+          <h3 className="mt-3 font-semibold">{filter === 'unread' ? (pt ? 'Tudo em dia' : 'All caught up') : filter === 'archived' ? (pt?'Nenhuma conversa arquivada':'No archived chats') : (pt ? 'Comece uma conversa' : 'Start a conversation')}</h3>
           <p className="mt-2 text-sm text-muted-foreground">{pt ? 'Busque uma pessoa pelo nome ou @usuário.' : 'Search people by name or @username.'}</p>
         </div>}
         </>}
@@ -842,7 +907,32 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <span className="min-w-0"><span className="block truncate text-sm font-semibold">{active.peerName}</span>
               <span className="block truncate text-xs text-muted-foreground">@{active.peerHandle}</span></span>
           </a>
-          <AccountBlockButton handle={active.peerHandle} compact onChanged={()=>{void loadThreads().catch(()=>{});}}/>
+          <div className="relative shrink-0" ref={conversationMenuRef}>
+            <Button type="button" variant="ghost" size="icon" aria-haspopup="menu"
+              aria-expanded={conversationMenuOpen} aria-label={pt?'Opções da conversa':'Conversation options'}
+              onClick={()=>setConversationMenuOpen(old=>!old)} disabled={conversationBusy}>
+              {conversationBusy?<Spinner className="size-4"/>:<MoreHorizontal className="size-6"/>}
+            </Button>
+            {conversationMenuOpen&&<div role="menu" aria-label={pt?'Opções da conversa':'Conversation options'}
+              className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
+              <button type="button" role="menuitem" onClick={()=>void archiveConversation(active)}
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm hover:bg-accent">
+                {active.archived?<ArchiveRestore className="size-4"/>:<Archive className="size-4"/>}
+                {active.archived?(pt?'Desarquivar':'Unarchive'):(pt?'Arquivar conversa':'Archive conversation')}
+              </button>
+              <button type="button" role="menuitem" onClick={()=>{setConversationMenuOpen(false);setConversationConfirm('delete');}}
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-destructive hover:bg-accent">
+                <Trash2 className="size-4"/>{pt?'Apagar conversa':'Delete conversation'}
+              </button>
+              <div className="my-1 h-px bg-border"/>
+              <button type="button" role="menuitem"
+                onClick={()=>{setConversationMenuOpen(false);if(blockedHandles.includes(active.peerHandle))void toggleBlockConversation(active);else setConversationConfirm('block');}}
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm hover:bg-accent">
+                {blockedHandles.includes(active.peerHandle)?<ShieldCheck className="size-4"/>:<ShieldBan className="size-4"/>}
+                {blockedHandles.includes(active.peerHandle)?(pt?'Desbloquear usuário':'Unblock user'):(pt?'Bloquear usuário':'Block user')}
+              </button>
+            </div>}
+          </div>
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollBox} onScroll={onMessagesScroll}
@@ -921,6 +1011,26 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
               </button></div>
             </div>}
         </div>
+        {conversationConfirm&&<div className="absolute inset-0 z-[80] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" aria-labelledby="conversation-action-title"
+            className="w-full max-w-sm rounded-xl border border-border bg-popover p-5 text-popover-foreground shadow-2xl">
+            <h3 id="conversation-action-title" className="text-base font-semibold">
+              {conversationConfirm==='delete'?(pt?'Apagar esta conversa?':'Delete this conversation?'):(pt?'Bloquear este usuário?':'Block this user?')}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {conversationConfirm==='delete'
+                ?(pt?'A conversa e suas mensagens antigas desaparecerão somente para você. A outra pessoa mantém o histórico. Mensagens novas poderão reabrir a conversa.':'This conversation and past messages will be hidden only for you. The other person keeps their history. New messages can reopen it.')
+                :(pt?'Vocês não poderão trocar mensagens e a amizade será encerrada. Você poderá desbloquear depois nas configurações.':'You will no longer be able to message each other and your friendship will end. You can unblock later in settings.')}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" disabled={conversationBusy} onClick={()=>setConversationConfirm(null)}>{pt?'Cancelar':'Cancel'}</Button>
+              <Button variant="destructive" disabled={conversationBusy} loading={conversationBusy}
+                onClick={()=>void (conversationConfirm==='delete'?deleteConversation(active):toggleBlockConversation(active))}>
+                {conversationConfirm==='delete'?(pt?'Apagar conversa':'Delete chat'):(pt?'Bloquear':'Block')}
+              </Button>
+            </div>
+          </section>
+        </div>}
         {cancelTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-labelledby="delete-direct-message-title"
             className="w-full max-w-sm rounded-xl border border-border bg-popover p-5 text-popover-foreground shadow-2xl">
