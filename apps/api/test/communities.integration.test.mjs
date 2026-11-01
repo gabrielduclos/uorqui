@@ -260,3 +260,35 @@ test('community share link: onboarding redemption, role gates, rotation, bans an
   assert.equal((await owner(path,'DELETE')).status,200,'owner may permanently delete community');
   assert.equal((await anonymous('/api/v1/community-invites/'+rotated.data.link.id)).status,404);
 });
+
+test('community visibility can be changed by admins without removing existing members',async()=>{
+  const created=await owner('/api/v1/communities','POST',{
+    name:'Visibility tests',slug:'visibility-moderation-test',visibility:'public'
+  });
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const path='/api/v1/communities/'+created.data.id;
+  assert.equal((await member(path+'/join','POST')).status,200);
+  assert.equal((await outsider(path)).status,200,'public community is discoverable');
+
+  assert.equal((await member(path,'PATCH',{visibility:'private'})).status,403,'members cannot change privacy');
+  assert.equal((await owner(path,'PATCH',{visibility:'hidden'})).status,400,'invalid visibility is rejected');
+  assert.equal((await owner(path,'PATCH',{visibility:'private'},false)).status,403,'CSRF origin remains required');
+  const hidden=await owner(path,'PATCH',{visibility:'private'});
+  assert.equal(hidden.status,200,JSON.stringify(hidden.data));
+  assert.equal(hidden.data.community.visibility,'private');
+  assert.equal((await outsider(path)).status,404,'a private community is hidden from outsiders');
+  assert.equal((await member(path)).data.community.myRole,'member','existing members stay in the community');
+
+  const requested=await owner(path,'PATCH',{visibility:'approval'});
+  assert.equal(requested.status,200);
+  assert.equal((await outsider(path)).status,200,'approval communities are discoverable');
+  assert.equal((await outsider(path+'/join','POST')).data.status,'pending');
+  assert.ok((await owner(path)).data.pendingRequests.some(row=>row.handle==='comm_outsider'));
+
+  const opened=await owner(path,'PATCH',{visibility:'public'});
+  assert.equal(opened.status,200);
+  assert.equal(opened.data.community.visibility,'public');
+  assert.equal((await owner(path)).data.pendingRequests.some(row=>row.handle==='comm_outsider'),false,
+    'pending join requests are cleared on opening the community');
+  assert.equal((await outsider(path+'/join','POST')).data.status,'member');
+});
