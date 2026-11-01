@@ -2,6 +2,8 @@
 
 Esta sequência trata **somente do novo Uorqui** (`gabrielduclos/uorqui`, Worker `main`, Render `uorqui-social-api`). O legado `uorqui-chat` e seus bancos/objetos **não podem ser modificados na preparação**.
 
+**Versão da aplicação:** `0.1.0-beta.1` (beta técnico, não versão estável). **Situação do domínio:** a tentativa automática de transferir `uorqui.app` foi recusada pelo Cloudflare (hostname já utilizado; a opção de sobrescrever foi bloqueada na integração). **Não considerar a troca concluída sem confirmar no painel que o domínio está no Worker `main` e testar a aplicação pelo hostname real.**
+
 ## Inventário confirmado em 01/11/2026
 
 - Domínio `uorqui.app`: custom domain Cloudflare atualmente associado ao Worker `uorqui-chat`.
@@ -23,7 +25,7 @@ Esta sequência trata **somente do novo Uorqui** (`gabrielduclos/uorqui`, Worker
 ## Virada (somente após testes anteriores)
 
 1. Atualizar Render `WEB_ORIGIN=https://uorqui.app` e `AUTH_BASE_URL=https://uorqui.app` **na mesma alteração**, mantendo `WEB_EXTRA_ORIGINS`. Esperar deploy `live` e health `ready`.
-2. Reassociar o custom domain `uorqui.app` ao Worker `main` pelo Cloudflare. Não alterar R2/D1/bindings do antigo e não migrar cookies antigos.
+2. Reassociar o custom domain `uorqui.app` ao Worker `main` pelo painel Cloudflare (Workers & Pages → `main` → Settings → Domains & Routes → Add custom domain). Como já existe associação com `uorqui-chat`, usar **transferência de hostname** caso o painel a ofereça. Se não houver opção de transferência, **não excluir o domínio automaticamente**: revisar a intervenção e o plano de reversão antes de prosseguir. Não alterar R2/D1/bindings antigos nem migrar cookies.
 3. Rodar o smoke `Production signup smoke test` com entrada `target=production` e verificar `/manifest.webmanifest`, `/sw.js`, login, registro, confirmação de e-mail, envio de DM, anexos, feed, comunidade e sala de voz.
 4. Abrir o PWA já instalado pela origem `uorqui.app` no iOS e no Android. Validar troca de worker, ausência de tela preta, atualização do ícone (pode exigir reinstalação no iOS), login e consentimento de notificações. **Sessões e histórico do sistema antigo não serão reconhecidos pelo novo**.
 5. Só após monitoramento e aceitação, considerar **redirecionar o endereço `uorqui-chat.uorqui1.workers.dev`** para `https://uorqui.app`. Isso é uma etapa posterior, no legado, não automática, e exige preservar endpoints de APIs/APK e avaliar clientes nativos antes de ativar um 301/308 global.
