@@ -77,3 +77,20 @@ A moderação de conteúdo é separada dos cargos de comunidade: proprietários,
 - Não são enviados alertas ou dados da denúncia à pessoa denunciada. É preciso definir uma política de retenção e regras de acesso antes de abrir amplamente a plataforma.
 
 **Ordem de implantação:** aplicar a migração `0023_content_reports` à Neon, verificar `content_reports` e `moderation_report_actions`, depois publicar API e interface. Executar testes em ambiente isolado antes de configurar moderadores reais. Não apontar o projeto novo para o banco do mensageiro empresarial legado.
+
+## PWA e notificações Web Push (novo Uorqui)
+
+A implementação é independente do Uorqui empresarial antigo. O frontend no Cloudflare Worker publica `/manifest.webmanifest`, `/sw.js` e ícones 192/512. O service worker mantém somente assets estáticos versionados em cache; **não** armazena API, sessão, mensagens, mídia nem o HTML de entrada. O convite para instalar aparece, no máximo, uma vez ao dia por conta/dispositivo quando ainda não estiver em modo standalone.
+
+**Configurando Render:**
+
+1. Aplique a migração `0025_push_subscriptions.sql` na Neon, antes de atualizar a API.
+2. Configure no serviço Render da API `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` para uma chave EC P-256 própria deste projeto, codificada em Base64 URL sem preenchimento. Opcional: `VAPID_SUBJECT=mailto:<contato real>`. Não copie as chaves do mensageiro empresarial.
+3. Confira `GET /api/v1/push/config`: `enabled:true`, sem expor a chave privada.
+4. Em duas contas diferentes, ative as notificações por ação explícita no perfil, envie mensagem privada entre elas e confira `deliveredAt` após o service worker do destinatário confirmar. **A resposta HTTP 201/202 do serviço de push não é confirmação de entrega.**
+5. Em iPhone/iPad, instale o PWA na tela de início primeiro e permita notificações nele; navegadores de abas iOS não oferecem o mesmo fluxo.
+6. Teste outra conta no mesmo navegador: um push antigo jamais deve aparecer para a nova conta. Ao sair, o frontend revoga a inscrição *antes* de expirar a sessão.
+
+**Segurança:** apenas endpoints conhecidos de provedores HTTPS são aceitos; os registros Web Push são vinculados à conta e limitados por usuário. O aviso é genérico e não transmite texto privado da conversa pelo push. O service worker verifica a sessão atual antes de mostrar o aviso e então manda um recibo HMAC assinado e autenticado; o servidor confirma a versão exata da mensagem. O recibo marca `delivered_at`, jamais `read_at`. As regras existentes de leitura e recebimento pelo aplicativo aberto continuam ativas.
+
+**Escopo atual:** DM nova, editada e encaminhada; mensagens de canais de texto para membros inscritos (limite de 200 endpoints por mensagem). Reações, convites, notificações de comunidades com alto volume, preferências granulares por canal, tentativas persistentes em fila e badges do sistema operacional podem ser evoluídos separadamente. Envio remoto em segundo plano é best-effort nesta etapa; não há garantia contratual de entrega. O frontend deve ser validado em Android, iOS Home Screen e desktop antes do beta aberto.
