@@ -36,7 +36,7 @@ function visitor(){
 const owner=visitor(),friend=visitor(),stranger=visitor(),anon=visitor();
 async function signup(user,handle){
   const name=handle;
-  const r=await user('/api/auth/sign-up/email','POST',{name,email:handle+'@example.invalid',password:'correct-horse-battery-staple-demo'});
+  const r=await user('/api/auth/sign-up/email','POST',{name,email:handle+'@example.invalid',password:'correct-horse-battery-staple-demo',termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'});
   assert.equal(r.status,200,JSON.stringify(r.data));
   const done=await user('/api/v1/onboarding','POST',{handle,displayName:name});
   assert.equal(done.status,201,JSON.stringify(done.data));

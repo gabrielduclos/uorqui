@@ -55,7 +55,7 @@ const alice = visitor(), bob = visitor(), outsider = visitor(), anonymous = visi
 async function signup(user, handle) {
   const sign = await user('/api/auth/sign-up/email', 'POST', {
     name: handle, email: handle + '@example.invalid', password: 'correct-horse-battery-staple-reports',
-  });
+  termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'});
   assert.equal(sign.status, 200, JSON.stringify(sign.data));
   const onboard = await user('/api/v1/onboarding', 'POST', { handle, displayName: handle });
   assert.equal(onboard.status, 201, JSON.stringify(onboard.data));
