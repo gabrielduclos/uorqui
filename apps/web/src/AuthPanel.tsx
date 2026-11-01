@@ -77,7 +77,8 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const [account, setAccount] = useState<Account | null>(null);
   const [view, setView] = useState<AuthView>(() => {
     const q = new URLSearchParams(window.location.search);
-    return q.has('token') ? 'reset' : q.has('verify') ? 'verify' : /^\/invite\//.test(window.location.pathname) ? 'register' : 'login';
+    // An email-verification return link must sign in before redeeming the saved invite.
+    return q.has('token') ? 'reset' : q.has('verify') ? 'verify' : q.has('login') ? 'login' : /^\/invite\//.test(window.location.pathname) ? 'register' : 'login';
   });
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
   const [status, setStatus] = useState<ApiStatus>({});
