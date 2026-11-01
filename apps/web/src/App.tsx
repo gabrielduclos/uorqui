@@ -10,6 +10,7 @@ import { publicProfileHandle } from './publicProfileNavigation';
 import { clearProfileImageCache } from './profileImageCache';
 import { clearChatMediaCache } from './chatMediaCache';
 import { clearFeedSessionCache } from './feedSessionCache';
+import { deactivatePush } from './useSocialPush';
 import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
@@ -75,7 +76,10 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
           </article>)}
         </section>
         <footer className="mt-4 space-y-2 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground sm:px-0 lg:text-left">
-          <p>{t('Uorqui · Construído em código aberto · Funcionalidades sociais em desenvolvimento')}</p>
+          <a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent">
+            <Github className="size-5"/>{t('Conheça o projeto')}
+          </a>
           <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 lg:justify-start" aria-label={t('Documentos legais')}>
             <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{t('Termos de Uso')}</a>
             <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">{t('Política de Privacidade')}</a>
@@ -188,6 +192,7 @@ function AppContent() {
       body: '{}',
     });
     if (!response.ok) throw new Error('Logout failed');
+    void deactivatePush().catch(()=>{});
     clearProfileImageCache();
     clearChatMediaCache();
     clearFeedSessionCache();
