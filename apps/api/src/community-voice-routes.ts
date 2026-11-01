@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
+import {publishCommunityEvent} from './community-events.js';
 
 type SessionReader=(request:FastifyRequest)=>Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -125,6 +126,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
           [sessionId,channelId,me]);
         await client.query('COMMIT');
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+      void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
       return reply.header('Cache-Control',noCache).send({
         sessionId,peers:await roomPeers(channelId,me,sessionId),rtc:await rtcConfig(),maxParticipants:6,
       });
@@ -175,6 +177,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind='voice' AND s.last_seen_at>now()-interval '45 seconds' RETURNING s.id",
         [sessionId,channelId,me,muted,id,deafened]);
       if(!result.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
+      void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
       return reply.header('Cache-Control',noCache).send({ok:true});
     }catch(error){request.log.error({err:error},'Voice heartbeat');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -221,10 +224,11 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       try{
         const me=await self(request,readSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
         const {id,channelId,sessionId}=request.params as {id:string;channelId:string;sessionId:string};
-        await getPool().query(
+        const removed=await getPool().query(
           'DELETE FROM community_voice_sessions s USING community_channels c '+
           "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=s.channel_id AND c.community_id=$4 AND c.kind='voice'",
           [sessionId,channelId,me,id]);
+        if(removed.rowCount)void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
         return reply.code(204).send();
       }catch(error){request.log.error({err:error},'Leave voice room');return reply.code(503).send({error:'Unavailable'});}
     });
