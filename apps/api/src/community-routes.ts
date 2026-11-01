@@ -292,7 +292,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
       return reply.header('Cache-Control',noCache).send({
         messages:result.rows.reverse().map(({authorId,...row})=>({
-          ...row,canReact:authorId!==me&&!row.deletedAt,canEdit:authorId===me&&!row.deletedAt,
+          ...row,canReact:Boolean(ready.rows[0]?.enabled)&&authorId!==me&&!row.deletedAt,canEdit:authorId===me&&!row.deletedAt,
           canDelete:(!row.deletedAt)&&(authorId===me||['owner','admin','moderator'].includes(readerRole)),
         }))
       });
