@@ -15,6 +15,7 @@ import { registerCommunityRoutes } from './community-routes.js';
 import { registerCommunityInviteLinks } from './community-invite-links.js';
 import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
 import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
+import { registerFeedRoutes } from './feed-routes.js';
 import { closeDmEvents } from './dm-events.js';
 
 const app = Fastify({
@@ -27,7 +28,7 @@ const app = Fastify({
 await app.register(cors, {
   origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
   credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
 });
 
@@ -252,6 +253,7 @@ registerCommunityRoutes(app, async request => readSession(request));
 registerCommunityInviteLinks(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
 registerCommunityModerationRoutes(app, async request => readSession(request));
+registerFeedRoutes(app, async request => readSession(request));
 
 const port = Number(process.env.PORT ?? 3001);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
