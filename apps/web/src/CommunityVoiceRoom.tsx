@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
+import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -7,6 +7,8 @@ import { VoiceActivityMonitor } from './VoiceActivityMonitor';
 import { playVoiceRoomCue, unlockVoiceRoomAudio } from './communityVoiceSounds';
 
 export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;deafened:boolean;isSelf:boolean;speaking?:boolean};
+export type VoiceRoomTarget={communityId:string;channelId:string;communityName:string;channelName:string};
+export type VoicePhase='idle'|'joining'|'joined';
 type VoicePeer=CommunityVoiceParticipant & {joinedAt:string};
 type VoiceSignal={id:string;senderSessionId:string;kind:'offer'|'answer'|'candidate';payload:RTCSessionDescriptionInit|RTCIceCandidateInit};
 type VoiceJoin={sessionId:string;peers:VoicePeer[];rtc:{iceServers:RTCIceServer[];relayAvailable:boolean};maxParticipants:number};
@@ -29,9 +31,14 @@ function ScreenTile({stream,label}:{stream:MediaStream;label:string}){
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
-export default function CommunityVoiceRoom({communityId,channelId,onParticipantsChange}:{communityId:string;channelId:string;onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void}){
+export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange}:{
+  communityId:string;channelId:string;communityName:string;channelName:string;
+  mode?:'expanded'|'floating';onMinimize?:()=>void;onRestore?:()=>void;onLeave?:()=>void;
+  onPhaseChange?:(phase:VoicePhase)=>void;
+  onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void;
+}){
   const {locale}=useUorquiPreferences();const pt=locale==='pt-BR';
-  const [phase,setPhase]=useState<'idle'|'joining'|'joined'>('idle');
+  const [phase,setPhase]=useState<VoicePhase>('idle');
   const [peers,setPeers]=useState<VoicePeer[]>([]);
   const [muted,setMuted]=useState(false);
   const [deafened,setDeafened]=useState(false);
@@ -352,6 +359,7 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   function leaveRoom(){
     if(running.current&&!deafenedRef.current)playVoiceRoomCue('leave');
     stop();
+    onLeave?.();
   }
   function toggleMute(){
     if(deafenedRef.current)return;
@@ -384,6 +392,19 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
     };
   },[stop]);
 
+  useEffect(()=>{
+    const resume=()=>{
+      if(document.visibilityState!=='visible'||!running.current||!selfSession.current)return;
+      void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:mutedRef.current,deafened:deafenedRef.current}))
+        .catch(()=>{if(running.current)setError('VOICE_NETWORK_RETRY');});
+      void sync();
+    };
+    document.addEventListener('visibilitychange',resume);
+    window.addEventListener('focus',resume);
+    return ()=>{document.removeEventListener('visibilitychange',resume);window.removeEventListener('focus',resume);};
+  },[base,sync]);
+  useEffect(()=>{onPhaseChange?.(phase);},[onPhaseChange,phase]);
+
   // Send real presence to the channel list; do not invent participants.
   const visiblePeers=peers.map(peer=>({
     ...peer,deafened:peer.isSelf?deafened:peer.deafened,
@@ -396,6 +417,40 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   useEffect(()=>()=>onParticipantsChange?.([]),[onParticipantsChange]);
 
   const count=phase==='joined'?peers.length:0;
+  const activeSpeakers=phase==='joined'?visiblePeers.filter(peer=>peer.speaking):[];
+  if(mode==='floating')return <section role="region" aria-label={pt?'Chamada de voz em andamento':'Ongoing voice call'}
+    className="w-full overflow-hidden rounded-2xl border border-primary/30 bg-card shadow-2xl">
+    <div className="flex min-w-0 items-center gap-3 p-3">
+      <div className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
+        <Headphones className="size-5"/><span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card" aria-hidden="true"/>
+      </div>
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={onRestore}
+        aria-label={pt?'Voltar para a sala de voz':'Return to voice room'}>
+        <span className="block truncate text-sm font-semibold">{channelName}</span>
+        <span className="block truncate text-xs text-muted-foreground">{communityName} · {count} {pt?'na sala':'in room'}</span>
+      </button>
+      <button type="button" onClick={toggleMute} disabled={deafened}
+        className={'grid size-10 shrink-0 place-items-center rounded-xl border disabled:opacity-50 '+(muted?'border-destructive/40 text-destructive':'border-border')}
+        aria-label={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}>
+        {muted?<MicOff className="size-4"/>:<Mic className="size-4"/>}
+      </button>
+      <button type="button" onClick={leaveRoom} className="grid size-10 shrink-0 place-items-center rounded-xl bg-destructive text-destructive-foreground"
+        aria-label={pt?'Desconectar da sala':'Disconnect from room'}><PhoneOff className="size-4"/></button>
+    </div>
+    <div className="flex items-center justify-between gap-2 border-t border-border/70 bg-background/50 px-3 py-2 text-xs">
+      <span className="min-w-0 flex-1 truncate text-muted-foreground" aria-live="off">
+        {activeSpeakers.length?<span className="inline-flex items-center gap-2 text-emerald-500">
+          <span className="size-2 shrink-0 animate-pulse rounded-full bg-emerald-500"/>
+          {activeSpeakers.slice(0,2).map(p=>p.displayName).join(', ')}
+          {activeSpeakers.length>2?' +'+(activeSpeakers.length-2):''}
+        </span>:(pt?'Ninguém falando agora':'Nobody speaking right now')}
+      </span>
+      <button type="button" onClick={onRestore} className="inline-flex shrink-0 items-center gap-1 font-medium text-primary"
+        aria-label={pt?'Expandir chamada':'Expand call'}>
+        <Maximize2 className="size-3.5"/>{pt?'Expandir':'Expand'}
+      </button>
+    </div>
+  </section>;
   const remoteReady=peers.filter(p=>!p.isSelf&&connections[p.sessionId]==='connected').length;
   return <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6">
@@ -408,9 +463,15 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
               phase==='joining'?(pt?'Entrando…':'Joining…'):(pt?'Conecte-se para conversar':'Connect to join the conversation')}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground" role="status">
-          <span className={'size-2 rounded-full '+(phase==='joined'?'bg-emerald-500':phase==='joining'?'bg-amber-500':'bg-muted-foreground/40')}/>
-          {phase==='joined'?(pt?'Conectado':'Connected'):phase==='joining'?(pt?'Conectando':'Connecting'):(pt?'Desconectado':'Disconnected')}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground" role="status">
+            <span className={'size-2 rounded-full '+(phase==='joined'?'bg-emerald-500':phase==='joining'?'bg-amber-500':'bg-muted-foreground/40')}/>
+            {phase==='joined'?(pt?'Conectado':'Connected'):phase==='joining'?(pt?'Conectando':'Connecting'):(pt?'Desconectado':'Disconnected')}
+          </div>
+          {onMinimize&&<Button type="button" variant="outline" size="sm" onClick={onMinimize} className="min-h-10 gap-1.5"
+            aria-label={phase==='joined'?(pt?'Minimizar chamada':'Minimize call'):(pt?'Fechar sala':'Close room')}>
+            <Minimize2 className="size-4"/><span className="hidden sm:inline">{phase==='joined'?(pt?'Minimizar':'Minimize'):(pt?'Fechar':'Close')}</span>
+          </Button>}
         </div>
       </div>
       {error&&<div role="alert" className="mx-auto mt-4 max-w-5xl rounded-xl border border-destructive/35 bg-destructive/5 p-3 text-xs text-destructive">
