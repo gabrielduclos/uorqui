@@ -55,7 +55,9 @@ async function roomPeers(channelId:string,me:string,sessionId:string){
     'FROM community_voice_sessions s JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=s.user_id '+
     'JOIN community_channels c ON c.id=s.channel_id JOIN community_members m ON m.community_id=c.community_id AND m.user_id=s.user_id '+
     'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
-    'WHERE s.channel_id=$1 AND '+activePresence+' ORDER BY s.joined_at,s.id LIMIT 8',
+    'WHERE s.channel_id=$1 AND '+activePresence+' '+
+    'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=$2) '+
+    'OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) ORDER BY s.joined_at,s.id LIMIT 8',
     [channelId,me],
   );
   return result.rows.map(peer=>({...peer,isSelf:peer.sessionId===sessionId}));
@@ -159,7 +161,9 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'JOIN community_voice_sessions t ON t.channel_id=s.channel_id AND t.id=$3 '+
         'JOIN community_members theirs ON theirs.community_id=c.community_id AND theirs.user_id=t.user_id '+
         'WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$6 AND c.community_id=$7 AND c.kind=\'voice\' '+
-        "AND s.last_seen_at>now()-interval '45 seconds' AND t.last_seen_at>now()-interval '45 seconds' RETURNING id",
+        "AND s.last_seen_at>now()-interval '45 seconds' AND t.last_seen_at>now()-interval '45 seconds' "+
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=t.user_id) '+
+        'OR (b.blocker_id=t.user_id AND b.blocked_id=s.user_id)) RETURNING id',
         [sessionId,channelId,recipientSessionId,kind,payloadText,me,id]);
       if(!result.rowCount)return reply.code(404).send({error:'VOICE_PEER_UNAVAILABLE'});
       return reply.code(201).header('Cache-Control',noCache).send({ok:true});
