@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
+import CommunityVoiceRoom from './CommunityVoiceRoom';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -340,13 +341,13 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.name}</h2>
             <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
         </header>
-        {activeChannel.kind==='voice'?<div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6 text-center">
-          <div><Headphones className="mx-auto size-11 text-primary"/><h3 className="mt-3 font-semibold">{pt?'Sala de voz':'Voice room'}</h3>
-            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{pt?
-              'Esta sala já faz parte da comunidade. As chamadas de voz em tempo real serão habilitadas na próxima etapa de áudio.':
-              'This voice channel is now saved to your community. Real-time voice calling will be enabled in a dedicated audio phase.'}</p>
+        {activeChannel.kind==='voice'?(
+          channelOpen?<CommunityVoiceRoom key={community.id+'/'+activeChannel.id}
+            communityId={community.id} channelId={activeChannel.id}/>:
+          <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-center text-sm text-muted-foreground">
+            {pt?'Selecione uma sala para conectar o áudio.':'Select a voice room to connect audio.'}
           </div>
-        </div>:<>
+        ):<>
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             {!messages.length&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
