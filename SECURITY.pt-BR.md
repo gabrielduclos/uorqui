@@ -4,7 +4,7 @@
 
 ## Estado do projeto
 
-O novo Uorqui está em **pré-MVP**. Este repositório ainda não publicou um serviço; há apenas uma estrutura inicial de desenvolvimento. O mensageiro empresarial legado é um produto separado; esta política não descreve sua segurança.
+O novo Uorqui está na versão **`0.1.0-beta.1` (beta técnico)**. O PWA, a API Fastify e o banco Neon já foram publicados para testes controlados, mas ainda não existe certificação independente de segurança ou validação completa em celulares. O mensageiro empresarial antigo é separado e não está coberto por esta política.
 
 ## Como relatar vulnerabilidades
 
