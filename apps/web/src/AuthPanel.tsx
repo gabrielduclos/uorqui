@@ -58,6 +58,14 @@ function Spinner() {
   );
 }
 
+function verificationCallback(){
+  const match=/^\/invite\/([0-9a-f-]{36})\/?$/i.exec(window.location.pathname);
+  let pending=match?.[1]??null;
+  if(!pending){try{pending=localStorage.getItem('uorqui:pending-community-invite');}catch{}}
+  const url=new URL('/auth/email-verification?result=success',window.location.origin);
+  if(pending&&/^[0-9a-f-]{36}$/i.test(pending))url.searchParams.set('invite',pending);
+  return url.toString();
+}
 export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (account: Account) => void }) {
   const { t, theme } = useUorquiPreferences();
   const [account, setAccount] = useState<Account | null>(null);
@@ -222,7 +230,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         {
           method: 'POST',
           body: JSON.stringify(signup
-            ? { name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin + '/auth/email-verification?result=success', ...(token ? { captchaToken: token } : {}) }
+            ? { name: name.trim(), email: email.trim(), password, callbackURL: verificationCallback(), ...(token ? { captchaToken: token } : {}) }
             : { email: email.trim(), password }),
         },
       );
@@ -282,7 +290,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       if (token === null) return;
       const { response } = await requestJson('/api/auth/send-verification-email', {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim(), callbackURL: window.location.origin + '/auth/email-verification?result=success', ...(token ? { captchaToken: token } : {}) }),
+        body: JSON.stringify({ email: email.trim(), callbackURL: verificationCallback(), ...(token ? { captchaToken: token } : {}) }),
       });
       resetChallenge();
       setMessage(response.ok ? t("Se a conta estiver pendente, enviaremos um novo link de confirmação.") : t("Não foi possível reenviar o e-mail. Tente novamente."));
