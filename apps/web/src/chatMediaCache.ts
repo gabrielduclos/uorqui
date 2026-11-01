@@ -1,11 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
 /**
- * Private DM media: bounded tab-memory cache only. No Cache Storage, SW,
+ * Private message and feed media: bounded tab-memory cache only. No Cache Storage, SW,
  * IndexedDB, localStorage, public CDN, or persistent authorization bypass.
  * The first fetch always passes the Worker's per-message membership check.
  */
-const PRIVATE_DM_URL = /^\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/i;
+const PRIVATE_MEDIA_URL = /^(?:\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}|\/media\/feed\/[0-9a-f-]{36}|\/media\/community-attachment\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36})$/i;
 const LIMIT_BYTES = 90 * 1024 * 1024;
 const MAX_ITEM_BYTES = 50 * 1024 * 1024;
 const MAX_ITEMS = 36;
@@ -25,7 +25,7 @@ const entries = new Map<string, Item>();
 const listeners = new Set<() => void>();
 const notify = () => { for (const fn of listeners) fn(); };
 const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
-const snapshot = (src: string | null | undefined) => src && PRIVATE_DM_URL.test(src) ? entries.get(src)?.blobUrl ?? null : src ?? null;
+const snapshot = (src: string | null | undefined) => src && PRIVATE_MEDIA_URL.test(src) ? entries.get(src)?.blobUrl ?? null : src ?? null;
 
 function remove(url: string) {
   const item=entries.get(url);
@@ -57,7 +57,7 @@ function prune() {
   }
 }
 export async function ensureChatMediaCached(url: string): Promise<string | null> {
-  if(!PRIVATE_DM_URL.test(url))return url;
+  if(!PRIVATE_MEDIA_URL.test(url))return url;
   if(typeof document!=='undefined' && document.visibilityState==='hidden')return null;
   prune();
   const existing=entries.get(url);
@@ -104,6 +104,6 @@ export async function ensureChatMediaCached(url: string): Promise<string | null>
 /** Keep one stable object URL across the bubble and expanded viewer. */
 export function useCachedChatMedia(src: string | null | undefined, eager = true) {
   const cached=useSyncExternalStore(subscribe,()=>snapshot(src),()=>null);
-  useEffect(()=>{if(eager && src && PRIVATE_DM_URL.test(src))void ensureChatMediaCached(src);},[src,eager]);
+  useEffect(()=>{if(eager && src && PRIVATE_MEDIA_URL.test(src))void ensureChatMediaCached(src);},[src,eager]);
   return cached;
 }
