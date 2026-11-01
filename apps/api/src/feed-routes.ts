@@ -52,7 +52,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
     return exists.rows[0]?.id as string|undefined ?? null;
   }
   async function available(){
-    const result=await getPool().query("SELECT to_regclass('public.feed_posts') IS NOT NULL AND to_regclass('public.feed_media') IS NOT NULL AS ready");
+    const result=await getPool().query("SELECT to_regclass('public.feed_posts') IS NOT NULL AND to_regclass('public.feed_media') IS NOT NULL AND to_regclass('public.feed_follows') IS NOT NULL AND to_regclass('public.feed_likes') IS NOT NULL AND to_regclass('public.feed_comments') IS NOT NULL AS ready");
     return !!result.rows[0]?.ready;
   }
   function failed(req:FastifyRequest,reply:any,err:unknown,what:string){
