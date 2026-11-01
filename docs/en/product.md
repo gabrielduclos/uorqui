@@ -50,3 +50,11 @@ No unauthorized private content exposure; no silent message loss; clear upload l
 ## Out of scope for the first MVP
 
 Traditional group chats, large-scale livestreaming, creator payouts, marketplace, AI-first personalization, full federation, 1:1 video calls, and unlimited free media/voice.
+
+## Text-channel message reactions
+
+- Active community messages support emoji reactions from other members. Authors cannot react to their own messages, consistently with Uorqui's current chat behavior.
+- A member can react **once per emoji** on a message and use several distinct emojis. Reaction chips show the emoji and count; the member's own selections are highlighted. Clicking a selected reaction removes it; the `+` control opens the compact emoji picker.
+- Message lists expose `reactions: [{emoji,count,mine}]` and `canReact` and refresh during normal channel polling. Authenticated `PUT` and `DELETE /api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions` accept `{emoji}` and enforce Origin and membership checks.
+- Reactions are not separate messages; canceled messages hide reactions and reject further changes.
+- Additive Drizzle migration **`0017_community_message_reactions`** creates `community_message_reactions`. Apply it to Neon PostgreSQL before enabling reactions in production. Until migration, channel histories remain readable and reaction writes return unavailable.
