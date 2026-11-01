@@ -12,6 +12,7 @@ import { registerDirectMessageRoutes } from './direct-message-routes.js';
 import { registerFriendRoutes } from './friend-routes.js';
 import { registerBlockRoutes } from './block-routes.js';
 import { registerCommunityRoutes } from './community-routes.js';
+import { registerCommunityInviteLinks } from './community-invite-links.js';
 import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
 import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
 import { closeDmEvents } from './dm-events.js';
@@ -239,6 +240,7 @@ registerDirectMessageRoutes(app, async request => readSession(request));
 registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));
 registerCommunityRoutes(app, async request => readSession(request));
+registerCommunityInviteLinks(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
 registerCommunityModerationRoutes(app, async request => readSession(request));
 
