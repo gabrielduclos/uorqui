@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHmac, createECDH, randomBytes } from 'node:crypto';
+import { signPushDelivery } from '../dist/push-routes.js';
 import { spawn } from 'node:child_process';
 import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -7,6 +8,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 const origin = 'http://localhost:5173';
 const base = 'http://127.0.0.1:3049';
 const ATTACHMENT_SECRET='test-only-attachment-hmac-secret-a7e012739318ee99';
+const vapid=createECDH('prime256v1');vapid.generateKeys();
+const vapidPublic=vapid.getPublicKey().toString('base64url');
+const vapidPrivate=vapid.getPrivateKey().toString('base64url');
+process.env.VAPID_PUBLIC_KEY=vapidPublic;
+process.env.VAPID_PRIVATE_KEY=vapidPrivate;
 function proof(conversationId,clientId,a){
   const canonical=JSON.stringify([conversationId,clientId,a.id,a.name,a.type,a.size]);
   return createHmac('sha256',ATTACHMENT_SECRET).update(canonical).digest('hex');
@@ -720,4 +726,58 @@ test('account blocking revokes contact, messages and profile photos in both dire
   assert.equal((await alice(avatarAccess)).status,200,'public avatar is available again after unblocking');
   assert.equal((await alice(coverAccess)).status,200,'public cover is available again after unblocking');
   assert.equal((await alice('/api/v1/dm/conversations/'+id+'/messages','POST',{body:'unblocked',clientId:crypto.randomUUID()})).status,201);
+});
+
+test('web push: opt-in authorization and signed device receipt without a read receipt',async()=>{
+  const from=visitor(),to=visitor(),anonymous=visitor();
+  const fromId=await createUser(from,'Push Sender','push_sender_v2');
+  const toId=await createUser(to,'Push Recipient','push_recipient_v2');
+  const config=await anonymous('/api/v1/push/config');
+  assert.equal(config.status,200);
+  assert.equal(config.data.enabled,true);
+  assert.equal(config.data.publicKey,vapidPublic);
+  const fakeEndpoint='https://fcm.googleapis.com/fcm/send/test-endpoint';
+  const receiver=createECDH('prime256v1');receiver.generateKeys();
+  const sub={endpoint:fakeEndpoint,keys:{
+    p256dh:receiver.getPublicKey().toString('base64url'),
+    auth:randomBytes(16).toString('base64url')
+  }};
+  assert.equal((await anonymous('/api/v1/push/subscription','POST',{subscription:sub})).status,401);
+  assert.equal((await to('/api/v1/push/subscription','POST',{subscription:sub},false)).status,403);
+  const malicious={...sub,endpoint:'https://127.0.0.1/internal'};
+  assert.equal((await to('/api/v1/push/subscription','POST',{subscription:malicious})).status,400);
+  assert.equal((await to('/api/v1/push/subscription','POST',{subscription:sub})).status,200);
+
+  const created=await from('/api/v1/dm/conversations','POST',{handle:'push_recipient_v2'});
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const conversationId=created.data.id;
+  const message=await from('/api/v1/dm/conversations/'+conversationId+'/messages','POST',{
+    body:'push test message',clientId:crypto.randomUUID()
+  });
+  assert.equal(message.status,201);
+  const messageId=message.data.message.id;
+  const revision=new Date(message.data.message.createdAt).toISOString();
+  const proof=signPushDelivery(toId,conversationId,messageId,revision);
+  assert.equal((await from('/api/v1/push/delivered','POST',{messageId,conversationId,proof})).status,403);
+  assert.equal((await to('/api/v1/push/delivered','POST',{messageId,conversationId,proof:'bad'})).status,403);
+  assert.equal((await to('/api/v1/push/delivered','POST',{messageId,conversationId,proof},false)).status,403);
+  const delivered=await to('/api/v1/push/delivered','POST',{messageId,conversationId,proof});
+  assert.equal(delivered.status,200,JSON.stringify(delivered.data));
+  assert.equal(delivered.data.received,true);
+  const repeated=await to('/api/v1/push/delivered','POST',{messageId,conversationId,proof});
+  assert.equal(repeated.status,200);
+  assert.equal(repeated.data.received,false,'duplicate push acknowledgement must be idempotent');
+  const after=await from('/api/v1/dm/conversations/'+conversationId+'/messages');
+  assert.equal(after.data.messages.find(m=>m.id===messageId).readAt,null);
+  assert.ok(after.data.messages.find(m=>m.id===messageId).deliveredAt);
+  assert.equal((await from('/api/v1/push/subscription','DELETE',{endpoint:fakeEndpoint})).status,200,
+    'a different account cannot revoke the recipient subscription');
+  assert.equal((await to('/api/v1/push/subscription','DELETE',{endpoint:fakeEndpoint})).status,200);
+  const db=(await import('pg')).default;
+  const client=new db.Client({connectionString:process.env.DATABASE_URL});
+  await client.connect();
+  try{
+    const result=await client.query('SELECT count(*)::int AS n FROM push_subscriptions WHERE user_id=$1',[toId]);
+    assert.equal(result.rows[0].n,0);
+  }finally{await client.end();}
 });
