@@ -161,6 +161,16 @@ export const feedMedia = pgTable('feed_media', {
   check('feed_media_position', sql`${table.position} BETWEEN 0 AND 5`),
   check('feed_media_size', sql`${table.size} BETWEEN 1 AND 52428800`),
 ]);
+/** Follow relationships are independent from mutual friendships and chat permissions. */
+export const feedFollows = pgTable('feed_follows', {
+  followerId: uuid('follower_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  followedId: uuid('followed_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  primaryKey({ columns: [table.followerId, table.followedId] }),
+  index('feed_follows_followed_idx').on(table.followedId),
+  check('feed_follows_not_self', sql`${table.followerId} <> ${table.followedId}`),
+]);
 export const feedLikes = pgTable('feed_likes', {
   postId: uuid('post_id').notNull().references(() => feedPosts.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
