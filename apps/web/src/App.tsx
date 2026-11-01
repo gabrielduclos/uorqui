@@ -165,7 +165,8 @@ function AppContent() {
     return ()=>{active=false;};
   },[inviteToken]);
   useEffect(()=>{
-    if(!inviteToken||!account?.profile||invitedCommunity)return;
+    // A second invite can be accepted in the same signed-in session.
+    if(!inviteToken||!account?.profile)return;
     let active=true;setInviteBusy(true);
     void fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken)+'/redeem',{
       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'
@@ -180,7 +181,7 @@ function AppContent() {
           'Não foi possível aceitar o convite. / Could not redeem the invitation.');}})
       .finally(()=>{if(active)setInviteBusy(false);});
     return ()=>{active=false;};
-  },[account?.profile,inviteToken,invitedCommunity]);
+  },[account?.profile,inviteToken]);
   const onAuthenticated = useCallback((next: Account) => {
     clearChatMediaCache();clearFeedSessionCache();setAccount(next);
   }, []);
@@ -198,13 +199,14 @@ function AppContent() {
     clearChatMediaCache();
     clearFeedSessionCache();
     setAccount(null);
+    setInvitedCommunity(null);
   }, []);
 
   return (
     <MotionConfig reducedMotion="user">
       {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
         <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)}
-          invitedCommunityId={invitedCommunity} />
+          invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
       {inviteToken && !publicHandle && !isVerificationResult && !legalDocument && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
         <button type="button" className="absolute right-2 top-2 rounded-md p-1.5 hover:bg-secondary"
