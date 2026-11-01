@@ -133,3 +133,11 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - Operações destrutivas (banimento, expulsão, desbanimento e exclusão do canal) exigem confirmação explícita na interface.
 - Controles exibidos conforme a hierarquia dos cargos. A API valida novamente cada operação; esconder botões não é a estratégia de segurança.
 - Mensagens permitem edição do próprio autor, cancelamento e visualização de uma marcação discreta após remoção. Moderadores recebem a ação de cancelar mensagens de outros membros.
+
+## Salas de voz — apresentação estilo Discord
+
+- A área principal usa **grade responsiva de participantes** com avatares grandes, nomes e indicação real de microfone/conexão. Não inventar animações de fala nem mostrar status conectado sem confirmação de sessão.
+- O rodapé da chamada fica fixo dentro do painel, com ações compactas: **mutar microfone**, **silenciar áudio (deafen)** e **desconectar**. Deafen silencia saída e microfone; ao desfazer, restaura o estado anterior do microfone.
+- A coluna lateral de canais mostra os participantes ativos do canal em uso. Ao sair, a lista e os estados locais são limpos.
+- Remover da tela da chamada textos técnicos explicativos de WebRTC, STUN, TURN e armazenamento de áudio. Essas informações permanecem na documentação técnica e só aparecem ao usuário quando houver erro real de conexão.
+- Preservar o header de contexto fixo, a área rolável interna, o tema claro/escuro, os controles de pelo menos 44px e a navegação mobile sem deslocamento com teclado.

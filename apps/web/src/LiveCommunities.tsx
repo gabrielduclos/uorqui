@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, Plus, Search, Send, UserPlus, Users, Volume2, X } from 'lucide-react';
+import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, UserPlus, Users, Volume2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -335,7 +335,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                     title={person.displayName}>
                     <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
                     <span className="min-w-0 flex-1 truncate">{person.displayName}</span>
-                    {person.muted&&<span className="text-destructive" aria-label={pt?'Microfone silenciado':'Microphone muted'}>×</span>}
+                    {person.muted&&<MicOff className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Microfone silenciado':'Microphone muted'}/>}
                   </div>)}
                 </div>}
               </div>)}</section>
