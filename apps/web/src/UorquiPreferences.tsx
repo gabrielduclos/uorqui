@@ -125,6 +125,13 @@ const en: Record<string, string> = {
   'Um espaço contínuo para textos, fotos e vídeos da sua rede.': 'A continuous stream of text, photos and videos from your network.',
   'Grupos com canais de texto e salas de voz organizados por assunto.': 'Communities with text channels and voice rooms organized by topic.',
   'Identidade Uorqui': 'Your Uorqui identity',
+  'Escolher forma de acesso': 'Choose sign-in method',
+  'Como devemos chamar você?': 'What should we call you?',
+  'Voltar para entrar': 'Back to sign in',
+  'Converse, compartilhe e participe das suas comunidades.': 'Chat, share and join your communities.',
+  'Converse, compartilhe e participe de comunidades em um só lugar.': 'Chat, share and join communities in one place.',
+  'Crie seu perfil para participar do feed e das comunidades.': 'Create your profile to join the feed and communities.',
+
   'Criar sua conta': 'Create your account', 'Recuperar acesso': 'Recover access',
   'Confirme seu e-mail': 'Confirm your email', 'Definir nova senha': 'Set a new password',
   'Entrar': 'Sign in', 'Seu perfil no Uorqui.': 'Your Uorqui profile.',
