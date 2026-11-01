@@ -134,6 +134,13 @@
       "when": 1793505800000,
       "tag": "0018_community_message_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793507600000,
+      "tag": "0019_hybrid_feed",
+      "breakpoints": true
     }
   ]
 }
