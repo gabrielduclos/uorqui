@@ -385,6 +385,7 @@ export default {
       }));
       const headers = new Headers(response.headers);
       headers.set('Cache-Control', 'no-store');
+      if(communityInviteNavigation)headers.set('Referrer-Policy','no-referrer');
       return new Response(response.body, { status: response.status, headers });
     }
     const apiPath = current.pathname.startsWith('/api/');
