@@ -283,6 +283,33 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     assert.equal(deletedAttachment.response.status,204);
     assert.equal((await fetch(browserOrigin+attachmentUrl,{headers:{cookie}})).status,404);
 
+    // Feed media: publish only after the Worker validates, stores and signs the asset.
+    const feedDraft=await request('/api/v1/feed/posts',{method:'POST',body:{body:'Worker media post',mediaCount:1}});
+    assert.equal(feedDraft.response.status,201,JSON.stringify(feedDraft.body));
+    const feedId=feedDraft.body.post.id;
+    const draftFromGuest=await fetch(browserOrigin+'/api/v1/feed/posts/'+feedId);
+    assert.equal(draftFromGuest.status,401);
+    const draftBeforePublish=await request('/api/v1/feed/posts/'+feedId+'/publish',{method:'POST',body:{}});
+    assert.equal(draftBeforePublish.response.status,409);
+    const feedUpload=await request('/api/media/feed/'+feedId+'/0',{method:'POST',rawBody:png,contentType:'image/png'});
+    assert.equal(feedUpload.response.status,201,JSON.stringify(feedUpload.body));
+    const feedPublish=await request('/api/v1/feed/posts/'+feedId+'/publish',{method:'POST',body:{}});
+    assert.equal(feedPublish.response.status,200,JSON.stringify(feedPublish.body));
+    const timeline=await request('/api/v1/feed/posts');
+    assert.equal(timeline.response.status,200);
+    const actual=timeline.body.posts.find(post=>post.id===feedId);
+    assert.equal(actual.media.length,1);
+    const feedMediaUrl='/media/feed/'+actual.media[0].id;
+    const feedPhoto=await fetch(browserOrigin+feedMediaUrl,{headers:{cookie}});
+    assert.equal(feedPhoto.status,200);
+    assert.equal(feedPhoto.headers.get('content-type'),'image/png');
+    assert.deepEqual(Buffer.from(await feedPhoto.arrayBuffer()),png);
+    assert.equal((await fetch(browserOrigin+feedMediaUrl)).status,404,'feed media requires current session');
+    assert.equal((await request('/api/v1/feed/posts/'+feedId+'/like',{method:'PUT'})).response.status,200);
+    assert.equal((await request('/api/v1/feed/posts/'+feedId+'/comments',{method:'POST',body:{body:'Great!'}})).response.status,201);
+    assert.equal((await request('/api/v1/feed/posts/'+feedId,{method:'DELETE'})).response.status,200);
+    assert.equal((await fetch(browserOrigin+feedMediaUrl,{headers:{cookie}})).status,404,'deleted media must not be viewable');
+
     const logout = await request('/api/auth/sign-out', { method: 'POST', body: {} });
     assert.equal(logout.response.status, 200, JSON.stringify(logout.body));
 
