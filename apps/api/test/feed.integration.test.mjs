@@ -75,7 +75,20 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal(comments.data.comments.length,1);
   assert.equal(comments.data.comments[0].body,'Nice post');
   assert.equal((await stranger('/api/v1/feed/posts/'+id+'/comments/'+reply.data.id,'DELETE')).status,404);
-  assert.equal((await friend('/api/v1/feed/posts/'+id+'/comments/'+reply.data.id,'DELETE')).status,204);
+  assert.equal((await owner('/api/v1/feed/posts/'+id+'/comments/'+reply.data.id,'DELETE')).status,204,
+    'the owner of a post may moderate a third-party comment');
+  const removed=await stranger('/api/v1/feed/posts/'+id+'/comments');
+  assert.equal(removed.status,200);
+  assert.equal(removed.data.comments.length,1,'deleted comment stays as a tombstone');
+  assert.equal(removed.data.comments[0].deleted,true);
+  assert.equal(removed.data.comments[0].body,'','deleted text must not leak');
+  assert.equal(removed.data.comments[0].authorHandle,null,'deleted author identity must be hidden');
+  assert.equal(removed.data.comments[0].canDelete,false);
+  assert.equal((await stranger('/api/v1/feed/posts/'+id)).data.post.commentCount,0);
+  assert.equal((await friend('/api/v1/feed/posts/'+id+'/comments/'+reply.data.id,'DELETE')).status,404);
+  const own=await friend('/api/v1/feed/posts/'+id+'/comments','POST',{body:'Another comment'});
+  assert.equal(own.status,201);
+  assert.equal((await friend('/api/v1/feed/posts/'+id+'/comments/'+own.data.id,'DELETE')).status,204);
   assert.equal((await owner('/api/v1/feed/posts/'+id,'PATCH',{body:'Edited feed post'})).status,200);
   assert.equal((await stranger('/api/v1/feed/posts/'+id)).data.post.body,'Edited feed post');
   assert.equal((await stranger('/api/v1/feed/posts/'+id,'DELETE')).status,404);
@@ -86,6 +99,12 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200);
   assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200,'idempotent follow');
   assert.equal((await friend('/api/v1/feed/follows/feed_owner')).data.following,true);
+  const stats=await stranger('/api/v1/profiles/feed_owner');
+  assert.equal(stats.status,200);
+  assert.equal(stats.data.profile.followersCount,1);
+  assert.equal(stats.data.profile.followingCount,0);
+  assert.equal(stats.data.profile.isPrivate,false);
+  assert.equal((await stranger('/api/v1/profiles/feed_owner/follows/followers')).data.users[0].handle,'feed_friend');
   assert.ok((await friend('/api/v1/feed/posts?filter=following')).data.posts.some(p=>p.id===id));
   assert.equal((await friend('/api/v1/feed/follows/feed_owner','DELETE')).status,200);
   assert.ok(!(await friend('/api/v1/feed/posts?filter=following')).data.posts.some(p=>p.id===id));
@@ -95,6 +114,16 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal((await owner('/api/v1/friends/requests/feed_friend/accept','POST')).status,200);
   const privateProfile=await owner('/api/v1/me/profile','PATCH',{isPublic:false});
   assert.equal(privateProfile.status,200,JSON.stringify(privateProfile.data));
+  const privateStats=await stranger('/api/v1/profiles/feed_owner');
+  assert.equal(privateStats.status,200);
+  assert.equal(privateStats.data.profile.isPrivate,true);
+  assert.equal(privateStats.data.profile.followersCount,1,'private profile still shows true follow totals');
+  assert.equal(privateStats.data.profile.followingCount,0);
+  assert.equal(privateStats.data.profile.avatarUrl,null);
+  assert.equal(privateStats.data.profile.bio,null);
+  assert.equal((await stranger('/api/v1/profiles/feed_owner/follows/followers')).status,403);
+  assert.equal((await friend('/api/v1/profiles/feed_owner/follows/following')).status,403,
+    'private relationship lists stay hidden even from friends');
   assert.equal((await stranger('/api/v1/feed/follows/feed_owner','PUT')).status,403,'private profile requires friendship');
   assert.ok((await friend('/api/v1/feed/posts?filter=following')).data.posts.some(p=>p.id===id));
   assert.equal((await stranger('/api/v1/feed/posts/'+id)).status,404);
