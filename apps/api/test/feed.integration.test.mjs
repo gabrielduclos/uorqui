@@ -79,12 +79,24 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal((await owner('/api/v1/feed/posts/'+id,'PATCH',{body:'Edited feed post'})).status,200);
   assert.equal((await stranger('/api/v1/feed/posts/'+id)).data.post.body,'Edited feed post');
   assert.equal((await stranger('/api/v1/feed/posts/'+id,'DELETE')).status,404);
-  // Friendship allows the "Following" tab to surface people in the user's network.
+  // Following is deliberately independent from friend requests.
+  assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT',null,false)).status,403);
+  assert.equal((await friend('/api/v1/feed/follows/feed_friend','PUT')).status,404,'no self-following');
+  assert.equal((await friend('/api/v1/feed/follows/feed_owner')).data.following,false);
+  assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200);
+  assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200,'idempotent follow');
+  assert.equal((await friend('/api/v1/feed/follows/feed_owner')).data.following,true);
+  assert.ok((await friend('/api/v1/feed/posts?filter=following')).data.posts.some(p=>p.id===id));
+  assert.equal((await friend('/api/v1/feed/follows/feed_owner','DELETE')).status,200);
+  assert.ok(!(await friend('/api/v1/feed/posts?filter=following')).data.posts.some(p=>p.id===id));
+  assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200);
+  // Mutual friendship unlocks posts on private profiles without granting access to strangers.
   assert.equal((await friend('/api/v1/friends/requests','POST',{handle:'feed_owner'})).status,201);
   assert.equal((await owner('/api/v1/friends/requests/feed_friend/accept','POST')).status,200);
-  assert.ok((await friend('/api/v1/feed/posts?filter=following')).data.posts.some(p=>p.id===id));
   const privateProfile=await owner('/api/v1/me/profile','PATCH',{isPublic:false});
   assert.equal(privateProfile.status,200,JSON.stringify(privateProfile.data));
+  assert.equal((await stranger('/api/v1/feed/follows/feed_owner','PUT')).status,403,'private profile requires friendship');
+  assert.ok((await friend('/api/v1/feed/posts?filter=following')).data.posts.some(p=>p.id===id));
   assert.equal((await stranger('/api/v1/feed/posts/'+id)).status,404);
   assert.ok(!(await stranger('/api/v1/feed/posts')).data.posts.some(p=>p.id===id));
   assert.equal((await friend('/api/v1/feed/posts/'+id)).status,200);
