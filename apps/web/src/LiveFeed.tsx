@@ -16,6 +16,8 @@ type Post={
 };
 type Comment={id:string;body:string;createdAt:string;authorHandle:string|null;authorName:string|null;authorAvatar:string|null;mine:boolean;canDelete:boolean;deleted:boolean};
 type FeedFilter='for-you'|'following';
+type FeedSnapshot={posts:Post[];cursor:string|null;hasMore:boolean;scrollTop:number;fetchedAt:number};
+const REVALIDATE_AFTER_MS=30_000;
 const mimeTypes=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime']);
 const LIMIT=50*1024*1024;
 async function api<T>(path:string,options:RequestInit={}):Promise<T>{
@@ -100,6 +102,10 @@ export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}
   const scrollRef=useRef<HTMLDivElement>(null);
   const bottomRef=useRef<HTMLDivElement>(null);
   const loadingRef=useRef(false);
+  const snapshots=useRef<Partial<Record<FeedFilter,FeedSnapshot>>>({});
+  const fetchedAtRef=useRef<Partial<Record<FeedFilter,number>>>({});
+  const activeRef=useRef(active);
+  activeRef.current=active;
   const [draft,setDraft]=useState('');
   const [files,setFiles]=useState<File[]>([]);
   const [preview,setPreview]=useState<string[]>([]);
@@ -142,43 +148,93 @@ export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}
     return ()=>urls.forEach(url=>URL.revokeObjectURL(url));
   },[files]);
 
+  // The timeline stays in memory per account and per filter; no private post body
+  // is written to Service Worker, Cache Storage, IndexedDB or localStorage.
   useEffect(()=>{
+    if(!active)return;
+    const snapshot=snapshots.current[filter];
+    if(snapshot && !refreshKey && Date.now()-snapshot.fetchedAt<REVALIDATE_AFTER_MS)return;
     const controller=new AbortController();
-    setLoading(true);setError('');setPosts([]);setCursor(null);setHasMore(true);
+    const prior=snapshots.current[filter];
+    if(!prior){setLoading(true);setError('');}
     loadingRef.current=false;
     void api<{posts:Post[];nextCursor:string|null}>('/api/v1/feed/posts?filter='+filter,{signal:controller.signal})
       .then(result=>{
         if(controller.signal.aborted)return;
-        setFeedReady(true);setPosts(result.posts);setCursor(result.nextCursor);setHasMore(!!result.nextCursor);setLoading(false);
+        const old=snapshots.current[filter];
+        const retainsOlder=!!old && old.posts.length>12 && !refreshKey;
+        const freshIds=new Set(result.posts.map(post=>post.id));
+        const merged=retainsOlder
+          ?[...result.posts,...old.posts.filter(post=>!freshIds.has(post.id))].slice(0,100)
+          :result.posts;
+        const nextCursor=retainsOlder?old.cursor:result.nextCursor;
+        const more=retainsOlder?old.hasMore:!!result.nextCursor;
+        const updated=Date.now();
+        fetchedAtRef.current[filter]=updated;
+        snapshots.current[filter]={posts:merged,cursor:nextCursor,hasMore:more,
+          scrollTop:scrollRef.current?.scrollTop??old?.scrollTop??0,fetchedAt:updated};
+        setFeedReady(true);setPosts(merged);setCursor(nextCursor);setHasMore(more);
+        setError('');setLoading(false);
       }).catch(e=>{
         if(controller.signal.aborted)return;
         setFeedReady(!(e instanceof Error&&e.message==='FEED_NOT_READY'));
+        // A failed revalidation does not erase the visible cached feed.
         setError(e instanceof Error&&e.message==='FEED_NOT_READY'?
           (pt?'O feed está aguardando a ativação do banco de dados.':'Feed database activation is pending.'):
-          (pt?'Não foi possível carregar as publicações.':'Could not load posts.'));
+          (pt?'Não foi possível atualizar as publicações.':'Could not refresh posts.'));
         setLoading(false);
       });
     return ()=>controller.abort();
-  },[filter,refreshKey,pt]);
+  },[active,filter,refreshKey,pt]);
+
+  function changeFilter(next:FeedFilter){
+    if(next===filter)return;
+    const updated=fetchedAtRef.current[filter]??Date.now();
+    snapshots.current[filter]={posts,cursor,hasMore,
+      scrollTop:scrollRef.current?.scrollTop??0,fetchedAt:updated};
+    const cached=snapshots.current[next];
+    setPosts(cached?.posts??[]);setCursor(cached?.cursor??null);
+    setHasMore(cached?.hasMore??true);
+    setLoading(!cached);setError('');setFilter(next);
+    window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:cached?.scrollTop??0,behavior:'instant'}));
+  }
+  useEffect(()=>{
+    if(!active){setVideoOpen(false);setVideoCommentsOpen(false);}
+  },[active]);
+  useEffect(()=>{
+    if(!active)return;
+    const onVisible=()=>{
+      if(document.visibilityState==='visible' &&
+        Date.now()-(fetchedAtRef.current[filter]??0)>REVALIDATE_AFTER_MS)
+        setRefreshKey(n=>n+1);
+    };
+    document.addEventListener('visibilitychange',onVisible);
+    return ()=>document.removeEventListener('visibilitychange',onVisible);
+  },[active,filter]);
 
   const loadMore=useCallback(async()=>{
-    if(loadingRef.current||!cursor||loading||!hasMore)return;
+    if(!activeRef.current||loadingRef.current||!cursor||loading||!hasMore)return;
     loadingRef.current=true;setLoadingMore(true);
     try{
       const result=await api<{posts:Post[];nextCursor:string|null}>('/api/v1/feed/posts?filter='+filter+'&cursor='+encodeURIComponent(cursor));
-      setPosts(old=>[...old,...result.posts.filter(p=>!old.some(existing=>existing.id===p.id))]);
+      const old=snapshots.current[filter];
+      const existing=old?.posts??posts;
+      const combined=[...existing,...result.posts.filter(p=>!existing.some(item=>item.id===p.id))].slice(0,100);
+      setPosts(combined);
       setCursor(result.nextCursor);setHasMore(!!result.nextCursor);
+      snapshots.current[filter]={posts:combined,cursor:result.nextCursor,hasMore:!!result.nextCursor,
+        scrollTop:scrollRef.current?.scrollTop??0,fetchedAt:fetchedAtRef.current[filter]??Date.now()};
     }catch{setError(pt?'Falha ao carregar mais publicações.':'Could not load more posts.');}
     finally{loadingRef.current=false;setLoadingMore(false);}
-  },[cursor,filter,loading,hasMore,pt]);
+  },[cursor,filter,loading,hasMore,pt,posts]);
 
   useEffect(()=>{
     const root=scrollRef.current,target=bottomRef.current;
-    if(!root||!target||!hasMore||loading)return;
+    if(!root||!target||!active||!hasMore||loading)return;
     const observer=new IntersectionObserver(entries=>{if(entries[0]?.isIntersecting)void loadMore();},
       {root,rootMargin:'600px',threshold:0});
     observer.observe(target);return ()=>observer.disconnect();
-  },[hasMore,loading,loadMore]);
+  },[active,hasMore,loading,loadMore]);
 
   useEffect(()=>{
     const wanted=new URLSearchParams(window.location.search).get('post');
@@ -469,9 +525,9 @@ export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}
           </form>
         </div>
         <div className="flex gap-2 border-b border-border pb-2">
-          <Button size="sm" variant={filter==='for-you'?'secondary':'ghost'} onClick={()=>{setFilter('for-you');scrollRef.current?.scrollTo(0,0);}}
+          <Button size="sm" variant={filter==='for-you'?'secondary':'ghost'} onClick={()=>changeFilter('for-you')}
             aria-pressed={filter==='for-you'}>{pt?'Para você':'For you'}</Button>
-          <Button size="sm" variant={filter==='following'?'secondary':'ghost'} onClick={()=>{setFilter('following');scrollRef.current?.scrollTo(0,0);}}
+          <Button size="sm" variant={filter==='following'?'secondary':'ghost'} onClick={()=>changeFilter('following')}
             aria-pressed={filter==='following'}>{pt?'Seguindo':'Following'}</Button>
         </div>
         {notice&&<div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
@@ -515,7 +571,7 @@ export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}
             </div>
           </form>:post.body&&<p className="mt-3 whitespace-pre-wrap wrap-break-word text-sm leading-6 sm:text-base">{post.body}</p>}
           <PostGallery post={post} onZoom={setZoom}/>
-          <FeedVideo post={post} open={()=>openVideo(post)} paused={videoOpen}/>
+          <FeedVideo post={post} open={()=>openVideo(post)} paused={videoOpen||!active}/>
           <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/70 pt-2">
             <Button type="button" size="sm" variant="ghost" disabled={likeBusy===post.id}
               onClick={()=>void toggleLike(post)} className={post.liked?'text-rose-500':''}
