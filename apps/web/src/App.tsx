@@ -157,6 +157,8 @@ function AppContent() {
 
   useEffect(()=>{
     if(!inviteToken)return;
+    setInvitePreview(null);
+    setInviteError('');
     let active=true;
     void fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken),{cache:'no-store'})
       .then(async r=>{if(!r.ok)throw Error('INVITE_EXPIRED');return r.json() as Promise<{community:{name:string}}>})
@@ -176,6 +178,8 @@ function AppContent() {
         setInvitedCommunity(data.communityId);setInviteToken(null);
         try{localStorage.removeItem(INVITE_KEY);}catch{}
         window.history.replaceState(null,'','/');
+        // Verification callbacks may already have an authenticated session.
+        setIsVerificationResult(false);
       }).catch(err=>{if(active){setInviteError(err instanceof Error&&err.message==='COMMUNITY_BANNED'?
           'Você foi banido desta comunidade. / You are banned from this community.':
           'Não foi possível aceitar o convite. / Could not redeem the invitation.');}})
