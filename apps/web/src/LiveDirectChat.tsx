@@ -8,6 +8,7 @@ import { LiveMessageComposer } from './LiveMessageComposer';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
+import { InternalShareDialog } from './InternalShareDialog';
 import { FriendsPanel } from './FriendsPanel';
 import { AccountBlockButton } from './AccountBlockButton';
 import { clearProfileImageCache } from './profileImageCache';
@@ -143,7 +144,6 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const [actionBusy, setActionBusy] = useState(false);
   const [actionNotice, setActionNotice] = useState('');
   const draftBeforeEdit = useRef('');
-  const forwardAttempt = useRef<{ sourceId: string; targetId: string; clientId: string } | null>(null);
   const realtimeConnected = useRef(false);
   const lastThreadFallback = useRef(0);
   const lastMessageFallback = useRef(0);
@@ -234,7 +234,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     setIncoming(null);
     setReplySource(null);
     setReactionOverrides({});
-    setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
+    setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice('');
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
   }, []);
@@ -252,7 +252,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     positionedRef.current = false;
     setReplySource(null);
     setReactionOverrides({});
-    setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice(''); forwardAttempt.current = null;
+    setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice('');
     setDraft('');
 
   }, []);
@@ -527,7 +527,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     const onEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (cancelTarget) { event.preventDefault(); setCancelTarget(null); return; }
-      if (forwardTarget) { event.preventDefault(); setForwardTarget(null); forwardAttempt.current = null; return; }
+      if (forwardTarget) { event.preventDefault(); setForwardTarget(null); return; }
       if (editing) { event.preventDefault(); cancelEdit(); return; }
       if (replySource) { setReplySource(null); return; }
       if (activeIdRef.current) { event.preventDefault(); closeThread(); }
@@ -594,23 +594,6 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
         return next;
       });
     }
-  }
-  async function forward(targetId: string) {
-    if (!forwardTarget || !activeId || targetId === activeId || actionBusy) return;
-    const source = forwardTarget, id = activeId, previous = forwardAttempt.current;
-    const clientId = previous?.sourceId === source.id && previous.targetId === targetId ? previous.clientId : crypto.randomUUID();
-    forwardAttempt.current = { sourceId:source.id, targetId, clientId };
-    setActionBusy(true); setChatError('');
-    try {
-      await api('/api/v1/dm/conversations/' + id + '/messages/' + source.id + '/forward',{
-        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetConversationId:targetId,clientId}),
-      });
-      const peer = threads.find(t => t.id === targetId);
-      setActionNotice(pt ? 'Encaminhada para ' + (peer?.peerName ?? 'conversa') : 'Forwarded to ' + (peer?.peerName ?? 'chat'));
-      setForwardTarget(null); forwardAttempt.current = null;
-      await loadThreads();
-    } catch { setChatError(pt ? 'Falha ao encaminhar. Tente novamente.' : 'Forward failed. Retry.'); }
-    finally { setActionBusy(false); }
   }
   async function submitPending(pending: PendingMessage) {
     setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'sending',statusUpdatedAt:new Date().toISOString()} : p));
@@ -871,7 +854,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
                     disabled={!active.canMessage || actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
-                    onForward={message => { forwardAttempt.current = null; setActionNotice(''); setForwardTarget(message); }}
+                    onForward={message => { setActionNotice(''); setForwardTarget(message); }}
                     onReact={(message, emoji) => void react(message, emoji)}
                     onRetry={message => {
                       const pending = pendingMessages.find(p => p.clientId === message.clientId);
@@ -942,30 +925,11 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             </div>
           </div>
         </div>}
-        {forwardTarget && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/65 p-4 backdrop-blur-sm">
-          <div role="dialog" aria-modal="true" aria-labelledby="forward-direct-message-title"
-            className="flex max-h-[min(520px,75dvh)] w-full max-w-md flex-col rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-2xl">
-            <div className="flex items-center justify-between gap-2">
-              <h3 id="forward-direct-message-title" className="font-semibold">{pt ? 'Encaminhar mensagem' : 'Forward message'}</h3>
-              <button type="button" aria-label={pt ? 'Cancelar encaminhamento' : 'Cancel forward'} disabled={actionBusy}
-                onClick={() => { setForwardTarget(null); forwardAttempt.current = null; }} className="grid size-9 place-items-center rounded-md hover:bg-accent"><X className="size-4"/></button>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">{pt ? 'Escolha uma conversa de destino.' : 'Select a destination conversation.'}</p>
-            <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
-              {threads.filter(thread => thread.id !== activeId).map(thread => <button type="button" key={thread.id}
-                disabled={actionBusy} onClick={() => void forward(thread.id)}
-                className="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-accent disabled:opacity-50">
-                <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
-                <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{thread.peerName}</strong>
-                  <span className="block truncate text-xs text-muted-foreground">@{thread.peerHandle}</span></span>
-              </button>)}
-              {threads.length <= 1 && <p className="px-2 py-8 text-center text-sm text-muted-foreground">
-                {pt ? 'Abra outra conversa para poder encaminhar uma mensagem.' : 'Start another conversation to forward this message.'}
-              </p>}
-            </div>
-            {chatError && <p role="alert" className="mt-2 text-xs text-destructive">{chatError}</p>}
-          </div>
-        </div>}
+        <InternalShareDialog source={forwardTarget?{
+          kind:'message',messageId:forwardTarget.id,conversationId:forwardTarget.conversationId,
+          body:forwardTarget.body,attachment:forwardTarget.attachment
+        }:null} onClose={()=>setForwardTarget(null)}
+          onSent={name=>{setActionNotice(pt?'Compartilhado com '+name:'Shared with '+name);void loadThreads().catch(()=>{});}}/>
       </> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
         <MessageCircle className="size-10 text-primary"/>
         <h3 className="font-semibold">{pt ? 'Selecione uma conversa' : 'Select a conversation'}</h3>
@@ -974,7 +938,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     </section>
 
     <ChatMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId}
-      onClose={()=>setMediaViewerId(null)} onSendEdited={file=>sendAttachment(file,'')} locale={locale}/>
+      onClose={()=>setMediaViewerId(null)} onSendEdited={file=>sendAttachment(file,'')}
+      onShareMedia={message=>{setMediaViewerId(null);setForwardTarget(message);setActionNotice('');}}
+      locale={locale}/>
     {incoming && <aside role="status" aria-live="polite"
       className="absolute left-3 right-3 top-3 z-40 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-xl">
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left"
