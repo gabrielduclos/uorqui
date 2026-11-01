@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import {publishCommunityEvent,subscribeCommunityEvents} from './community-events.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -64,6 +65,49 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     const r=await getPool().query('SELECT role FROM community_members WHERE community_id=$1 AND user_id=$2',[id,me]);
     return (r.rows[0]?.role as string|undefined)??null;
   }
+
+  // The same authenticated Server-Sent Events pattern as direct messages.
+  // A single listener handles all connected members; the stream expires after
+  // five minutes so membership and account permissions are re-validated.
+  app.get('/api/v1/communities/events',async(request,reply)=>{
+    try{
+      const me=await self(request);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      if(!(request.headers.accept??'').includes('text/event-stream'))
+        return reply.code(406).send({error:'Expected event stream'});
+      const groups=await getPool().query('SELECT community_id FROM community_members WHERE user_id=$1',[me]);
+      const response=reply.raw;
+      response.writeHead(200,{
+        'Content-Type':'text/event-stream; charset=utf-8',
+        'Cache-Control':'private, no-store, no-transform',
+        Connection:'keep-alive',
+        'X-Accel-Buffering':'no',
+        'X-Content-Type-Options':'nosniff',
+      });
+      reply.hijack();
+      let ended=false;
+      let unsubscribe=()=>{};
+      const write=(value:string)=>{
+        if(ended||response.destroyed||response.writableEnded)return;
+        try{response.write(value);}catch{finish();}
+      };
+      const heartbeat=setInterval(()=>write(': heartbeat\n\n'),15_000);
+      const expires=setTimeout(()=>finish(),5*60_000);
+      function finish(){
+        if(ended)return;
+        ended=true;clearInterval(heartbeat);clearTimeout(expires);
+        unsubscribe();
+        if(!response.writableEnded)response.end();
+      }
+      response.once('close',finish);
+      unsubscribe=await subscribeCommunityEvents(
+        groups.rows.map((r:{community_id:string})=>r.community_id),
+        event=>write('event: community-update\ndata: '+JSON.stringify(event)+'\n\n'));
+      if(response.destroyed){finish();return;}
+      write('retry: 2000\n\n');
+      write('event: ready\ndata: {}\n\n');
+    }catch(error){request.log.error({err:error},'Community events');if(!reply.sent)return reply.code(503).send({error:'Unavailable'});}
+  });
 
   app.get('/api/v1/communities',async(request,reply)=>{
     try {
@@ -314,6 +358,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const result=await getPool().query(
         'INSERT INTO community_channels(community_id,name,kind) VALUES($1,$2,$3) RETURNING id,name,kind',
         [id,normalized,kind]);
+      void publishCommunityEvent(id,result.rows[0].id,'channel').catch(()=>{});
       return reply.code(201).header('Cache-Control',noCache).send({channel:result.rows[0]});
     }catch(error){
       if(typeof error==='object'&&error!==null&&'code' in error&&error.code==='23505')
@@ -397,6 +442,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         if(!existing.rowCount||existing.rows[0].author_id!==me)return reply.code(404).send({error:'Channel unavailable'});
         return reply.header('Cache-Control',noCache).send({id:existing.rows[0].id,duplicate:true});
       }
+      void publishCommunityEvent(id,channelId,'message').catch(()=>{});
       return reply.code(201).header('Cache-Control',noCache).send({id:saved.rows[0].id});
     }catch(error){request.log.error({err:error},'Send community message');return reply.code(503).send({error:'Unavailable'});}
   });
