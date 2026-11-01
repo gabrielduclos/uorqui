@@ -4,6 +4,7 @@ import { Github, MessageCircle, Users, Newspaper, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import AuthPanel, { type Account } from './AuthPanel';
+import { UorquiWordmark } from './UorquiWordmark';
 import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
@@ -24,7 +25,7 @@ function StartupSplash() {
   return (
     <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-background p-6" role="status" aria-live="polite" aria-label={t("Iniciando Uorqui")}>
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="text-center">
-        <div className="text-5xl font-bold tracking-tight">uorqui<span className="text-primary">.</span></div>
+        <UorquiWordmark className="mx-auto h-11 w-auto max-w-[85vw] text-foreground"/>
         <p className="mt-3 text-sm text-muted-foreground">{t("Preparando sua experiência…")}</p>
         <div className="mt-6 h-1 w-52 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
           <motion.div className="h-full w-1/3 rounded-full bg-primary" initial={{ x: '-100%' }} animate={{ x: '310%' }} transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }} />
@@ -47,7 +48,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
       <div aria-hidden="true" className="pointer-events-none absolute -top-48 left-1/2 size-120 -translate-x-1/2 rounded-full bg-primary/15 blur-[100px]" />
       <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col px-0 sm:px-8 lg:px-10">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:px-0 sm:py-4">
-          <span className="text-2xl font-bold tracking-tight">uorqui<span className="text-primary">.</span></span>
+          <UorquiWordmark className="h-6 w-auto max-w-[45vw] text-foreground"/>
           <div className="flex shrink-0 items-center gap-2">
             <PreferencesControls />
           </div>
