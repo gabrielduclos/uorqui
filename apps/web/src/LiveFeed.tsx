@@ -6,7 +6,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { ZoomableChatImage } from './ZoomableChatImage';
-import { invalidateChatMedia, useCachedChatMedia } from './chatMediaCache';
+import { invalidateChatMedia, useCachedChatMedia, useCachedFeedVideo } from './chatMediaCache';
+import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { clearFeedSessionCache,readFeedSession,readFeedSessionFilter,writeFeedSession } from './feedSessionCache';
 
 type Media={id:string;type:string;size:number;position:number};
@@ -31,6 +32,17 @@ const requestBody=(data:unknown):RequestInit=>({method:'POST',headers:{'Content-
 const mediaUrl=(id:string)=>'/media/feed/'+id;
 function FeedVideo({post,open,paused}:{post:Post;open:()=>void;paused:boolean}){
   const ref=useRef<HTMLVideoElement>(null);
+  const video=post.media.find(m=>m.type.startsWith('video/'));
+  const [nearby,setNearby]=useState(false);
+  const {src,loading:videoLoading}=useCachedFeedVideo(video?mediaUrl(video.id):null,nearby);
+  useEffect(()=>{
+    const element=ref.current;
+    if(!element)return;
+    const proximity=new IntersectionObserver(entries=>setNearby(!!entries[0]?.isIntersecting),
+      {rootMargin:'600px',threshold:0});
+    proximity.observe(element);
+    return ()=>proximity.disconnect();
+  },[]);
   useEffect(()=>{
     const video=ref.current;if(!video)return;
     if(paused){video.pause();return;}
@@ -44,16 +56,28 @@ function FeedVideo({post,open,paused}:{post:Post;open:()=>void;paused:boolean}){
     },{threshold:[0,0.7,1]});
     observer.observe(video);
     return ()=>{observer.disconnect();window.removeEventListener('uorqui:feed-active-video',onOther);video.pause();};
-  },[paused,post.id]);
-  const video=post.media.find(m=>m.type.startsWith('video/'));
+  },[paused,post.id,src]);
   if(!video)return null;
   return <button type="button" className="group relative mt-3 block w-full overflow-hidden rounded-xl bg-black" onClick={open}
     aria-label="Abrir vídeo">
-    <video ref={ref} src={mediaUrl(video.id)} muted loop playsInline preload="metadata"
+    <video ref={ref} src={src??undefined} muted loop playsInline preload="metadata"
       className="mx-auto max-h-[min(74dvh,600px)] w-full object-contain" />
+    {videoLoading&&nearby&&<span className="pointer-events-none absolute inset-0 grid place-items-center text-white"
+      role="status" aria-label="Carregando vídeo"><Spinner className="size-6"/></span>}
     <span className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/65 px-3 py-1.5 text-xs text-white">
       <Play className="size-3.5"/>Vídeo</span>
   </button>;
+}
+/** Reuse the already authorized in-memory video file across the timeline and immersive player. */
+function ExpandedFeedVideo({mediaId}:{mediaId:string}){
+  const video=useRef<HTMLVideoElement>(null);
+  const isPresent=useIsPresent();
+  const {src,loading}=useCachedFeedVideo(mediaUrl(mediaId));
+  useEffect(()=>{if(!isPresent)video.current?.pause();},[isPresent]);
+  return src?<video ref={video} autoPlay loop playsInline controls src={src}
+    className="max-h-full max-w-full object-contain"/>:
+    <div role="status" aria-label="Carregando vídeo"
+      className="flex items-center justify-center text-white/75">{loading&&<Spinner className="size-7"/>}</div>;
 }
 function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
   const items=post.media.filter(item=>item.type.startsWith('image/'));
@@ -159,6 +183,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const [videoCommentsOpen,setVideoCommentsOpen]=useState(false);
   const [videos,setVideos]=useState<Post[]>([]);
   const [videoIndex,setVideoIndex]=useState(0);
+  const [videoDirection,setVideoDirection]=useState<1|-1>(1);
   const [videoCursor,setVideoCursor]=useState<string|null>(null);
   const [videoLoading,setVideoLoading]=useState(false);
   const gesture=useRef<number|null>(null);
@@ -492,11 +517,14 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     finally{setVideoLoading(false);videoBusy.current=false;}
   },[pt]);
   function openVideo(post?:Post){
-    setVideoCommentsOpen(false);setVideoOpen(true);setVideoIndex(0);setVideos(post?[post]:[]);
+    setVideoDirection(1);setVideoCommentsOpen(false);setVideoOpen(true);setVideoIndex(0);setVideos(post?[post]:[]);
     videosRef.current=post?[post]:[];videoCursorRef.current=null;
     void fetchVideos(true,post);
   }
   function nextVideo(delta:number){
+    const target=Math.max(0,Math.min(videosRef.current.length-1,videoIndex+delta));
+    if(target===videoIndex)return;
+    setVideoDirection(delta>0?1:-1);
     setVideoCommentsOpen(false);
     setVideoIndex(current=>{
       const next=Math.max(0,Math.min(videosRef.current.length-1,current+delta));
@@ -662,9 +690,18 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
           <ArrowLeft className="size-5"/>{pt?'Voltar':'Back'}</button>
         <strong className="text-sm">{pt?'Vídeos':'Videos'}</strong><span className="text-xs opacity-75">{videos.length?videoIndex+1+'/'+videos.length:''}</span>
       </header>
-      {activeVideo&&activeVideoMedia?<div key={activeVideo.id} className="relative flex min-h-0 flex-1 items-center justify-center">
-        <video key={activeVideoMedia.id} autoPlay loop playsInline controls src={mediaUrl(activeVideoMedia.id)}
-          className="max-h-full max-w-full object-contain"/>
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <AnimatePresence initial={false} custom={videoDirection}>
+      {activeVideo&&activeVideoMedia?<motion.div key={activeVideo.id} custom={videoDirection}
+        variants={{
+          enter:(direction:number)=>({y:direction>0?'100%':'-100%',opacity:0.85}),
+          center:{y:'0%',opacity:1},
+          exit:(direction:number)=>({y:direction>0?'-100%':'100%',opacity:0.85})
+        }}
+        initial="enter" animate="center" exit="exit"
+        transition={{duration:0.32,ease:[0.22,1,0.36,1]}}
+        className="absolute inset-0 flex items-center justify-center overflow-hidden">
+        <ExpandedFeedVideo mediaId={activeVideoMedia.id}/>
         <div className="pointer-events-none absolute bottom-12 left-3 max-w-[75%] space-y-1 bg-gradient-to-t from-black/60 to-transparent p-2 text-sm">
           <strong>@{activeVideo.authorHandle}</strong><p className="line-clamp-3 whitespace-pre-wrap">{activeVideo.body}</p>
         </div>
@@ -677,7 +714,9 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
           <button type="button" className="grid size-11 place-items-center rounded-full bg-black/60"
             onClick={()=>void share(activeVideo)} aria-label={pt?'Compartilhar':'Share'}><Share2 className="size-5"/></button>
         </div>
-      </div>:<div className="flex flex-1 items-center justify-center text-sm">{videoLoading?<Spinner/>:(pt?'Nenhum vídeo disponível.':'No videos yet.')}</div>}
+      </motion.div>:<div className="absolute inset-0 flex items-center justify-center text-sm">{videoLoading?<Spinner/>:(pt?'Nenhum vídeo disponível.':'No videos yet.')}</div>}
+      </AnimatePresence>
+      </div>
       <div className="absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-3">
         <button type="button" onClick={()=>nextVideo(-1)} disabled={videoIndex===0} aria-label={pt?'Vídeo anterior':'Previous video'}
           className="grid size-10 rotate-90 place-items-center rounded-full bg-black/60 disabled:opacity-30"><ChevronLeft className="size-5"/></button>
