@@ -6,6 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const url = 'http://127.0.0.1:3001';
 const origin = 'http://localhost:5173';
 let server;
+let startupErrors = '';
 let cookie = '';
 
 before(async () => {
@@ -19,9 +20,10 @@ before(async () => {
       ENABLE_DEV_SIGNUP: 'true',
       PORT: '3001',
     },
-    stdio: 'ignore',
+    stdio: ['ignore','ignore','pipe'],
   });
 
+  server.stderr?.on('data', chunk => {startupErrors=(startupErrors+String(chunk)).slice(-6000);});
   let ready = false;
   for (let i = 0; i < 60; i++) {
     if (server.exitCode !== null) break;
@@ -31,7 +33,7 @@ before(async () => {
     } catch { /* waiting for startup */ }
     await sleep(250);
   }
-  assert.ok(ready, 'Fastify server did not start');
+  assert.ok(ready, 'Fastify server did not start: '+startupErrors);
 });
 
 after(async () => {
