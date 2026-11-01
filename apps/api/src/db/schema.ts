@@ -46,6 +46,7 @@ export const communities = pgTable('communities', {
   ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   visibility: communityVisibility('visibility').notNull().default('public'),
   description: varchar('description', { length: 500 }),
+  avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
