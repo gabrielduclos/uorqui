@@ -48,7 +48,7 @@ Use classes Tailwind semânticas, não cores fixas que só funcionem no dark. Ve
 | DemoAudioPlayer, DemoMediaViewer | Áudio e visualização de fotos/vídeos |
 | DemoImageEditor | Desenhos e formas em fotos antes de enviar e no visualizador |
 
-O mensageiro 1:1 **já está conectado** à API e ao Neon. Os canais comunitários ainda usam prévias locais. O layout do chat real deve manter paridade com este UI Kit; funções que dependem de novas APIs não podem fingir persistência.
+O mensageiro 1:1 **já está conectado** à API e ao Neon. Os canais de texto comunitários também usam API e Neon; as salas de voz estão persistidas, mas as chamadas WebRTC ainda não estão habilitadas. O layout do chat real deve manter paridade com este UI Kit; funções que dependem de novas APIs não podem fingir persistência.
 
 ## Idiomas
 
@@ -112,3 +112,10 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - Nada de nomes técnicos `IMG_2026...`, `gravacao-...` ou IDs R2 nas mídias. Mostrar **Foto / Vídeo / Áudio / Documento PDF** conforme idioma, preservando metadados para download.
 - Player de áudio em **bg-card + text-foreground**, Play em **bg-primary**, controles de velocidade em **bg-secondary** e barra de progresso `accent-primary` para contraste adequado no Light/Dark.
 - A prévia e o visualizador compartilham URLs Blob de cache privado limitado à aba. A localização abre o Google Maps, inclusive para mensagens antigas com link OpenStreetMap.
+
+## Layout das comunidades reais
+
+- Faixa de comunidades à esquerda com ícones, busca/criação, e painel fixo de canais no desktop; no celular, entrar em um canal abre a conversa, com seta para voltar e barra inferior de navegação principal oculta.
+- Cabeçalho dos canais com `data-uorqui-context-header` fixo, lista de mensagens ocupando a largura e rolando isoladamente, campo de texto fixo próximo ao rodapé do painel.
+- Modos públicos/por aprovação/privados claramente identificados. Nas comunidades privadas, os canais só aparecem depois da aceitação do convite. Proprietário/admin vê solicitações pendentes e o formulário de convite por @usuário.
+- Seletores, botões, estados vazios e erros usam tokens semânticos do tema light/dark. Mensagens de usuário não são traduzidas.
