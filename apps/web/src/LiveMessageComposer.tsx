@@ -19,11 +19,12 @@ const ATTACHMENTS = [
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
 
-export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false }: {
+export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false, onGif, gifOpen = false }: {
   value: string; onChange: (text: string) => void; onSubmit: () => void;
   onAttach: (file: File, caption: string) => void;
   onShareLocation: (latitude:number,longitude:number,caption:string) => void;
   sending: boolean; locale: string; textareaRef: RefObject<HTMLTextAreaElement | null>; editing?: boolean;
+  onGif?:()=>void;gifOpen?:boolean;
 }) {
   const pt = locale === 'pt-BR';
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
@@ -310,6 +311,9 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         </section>)}
       </div>}
     </div>
+    {onGif&&<button type="button" onClick={onGif} aria-expanded={gifOpen}
+        aria-label={pt?'Selecionar GIF':'Choose GIF'}
+        className={cn('grid h-11 shrink-0 place-items-center rounded-lg px-1.5 text-[11px] font-bold text-muted-foreground hover:bg-accent',gifOpen&&'text-primary')}>GIF</button>}
     {canSend
       ? <button type="submit" aria-label={pt ? 'Enviar mensagem' : 'Send message'}
         className="grid size-11 shrink-0 place-items-center bg-primary text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
