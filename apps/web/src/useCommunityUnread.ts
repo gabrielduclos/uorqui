@@ -37,12 +37,41 @@ export function useCommunityUnread(){
     window.addEventListener('uorqui:community-channel-read',read);
     window.addEventListener('focus',onFocus);
     document.addEventListener('visibilitychange',onFocus);
-    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void refresh();},12000);
+    // Reuse the DM realtime transport pattern: a single authenticated SSE
+    // subscription triggers refetches, while a slow fallback covers outages.
+    let source:EventSource|null=null;
+    function connect(){
+      if(document.visibilityState!=='visible'||source)return;
+      source=new EventSource('/api/v1/communities/events',{withCredentials:true});
+      source.addEventListener('community-update',event=>{
+        try{
+          const data=JSON.parse((event as MessageEvent<string>).data) as {
+            kind:'message'|'voice'|'channel'|'membership';communityId:string;channelId:string|null
+          };
+          if(!data||typeof data.communityId!=='string')return;
+          window.dispatchEvent(new CustomEvent('uorqui:community-event',{detail:data}));
+          if(data.kind!=='voice')void refresh();
+        }catch{/* Ignore invalid notifications. */}
+      });
+      source.addEventListener('ready',()=>{
+        window.dispatchEvent(new CustomEvent('uorqui:community-event',{detail:{kind:'ready'}}));
+        void refresh();
+      });
+    }
+    function visibility(){
+      if(document.visibilityState!=='visible'){source?.close();source=null;}
+      else{connect();void refresh();}
+    }
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void refresh();},30000);
+    document.addEventListener('visibilitychange',visibility);
+    connect();
     void refresh();
     return ()=>{mounted=false;requestId++;window.clearInterval(timer);
+      source?.close();
       window.removeEventListener('uorqui:community-channel-read',read);
       window.removeEventListener('focus',onFocus);
       document.removeEventListener('visibilitychange',onFocus);
+      document.removeEventListener('visibilitychange',visibility);
     };
   },[]);
   return unread;
