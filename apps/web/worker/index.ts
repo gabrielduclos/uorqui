@@ -470,7 +470,10 @@ export default {
     const communityInviteNavigation = /^\/invite\/[0-9a-f-]{36}\/?$/i.test(current.pathname);
     const publicProfileNavigation = /^\/(?:@|%40)[a-z][a-z0-9_]{2,31}\/?$/i.test(current.pathname);
     const emailVerificationNavigation = /^\/auth\/email-verification\/?$/.test(current.pathname);
-    if ((publicProfileNavigation || communityInviteNavigation || emailVerificationNavigation) && (request.method === 'GET' || request.method === 'HEAD')) {
+    // Always revalidate the SPA bootstrap document. A stale index.html can
+    // reference deleted hashed JS bundles and leave the login as a blank page.
+    const appEntryNavigation = current.pathname === '/' || current.pathname === '/index.html';
+    if ((appEntryNavigation || publicProfileNavigation || communityInviteNavigation || emailVerificationNavigation) && (request.method === 'GET' || request.method === 'HEAD')) {
       const response = await env.ASSETS.fetch(new Request(new URL('/index.html', current), {
         method: 'GET', headers: { accept: 'text/html' },
       }));
