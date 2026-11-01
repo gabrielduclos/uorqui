@@ -11,6 +11,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Uorqui" />
     <title>Uorqui — Conecte-se</title>
+    <script>
+      // Register on EVERY visit, including before login. This replaces the
+      // previous Uorqui Chat worker in installed PWAs on the same hostname.
+      // Never reload the page on controllerchange: iOS can get into a loop.
+      if ('serviceWorker' in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })
+          .catch(() => { /* The site remains usable without push/offline features. */ });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

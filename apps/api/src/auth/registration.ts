@@ -1,3 +1,5 @@
+import { allowedWebOrigins } from './web-origins.js';
+
 /**
  * Public registration is opt-in. Never allow production signups unless both
  * outbound verification email and a server-validated anti-bot challenge exist.
@@ -40,8 +42,8 @@ export async function verifyRegistrationChallenge(token: string, remoteIp?: stri
     if (!response.ok) return false;
     const data = await response.json() as { success?: boolean; hostname?: string };
     // Hostnames are optional on Turnstile test keys; production must match our public frontend.
-    const expectedHost = new URL(process.env.WEB_ORIGIN ?? 'https://main.uorqui1.workers.dev').hostname;
-    return data.success === true && data.hostname === expectedHost;
+    const allowedHosts = new Set(allowedWebOrigins().map(origin => new URL(origin).hostname));
+    return data.success === true && typeof data.hostname === 'string' && allowedHosts.has(data.hostname);
   } catch {
     return false;
   }

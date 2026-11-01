@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import { fromNodeHeaders } from 'better-auth/node';
 import { eq } from 'drizzle-orm';
 import { getAuth } from './auth/auth.js';
+import { allowedWebOrigins } from './auth/web-origins.js';
 import { isDevelopmentSignupEnabled, isPublicSignupEnabled, isRegistrationAvailable, verifyRegistrationChallenge } from './auth/registration.js';
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
@@ -31,7 +32,7 @@ const app = Fastify({
 });
 
 await app.register(cors, {
-  origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
+  origin: allowedWebOrigins(),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
@@ -146,7 +147,7 @@ app.route({
           try{
             const callback=new URL(original);
             const token=callback.searchParams.get('invite');
-            if(callback.origin===frontend.origin&&callback.pathname==='/auth/email-verification'
+            if(allowedWebOrigins().includes(callback.origin)&&callback.pathname==='/auth/email-verification'
               &&token&&/^[0-9a-f-]{36}$/i.test(token))result.searchParams.set('invite',token);
           }catch{/* Reject invalid callback destinations. */}
         }
