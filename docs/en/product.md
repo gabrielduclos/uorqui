@@ -92,3 +92,11 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Public profiles display a responsive **three-column** post grid with photo/video thumbnails, text-only previews, a post viewer and pagination. The `GET /api/v1/feed/posts?author=handle` API requires a session and returns only published posts from public accounts, honoring blocks. Signed-out visitors are prompted to sign in to see post media.
 - One-to-one chat bubbles (live and demo) use subtle **5 px** corner radii; community channels keep their threaded message appearance.
 - Mobile authentication puts sign-in ahead of promotional content, opens directly on **Sign in**, and offers Sign in/Create account tabs, mobile-friendly fields, accessible password visibility and larger touch targets. Server-side registration availability and abuse protection remain enforced.
+
+### Integrated sharing and account sign-out
+
+- The one-to-one chat **Send** control matches the subtle **5 px** message bubble corners.
+- Message actions and the media viewer support sharing text, photos, videos, audio and files with **friends** or **existing conversations** using a searchable recipient picker with per-recipient delivery feedback. Blocked or restricted destinations cannot receive new messages.
+- Private media is checked for access and uploaded as a **new destination-scoped attachment**, never by reusing a private URL across conversations. The 50 MB upload limits still apply. Text forwarding uses the idempotent authorized forwarding API.
+- **Feed posts and videos** can be shared as internal authorized links to friends and existing conversations; the recipient can open them in the mounted feed without a full reload. External sharing and copying post links remain available. A private post does not become public through link sharing.
+- A **Sign out** button is now visible at the top of the account profile on mobile and desktop and shows a confirmation dialog. Signing out clears session-scoped media and feed caches.
