@@ -22,7 +22,8 @@ export function registerCommunityInviteLinks(app:FastifyInstance,reader:Reader){
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
-      if(!await mod(id,me))return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      const member=await getPool().query('SELECT 1 FROM community_members WHERE community_id=$1 AND user_id=$2',[id,me]);
+      if(!member.rowCount)return reply.code(403).send({error:'MEMBERS_ONLY'});
       const r=await getPool().query(
         "SELECT id,expires_at AS \"expiresAt\" FROM community_invite_links WHERE community_id=$1 "+
         'AND revoked_at IS NULL AND expires_at>now() ORDER BY created_at DESC LIMIT 1',[id]);
