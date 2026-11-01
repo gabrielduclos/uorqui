@@ -113,3 +113,9 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Avatar onboarding reuses the private profile-media endpoint and photo cropper; the avatar can be replaced later in Profile.
 - **Numeric unread badges** are shown on text channels, individual community icons and the main mobile/desktop Communities navigation. Own/deleted messages are excluded; reading is acknowledged only when a text channel is open and its messages have loaded. Per-user/channel cursors persist in PostgreSQL across devices. The API checks session, membership, origin and enforces monotonic read progress.
 - Sign-in and account creation use edge-to-edge mobile card spacing and actual link styles for recovery and email verification in both light and dark modes.
+
+### Realtime communities
+
+- The main voice-room channel list shows **name, microphone on/off and speaker audio on/off**, with no profile images. A small presence dot remains next to the username; speaking is highlighted only when actual activity is known.
+- Text-channel messages, unread badges and voice-room occupants use authenticated **Server-Sent Events (SSE)**, the same pattern as direct messaging. `GET /api/v1/communities/events` requires a valid session, resubscribes every five minutes and transmits only channel/community IDs plus event kinds. All content is fetched via membership-gated API requests. A ~30-second fallback covers disconnections.
+- A dedicated cluster-wide PostgreSQL `LISTEN/NOTIFY` subscription per API instance dispatches message, channel and voice activity without streaming content or private identities; it is closed during shutdown.
