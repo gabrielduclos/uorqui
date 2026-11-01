@@ -63,7 +63,7 @@ function Button({
       disabled={loading || disabled}
       aria-busy={loading || undefined}
       {...props}
-    >{loading && !asChild && <Spinner className="size-4 animate-spin" aria-hidden="true" />}{children}</Comp>
+    >{asChild ? children : <>{loading && <Spinner className="size-4 animate-spin" aria-hidden="true" />}{children}</>}</Comp>
   )
 }
 
