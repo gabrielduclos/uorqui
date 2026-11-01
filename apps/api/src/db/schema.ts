@@ -154,13 +154,20 @@ export const communityMessages = pgTable('community_messages', {
   authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   clientId: uuid('client_id').notNull().unique(),
   body: text('body').notNull(),
+  attachmentId: uuid('attachment_id'),
+  attachmentName: varchar('attachment_name', { length: 180 }),
+  attachmentType: varchar('attachment_type', { length: 100 }),
+  attachmentSize: integer('attachment_size'),
   editedAt: timestamp('edited_at', { withTimezone: true }),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedById: uuid('deleted_by_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
   index('community_messages_channel_created_idx').on(table.channelId, table.createdAt),
-  check('community_messages_length', sql`length(${table.body}) BETWEEN 1 AND 4000`),
+  check('community_messages_length', sql`(length(${table.body}) BETWEEN 1 AND 4000 OR (length(${table.body})=0 AND ${table.attachmentId} IS NOT NULL))`),
+  check('community_message_attachment_consistency', sql.raw(
+    '((attachment_id IS NULL AND attachment_name IS NULL AND attachment_type IS NULL AND attachment_size IS NULL) OR (attachment_id IS NOT NULL AND attachment_name IS NOT NULL AND attachment_type IS NOT NULL AND attachment_size > 0 AND attachment_size <= 52428800))'
+  )),
 ]);
 
 /** Emoji reactions on community messages: each member can react once per emoji. */
