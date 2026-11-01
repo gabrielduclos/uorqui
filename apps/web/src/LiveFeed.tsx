@@ -182,16 +182,31 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   },[]);
 
   function resetComposer(){setDraft('');setFiles([]);setDraftId(null);setUploadProgress('');}
+  async function discardPendingDraft(){
+    if(posting)return;
+    const id=draftId;
+    if(!id){resetComposer();return;}
+    setPosting(true);
+    try{
+      await api('/api/v1/feed/posts/'+id,{method:'DELETE'});
+      resetComposer();setError('');
+    }catch{setError(pt?'Falha ao descartar o envio. Tente novamente.':'Could not discard upload. Retry.');}
+    finally{setPosting(false);}
+  }
   function selectFiles(event:ChangeEvent<HTMLInputElement>){
     const chosen=Array.from(event.target.files??[]);event.target.value='';
     if(!chosen.length)return;
+    if(draftId){
+      setError(pt?'Descarte o envio pendente antes de trocar as mídias.':'Discard the pending upload before changing media.');
+      return;
+    }
     const combined=[...files,...chosen],videos=combined.filter(f=>f.type.startsWith('video/'));
     if(combined.some(f=>!mimeTypes.has(f.type)||!f.size||f.size>LIMIT)||
       combined.length>6||(videos.length>0&&combined.length!==1)){
       setError(pt?'Envie até 6 imagens ou 1 vídeo, com até 50 MB por arquivo.':
         'Use up to 6 images or 1 video, with a 50 MB limit per file.');return;
     }
-    setError('');setFiles(combined);setDraftId(null);
+    setError('');setFiles(combined);
   }
   async function publish(event:FormEvent){
     event.preventDefault();
@@ -202,6 +217,12 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
       if(!id){
         const result=await api<{post:{id:string;publishedAt:string|null}}>('/api/v1/feed/posts',requestBody({body:draft.trim(),mediaCount:files.length}));
         id=result.post.id;if(files.length)setDraftId(id);
+      }
+      if(draftId){
+        await api('/api/v1/feed/posts/'+id,{
+          method:'PATCH',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({body:draft.trim()})
+        });
       }
       if(files.length){
         const existing=await api<{draft:{media:{position:number}[]}}>('/api/v1/feed/posts/'+id+'/draft');
@@ -360,7 +381,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
           <form onSubmit={publish} className="space-y-3">
             <div className="flex items-start gap-2">
               <UserAvatar name={ownName} image={ownAvatar} size="sm"/>
-              <textarea value={draft} onChange={e=>{setDraft(e.target.value);if(draftId)setDraftId(null);}} maxLength={4000} rows={3}
+              <textarea value={draft} onChange={e=>setDraft(e.target.value)} disabled={posting} maxLength={4000} rows={3}
                 placeholder={pt?'O que você quer compartilhar?':'What would you like to share?'}
                 aria-label={pt?'Nova publicação':'New post'}
                 className="min-h-24 min-w-0 flex-1 resize-y rounded-xl border border-input bg-background p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/40"/>
@@ -369,14 +390,18 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
               {preview.map((url,i)=><div key={url} className="relative overflow-hidden rounded-xl bg-muted">
                 {files[i]?.type.startsWith('video/')?<video src={url} preload="metadata" className="aspect-square w-full object-cover"/>:
                   <img src={url} alt={'Anexo '+(i+1)} className="aspect-square w-full object-cover"/>}
-                <button type="button" aria-label={pt?'Remover mídia':'Remove media'} disabled={posting}
-                  onClick={()=>{setFiles(old=>old.filter((_,k)=>k!==i));setDraftId(null);}}
+                <button type="button" aria-label={pt?'Remover mídia':'Remove media'} disabled={posting||!!draftId}
+                  onClick={()=>setFiles(old=>old.filter((_,k)=>k!==i))}
                   className="absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-black/75 text-white"><X className="size-4"/></button>
               </div>)}
             </div>}
             {uploadProgress&&<p className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3.5"/>{uploadProgress}</p>}
+            {draftId&&!posting&&<div className="flex items-center justify-between gap-2 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span>{pt?'Envio pendente salvo. Você pode tentar publicar novamente.':'Pending upload saved. You can retry publishing.'}</span>
+              <button type="button" onClick={()=>void discardPendingDraft()} className="shrink-0 font-semibold text-destructive hover:underline">{pt?'Descartar':'Discard'}</button>
+            </div>}
             <div className="flex items-center justify-between gap-2">
-              <button type="button" disabled={posting} onClick={()=>fileRef.current?.click()}
+              <button type="button" disabled={posting||!!draftId} onClick={()=>fileRef.current?.click()}
                 className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs font-semibold text-primary hover:bg-accent">
                 <ImagePlus className="size-5"/>{pt?'Foto ou vídeo':'Photo or video'}</button>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime"
