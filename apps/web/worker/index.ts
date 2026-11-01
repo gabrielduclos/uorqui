@@ -29,6 +29,7 @@ const COMMUNITY_ATTACHMENT_UPLOAD = /^\/api\/media\/community-attachment\/([0-9a
 const COMMUNITY_ATTACHMENT_READ = /^\/media\/community-attachment\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
 const FEED_UPLOAD_PATH = /^\/api\/media\/feed\/([0-9a-f-]{36})\/([0-5])$/;
 const FEED_READ_PATH = /^\/media\/feed\/([0-9a-f-]{36})$/;
+const FEED_DELETE_PATH = /^\/api\/v1\/feed\/posts\/([0-9a-f-]{36})$/;
 const FEED_TYPES = new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime']);
 const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
 const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream',
@@ -531,6 +532,24 @@ export default {
       return handleMediaWrite(request, env, current, origin, write[1] as 'avatar' | 'cover');
     }
 
+    // Reclaim linked R2 objects immediately after an authorized feed post deletion.
+    // Any interrupted, unlinked draft uploads will need a separate lifecycle job.
+    const feedDelete=FEED_DELETE_PATH.exec(current.pathname);
+    if(feedDelete&&request.method==='DELETE'){
+      try{
+        const draft=await callApi(request,origin,'/api/v1/feed/posts/'+feedDelete[1]+'/draft');
+        const ids:string[]=draft.ok
+          ?((await draft.json() as {draft?:{media?:{id:string}[]}}).draft?.media??[]).map(m=>m.id)
+          :[];
+        const response=await callApi(request,origin,current.pathname,'DELETE');
+        if(response.ok&&env.DM_ATTACHMENTS){
+          await Promise.all(ids.filter(id=>/^[0-9a-f-]{36}$/.test(id)).map(id=>
+            env.DM_ATTACHMENTS!.delete('feed/'+feedDelete[1]+'/'+id).catch(()=>{})));
+        }
+        const headers=new Headers(response.headers);headers.set('cache-control','no-store');
+        return new Response(response.body,{status:response.status,headers});
+      }catch{return jsonError(502,'Could not remove feed post');}
+    }
     const dmCancel=DM_CANCEL_PATH.exec(current.pathname);
     if (dmCancel && request.method === 'DELETE') {
       try {
