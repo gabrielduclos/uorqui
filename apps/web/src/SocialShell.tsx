@@ -192,7 +192,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               </Button>
             </div>
           </section>
-        </div>
+        </div>}
 
         {!showSubpage && !feedTyping && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
