@@ -58,3 +58,12 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Message lists expose `reactions: [{emoji,count,mine}]` and `canReact` and refresh during normal channel polling. Authenticated `PUT` and `DELETE /api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions` accept `{emoji}` and enforce Origin and membership checks.
 - Reactions are not separate messages; canceled messages hide reactions and reject further changes.
 - Additive Drizzle migration **`0017_community_message_reactions`** creates `community_message_reactions`. Apply it to Neon PostgreSQL before enabling reactions in production. Until migration, channel histories remain readable and reaction writes return unavailable.
+
+## Unified text-channel composer
+
+- Community text channels reuse the existing `LiveMessageComposer`: gallery, camera, files, Google Maps location, image editor, voice recording with pause/resume, and emojis.
+- The existing **GIF picker remains available** from the shared composer.
+- Channel posts have **no sent/delivered/read receipts**. Only transient upload/send progress and retry on failure are shown.
+- Attachments up to 50 MB, including recorded voice notes, reuse the existing signed Worker and private R2 storage, under a `community/<communityId>/<channelId>` namespace. API authorization is community- and channel-specific.
+- Uploads require Worker-issued HMAC proof. Media downloads require current membership and an active, non-canceled message.
+- Drizzle migration `0018_community_message_attachments` adds attachment metadata and allows empty text only with an attachment. Apply it to Neon before enabling the feature in production; existing text messages remain intact.
