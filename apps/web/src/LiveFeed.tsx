@@ -90,6 +90,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   const [posts,setPosts]=useState<Post[]>([]);
   const [cursor,setCursor]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
+  const [feedReady,setFeedReady]=useState(true);
   const [loadingMore,setLoadingMore]=useState(false);
   const [hasMore,setHasMore]=useState(true);
   const [error,setError]=useState('');
@@ -142,9 +143,10 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
     void api<{posts:Post[];nextCursor:string|null}>('/api/v1/feed/posts?filter='+filter,{signal:controller.signal})
       .then(result=>{
         if(controller.signal.aborted)return;
-        setPosts(result.posts);setCursor(result.nextCursor);setHasMore(!!result.nextCursor);setLoading(false);
+        setFeedReady(true);setPosts(result.posts);setCursor(result.nextCursor);setHasMore(!!result.nextCursor);setLoading(false);
       }).catch(e=>{
         if(controller.signal.aborted)return;
+        setFeedReady(!(e instanceof Error&&e.message==='FEED_NOT_READY'));
         setError(e instanceof Error&&e.message==='FEED_NOT_READY'?
           (pt?'O feed está aguardando a ativação do banco de dados.':'Feed database activation is pending.'):
           (pt?'Não foi possível carregar as publicações.':'Could not load posts.'));
@@ -211,7 +213,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   }
   async function publish(event:FormEvent){
     event.preventDefault();
-    if(posting||(!draft.trim()&&!files.length))return;
+    if(posting||!feedReady||(!draft.trim()&&!files.length))return;
     setPosting(true);setError('');
     try{
       let id=draftId;
@@ -394,13 +396,13 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
         <div className="flex items-center justify-between gap-2">
           <div><h2 className="text-xl font-bold sm:text-2xl">{pt?'Seu feed':'Your feed'}</h2>
             <p className="text-xs text-muted-foreground">{pt?'Pessoas, fotos, histórias e vídeos.':'People, photos, stories and videos.'}</p></div>
-          <Button variant="outline" onClick={()=>openVideo()} className="gap-2" size="sm"><Video className="size-4"/>{pt?'Vídeos':'Videos'}</Button>
+          <Button variant="outline" onClick={()=>openVideo()} disabled={!feedReady} className="gap-2" size="sm"><Video className="size-4"/>{pt?'Vídeos':'Videos'}</Button>
         </div>
         <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
           <form onSubmit={publish} className="space-y-3">
             <div className="flex items-start gap-2">
               <UserAvatar name={ownName} image={ownAvatar} size="sm"/>
-              <textarea value={draft} onChange={e=>setDraft(e.target.value)} disabled={posting} maxLength={4000} rows={3}
+              <textarea value={draft} onChange={e=>setDraft(e.target.value)} disabled={posting||!feedReady} maxLength={4000} rows={3}
                 placeholder={pt?'O que você quer compartilhar?':'What would you like to share?'}
                 aria-label={pt?'Nova publicação':'New post'}
                 className="min-h-24 min-w-0 flex-1 resize-y rounded-xl border border-input bg-background p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/40"/>
@@ -420,12 +422,12 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
               <button type="button" onClick={()=>void discardPendingDraft()} className="shrink-0 font-semibold text-destructive hover:underline">{pt?'Descartar':'Discard'}</button>
             </div>}
             <div className="flex items-center justify-between gap-2">
-              <button type="button" disabled={posting||!!draftId} onClick={()=>fileRef.current?.click()}
+              <button type="button" disabled={posting||!feedReady||!!draftId} onClick={()=>fileRef.current?.click()}
                 className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs font-semibold text-primary hover:bg-accent">
                 <ImagePlus className="size-5"/>{pt?'Foto ou vídeo':'Photo or video'}</button>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime"
                 multiple className="sr-only" onChange={selectFiles}/>
-              <Button type="submit" disabled={posting||(!draft.trim()&&!files.length)} loading={posting} className="gap-2">
+              <Button type="submit" disabled={posting||!feedReady||(!draft.trim()&&!files.length)} loading={posting} className="gap-2">
                 <Send className="size-4"/>{pt?'Publicar':'Post'}
               </Button>
             </div>
@@ -444,7 +446,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
           <span>{error}</span><button type="button" onClick={()=>setError('')} aria-label={pt?'Fechar':'Close'}><X className="size-4"/></button>
         </div>}
         {loading&&<SkeletonRows rows={5}/>}
-        {!loading&&!posts.length&&<div className="rounded-2xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
+        {!loading&&!error&&!posts.length&&<div className="rounded-2xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
           {pt?'Ainda não há publicações. Compartilhe a primeira!':'No posts yet. Share the first one!'}
         </div>}
         {posts.map(post=><article key={post.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
