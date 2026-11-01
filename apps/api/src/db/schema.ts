@@ -153,6 +153,9 @@ export const communityMessages = pgTable('community_messages', {
   authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   clientId: uuid('client_id').notNull().unique(),
   body: text('body').notNull(),
+  editedAt: timestamp('edited_at', { withTimezone: true }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedById: uuid('deleted_by_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
   index('community_messages_channel_created_idx').on(table.channelId, table.createdAt),
@@ -200,4 +203,16 @@ export const communityVoiceSignals = pgTable('community_voice_signals', {
   index('community_voice_signal_recipient_idx').on(table.channelId, table.recipientSessionId, table.id),
   index('community_voice_signal_created_idx').on(table.createdAt),
   check('community_voice_signal_kind', sql`${table.kind} IN ('offer', 'answer', 'candidate')`),
+]);
+
+/** Persistent community bans survive member removal and prevent rejoining. */
+export const communityBans = pgTable('community_bans', {
+  communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  bannedById: uuid('banned_by_id').references(() => users.id, { onDelete: 'set null' }),
+  reason: varchar('reason', { length: 300 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  primaryKey({ columns: [table.communityId, table.userId] }),
+  index('community_bans_user_idx').on(table.userId),
 ]);
