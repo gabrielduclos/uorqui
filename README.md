@@ -13,7 +13,7 @@
 Uorqui brings together three connected experiences:
 
 - **Direct messages:** private 1:1 text conversations, replies, reactions, media attachments, message status, background push and SSE-driven updates. No conventional private group chats.
-- **Hybrid feed:** continuous mixed text/photo/video posts and a dedicated immersive video browsing experience.
+- **Hybrid feed:** continuous mixed text/photo/video posts, fixed "For you" / "Following" filters, a + button on the left that opens the new-post modal, and dedicated immersive video browsing.
 - **Communities:** public/private membership, invitations, text channels, moderation and live WebRTC voice rooms, including a floating call control when navigating.
 
 The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
@@ -24,7 +24,7 @@ The initial audience includes gaming communities, but Uorqui is designed for gen
 | --- | --- |
 | Login and profiles | Better Auth sessions, email verification/recovery flow, profile visibility and blocking implemented; real signup + email delivery need final validation |
 | Direct messages | Persisted 1:1 messages, media, reactions, read/delivery state, SSE updates and Web Push implementation |
-| Feed | Hybrid social posts and media, backed by the API and database |
+| Feed | Hybrid posts and media backed by the API/database, persistent filters and a modal post composer |
 | Communities | Membership, invitations, roles, text channels, voice presence and WebRTC |
 | Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
 | Public launch | **Not yet approved:** real-device tests, push, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
@@ -42,7 +42,7 @@ The project has automated CI for the API, UI and integration flows. Passing CI d
 - **Voice:** WebRTC peer-to-peer; TURN is optional and connectivity must be tested across networks.
 - **Deployment:** Cloudflare Builds and Render, with GitHub Actions verification.
 
-This beta version is defined in the npm workspace manifests. See [release notes](CHANGELOG.md) for the exact scope and known risks.
+This beta version is defined in the npm workspace manifests and shown beside the Uorqui header wordmark. See [release notes](CHANGELOG.md) for the exact scope and known risks.
 
 ## Documentation
 
