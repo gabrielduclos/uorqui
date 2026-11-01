@@ -101,7 +101,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     setFeedTyping(false);
     setArea(next);
     setConversationOpened(false);
-    setChannelOpened(false);
+    // Communities remain mounted to preserve any ongoing WebRTC voice call.
   }, []);
 
   useEffect(()=>{
@@ -196,16 +196,20 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 ownAvatar={account.profile?.avatarUrl??null}
                 onCommentFocusChange={setFeedTyping}/>
             </div>
-            {area!=='feed'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
+            {/* A persistent mount keeps the microphone, signaling and room state alive
+                when switching between Feed, Messages, Profile and Communities. */}
+            <div hidden={area!=='communities'} className="h-full min-h-0">
+              <LiveCommunities myId={account.user.id} active={area==='communities'}
+                onMobileOpenChange={setChannelOpened} initialCommunityId={invitedCommunityId}
+                unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}/>
+            </div>
+            {area!=='feed'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
               transition={{duration:0.16}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
                 onMobileOpenChange={setConversationOpened}
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
-
-            {area === 'communities' && <LiveCommunities myId={account.user.id} onMobileOpenChange={setChannelOpened} initialCommunityId={invitedCommunityId}
-              unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities} />}
 
             {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
             {area === 'profile' && account.profile && (
