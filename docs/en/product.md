@@ -67,3 +67,13 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Attachments up to 50 MB, including recorded voice notes, reuse the existing signed Worker and private R2 storage, under a `community/<communityId>/<channelId>` namespace. API authorization is community- and channel-specific.
 - Uploads require Worker-issued HMAC proof. Media downloads require current membership and an active, non-canceled message.
 - Drizzle migration `0018_community_message_attachments` adds attachment metadata and allows empty text only with an attachment. Apply it to Neon before enabling the feature in production; existing text messages remain intact.
+
+### Initial persistent feed implementation
+
+- Home now shows a real cursor-paginated hybrid timeline: **For you** contains authorized posts (public, friends and own); **Following** initially uses accepted friends plus own posts.
+- Publish text, up to **6 images** as a carousel or **1 video** (50 MB per media file), like/unlike, comment and delete own posts. Private profiles require an accepted friendship; blocks hide posts.
+- The Worker validates file signatures and draft ownership, stores media in private R2, and uses an HMAC signature to link uploaded media through the API. Posts with media are not visible until all expected assets are confirmed; upload retries resume completed slots.
+- Separate fullscreen **Videos** mode starts at the tapped video, navigates vertically by swipe/keys, and returns without losing the feed scroll position. Visible feed videos can autoplay muted.
+- Share URLs use `/?post=<id>`; image zoom is available. Access to private shared posts remains authorization-gated.
+- Drizzle migration `0019_hybrid_feed` creates `feed_posts`, `feed_media`, `feed_likes` and `feed_comments`. Production must be migrated before enabling feed endpoints; missing schema returns `FEED_NOT_READY`.
+- Future work: directional follows, comment pagination, discovery ranking, video transcoding, reporting/moderation, previews, accessibility, and cleanup of orphaned uploads after interrupted sessions.
