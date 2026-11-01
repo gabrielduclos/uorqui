@@ -63,6 +63,43 @@ async function roomPeers(channelId:string,me:string,sessionId:string){
   return result.rows.map(peer=>({...peer,isSelf:peer.sessionId===sessionId}));
 }
 export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:SessionReader){
+  // Show active voice-room occupants on the community's main channel list.
+  // Unlike /voice/state, this endpoint does not require joining an audio room.
+  // Only members can see presence, and private identities/blocks are redacted
+  // with the same rules as the authenticated WebRTC room roster.
+  app.get('/api/v1/communities/:id/voice/presence',{
+    schema:{params:{type:'object',required:['id'],additionalProperties:false,properties:{id:uuid}}}
+  },async(request,reply)=>{
+    try{
+      const me=await self(request,readSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      const allowed=await getPool().query(
+        'SELECT 1 FROM community_members WHERE community_id=$1 AND user_id=$2',[id,me]);
+      if(!allowed.rowCount)return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const result=await getPool().query(
+        'SELECT s.channel_id AS "channelId",s.id AS "sessionId",u.handle,'+
+        "CASE WHEN p.is_public=true OR s.user_id=$2 OR f.status='accepted' THEN p.display_name ELSE u.handle END AS \"displayName\","+
+        "CASE WHEN p.is_public=true OR s.user_id=$2 OR f.status='accepted' THEN p.avatar_url ELSE NULL END AS \"avatarUrl\","+
+        's.muted,s.deafened,(s.user_id=$2) AS "isSelf" '+
+        'FROM community_voice_sessions s '+
+        'JOIN community_channels ch ON ch.id=s.channel_id '+
+        'JOIN community_members present ON present.community_id=ch.community_id AND present.user_id=s.user_id '+
+        'JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=s.user_id '+
+        'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
+        "WHERE ch.community_id=$1 AND ch.kind='voice' AND "+activePresence+' '+
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
+        '(b.blocker_id=s.user_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) '+
+        'ORDER BY s.channel_id,s.joined_at,s.id LIMIT 300',[id,me]);
+      const rooms:Record<string,typeof result.rows>={};
+      for(const person of result.rows){
+        const {channelId,...details}=person;
+        (rooms[channelId as string]??=[]).push(details);
+      }
+      return reply.header('Cache-Control',noCache).send({rooms});
+    }catch(error){request.log.error({err:error},'Community voice room presence');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   app.post('/api/v1/communities/:id/channels/:channelId/voice/join',{schema:{params,body:joinBody}},async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
