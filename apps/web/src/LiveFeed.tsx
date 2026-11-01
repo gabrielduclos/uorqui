@@ -54,10 +54,19 @@ function FeedVideo({post,open,paused}:{post:Post;open:()=>void;paused:boolean}){
 function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
   const items=post.media.filter(item=>item.type.startsWith('image/'));
   const [index,setIndex]=useState(0);
+  const touchStart=useRef<number|null>(null);
+  const swiped=useRef(false);
   if(!items.length)return null;
   const current=items[Math.min(index,items.length-1)];
-  return <div className="relative mt-3 overflow-hidden rounded-xl bg-muted/50">
-    <button type="button" onClick={()=>onZoom(mediaUrl(current.id))} className="block w-full" aria-label="Ampliar imagem">
+  return <div className="relative mt-3 overflow-hidden rounded-xl bg-muted/50"
+    onTouchStart={event=>{touchStart.current=event.touches[0]?.clientX??null;swiped.current=false;}}
+    onTouchEnd={event=>{
+      if(touchStart.current===null||items.length<2)return;
+      const diff=touchStart.current-(event.changedTouches[0]?.clientX??touchStart.current);
+      touchStart.current=null;
+      if(Math.abs(diff)>45){swiped.current=true;setIndex(old=>(old+(diff>0?1:-1)+items.length)%items.length);}
+    }}>
+    <button type="button" onClick={()=>{if(!swiped.current)onZoom(mediaUrl(current.id));swiped.current=false;}} className="block w-full" aria-label="Ampliar imagem">
       <img src={mediaUrl(current.id)} alt={'Imagem '+(index+1)+' de '+items.length} loading="lazy"
         className="mx-auto max-h-[min(70dvh,620px)] w-full object-contain"/>
     </button>
@@ -101,6 +110,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   const [deleting,setDeleting]=useState<string|null>(null);
   const [zoom,setZoom]=useState<string|null>(null);
   const [videoOpen,setVideoOpen]=useState(false);
+  const [videoCommentsOpen,setVideoCommentsOpen]=useState(false);
   const [videos,setVideos]=useState<Post[]>([]);
   const [videoIndex,setVideoIndex]=useState(0);
   const [videoCursor,setVideoCursor]=useState<string|null>(null);
@@ -263,6 +273,13 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
       else{await navigator.clipboard.writeText(url);setError(pt?'Link copiado.':'Link copied.');}
     }catch{/* User may dismiss share sheet. */}
   }
+  async function openVideoComments(post:Post){
+    setVideoCommentsOpen(true);setCommentDraft('');
+    try{
+      const r=await api<{comments:Comment[]}>('/api/v1/feed/posts/'+post.id+'/comments');
+      setComments(old=>({...old,[post.id]:r.comments}));
+    }catch{setError(pt?'Comentários indisponíveis.':'Comments unavailable.');}
+  }
   const fetchVideos=useCallback(async(first:boolean,selected?:Post)=>{
     if(videoBusy.current)return;
     videoBusy.current=true;setVideoLoading(true);
@@ -279,11 +296,12 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
     finally{setVideoLoading(false);videoBusy.current=false;}
   },[pt]);
   function openVideo(post?:Post){
-    setVideoOpen(true);setVideoIndex(0);setVideos(post?[post]:[]);
+    setVideoCommentsOpen(false);setVideoOpen(true);setVideoIndex(0);setVideos(post?[post]:[]);
     videosRef.current=post?[post]:[];videoCursorRef.current=null;
     void fetchVideos(true,post);
   }
   function nextVideo(delta:number){
+    setVideoCommentsOpen(false);
     setVideoIndex(current=>{
       const next=Math.max(0,Math.min(videosRef.current.length-1,current+delta));
       if(next>=videosRef.current.length-3&&videoCursorRef.current)void fetchVideos(false);
@@ -293,14 +311,15 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   useEffect(()=>{
     if(!videoOpen)return;
     const key=(event:KeyboardEvent)=>{
-      if(event.key==='Escape'){setVideoOpen(false);return;}
+      if(event.key==='Escape'){if(videoCommentsOpen)setVideoCommentsOpen(false);else setVideoOpen(false);return;}
+      if(event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement)return;
       if(event.key==='ArrowDown'||event.key==='ArrowUp'){
         event.preventDefault();nextVideo(event.key==='ArrowDown'?1:-1);
       }
     };
     window.addEventListener('keydown',key);
     return ()=>window.removeEventListener('keydown',key);
-  },[videoOpen,fetchVideos]);
+  },[videoOpen,videoCommentsOpen,fetchVideos]);
   function wheelVideo(event:WheelEvent){if(Math.abs(event.deltaY)<16||Date.now()-wheelAt.current<480)return;wheelAt.current=Date.now();nextVideo(event.deltaY>0?1:-1);}
   function touchStart(event:TouchEvent){gesture.current=event.touches[0]?.clientY??null;}
   function touchEnd(event:TouchEvent){if(gesture.current===null)return;const diff=gesture.current-(event.changedTouches[0]?.clientY??gesture.current);gesture.current=null;if(Math.abs(diff)>65)nextVideo(diff>0?1:-1);}
@@ -425,6 +444,9 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
         <div className="absolute bottom-16 right-3 flex flex-col gap-2">
           <button type="button" className="grid size-11 place-items-center rounded-full bg-black/60"
             onClick={()=>void toggleLike(activeVideo)} aria-label={pt?'Curtir':'Like'}><Heart className="size-6" fill={activeVideo.liked?'currentColor':'none'}/><span className="text-[10px]">{activeVideo.likeCount}</span></button>
+          <button type="button" className="flex size-11 flex-col items-center justify-center rounded-full bg-black/60"
+            onClick={()=>void openVideoComments(activeVideo)} aria-label={pt?'Comentários':'Comments'}>
+            <MessageCircle className="size-5"/><span className="text-[10px]">{activeVideo.commentCount}</span></button>
           <button type="button" className="grid size-11 place-items-center rounded-full bg-black/60"
             onClick={()=>void share(activeVideo)} aria-label={pt?'Compartilhar':'Share'}><Share2 className="size-5"/></button>
         </div>
@@ -435,6 +457,34 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
         <button type="button" onClick={()=>nextVideo(1)} disabled={videoIndex>=videos.length-1} aria-label={pt?'Próximo vídeo':'Next video'}
           className="grid size-10 rotate-90 place-items-center rounded-full bg-black/60 disabled:opacity-30"><ChevronRight className="size-5"/></button>
       </div>
+      {videoCommentsOpen&&activeVideo&&<section aria-label={pt?'Comentários do vídeo':'Video comments'}
+        className="absolute inset-x-0 bottom-0 z-40 flex max-h-[75dvh] flex-col rounded-t-2xl border-t border-white/20 bg-card text-foreground shadow-2xl"
+        onWheel={event=>event.stopPropagation()} onTouchStart={event=>event.stopPropagation()} onTouchEnd={event=>event.stopPropagation()}>
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+          <strong className="text-sm">{pt?'Comentários':'Comments'} · {activeVideo.commentCount}</strong>
+          <button type="button" aria-label={pt?'Fechar comentários':'Close comments'} onClick={()=>setVideoCommentsOpen(false)}
+            className="grid size-9 place-items-center"><X className="size-5"/></button>
+        </header>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+          {(comments[activeVideo.id]??[]).map(comment=><div key={comment.id} className="flex items-start gap-2 text-sm">
+            <UserAvatar name={comment.authorName} image={comment.authorAvatar} size="sm"/>
+            <div className="min-w-0 flex-1"><strong>{comment.authorName}</strong>
+              <span className="ml-2 text-xs text-muted-foreground">@{comment.authorHandle}</span>
+              <p className="mt-1 whitespace-pre-wrap wrap-break-word">{comment.body}</p></div>
+            {comment.mine&&<button type="button" aria-label={pt?'Apagar comentário':'Delete comment'}
+              onClick={()=>void removeComment(activeVideo,comment.id)}><Trash2 className="size-4"/></button>}
+          </div>)}
+          {!(comments[activeVideo.id]??[]).length&&<p className="text-center text-xs text-muted-foreground">{pt?'Ainda não há comentários.':'No comments yet.'}</p>}
+        </div>
+        <form className="flex shrink-0 gap-2 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          onSubmit={event=>void sendComment(event,activeVideo)}>
+          <input value={commentDraft} onChange={event=>setCommentDraft(event.target.value)} maxLength={1000}
+            aria-label={pt?'Comentário':'Comment'} placeholder={pt?'Escrever comentário…':'Write a comment…'}
+            className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base outline-none"/>
+          <Button size="icon" type="submit" disabled={!commentDraft.trim()||commentBusy} loading={commentBusy}
+            aria-label={pt?'Enviar comentário':'Send comment'}><Send className="size-4"/></Button>
+        </form>
+      </section>}
       {videoLoading&&<span className="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs opacity-70">{pt?'Carregando vídeos…':'Loading videos…'}</span>}
     </div>}
     {zoom&&<div role="dialog" aria-modal="true" aria-label={pt?'Visualizador de foto':'Photo viewer'} className="fixed inset-0 z-[140] flex flex-col bg-black/95 text-white">
