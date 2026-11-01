@@ -91,13 +91,18 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal((await friend('/api/v1/feed/posts/'+id+'/comments/'+own.data.id,'DELETE')).status,204);
   const selfRemoved=await owner('/api/v1/feed/posts/'+id+'/comments');
   assert.equal(selfRemoved.status,200);
-  const ownTombstone=selfRemoved.data.comments.find(c=>c.id===own.data.id);
-  assert.ok(ownTombstone,'deleting your own comment must keep a visible placeholder');
-  assert.equal(ownTombstone.deleted,true);
-  assert.equal(ownTombstone.body,'','the original comment must not be visible');
-  assert.equal(ownTombstone.authorName,null,'deleted comment identity must be redacted');
-  assert.equal(ownTombstone.canDelete,false);
-  assert.equal(selfRemoved.data.comments.length,2,'both own and moderated comments remain in place');
+  assert.ok(!selfRemoved.data.comments.some(c=>c.id===own.data.id),
+    'deleting your own comment must not leave a notice');
+  assert.equal(selfRemoved.data.comments.length,1,
+    'only the comment moderated by the post owner keeps its notice');
+  assert.equal(selfRemoved.data.comments[0].id,reply.data.id);
+  assert.equal(selfRemoved.data.comments[0].deleted,true);
+  const authorComment=await owner('/api/v1/feed/posts/'+id+'/comments','POST',{body:'My own comment on my own post'});
+  assert.equal(authorComment.status,201);
+  assert.equal((await owner('/api/v1/feed/posts/'+id+'/comments/'+authorComment.data.id,'DELETE')).status,204);
+  const afterAuthorDelete=await friend('/api/v1/feed/posts/'+id+'/comments');
+  assert.ok(!afterAuthorDelete.data.comments.some(c=>c.id===authorComment.data.id));
+  assert.equal(afterAuthorDelete.data.comments.length,1,'post owners self-delete without a tombstone');
   assert.equal((await friend('/api/v1/feed/posts/'+id)).data.post.commentCount,0,
     'self-deleted comments do not count as active comments');
   assert.equal((await owner('/api/v1/feed/posts/'+id,'PATCH',{body:'Edited feed post'})).status,200);
