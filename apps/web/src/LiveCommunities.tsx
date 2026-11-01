@@ -10,6 +10,7 @@ import { useUorquiPreferences } from './UorquiPreferences';
 import CommunityVoiceRoom, { type CommunityVoiceParticipant } from './CommunityVoiceRoom';
 import CommunityModerationPanel from './CommunityModerationPanel';
 import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
+import CommunityMessageReactions, { type CommunityReaction } from './CommunityMessageReactions';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -19,7 +20,7 @@ type Community={
 type Channel={id:string;name:string;kind:'text'|'voice';createdAt:string};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
-type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean};
+type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[]};
 type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
@@ -70,6 +71,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [detailLoading,setDetailLoading]=useState(false);
   const [draft,setDraft]=useState('');
   const [mediaPicker,setMediaPicker]=useState<'emoji'|'gif'|null>(null);
+  const [reactionPickerId,setReactionPickerId]=useState<string|null>(null);
+  const [reactionBusyId,setReactionBusyId]=useState<string|null>(null);
+  const reactionSubmitting=useRef<string|null>(null);
   const [editingId,setEditingId]=useState<string|null>(null);
   const [editingBody,setEditingBody]=useState('');
   const [deletingId,setDeletingId]=useState<string|null>(null);
@@ -133,13 +137,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       setShareNotice(pt?'Link copiado!':'Link copied!');}
     catch{setShareNotice(window.location.origin+'/invite/'+inviteLink.id);}
   }
-  const closeChannel=()=>{setChannelOpen(false);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){setMessages([]);return;}
     let active=true;
     previousLastMessage.current=null;
-    setMessages([]);setMessagesLoading(true);
+    setReactionPickerId(null);setMessages([]);setMessagesLoading(true);
     const poll=async()=>{
       try{
         const result=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
@@ -237,7 +241,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!selected||!text||text.length>4000)return;
     const clientId=crypto.randomUUID(),now=new Date().toISOString();
     const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text,createdAt:now,
-      authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,canEdit:false,canDelete:false,pending:'sending'};
+      authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,canEdit:false,canDelete:false,canReact:false,reactions:[],pending:'sending'};
     setPendingMessages(old=>[...old,pending]);
     if(clearDraft)setDraft('');
     setError('');
@@ -277,6 +281,23 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       setMessages(updated.messages);setDeletingId(null);
     }catch{setError(pt?'Não foi possível cancelar a mensagem.':'Could not remove message.');}
     finally{setBusy(false);setBusyAction(null);}
+  }
+  async function toggleReaction(message:Message,emoji:string,mine:boolean){
+    if(!selectedId||!channelId||!message.canReact||message.deletedAt||reactionSubmitting.current)return;
+    const key=selectedId+'/'+channelId+'/'+message.id;
+    reactionSubmitting.current=key;setReactionBusyId(message.id);setError('');
+    try{
+      const result=await api<{reactions:CommunityReaction[]}>(
+        '/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+message.id+'/reactions',{
+          method:mine?'DELETE':'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({emoji})
+        });
+      setMessages(old=>old.map(item=>item.id===message.id?{...item,reactions:result.reactions}:item));
+      setReactionPickerId(null);
+    }catch{
+      setError(pt?'Não foi possível atualizar a reação.':'Could not update reaction.');
+    }finally{
+      reactionSubmitting.current=null;setReactionBusyId(null);
+    }
   }
   function onComposerKeyDown(event:KeyboardEvent<HTMLTextAreaElement>){
     if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void send();}
@@ -522,6 +543,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                       {pt?'Reenviar':'Retry'}</button></>}
                 </div>}
                 {!message.deletedAt&&message.editedAt&&<span className="mt-1 block text-[11px] text-muted-foreground">{pt?'Editada':'Edited'}</span>}
+                {!message.deletedAt&&!isPendingMessage(message)&&<CommunityMessageReactions
+                  reactions={message.reactions??[]} canReact={message.canReact}
+                  open={reactionPickerId===message.id} busy={reactionBusyId===message.id}
+                  pt={pt} onOpen={()=>setReactionPickerId(old=>old===message.id?null:message.id)}
+                  onToggle={(emoji,mine)=>void toggleReaction(message,emoji,mine)}/>}
                 {!message.deletedAt&&(message.canEdit||message.canDelete)&&<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
                   {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
                     onClick={()=>{setEditingId(message.id);setEditingBody(message.body??'');setDeletingId(null);}}>
