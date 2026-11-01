@@ -7,7 +7,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BetaBadge } from './BetaBadge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { PreferencesControls } from './PreferencesControls';
@@ -157,7 +156,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 
-  const title = area === 'notifications' ? (locale==='pt-BR'?'Notificações':'Notifications') : area === 'moderation' ? (locale==='pt-BR'?'Moderação':'Moderation') : area === 'profile' ? t('Perfil') : t(navigation.find(item => item.id === area)?.label ?? 'Uorqui');
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
@@ -203,8 +201,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               <UorquiWordmark className="h-4 w-auto max-w-[34vw] text-foreground" />
               <BetaBadge compact />
             </button>
-            <Separator orientation="vertical" className="h-5 md:hidden" />
-            <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
           </div>
           <div className="flex items-center gap-2">
              <PreferencesControls />
