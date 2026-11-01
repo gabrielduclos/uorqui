@@ -21,6 +21,7 @@
       "/auth/email-verification",
       "/auth/email-verification/",
       "/media/profile/*",
+      "/media/community/*",
       "/media/dm/*",
       "/health",
       "/health/*"
