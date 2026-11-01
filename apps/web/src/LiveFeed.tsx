@@ -404,11 +404,12 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   }
   async function removeComment(post:Post,commentId:string){
     if(deleteBusy)return;
+    const deletingOwnComment=comments[post.id]?.some(c=>c.id===commentId&&c.mine)??false;
     setDeleteBusy(true);
     try{
       await api('/api/v1/feed/posts/'+post.id+'/comments/'+commentId,{method:'DELETE'});
-      setComments(old=>({...old,[post.id]:(old[post.id]??[]).map(c=>c.id===commentId?
-        {...c,deleted:true,body:'',authorName:null,authorHandle:null,authorAvatar:null,canDelete:false}:c)}));
+      setComments(old=>({...old,[post.id]:(old[post.id]??[]).flatMap(c=>c.id!==commentId?[c]:
+        deletingOwnComment?[]:[{...c,deleted:true,body:'',authorName:null,authorHandle:null,authorAvatar:null,canDelete:false}])}));
       updatePost(post.id,p=>({...p,commentCount:Math.max(0,p.commentCount-1)}));
       setDeleteCandidate(null);
     }catch{setError(pt?'Não foi possível remover o comentário.':'Could not remove comment.');}
@@ -723,9 +724,10 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
       className="fixed inset-0 z-[160] flex items-center justify-center bg-black/60 px-4">
       <div className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-card p-5 shadow-xl" role="document">
         <h3 className="text-base font-semibold">{pt?'Excluir comentário?':'Delete comment?'}</h3>
-        <p className="text-sm text-muted-foreground">{pt?
-          'O texto do comentário será removido, mas ficará um aviso informando que um comentário foi excluído.':
-          'The comment text will be removed, but a deleted-comment notice will remain.'}</p>
+        <p className="text-sm text-muted-foreground">{comments[deleteCandidate.postId]?.some(c=>c.id===deleteCandidate.commentId&&c.mine)
+          ?(pt?'Seu comentário será removido por completo, sem deixar um aviso.':'Your comment will disappear completely, without a notice.')
+          :(pt?'O texto do comentário será removido, mas ficará um aviso informando que um comentário foi excluído.':
+            'The comment text will be removed, but a deleted-comment notice will remain.')}</p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" disabled={deleteBusy} onClick={()=>setDeleteCandidate(null)}>
             {pt?'Cancelar':'Cancel'}</Button>
