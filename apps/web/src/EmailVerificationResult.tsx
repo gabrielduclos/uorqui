@@ -48,7 +48,7 @@ export default function EmailVerificationResult() {
   return <main className="flex min-h-[100dvh] flex-col bg-background text-foreground">
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
-        <a href="/" className="inline-flex min-h-11 items-center" aria-label="Uorqui"><UorquiWordmark className="h-6 w-auto text-foreground"/></a>
+        <a href="/" className="inline-flex min-h-11 items-center" aria-label="Uorqui"><UorquiWordmark className="h-5 w-auto text-foreground"/></a>
         <PreferencesControls/>
       </div>
     </header>
