@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, Compass, Home, LogOut, MessageCircle, Users, Video,
+  Bell, Home, LogOut, MessageCircle, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
@@ -19,6 +17,7 @@ import { ProfileEditor, type UserProfileData } from './UserProfiles';
 import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
 import LiveCommunities from './LiveCommunities';
+import LiveFeed from './LiveFeed';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 
 export type SignedInAccount = {
@@ -37,16 +36,6 @@ function ProfileAvatar({ name, image, className }: { name: string; image?: strin
   const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
   const source = useCachedProfileImage(image);
   return <Avatar className={cn('size-9', className)}>{source && <AvatarImage src={source} alt={name} referrerPolicy="no-referrer" className="object-cover" />}<AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
-}
-
-function EmptyState({ icon: Icon, title, description }: { icon: typeof Home; title: string; description: string }) {
-  return (
-    <div className="mx-auto flex max-w-md flex-col items-center justify-center px-5 py-14 text-center">
-      <div className="mb-4 rounded-2xl border border-border bg-muted p-4"><Icon aria-hidden="true" className="size-7 text-primary" /></div>
-      <h3 className="text-lg font-semibold">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
-    </div>
-  );
 }
 
 export default function SocialShell({ account, onLogout, onAccountUpdate, invitedCommunityId }: {
@@ -142,29 +131,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <motion.div key={area} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }} className="h-full min-h-0 overflow-hidden">
-            {area === 'feed' && (
-              <ScrollArea className="h-full">
-                <div className="mx-auto max-w-3xl space-y-5 p-4 pb-24 sm:p-7">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div><h2 className="text-2xl font-bold tracking-tight">{t("Seu espaço, suas conexões.")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("Acompanhe pessoas e comunidades que fazem parte do seu mundo.")}</p></div>
-                    <Badge variant="outline">{t('Em construção')}</Badge>
-                  </div>
-                  <Card className="gap-4 border-primary/25 bg-primary/5">
-                    <CardHeader className="gap-2">
-                      <Badge className="w-fit">{t("Bem-vindo ao Uorqui")}</Badge>
-                      <CardTitle className="text-xl">{t('Tudo começa por aqui.')}</CardTitle>
-                      <CardDescription>{t("O cadastro e seu perfil já estão funcionando. O feed, as publicações e os vídeos estão sendo preparados.")}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      <Button type="button" onClick={() => move('communities')}><Users className="size-4" /> {t("Explorar comunidades")}</Button>
-                      <Button type="button" variant="outline" onClick={() => move('conversations')}><MessageCircle className="size-4" /> {t('Ver conversas')}</Button>
-                    </CardContent>
-                  </Card>
-                  <EmptyState icon={Compass} title={t("Seu feed aparecerá aqui")} description={t("Ainda não há publicações reais para mostrar. Quando o backend social estiver pronto, esta área reunirá textos, fotos, carrosséis e vídeos.")} />
-                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground"><Video className="size-4" /> {t("O modo Vídeos será uma visualização separada do feed.")}</div>
-                </div>
-              </ScrollArea>
-            )}
+            {area === 'feed' && <LiveFeed />}
 
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle}
