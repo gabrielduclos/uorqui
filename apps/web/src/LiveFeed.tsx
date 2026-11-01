@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type TouchEvent, type WheelEvent } from 'react';
-import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Send, Share2, Trash2, Video, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Send, Share2, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { ZoomableChatImage } from './ZoomableChatImage';
-import { invalidateChatMedia, useCachedChatMedia, useCachedFeedVideo } from './chatMediaCache';
+import { ensureChatMediaCached, invalidateChatMedia, setFeedVideoCacheWindow, useCachedChatMedia, useCachedFeedVideo } from './chatMediaCache';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { clearFeedSessionCache,readFeedSession,readFeedSessionFilter,writeFeedSession } from './feedSessionCache';
 
@@ -68,16 +68,74 @@ function FeedVideo({post,open,paused}:{post:Post;open:()=>void;paused:boolean}){
       <Play className="size-3.5"/>Vídeo</span>
   </button>;
 }
-/** Reuse the already authorized in-memory video file across the timeline and immersive player. */
-function ExpandedFeedVideo({mediaId}:{mediaId:string}){
+/** Full-bleed, in-app player: never expose the browser's external video controls. */
+function ExpandedFeedVideo({mediaId,pt}:{mediaId:string;pt:boolean}){
   const video=useRef<HTMLVideoElement>(null);
+  const startY=useRef<number|null>(null);
+  const moved=useRef(false);
   const isPresent=useIsPresent();
+  const [muted,setMuted]=useState(true);
+  const [playing,setPlaying]=useState(true);
+  const [landscape,setLandscape]=useState(false);
+  const [progress,setProgress]=useState(0);
   const {src,loading}=useCachedFeedVideo(mediaUrl(mediaId));
-  useEffect(()=>{if(!isPresent)video.current?.pause();},[isPresent]);
-  return src?<video ref={video} autoPlay loop playsInline controls src={src}
-    className="max-h-full max-w-full object-contain"/>:
-    <div role="status" aria-label="Carregando vídeo"
-      className="flex items-center justify-center text-white/75">{loading&&<Spinner className="size-7"/>}</div>;
+  useEffect(()=>{
+    if(!isPresent){video.current?.pause();return;}
+    if(!src)return;
+    const sync=()=>{
+      if(document.visibilityState==='hidden'){video.current?.pause();return;}
+      void video.current?.play().catch(()=>setPlaying(false));
+    };
+    sync();
+    document.addEventListener('visibilitychange',sync);
+    return ()=>document.removeEventListener('visibilitychange',sync);
+  },[isPresent,src]);
+  function toggle(){
+    if(moved.current){moved.current=false;return;}
+    const current=video.current;
+    if(!current)return;
+    if(current.paused)void current.play().catch(()=>setPlaying(false));
+    else current.pause();
+  }
+  return <div className="absolute inset-0 overflow-hidden bg-black">
+    {src?<video ref={video} src={src} autoPlay loop muted={muted} playsInline
+      disablePictureInPicture disableRemotePlayback
+      controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
+      preload="auto" onContextMenu={event=>event.preventDefault()}
+      onLoadedMetadata={event=>{
+        const element=event.currentTarget;
+        setLandscape(element.videoWidth>element.videoHeight);
+      }}
+      onTimeUpdate={event=>{
+        const element=event.currentTarget;
+        setProgress(element.duration>0?element.currentTime/element.duration:0);
+      }}
+      onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)}
+      className={landscape?'absolute inset-0 h-full w-full object-contain':
+        'absolute inset-0 h-full w-full object-cover md:object-contain'}/>:
+      <div role="status" aria-label={pt?'Carregando vídeo':'Loading video'}
+        className="absolute inset-0 flex items-center justify-center text-white/75">{loading&&<Spinner className="size-7"/>}</div>}
+    <button type="button" disabled={!src}
+      aria-label={playing?(pt?'Pausar vídeo':'Pause video'):(pt?'Reproduzir vídeo':'Play video')}
+      onTouchStart={event=>{startY.current=event.touches[0]?.clientY??null;moved.current=false;}}
+      onTouchMove={event=>{
+        if(startY.current!==null && Math.abs((event.touches[0]?.clientY??startY.current)-startY.current)>16)moved.current=true;
+      }}
+      onTouchEnd={()=>{startY.current=null;}}
+      onClick={toggle}
+      className="absolute inset-0 z-[1] flex items-center justify-center text-white"
+      >
+      {!playing&&src&&<span className="rounded-full bg-black/50 p-5"><Play className="size-9" fill="currentColor"/></span>}
+    </button>
+    {src&&<button type="button" onClick={()=>setMuted(value=>!value)}
+      className="absolute bottom-16 left-3 z-[2] grid size-10 place-items-center rounded-full bg-black/55 text-white"
+      aria-label={muted?(pt?'Ativar som':'Unmute'):(pt?'Silenciar':'Mute')}>
+      {muted?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
+    </button>}
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-1 bg-white/25">
+      <div className="h-full bg-white transition-[width] duration-150" style={{width:(progress*100)+'%'}}/>
+    </div>
+  </div>;
 }
 function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
   const items=post.media.filter(item=>item.type.startsWith('image/'));
@@ -549,6 +607,28 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   function touchEnd(event:TouchEvent){if(gesture.current===null)return;const diff=gesture.current-(event.changedTouches[0]?.clientY??gesture.current);gesture.current=null;if(Math.abs(diff)>65)nextVideo(diff>0?1:-1);}
   const activeVideo=videos[Math.min(videoIndex,Math.max(0,videos.length-1))];
   const activeVideoMedia=activeVideo?.media.find(item=>item.type.startsWith('video/'));
+  const cacheWindowIds=[
+    activeVideoMedia?.id,
+    videos[videoIndex+1]?.media.find(item=>item.type.startsWith('video/'))?.id,
+    videos[videoIndex-1]?.media.find(item=>item.type.startsWith('video/'))?.id
+  ].filter((id):id is string=>!!id);
+  const cacheWindowKey=cacheWindowIds.join(',');
+  // Prioritize the playing video, then fetch the next clip before the user swipes.
+  // The previous clip stays pinned for immediate backward navigation.
+  useEffect(()=>{
+    if(!videoOpen||!active){setFeedVideoCacheWindow([]);return;}
+    const urls=cacheWindowKey.split(',').filter(Boolean).map(mediaUrl);
+    setFeedVideoCacheWindow(urls);
+    let cancelled=false;
+    void (async()=>{
+      for(const url of urls){
+        if(cancelled)return;
+        await ensureChatMediaCached(url);
+      }
+    })();
+    return ()=>{cancelled=true;};
+  },[videoOpen,active,cacheWindowKey]);
+  useEffect(()=>()=>setFeedVideoCacheWindow([]),[]);
   const date=(raw:string)=>new Intl.DateTimeFormat(locale,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(raw));
 
   return <div className="relative h-full min-h-0 w-full">
@@ -701,7 +781,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         initial="enter" animate="center" exit="exit"
         transition={{duration:0.32,ease:[0.22,1,0.36,1]}}
         className="absolute inset-0 flex items-center justify-center overflow-hidden">
-        <ExpandedFeedVideo mediaId={activeVideoMedia.id}/>
+        <ExpandedFeedVideo mediaId={activeVideoMedia.id} pt={pt}/>
         <div className="pointer-events-none absolute bottom-12 left-3 max-w-[75%] space-y-1 bg-gradient-to-t from-black/60 to-transparent p-2 text-sm">
           <strong>@{activeVideo.authorHandle}</strong><p className="line-clamp-3 whitespace-pre-wrap">{activeVideo.body}</p>
         </div>
