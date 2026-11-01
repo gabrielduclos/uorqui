@@ -7,6 +7,7 @@ import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { ZoomableChatImage } from './ZoomableChatImage';
 import { invalidateChatMedia, useCachedChatMedia } from './chatMediaCache';
+import { readFeedSession,readFeedSessionFilter,writeFeedSession } from './feedSessionCache';
 
 type Media={id:string;type:string;size:number;position:number};
 type Post={
@@ -86,26 +87,51 @@ function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
   </div>;
 }
 
-export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}:{
-  ownName:string;ownAvatar:string|null;active:boolean;onCommentFocusChange?:(focused:boolean)=>void;
+export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocusChange}:{
+  userId:string;ownName:string;ownAvatar:string|null;active:boolean;onCommentFocusChange?:(focused:boolean)=>void;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
-  const [filter,setFilter]=useState<FeedFilter>('for-you');
-  const [posts,setPosts]=useState<Post[]>([]);
-  const [cursor,setCursor]=useState<string|null>(null);
-  const [loading,setLoading]=useState(true);
+  const [filter,setFilter]=useState<FeedFilter>(()=>readFeedSessionFilter(userId));
+  const [posts,setPosts]=useState<Post[]>(()=>readFeedSession<Post>(userId,readFeedSessionFilter(userId))?.posts??[]);
+  const [cursor,setCursor]=useState<string|null>(()=>readFeedSession<Post>(userId,readFeedSessionFilter(userId))?.cursor??null);
+  const [loading,setLoading]=useState(()=>!readFeedSession<Post>(userId,readFeedSessionFilter(userId)));
   const [feedReady,setFeedReady]=useState(true);
   const [loadingMore,setLoadingMore]=useState(false);
-  const [hasMore,setHasMore]=useState(true);
+  const [hasMore,setHasMore]=useState(()=>readFeedSession<Post>(userId,readFeedSessionFilter(userId))?.hasMore??true);
   const [error,setError]=useState('');
   const [refreshKey,setRefreshKey]=useState(0);
   const scrollRef=useRef<HTMLDivElement>(null);
   const bottomRef=useRef<HTMLDivElement>(null);
   const loadingRef=useRef(false);
-  const snapshots=useRef<Partial<Record<FeedFilter,FeedSnapshot>>>({});
+  const snapshots=useRef<Partial<Record<FeedFilter,FeedSnapshot>>>({
+    'for-you':readFeedSession<Post>(userId,'for-you')??undefined,
+    following:readFeedSession<Post>(userId,'following')??undefined,
+  });
   const fetchedAtRef=useRef<Partial<Record<FeedFilter,number>>>({});
   const activeRef=useRef(active);
   activeRef.current=active;
+  // Persist per-filter snapshots only in the module's bounded tab-memory map.
+  useEffect(()=>{
+    const old=snapshots.current[filter];
+    if(!old&&!posts.length)return;
+    const snapshot:FeedSnapshot={posts,cursor,hasMore,
+      scrollTop:scrollRef.current?.scrollTop??old?.scrollTop??0,
+      fetchedAt:fetchedAtRef.current[filter]??old?.fetchedAt??Date.now()};
+    snapshots.current[filter]=snapshot;
+    writeFeedSession(userId,filter,snapshot);
+  },[userId,filter,posts,cursor,hasMore]);
+  useEffect(()=>{
+    const container=scrollRef.current;
+    if(!container)return;
+    const initial=snapshots.current[filter]?.scrollTop??0;
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>container.scrollTop=initial));
+    const onScroll=()=>{
+      const old=snapshots.current[filter];
+      if(old){old.scrollTop=container.scrollTop;writeFeedSession(userId,filter,old);}
+    };
+    container.addEventListener('scroll',onScroll,{passive:true});
+    return ()=>{container.removeEventListener('scroll',onScroll);onScroll();};
+  },[userId,filter]);
   const [draft,setDraft]=useState('');
   const [files,setFiles]=useState<File[]>([]);
   const [preview,setPreview]=useState<string[]>([]);
@@ -173,6 +199,7 @@ export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}
         fetchedAtRef.current[filter]=updated;
         snapshots.current[filter]={posts:merged,cursor:nextCursor,hasMore:more,
           scrollTop:scrollRef.current?.scrollTop??old?.scrollTop??0,fetchedAt:updated};
+        writeFeedSession(userId,filter,snapshots.current[filter]);
         setFeedReady(true);setPosts(merged);setCursor(nextCursor);setHasMore(more);
         setError('');setLoading(false);
       }).catch(e=>{
@@ -192,7 +219,8 @@ export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}
     const updated=fetchedAtRef.current[filter]??Date.now();
     snapshots.current[filter]={posts,cursor,hasMore,
       scrollTop:scrollRef.current?.scrollTop??0,fetchedAt:updated};
-    const cached=snapshots.current[next];
+    writeFeedSession(userId,filter,snapshots.current[filter]);
+    const cached=snapshots.current[next]??readFeedSession<Post>(userId,next)??undefined;
     setPosts(cached?.posts??[]);setCursor(cached?.cursor??null);
     setHasMore(cached?.hasMore??true);
     setLoading(!cached);setError('');setFilter(next);
@@ -224,6 +252,7 @@ export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}
       setCursor(result.nextCursor);setHasMore(!!result.nextCursor);
       snapshots.current[filter]={posts:combined,cursor:result.nextCursor,hasMore:!!result.nextCursor,
         scrollTop:scrollRef.current?.scrollTop??0,fetchedAt:fetchedAtRef.current[filter]??Date.now()};
+      writeFeedSession(userId,filter,snapshots.current[filter]);
     }catch{setError(pt?'Falha ao carregar mais publicações.':'Could not load more posts.');}
     finally{loadingRef.current=false;setLoadingMore(false);}
   },[cursor,filter,loading,hasMore,pt,posts]);
