@@ -228,7 +228,7 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
   }
   async function toggleScreenShare(){
     if(screenRef.current){stopScreenShare();return;}
-    if(!running.current||!navigator.mediaDevices?.getDisplayMedia)return;
+    if(!running.current||!('getDisplayMedia' in (navigator.mediaDevices??{})))return;
     setScreenBusy(true);setError('');
     let stream:MediaStream|null=null;
     try{
@@ -484,10 +484,10 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
             title={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}>
             {deafened?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
           </button>
-          <button type="button" disabled={screenBusy||!navigator.mediaDevices?.getDisplayMedia} onClick={()=>void toggleScreenShare()}
+          <button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
             className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-40 '+(sharing?'border-primary/60 bg-primary/15 text-primary':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={sharing?(pt?'Parar compartilhamento de tela':'Stop screen sharing'):(pt?'Compartilhar tela':'Share screen')}
-            title={navigator.mediaDevices?.getDisplayMedia?(sharing?(pt?'Parar apresentação':'Stop presenting'):(pt?'Compartilhar tela':'Share screen')):
+            title={('getDisplayMedia' in (navigator.mediaDevices??{}))?(sharing?(pt?'Parar apresentação':'Stop presenting'):(pt?'Compartilhar tela':'Share screen')):
               (pt?'Não disponível neste navegador':'Unavailable in this browser')}>
             {screenBusy?<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"/>:
               sharing?<MonitorOff className="size-5"/>:<MonitorUp className="size-5"/>}

@@ -20,6 +20,7 @@ type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean};
 type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
+function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
 const allowedSlug=/^[a-z][a-z0-9-]{2,63}$/;
 
@@ -502,7 +503,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                         {pt?'Cancelar':'Cancel'}</Button>
                     </div>
                   </form>:<p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>}
-                {'pending' in message&&<div role="status" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                {isPendingMessage(message)&&<div role="status" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                   {message.pending==='sending'?<><Spinner className="size-3.5"/>{pt?'Enviando…':'Sending…'}</>:
                     <><span className="text-destructive">{pt?'Falha no envio':'Send failed'}</span>
                     <button type="button" className="text-primary underline" onClick={()=>retryPending(message)}>
