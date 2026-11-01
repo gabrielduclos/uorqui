@@ -6,7 +6,7 @@
 
 A aplicação React/Vite/Tailwind do Uorqui é compilada em **arquivos estáticos**, servidos pelo **Cloudflare Workers Static Assets**, não pelo Cloudflare Pages. Um Worker pequeno recebe as requisições `/api/*` e `/health*` no mesmo domínio e as encaminha à API independente **Node.js + Fastify**, que usa **PostgreSQL Neon com Drizzle**.
 
-O Worker **não executa Fastify** nem recebe `DATABASE_URL` ou `AUTH_SECRET`. A API Fastify já está publicada no Render como `uorqui-social-api`. O novo Worker `main` já existe na Cloudflare, vinculado ao repositório `gabrielduclos/uorqui` e à branch `main`; a publicação será feita pelo **Cloudflare Builds**, não pelo GitHub Actions. A migração de `uorqui.app` é uma operação separada: confira no Cloudflare qual Worker realmente atende ao domínio antes de declarar a mudança concluída.
+O Worker **não executa Fastify** nem recebe `DATABASE_URL` ou `AUTH_SECRET`. A API Fastify já está publicada no Render como `uorqui-social-api`. O novo Worker `main` já existe na Cloudflare, vinculado ao repositório `gabrielduclos/uorqui` e à branch `main`; a publicação é feita pelo **Cloudflare Builds**, não pelo GitHub Actions. O domínio `uorqui.app` foi confirmado como associado ao Worker `main` na Cloudflare em 01/11/2026.
 
 ## Arquivos
 
@@ -48,8 +48,8 @@ O novo Worker **`main`** foi criado pelo usuário e está conectado à branch **
 
 O Cloudflare instala as dependências do workspace web, compila React/Vite e executa o deploy usando o Wrangler localizado em `apps/web`. Para alterações no front-end, o fluxo padrão é **commit → push na main → Cloudflare Builds → Worker**. O GitHub Actions permanece com testes da API e do Drizzle, sem fazer deploy do front-end.
 
-**Atenção:** o nome técnico `main` corresponde ao Worker já conectado; é diferente da branch Git `main`. Não apontar este projeto para o Worker legado `uorqui-chat` ou para o domínio `uorqui.app` sem migração aprovada.
+**Atenção:** o nome técnico `main` corresponde ao Worker já conectado; é diferente da branch Git `main`. O domínio `uorqui.app` já está no Worker `main`. Não reutilizar o Worker legado `uorqui-chat` nem seus bancos e bindings.
 
-A API Node.js está publicada no Render; veja [Hospedagem da API](hospedagem-api.md). O **beta técnico `0.1.0-beta.1`** usa `API_ORIGIN=https://uorqui-social-api.onrender.com` no Worker; sem origem válida, `/api/*` retorna 503. Credenciais de banco/autenticação ficam apenas no Render. Configure `AUTH_BASE_URL` e `WEB_ORIGIN` para a origem canônica atual e `WEB_EXTRA_ORIGINS` apenas para origens explícitas durante a migração. Cadastro público já está habilitado com controles de e-mail e Turnstile, mas ainda falta validar o fluxo positivo com usuário real.
+A API Node.js está publicada no Render; veja [Hospedagem da API](hospedagem-api.md). O **beta técnico `0.1.0-beta.1`** usa `API_ORIGIN=https://uorqui-social-api.onrender.com` no Worker; sem origem válida, `/api/*` retorna 503. Credenciais de banco/autenticação ficam apenas no Render. Mantenha `AUTH_BASE_URL` e `WEB_ORIGIN` alinhados à origem canônica `https://uorqui.app` e `WEB_EXTRA_ORIGINS` apenas com origens explícitas necessárias. Cadastro público já está habilitado com controles de e-mail e Turnstile, mas ainda falta validar o fluxo positivo com usuário real.
 
 Acompanhe a execução de cada build no painel **Workers & Pages → main → Builds**. Não confundir um build concluído com funcionalidade social pronta.
