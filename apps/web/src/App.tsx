@@ -98,6 +98,12 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
 
+  useEffect(()=>{
+    const onBlocksChanged=()=>clearFeedSessionCache();
+    window.addEventListener('uorqui:blocks-updated',onBlocksChanged);
+    return ()=>window.removeEventListener('uorqui:blocks-updated',onBlocksChanged);
+  },[]);
+
   useEffect(() => {
     const onNavigation = () => {
       setPublicHandle(publicProfileHandle(window.location.pathname));
