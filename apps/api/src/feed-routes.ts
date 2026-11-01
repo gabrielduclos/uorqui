@@ -88,7 +88,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
         filter==='videos'?" AND EXISTS (SELECT 1 FROM feed_media fm WHERE fm.post_id=p.id AND fm.type LIKE 'video/%')":'';
       const result=await getPool().query('SELECT '+fields+from+' WHERE '+viewableSql+where+
         ' AND ($2::timestamptz IS NULL OR (p.published_at,p.id)<($2::timestamptz,$3::uuid)) '+
-        'ORDER BY p.published_at DESC,p.id DESC LIMIT 13',[me,keyTime,keyId,author??null]);
+        'ORDER BY p.published_at DESC,p.id DESC LIMIT 13',author?[me,keyTime,keyId,author]:[me,keyTime,keyId]);
       const rows=result.rows.slice(0,12),last=rows.at(-1);
       return reply.header('Cache-Control',cache).send({
         posts:rows,nextCursor:result.rows.length>12&&last?last.cursorTime+'|'+last.id:null
