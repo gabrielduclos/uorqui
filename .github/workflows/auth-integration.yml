@@ -51,6 +51,8 @@ jobs:
         run: node --test apps/api/test/direct-messages.integration.test.mjs
       - name: Exercise real community membership and messages
         run: node --test apps/api/test/communities.integration.test.mjs
+      - name: Verify authenticated community voice signaling
+        run: node --test apps/api/test/community-voice.integration.test.mjs
       - name: Verify disabled registration is enforced server-side
         run: node --test apps/api/test/signup-closed.integration.test.mjs
       - name: Verify production does not enable signup from dev flags
