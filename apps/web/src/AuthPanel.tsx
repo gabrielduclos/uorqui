@@ -345,11 +345,11 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
 
   const inputClass = 'min-h-12 w-full rounded-lg border border-input bg-background px-3.5 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40';
   const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
-  const minorButton = 'w-full min-h-11 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const minorButton = 'w-full min-h-11 rounded-lg px-4 py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
   const submitLabel = busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'register' ? t("Criar minha conta") : t("Entrar");
 
   return (
-    <section aria-label={t('Acesso à conta')} className="w-full min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:rounded-2xl sm:p-7">
+    <section aria-label={t('Acesso à conta')} className="w-full min-w-0 rounded-none border-y border-border bg-card px-4 py-5 shadow-none sm:rounded-2xl sm:border sm:p-7 sm:shadow-sm">
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10"><LockKeyhole className="size-4"/></span>
@@ -359,7 +359,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? t('Seu perfil no Uorqui.') : view === 'welcome' ? t("Converse, compartilhe e participe das suas comunidades.") : view === 'register' ? t("Crie seu perfil para participar do feed e das comunidades.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
       </div>
       {!loading&&!account&&(view==='login'||view==='register')&&<div role="group" aria-label={t('Escolher forma de acesso')}
-        className="mb-5 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+        className="mb-5 grid min-w-0 grid-cols-2 gap-1 rounded-lg bg-muted p-1">
         <button type="button" aria-pressed={view==='login'} onClick={()=>navigate('login')}
           className={'min-h-11 rounded-md text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring '+(view==='login'?'bg-card text-foreground shadow-sm':'text-muted-foreground hover:text-foreground')}>
           {t('Entrar')}
@@ -396,12 +396,12 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Salvando…')}</> : t("Criar meu perfil")}</Button>
             </form>
           )}
-          <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} className={minorButton}>{busy ? <><Spinner /> {t("Saindo…")}</> : t('Sair da conta')}</Button>
+          <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} variant="outline" className={minorButton}>{busy ? <><Spinner /> {t("Saindo…")}</> : t('Sair da conta')}</Button>
         </div>
       ) : view === 'welcome' ? (
         <div className="space-y-3">
           <Button type="button" onClick={() => navigate('register')} className={buttonClass}>{t('Criar conta')}</Button>
-          <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Entrar com uma conta existente")}</Button>
+          <Button type="button" onClick={() => navigate('login')} variant="outline" className={minorButton}>{t("Entrar com uma conta existente")}</Button>
           {apiChecked && !apiReady && <div role="status" className="space-y-2 text-sm text-amber-600 dark:text-amber-200"><p>{t("O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.")}</p><Button type="button" variant="outline" size="sm" onClick={() => void checkApi()}>{t("Tentar novamente")}</Button></div>}
         </div>
       ) : (
@@ -412,7 +412,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               <Input id="verify-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
               {siteKey && <div ref={captchaRef} aria-label={t("Verificação de segurança")} />}
               <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void resendVerification()} className={buttonClass}>{busy ? <><Spinner /> {t("Reenviando…")}</> : t('Reenviar confirmação')}</Button>
-              <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Já confirmei · Entrar")}</Button>
+              <Button type="button" onClick={() => navigate('login')} variant="outline" className={minorButton}>{t("Já confirmei · Entrar")}</Button>
             </div>
           ) : (
             <form className="space-y-4" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
@@ -444,13 +444,13 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label={t("Verificação de segurança")} />}
               <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'forgot' ? t("Enviar link de recuperação") : view === 'reset' ? t('Salvar nova senha') : submitLabel}</Button>
               {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-600 dark:text-amber-200">{t("Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.")}</p>}
-              {view === 'login' && <div className="flex flex-wrap gap-x-5 gap-y-3">
-                <Button type="button" onClick={() => navigate('forgot')} className="text-sm font-medium text-primary underline underline-offset-4">{t("Esqueci minha senha")}</Button>
-                <Button type="button" onClick={() => navigate('verify')} className="text-sm font-medium text-primary underline underline-offset-4">{t('Reenviar confirmação de e-mail')}</Button>
+              {view === 'login' && <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-x-5">
+                <Button type="button" variant="link" onClick={() => navigate('forgot')} className="h-auto min-h-10 justify-start px-0 py-1 text-sm font-medium text-primary underline underline-offset-4 hover:text-primary/80">{t("Esqueci minha senha")}</Button>
+                <Button type="button" variant="link" onClick={() => navigate('verify')} className="h-auto min-h-10 justify-start px-0 py-1 text-sm font-medium text-primary underline underline-offset-4 hover:text-primary/80">{t('Reenviar confirmação de e-mail')}</Button>
               </div>}
             </form>
           )}
-          {view !== 'login' && view !== 'register' && <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Voltar para entrar")}</Button>}
+          {view !== 'login' && view !== 'register' && <Button type="button" onClick={() => navigate('login')} variant="outline" className={minorButton}>{t("Voltar para entrar")}</Button>}
         </div>
       )}
       {message && <p role={view === 'verify' && message.startsWith('Conta criada') ? 'status' : 'alert'} className="mt-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-foreground">{message}</p>}
