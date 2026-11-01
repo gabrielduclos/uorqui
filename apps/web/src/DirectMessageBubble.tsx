@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Download, FileText, Forward, LoaderCircle, MapPin, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Forward, LoaderCircle, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { useCachedChatMedia } from './chatMediaCache';
@@ -104,6 +104,14 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   const mapHref=locationMessage && Number.isFinite(latitude) && Number.isFinite(longitude) &&
     Math.abs(latitude)<=90 && Math.abs(longitude)<=180
     ? 'https://www.google.com/maps?q='+latitude+','+longitude : null;
+  const sharedPostId=(()=>{
+    try{
+      const target=new URL(message.body.trim());
+      const id=target.searchParams.get('post');
+      return target.origin===window.location.origin && target.pathname==='/' &&
+        id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+    }catch{return null;}
+  })();
   const timeLabel = Number.isFinite(time.getTime())
     ? time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -199,6 +207,14 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           aria-label={pt?'Abrir localização no mapa':'Open location on map'}>
           <MapPin className="size-6 shrink-0"/>
           <span className="text-xs font-semibold">{pt?'Localização compartilhada · Ver no mapa':'Shared location · View map'}</span>
+        </a>}
+        {sharedPostId&&!message.deletedAt&&<a href={'/?post='+sharedPostId}
+          onClick={event=>{
+            event.preventDefault();
+            window.dispatchEvent(new CustomEvent('uorqui:open-feed-post',{detail:sharedPostId}));
+          }} className="mb-1 flex min-h-12 items-center gap-2 rounded-[5px] border border-current/20 bg-current/5 px-3 text-sm font-medium hover:underline"
+          aria-label={pt?'Ver publicação compartilhada no feed':'View shared post in feed'}>
+          <Newspaper className="size-4 shrink-0"/>{pt?'Ver publicação no feed':'View post in feed'}
         </a>}
         <p className="whitespace-pre-wrap break-words">
           {message.deletedAt
