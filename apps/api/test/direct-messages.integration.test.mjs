@@ -628,7 +628,12 @@ test('hybrid DM permissions: public messages, private requests, acceptance and r
   // Private account becomes visible to accepted friends, not unrelated users.
   assert.equal((await bob('/api/v1/me/profile','PATCH',{isPublic:false})).status,200);
   assert.equal((await alice('/api/v1/profiles/dm_bob')).status,200);
-  assert.equal((await other('/api/v1/profiles/dm_bob')).status,404);
+  const privatePreview=await other('/api/v1/profiles/dm_bob');
+  assert.equal(privatePreview.status,200);
+  assert.equal(privatePreview.data.profile.isPrivate,true);
+  assert.equal(privatePreview.data.profile.avatarUrl,null);
+  assert.equal(privatePreview.data.profile.followersCount,0);
+  assert.equal((await other('/api/v1/profiles/dm_bob/follows/followers')).status,403);
   assert.equal((await other('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
   assert.equal((await other('/api/v1/friends/requests','POST',{handle:'dm_bob'})).status,201,
     'a known exact @handle may request a private account');
@@ -643,7 +648,10 @@ test('hybrid DM permissions: public messages, private requests, acceptance and r
   assert.equal((await alice('/api/v1/friends/dm_bob','DELETE')).status,204);
   const history=await alice(path+'/messages');
   assert.equal(history.status,200,'friend removal must preserve DM history');
-  assert.equal((await alice('/api/v1/profiles/dm_bob')).status,404);
+  const privateAfterUnfriend=await alice('/api/v1/profiles/dm_bob');
+  assert.equal(privateAfterUnfriend.status,200);
+  assert.equal(privateAfterUnfriend.data.profile.isPrivate,true);
+  assert.equal(privateAfterUnfriend.data.profile.bio,null);
   assert.equal((await alice('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
   assert.equal((await alice(path+'/messages','POST',{body:'blocked after unfriend',clientId:crypto.randomUUID()})).status,403);
   assert.equal((await alice(path+'/attachments/allowed')).status,403,
