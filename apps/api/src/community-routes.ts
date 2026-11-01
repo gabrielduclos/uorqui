@@ -261,11 +261,14 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
-      if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const readerRole=await membership(id,me);
+      if(!readerRole)return reply.code(403).send({error:'MEMBERS_ONLY'});
       const check=await getPool().query('SELECT 1 FROM community_channels WHERE id=$1 AND community_id=$2 AND kind=\'text\'',[channelId,id]);
       if(!check.rowCount)return reply.code(404).send({error:'Text channel not found'});
       const result=await getPool().query(
-        'SELECT m.id,m.client_id AS "clientId",m.body,m.created_at AS "createdAt",'+
+        'SELECT m.id,m.client_id AS "clientId",m.author_id AS "authorId",'+
+        'CASE WHEN m.deleted_at IS NULL THEN m.body ELSE NULL END AS body,m.created_at AS "createdAt",'+
+        'm.edited_at AS "editedAt",m.deleted_at AS "deletedAt",'+
         'u.handle AS "authorHandle",'+
         'CASE WHEN p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "authorName",'+
         'CASE WHEN (p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\') AND '+
@@ -274,7 +277,12 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'FROM community_messages m JOIN users u ON u.id=m.author_id JOIN profiles p ON p.user_id=m.author_id '+
         'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
         'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
-      return reply.header('Cache-Control',noCache).send({messages:result.rows.reverse()});
+      return reply.header('Cache-Control',noCache).send({
+        messages:result.rows.reverse().map(({authorId,...row})=>({
+          ...row,canEdit:authorId===me&&!row.deletedAt,
+          canDelete:(!row.deletedAt)&&(authorId===me||['owner','admin','moderator'].includes(readerRole)),
+        }))
+      });
     }catch(error){request.log.error({err:error},'Read community messages');return reply.code(503).send({error:'Unavailable'});}
   });
 
