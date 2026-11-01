@@ -11,7 +11,7 @@ export function allowedWebOrigins(): string[] {
   const values = [canonical, ...extras].map(raw => {
     const url = new URL(raw);
     if (url.origin !== raw || url.username || url.password || url.pathname !== '/' ||
-        url.search || url.hash ||
+        url.search || url.hash || url.hostname.includes('*') ||
         !['http:', 'https:'].includes(url.protocol) ||
         (process.env.NODE_ENV === 'production' && url.protocol !== 'https:')) {
       throw new Error('Invalid WEB_ORIGIN or WEB_EXTRA_ORIGINS');
