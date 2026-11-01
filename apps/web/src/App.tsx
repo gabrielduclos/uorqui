@@ -15,7 +15,7 @@ import { deactivatePush } from './useSocialPush';
 import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
-import { Badge } from '@/components/ui/badge';
+import { BetaBadge } from './BetaBadge';
 import { Button } from '@/components/ui/button';
 import { LegalPage, legalDocumentFromPath } from './LegalPages';
 import { CookieNotice } from './CookieNotice';
@@ -50,7 +50,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:px-0 sm:py-4">
           <div className="flex min-w-0 items-center gap-2">
             <UorquiWordmark className="h-5 w-auto max-w-[38vw] text-foreground"/>
-            <Badge variant="secondary" aria-hidden="true" className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Beta</Badge>
+            <BetaBadge />
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noopener noreferrer"

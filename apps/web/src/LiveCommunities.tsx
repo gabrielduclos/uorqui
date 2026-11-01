@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Compass, Hash, Headphones, LockKeyhole, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -89,6 +89,17 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [shareBusy,setShareBusy]=useState(false);
   const [shareNotice,setShareNotice]=useState('');
   const [shareOpen,setShareOpen]=useState(false);
+  const [shareCopyState,setShareCopyState]=useState<'idle'|'copied'|'error'>('idle');
+  const [shareToast,setShareToast]=useState<{kind:'success'|'error';message:string}|null>(null);
+  const shareToastTimer=useRef<number|null>(null);
+  useEffect(()=>()=>{if(shareToastTimer.current!==null)window.clearTimeout(shareToastTimer.current);},[]);
+  function showShareToast(kind:'success'|'error',message:string){
+    if(shareToastTimer.current!==null)window.clearTimeout(shareToastTimer.current);
+    setShareToast({kind,message});
+    shareToastTimer.current=window.setTimeout(()=>{
+      setShareToast(null);setShareCopyState('idle');shareToastTimer.current=null;
+    },3500);
+  }
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'>('text');
@@ -193,7 +204,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
 
   async function shareCommunity(){
     if(!selectedId)return;
-    setShareBusy(true);setShareNotice('');
+    setShareBusy(true);setShareNotice('');setShareCopyState('idle');
     try{
       const existing=await api<{link:{id:string;expiresAt:string}|null}>('/api/v1/communities/'+selectedId+'/share');
       if(!existing.link&&manage(community!)){
@@ -206,9 +217,20 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   }
   async function copyInvite(){
     if(!inviteLink)return;
-    try{await navigator.clipboard.writeText(window.location.origin+'/invite/'+inviteLink.id);
-      setShareNotice(pt?'Link copiado!':'Link copied!');}
-    catch{setShareNotice(window.location.origin+'/invite/'+inviteLink.id);}
+    const url=window.location.origin+'/invite/'+inviteLink.id;
+    setShareCopyState('idle');
+    try{
+      if(!navigator.clipboard?.writeText)throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(url);
+      setShareCopyState('copied');
+      setShareNotice(pt?'Link copiado para a área de transferência.':'Link copied to clipboard.');
+      showShareToast('success',pt?'Link da comunidade copiado!':'Community link copied!');
+    }catch{
+      setShareCopyState('error');
+      setShareNotice(pt?'Não foi possível copiar. Selecione o link acima para copiar manualmente.':
+        'Could not copy. Select the link above to copy it manually.');
+      showShareToast('error',pt?'Não foi possível copiar o link.':'Could not copy the link.');
+    }
   }
   const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
@@ -655,7 +677,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                 {pt?'Compartilhar comunidade':'Share community'}</Button>
               {shareOpen&&<div className="space-y-2 rounded-xl border border-border p-2">
                 {inviteLink?<><p className="break-all text-[11px] text-muted-foreground">{window.location.origin+'/invite/'+inviteLink.id}</p>
-                <Button type="button" size="sm" className="w-full" onClick={()=>void copyInvite()}>{pt?'Copiar link':'Copy link'}</Button>
+                <p className="text-xs text-muted-foreground">{pt?'Toque em Copiar link para copiar o convite.':'Tap Copy link to copy this invitation.'}</p>
+                <Button type="button" size="sm" className="w-full gap-2" onClick={()=>void copyInvite()}>
+                  {shareCopyState==='copied'?<Check aria-hidden="true" className="size-4"/>:<Copy aria-hidden="true" className="size-4"/>}
+                  {shareCopyState==='copied'?(pt?'Copiado!':'Copied!'):(pt?'Copiar link':'Copy link')}
+                </Button>
                 {manage(community)&&<Button type="button" size="sm" variant="outline" disabled={shareBusy} onClick={()=>{
                   if(!selectedId)return;setShareBusy(true);
                   void api<{link:{id:string;expiresAt:string}}>('/api/v1/communities/'+selectedId+'/share',body({}))
@@ -814,6 +840,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       </VoicePortalShell>,document.body)}
     <ContentReportDialog target={reportMessageId?{targetKind:'community_message',targetId:reportMessageId}:null}
       locale={locale} onClose={()=>setReportMessageId(null)}/>
+    {shareToast&&createPortal(
+      <div role={shareToast.kind==='error'?'alert':'status'} aria-live={shareToast.kind==='error'?'assertive':'polite'}
+        className="pointer-events-none fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[300] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-popover px-4 py-3 text-sm font-medium text-popover-foreground shadow-2xl">
+        {shareToast.kind==='success'?<Check aria-hidden="true" className="size-5 shrink-0 text-primary"/>:<X aria-hidden="true" className="size-5 shrink-0 text-destructive"/>}
+        <span>{shareToast.message}</span>
+      </div>,document.body)}
     {(error||notice)&&<div role={error?'alert':'status'}
       className={cn('pointer-events-auto absolute bottom-20 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-xl border border-border bg-popover px-4 py-3 text-center text-xs shadow-xl',error?'text-destructive':'text-primary')}>
       {error||notice}<button type="button" className="ml-3 underline" onClick={()=>{setError('');setNotice('');}}>{pt?'Fechar':'Close'}</button>

@@ -694,20 +694,22 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     {/* Filters live outside the scroll viewport, so they remain visible while browsing posts. */}
     <div data-feed-filter-bar className="z-20 shrink-0 border-b border-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-3 py-2 sm:px-6">
-        <div role="group" aria-label={pt?'Filtrar publicações':'Filter posts'} className="flex min-w-0 items-center gap-1">
+        <Button ref={composerTriggerRef} type="button" size="icon" onClick={()=>setComposerOpen(true)}
+          disabled={!feedReady} className="shrink-0" aria-label={pt?'Nova postagem':'New post'}
+          title={pt?'Nova postagem':'New post'}>
+          <Plus className="size-5" aria-hidden="true"/>
+        </Button>
+        <div role="group" aria-label={pt?'Filtrar publicações':'Filter posts'} className="flex min-w-0 items-center justify-center gap-1">
           <Button size="sm" variant={filter==='for-you'?'secondary':'ghost'} onClick={()=>changeFilter('for-you')}
             aria-pressed={filter==='for-you'} className="px-3">{pt?'Para você':'For you'}</Button>
           <Button size="sm" variant={filter==='following'?'secondary':'ghost'} onClick={()=>changeFilter('following')}
             aria-pressed={filter==='following'} className="px-3">{pt?'Seguindo':'Following'}</Button>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button type="button" variant="ghost" size="icon" onClick={()=>openVideo()} disabled={!feedReady}
-            aria-label={pt?'Ver vídeos':'View videos'} title={pt?'Vídeos':'Videos'}><Video className="size-4"/></Button>
-          <Button ref={composerTriggerRef} type="button" size="sm" onClick={()=>setComposerOpen(true)}
-            disabled={!feedReady} className="gap-1.5 px-2.5 sm:px-3" aria-label={pt?'Nova postagem':'New post'}>
-            <Plus className="size-4"/><span className="hidden sm:inline">{pt?'Nova postagem':'New post'}</span>
-          </Button>
-        </div>
+        <Button type="button" variant="ghost" size="icon" className="shrink-0"
+          onClick={()=>openVideo()} disabled={!feedReady}
+          aria-label={pt?'Ver vídeos':'View videos'} title={pt?'Vídeos':'Videos'}>
+          <Video className="size-4"/>
+        </Button>
       </div>
     </div>
     <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background" data-feed-scroll>
