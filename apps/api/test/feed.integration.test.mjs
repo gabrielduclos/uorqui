@@ -116,3 +116,22 @@ test('feed: drafts, media proof, video-only filtering and attachment permissions
   assert.equal((await owner(basePath,'DELETE')).status,200);
   assert.equal((await friend('/api/v1/feed/media/'+media.id+'/access')).status,404);
 });
+
+test('feed: stable keyset pagination without duplicate posts',async()=>{
+  const ids=[];
+  for(let i=0;i<14;i++){
+    const created=await owner('/api/v1/feed/posts','POST',{body:'Pagination post '+i,mediaCount:0});
+    assert.equal(created.status,201,JSON.stringify(created.data));
+    ids.push(created.data.post.id);
+  }
+  const first=await owner('/api/v1/feed/posts?filter=for-you');
+  assert.equal(first.status,200);
+  assert.equal(first.data.posts.length,12);
+  assert.ok(first.data.nextCursor);
+  const second=await owner('/api/v1/feed/posts?filter=for-you&cursor='+encodeURIComponent(first.data.nextCursor));
+  assert.equal(second.status,200,JSON.stringify(second.data));
+  const unique=new Set([...first.data.posts,...second.data.posts].map(p=>p.id));
+  assert.ok(unique.size>=14,'the next page must include older posts');
+  assert.ok(ids.every(id=>unique.has(id)),'every created post must be reachable');
+});
+
