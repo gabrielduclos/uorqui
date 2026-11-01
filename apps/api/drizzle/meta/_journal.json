@@ -85,6 +85,13 @@
       "when": 1793493200000,
       "tag": "0011_live_communities",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793495000000,
+      "tag": "0012_voice_signaling",
+      "breakpoints": true
     }
   ]
 }
