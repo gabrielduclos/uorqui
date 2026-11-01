@@ -125,7 +125,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const result=await getPool().query(
         'UPDATE community_voice_sessions s SET last_seen_at=now(),muted=$4 '+
         'FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
-        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind='voice' RETURNING s.id",
+        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind='voice' AND s.last_seen_at>now()-interval '45 seconds' RETURNING s.id",
         [sessionId,channelId,me,muted,id]);
       if(!result.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       return reply.header('Cache-Control',noCache).send({ok:true});
