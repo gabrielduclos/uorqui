@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, Mic, MicOff, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import CommunityVoiceRoom, { type CommunityVoiceParticipant } from './CommunityVoiceRoom';
 import CommunityModerationPanel from './CommunityModerationPanel';
@@ -131,30 +130,38 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
-  // Visible voice presence is independent of an audio connection. Members should
-  // see who is in every room without granting microphone access or joining it.
+  // The main room roster is refreshed immediately by the shared community SSE.
+  // Retain a slow fallback only for disconnected browsers or expired sessions.
   useEffect(()=>{
-    let mounted=true;
-    let timer:ReturnType<typeof setTimeout>|undefined;
+    let mounted=true,requestId=0;
     setVoiceRooms({});setVoicePresenceFailed(false);
     if(!selectedId||!community?.myRole){setVoicePresenceLoading(false);return;}
     setVoicePresenceLoading(true);
-    const poll=async()=>{
-      if(!mounted)return;
+    const refresh=async()=>{
+      const id=++requestId;
       try{
         const response=await api<{rooms:Record<string,CommunityVoiceParticipant[]>}>(
           '/api/v1/communities/'+encodeURIComponent(selectedId)+'/voice/presence');
-        if(mounted){setVoiceRooms(response.rooms);setVoicePresenceFailed(false);}
-      }catch{if(mounted)setVoicePresenceFailed(true);}
-      finally{
-        if(mounted){
-          setVoicePresenceLoading(false);
-          timer=setTimeout(poll,document.visibilityState==='visible'?5000:15000);
-        }
-      }
+        if(mounted&&id===requestId){setVoiceRooms(response.rooms);setVoicePresenceFailed(false);}
+      }catch{if(mounted&&id===requestId)setVoicePresenceFailed(true);}
+      finally{if(mounted&&id===requestId)setVoicePresenceLoading(false);}
     };
-    void poll();
-    return ()=>{mounted=false;if(timer)clearTimeout(timer);};
+    const event=(incoming:Event)=>{
+      const detail=(incoming as CustomEvent<{kind:string;communityId?:string}>).detail;
+      if(detail?.kind==='ready'||detail?.kind==='voice'&&detail.communityId===selectedId)
+        void refresh();
+    };
+    const focus=()=>{if(document.visibilityState==='visible')void refresh();};
+    window.addEventListener('uorqui:community-event',event);
+    window.addEventListener('focus',focus);
+    const timer=window.setInterval(()=>{
+      if(document.visibilityState==='visible')void refresh();
+    },30000);
+    void refresh();
+    return ()=>{mounted=false;requestId++;window.clearInterval(timer);
+      window.removeEventListener('uorqui:community-event',event);
+      window.removeEventListener('focus',focus);
+    };
   },[selectedId,community?.myRole]);
 
   useEffect(()=>{if(initialCommunityId){setSelectedId(initialCommunityId);setDiscovery(false);void loadList();}},[initialCommunityId,loadList]);
@@ -183,36 +190,40 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){
       setMessages([]);setMessagesLoadFailed(false);return;
     }
-    let active=true,loadedOnce=false,failures=0;
-    let timer:ReturnType<typeof setTimeout>|undefined;
+    let active=true,loadedOnce=false,requestId=0;
     previousLastMessage.current=null;
     setReactionPickerId(null);setMessages([]);setMessagesLoading(true);setMessagesLoadFailed(false);
-    const poll=async()=>{
-      if(!active)return;
+    const refresh=async()=>{
+      const id=++requestId;
       try{
         const result=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
-        if(active){
-          loadedOnce=true;failures=0;
+        if(active&&id===requestId){
+          loadedOnce=true;
           setMessages(result.messages);
           setPendingMessages(old=>old.filter(p=>p.channelId!==channelId||!result.messages.some(m=>m.clientId===p.clientId)));
           setMessagesLoading(false);setMessagesLoadFailed(false);
         }
       }catch{
-        if(active){
-          failures+=1;setMessagesLoading(false);
-          // Do not overwrite previously loaded messages or spam global alerts
-          // during automatic retries; show the inline error only on first load.
+        if(active&&id===requestId){
+          setMessagesLoading(false);
           if(!loadedOnce)setMessagesLoadFailed(true);
         }
-      }finally{
-        if(active)timer=setTimeout(()=>{
-          if(document.visibilityState==='visible')void poll();
-          else timer=setTimeout(()=>{if(active)void poll();},15000);
-        },failures?Math.min(30000,5000*Math.pow(2,Math.min(failures,3))):5000);
       }
     };
-    void poll();
-    return ()=>{active=false;if(timer)clearTimeout(timer);};
+    const event=(incoming:Event)=>{
+      const detail=(incoming as CustomEvent<{kind:string;communityId?:string;channelId?:string}>).detail;
+      if(detail?.kind==='ready'||(detail?.kind==='message'&&detail.communityId===selectedId&&detail.channelId===channelId))
+        void refresh();
+    };
+    const focus=()=>{if(document.visibilityState==='visible')void refresh();};
+    window.addEventListener('uorqui:community-event',event);
+    window.addEventListener('focus',focus);
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void refresh();},30000);
+    void refresh();
+    return ()=>{active=false;requestId++;window.clearInterval(timer);
+      window.removeEventListener('uorqui:community-event',event);
+      window.removeEventListener('focus',focus);
+    };
   },[selectedId,channelId,activeChannel?.kind,community?.myRole]);
   useEffect(()=>{
     const latest=messages.at(-1)?.id??null;
@@ -560,12 +571,19 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                     {occupants.map(person=><div key={person.sessionId}
                       className="flex min-h-9 items-center gap-2 rounded-lg px-2 py-1 text-xs text-muted-foreground"
                       title={person.displayName}>
-                      <div className={cn('rounded-full p-0.5',person.speaking&&'ring-2 ring-emerald-500 animate-pulse')}>
-                        <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
-                      </div>
+                      <span className={cn('size-2 shrink-0 rounded-full',person.speaking?'animate-pulse bg-emerald-500':'bg-emerald-500/50')}
+                        aria-label={person.speaking?(pt?'Falando':'Speaking'):(pt?'Conectado':'Connected')}/>
                       <span className="min-w-0 flex-1 truncate">{person.displayName}{person.isSelf&&(pt?' (você)':' (you)')}</span>
-                      {person.deafened&&<VolumeX className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Áudio desligado':'Audio disabled'}/>}
-                      {person.muted&&<MicOff className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Microfone silenciado':'Microphone muted'}/>}
+                      <span title={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}
+                        aria-label={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
+                        {person.muted?<MicOff className="size-3.5 shrink-0 text-destructive"/>:
+                          <Mic className="size-3.5 shrink-0 text-muted-foreground"/>}
+                      </span>
+                      <span title={person.deafened?(pt?'Áudio desligado':'Audio off'):(pt?'Áudio ligado':'Audio on')}
+                        aria-label={person.deafened?(pt?'Áudio desligado':'Audio off'):(pt?'Áudio ligado':'Audio on')}>
+                        {person.deafened?<VolumeX className="size-3.5 shrink-0 text-destructive"/>:
+                          <Volume2 className="size-3.5 shrink-0 text-muted-foreground"/>}
+                      </span>
                     </div>)}
                   </div>}
                 </div>;
