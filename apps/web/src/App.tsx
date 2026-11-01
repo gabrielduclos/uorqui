@@ -185,6 +185,8 @@ function AppContent() {
     clearChatMediaCache();clearFeedSessionCache();setAccount(next);
   }, []);
   const signOut = useCallback(async () => {
+    // Revoke the authenticated subscription before ending the session.
+    await deactivatePush().catch(()=>{});
     const response = await fetch('/api/auth/sign-out', {
       method: 'POST',
       credentials: 'same-origin',
@@ -192,7 +194,6 @@ function AppContent() {
       body: '{}',
     });
     if (!response.ok) throw new Error('Logout failed');
-    void deactivatePush().catch(()=>{});
     clearProfileImageCache();
     clearChatMediaCache();
     clearFeedSessionCache();
