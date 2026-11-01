@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, LogOut, Mic, MicOff, RefreshCw, Volume2, VolumeX, Users } from 'lucide-react';
+import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 
-type VoicePeer={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;joinedAt:string;isSelf:boolean};
+export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;isSelf:boolean};
+type VoicePeer=CommunityVoiceParticipant & {joinedAt:string};
 type VoiceSignal={id:string;senderSessionId:string;kind:'offer'|'answer'|'candidate';payload:RTCSessionDescriptionInit|RTCIceCandidateInit};
 type VoiceJoin={sessionId:string;peers:VoicePeer[];rtc:{iceServers:RTCIceServer[];relayAvailable:boolean};maxParticipants:number};
 type VoiceState={peers:VoicePeer[];signals:VoiceSignal[];cursor:string};
@@ -17,12 +18,12 @@ async function req<T>(url:string,init?:RequestInit):Promise<T>{
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
-export default function CommunityVoiceRoom({communityId,channelId}:{communityId:string;channelId:string}){
+export default function CommunityVoiceRoom({communityId,channelId,onParticipantsChange}:{communityId:string;channelId:string;onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void}){
   const {locale}=useUorquiPreferences();const pt=locale==='pt-BR';
   const [phase,setPhase]=useState<'idle'|'joining'|'joined'>('idle');
   const [peers,setPeers]=useState<VoicePeer[]>([]);
   const [muted,setMuted]=useState(false);
-  const [relayAvailable,setRelayAvailable]=useState(false);
+  const [deafened,setDeafened]=useState(false);
   const [connections,setConnections]=useState<Record<string,RTCPeerConnectionState>>({});
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
@@ -39,6 +40,8 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
   const polling=useRef(false);
   const timers=useRef<number[]>([]);
   const mutedRef=useRef(false);
+  const deafenedRef=useRef(false);
+  const priorMuteRef=useRef(false);
   const ownJoinedAt=useRef('');
   const base='/api/v1/communities/'+communityId+'/channels/'+channelId+'/voice';
 
@@ -51,8 +54,8 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
     pcMap.current.clear();candidateQueue.current.clear();
     for(const el of audioMap.current.values()){el.pause();el.srcObject=null;el.remove();}
     audioMap.current.clear();local.current?.getTracks().forEach(track=>track.stop());local.current=null;
-    cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;
-    setPhase('idle');setMuted(false);setPeers([]);setConnections({});setAudioBlocked(false);
+    cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;deafenedRef.current=false;priorMuteRef.current=false;
+    setPhase('idle');setMuted(false);setDeafened(false);setPeers([]);setConnections({});setAudioBlocked(false);
     if(sessionId&&notify){
       void fetch(base+'/sessions/'+sessionId,{method:'DELETE',credentials:'same-origin',cache:'no-store',keepalive:true}).catch(()=>{});
     }
@@ -95,7 +98,7 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
       if(!element){
         element=document.createElement('audio');element.autoplay=true;
         element.setAttribute('playsinline','');
-        element.style.display='none';
+        element.style.display='none';element.muted=deafenedRef.current;
         document.body.appendChild(element);
         audioMap.current.set(id,element);
       }
@@ -202,7 +205,6 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
       }
       local.current=stream;selfSession.current=sessionId;
       config.current=result.rtc.iceServers;
-      setRelayAvailable(result.rtc.relayAvailable);
       ownJoinedAt.current=result.peers.find(peer=>peer.sessionId===sessionId)?.joinedAt??new Date().toISOString();
       running.current=true;cursor.current='0';setPeers(result.peers);setPhase('joined');
       for(const peer of result.peers)if(!peer.isSelf)void connect(peer.sessionId,true);
@@ -227,9 +229,20 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
     }finally{joining.current=false;}
   }
   function toggleMute(){
+    if(deafenedRef.current)return;
     const next=!mutedRef.current;mutedRef.current=next;setMuted(next);
     local.current?.getAudioTracks().forEach(track=>{track.enabled=!next;});
     if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:next})).catch(()=>{});
+  }
+  function toggleDeafen(){
+    const next=!deafenedRef.current;
+    if(next)priorMuteRef.current=mutedRef.current;
+    deafenedRef.current=next;setDeafened(next);
+    for(const player of audioMap.current.values())player.muted=next;
+    const nextMute=next?true:priorMuteRef.current;
+    mutedRef.current=nextMute;setMuted(nextMute);
+    local.current?.getAudioTracks().forEach(track=>{track.enabled=!nextMute;});
+    if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:nextMute})).catch(()=>{});
   }
   function enableAudio(){
     void Promise.all([...audioMap.current.values()].map(el=>el.play())).then(()=>setAudioBlocked(false))
