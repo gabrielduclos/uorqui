@@ -30,13 +30,17 @@ function FeedVideo({post,open,paused}:{post:Post;open:()=>void;paused:boolean}){
   useEffect(()=>{
     const video=ref.current;if(!video)return;
     if(paused){video.pause();return;}
+    const onOther=(event:Event)=>{if((event as CustomEvent<string>).detail!==post.id)video.pause();};
+    window.addEventListener('uorqui:feed-active-video',onOther);
     const observer=new IntersectionObserver(entries=>{
-      if(entries[0]?.intersectionRatio>=0.7)void video.play().catch(()=>{});
-      else video.pause();
+      if(entries[0]?.intersectionRatio>=0.7){
+        window.dispatchEvent(new CustomEvent('uorqui:feed-active-video',{detail:post.id}));
+        void video.play().catch(()=>{});
+      }else video.pause();
     },{threshold:[0,0.7,1]});
     observer.observe(video);
-    return ()=>{observer.disconnect();video.pause();};
-  },[paused]);
+    return ()=>{observer.disconnect();window.removeEventListener('uorqui:feed-active-video',onOther);video.pause();};
+  },[paused,post.id]);
   const video=post.media.find(m=>m.type.startsWith('video/'));
   if(!video)return null;
   return <button type="button" className="group relative mt-3 block w-full overflow-hidden rounded-xl bg-black" onClick={open}
@@ -69,7 +73,7 @@ function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
   </div>;
 }
 
-export default function LiveFeed({myId}:{myId:string}){
+export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:string|null}){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [filter,setFilter]=useState<FeedFilter>('for-you');
   const [posts,setPosts]=useState<Post[]>([]);
@@ -315,7 +319,7 @@ export default function LiveFeed({myId}:{myId:string}){
         <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
           <form onSubmit={publish} className="space-y-3">
             <div className="flex items-start gap-2">
-              <UserAvatar name={pt?'Você':'You'} image={null} size="sm"/>
+              <UserAvatar name={ownName} image={ownAvatar} size="sm"/>
               <textarea value={draft} onChange={e=>{setDraft(e.target.value);if(draftId)setDraftId(null);}} maxLength={4000} rows={3}
                 placeholder={pt?'O que você quer compartilhar?':'What would you like to share?'}
                 aria-label={pt?'Nova publicação':'New post'}
@@ -338,7 +342,7 @@ export default function LiveFeed({myId}:{myId:string}){
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime"
                 multiple className="sr-only" onChange={selectFiles}/>
               <Button type="submit" disabled={posting||(!draft.trim()&&!files.length)} loading={posting} className="gap-2">
-                <Send className="size-4"/>{pt?'Publicar':'Postar'}
+                <Send className="size-4"/>{pt?'Publicar':'Post'}
               </Button>
             </div>
           </form>
