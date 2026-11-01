@@ -90,7 +90,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
       {canAdmin&&<div className="space-y-3 border-b border-border pb-4">
         <h4 className="text-xs font-semibold">{pt?'Configurações da comunidade':'Community settings'}</h4>
         <div className="flex items-center gap-3">
-          {photo?<img src={photo} alt="" className="size-16 rounded-2xl object-cover"/>:
+          {photo?<div className="size-16 shrink-0 overflow-hidden rounded-2xl"><img src={photo} alt="" className="block size-full object-cover"/></div>:
             <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">{name[0]?.toUpperCase()}</div>}
           <div className="min-w-0 flex-1 space-y-2">
             <label className="relative inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs hover:bg-secondary">
