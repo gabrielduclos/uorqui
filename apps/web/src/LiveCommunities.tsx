@@ -59,13 +59,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
   const [voiceMinimized,setVoiceMinimized]=useState(false);
-  const [voiceTextExpanded,setVoiceTextExpanded]=useState(false);
+  const [voiceTextExpanded,setVoiceTextExpanded]=useState(true);
   const [voicePhase,setVoicePhase]=useState<VoicePhase>('idle');
   const voiceHostRef=useRef<HTMLDivElement|null>(null);
   useEffect(()=>{if(!active){setVoiceMinimized(true);if(voicePhase==='idle')setActiveVoiceRoom(null);}},[active,voicePhase]);
   function openVoiceRoom(target:VoiceRoomTarget){
-    // Voice controls and participants take priority; the room chat is opt-in.
-    setVoiceTextExpanded(false);
     if(activeVoiceRoom?.communityId===target.communityId&&activeVoiceRoom.channelId===target.channelId){
       setVoiceMinimized(false);return;
     }
@@ -75,6 +73,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         'You are already connected to another room. Disconnect before joining another.');
       return;
     }
+    // New voice rooms start with their text chat open; users can still collapse it.
+    setVoiceTextExpanded(true);
     setActiveVoiceRoom(target);setVoiceMinimized(false);
   }
   const [voiceRooms,setVoiceRooms]=useState<Record<string,CommunityVoiceParticipant[]>>({});
@@ -298,7 +298,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   // selected by default in the community sidebar. Never mark unseen messages
   // in background tabs; the cursor is tied to a message present in our response.
   useEffect(()=>{
-    if(!channelOpen||!selectedId||!channelId||!activeChannel||
+    if(!active||!channelOpen||!selectedId||!channelId||!activeChannel||
        (activeChannel.kind==='voice'&&!voiceTextExpanded)||
        document.visibilityState!=='visible'||messagesLoading)return;
     const lastMessageId=messages.at(-1)?.id;
@@ -316,7 +316,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       }).catch(()=>{/* Leave badge intact and retry after next successful load. */});
     },250);
     return ()=>{cancelled=true;window.clearTimeout(timer);};
-  },[channelOpen,selectedId,channelId,activeChannel?.kind,voiceTextExpanded,messages,messagesLoading]);
+  },[active,channelOpen,selectedId,channelId,activeChannel?.kind,voiceTextExpanded,messages,messagesLoading]);
 
   async function refresh(id=selectedId){
     await loadList();
@@ -756,7 +756,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           title={voiceTextExpanded?(pt?'Recolher conversa de texto':'Collapse text chat'):(pt?'Expandir conversa de texto':'Expand text chat')}>
           <span className="flex min-w-0 items-center gap-2"><MessageSquareText className="size-4 shrink-0 text-primary"/>
             {voiceTextExpanded?(pt?'Recolher chat':'Collapse chat'):(pt?'Expandir chat de texto':'Expand text chat')}
-            {!voiceTextExpanded&&!!unreadChannels[activeChannel.id]&&<span className="rounded-full bg-destructive px-2 py-0.5 text-[11px] font-semibold text-white">{unreadChannels[activeChannel.id]>99?'99+':unreadChannels[activeChannel.id]}</span>}
+            {!voiceTextExpanded&&!!unreadChannels[activeChannel.id]&&<span role="status" className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary"><span aria-hidden="true" className="size-1.5 rounded-full bg-primary"/>{pt?'Nova mensagem':'New message'}</span>}
           </span>
           {voiceTextExpanded?<ChevronDown className="size-4 shrink-0"/>:<ChevronUp className="size-4 shrink-0"/>}
         </button>}
