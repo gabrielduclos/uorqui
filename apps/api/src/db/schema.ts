@@ -76,6 +76,18 @@ export const directConversations = pgTable('direct_conversations', {
   // Application services must canonicalize participant ordering before insert.
 ]);
 
+/** Account-local DM visibility; never removes data from the other participant. */
+export const directConversationUserStates = pgTable('direct_conversation_user_states', {
+  conversationId: uuid('conversation_id').notNull().references(() => directConversations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  clearedAt: timestamp('cleared_at', { withTimezone: true }),
+  revivedAt: timestamp('revived_at', { withTimezone: true }),
+}, table => [
+  primaryKey({ columns: [table.conversationId, table.userId] }),
+  index('dm_user_states_user_idx').on(table.userId),
+]);
+
 export const directMessages = pgTable('direct_messages', {
   id: uuid('id').defaultRandom().primaryKey(),
   conversationId: uuid('conversation_id').notNull().references(() => directConversations.id, { onDelete: 'cascade' }),
