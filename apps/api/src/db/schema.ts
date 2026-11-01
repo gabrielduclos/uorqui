@@ -135,6 +135,48 @@ export const userBlocks = pgTable('user_blocks', {
   check('user_blocks_not_self', sql`${table.blockerId} <> ${table.blockedId}`),
 ]);
 
+/** Hybrid social feed. Posts stay private drafts until all expected media are uploaded. */
+export const feedPosts = pgTable('feed_posts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  body: text('body').notNull().default(''),
+  mediaCount: integer('media_count').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, table => [
+  index('feed_posts_published_idx').on(table.publishedAt, table.id),
+  index('feed_posts_author_idx').on(table.authorId),
+  check('feed_posts_body_length', sql`length(${table.body}) <= 4000`),
+  check('feed_posts_media_count', sql`${table.mediaCount} BETWEEN 0 AND 6`),
+]);
+export const feedMedia = pgTable('feed_media', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  postId: uuid('post_id').notNull().references(() => feedPosts.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(),
+  type: varchar('type', { length: 80 }).notNull(),
+  size: integer('size').notNull(),
+}, table => [
+  uniqueIndex('feed_media_post_position_idx').on(table.postId, table.position),
+  check('feed_media_position', sql`${table.position} BETWEEN 0 AND 5`),
+  check('feed_media_size', sql`${table.size} BETWEEN 1 AND 52428800`),
+]);
+export const feedLikes = pgTable('feed_likes', {
+  postId: uuid('post_id').notNull().references(() => feedPosts.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [primaryKey({ columns: [table.postId, table.userId] })]);
+export const feedComments = pgTable('feed_comments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  postId: uuid('post_id').notNull().references(() => feedPosts.id, { onDelete: 'cascade' }),
+  authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index('feed_comments_post_created_idx').on(table.postId, table.createdAt),
+  check('feed_comments_length', sql`length(${table.body}) BETWEEN 1 AND 1000`),
+]);
+
 /** Persistent community channels. Voice membership and RTC will follow separately. */
 export const communityChannels = pgTable('community_channels', {
   id: uuid('id').defaultRandom().primaryKey(),
