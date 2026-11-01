@@ -14,7 +14,7 @@ type Post={
   authorHandle:string;authorName:string;authorAvatar:string|null;
   mine:boolean;following:boolean;likeCount:number;liked:boolean;commentCount:number;media:Media[];
 };
-type Comment={id:string;body:string;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;mine:boolean};
+type Comment={id:string;body:string;createdAt:string;authorHandle:string|null;authorName:string|null;authorAvatar:string|null;mine:boolean;canDelete:boolean;deleted:boolean};
 type FeedFilter='for-you'|'following';
 const mimeTypes=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime']);
 const LIMIT=50*1024*1024;
@@ -84,7 +84,9 @@ function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
   </div>;
 }
 
-export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:string|null}){
+export default function LiveFeed({ownName,ownAvatar,active,onCommentFocusChange}:{
+  ownName:string;ownAvatar:string|null;active:boolean;onCommentFocusChange?:(focused:boolean)=>void;
+}){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [filter,setFilter]=useState<FeedFilter>('for-you');
   const [posts,setPosts]=useState<Post[]>([]);
@@ -109,6 +111,10 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   const [comments,setComments]=useState<Record<string,Comment[]>>({});
   const [commentDraft,setCommentDraft]=useState('');
   const [commentBusy,setCommentBusy]=useState(false);
+  const [deleteCandidate,setDeleteCandidate]=useState<{postId:string;commentId:string}|null>(null);
+  const [deleteBusy,setDeleteBusy]=useState(false);
+  const commentInputRef=useRef<HTMLInputElement|null>(null);
+  const [commentFocused,setCommentFocused]=useState(false);
   const [likeBusy,setLikeBusy]=useState<string|null>(null);
   const [followBusy,setFollowBusy]=useState<string|null>(null);
   const [deleting,setDeleting]=useState<string|null>(null);
@@ -300,12 +306,41 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
     finally{setCommentBusy(false);}
   }
   async function removeComment(post:Post,commentId:string){
+    if(deleteBusy)return;
+    setDeleteBusy(true);
     try{
       await api('/api/v1/feed/posts/'+post.id+'/comments/'+commentId,{method:'DELETE'});
-      setComments(old=>({...old,[post.id]:(old[post.id]??[]).filter(c=>c.id!==commentId)}));
+      setComments(old=>({...old,[post.id]:(old[post.id]??[]).map(c=>c.id===commentId?
+        {...c,deleted:true,body:'',authorName:null,authorHandle:null,authorAvatar:null,canDelete:false}:c)}));
       updatePost(post.id,p=>({...p,commentCount:Math.max(0,p.commentCount-1)}));
+      setDeleteCandidate(null);
     }catch{setError(pt?'Não foi possível remover o comentário.':'Could not remove comment.');}
+    finally{setDeleteBusy(false);}
   }
+  function commentFocus(input:HTMLInputElement){
+    commentInputRef.current=input;
+    setCommentFocused(true);
+    onCommentFocusChange?.(true);
+    // iOS/Samsung resize the visual viewport only after the keyboard animation.
+    // Scroll only the feed's own container, without moving the fixed app header.
+    const move=()=>input.scrollIntoView({block:'nearest',behavior:'smooth'});
+    window.requestAnimationFrame(move);
+    window.setTimeout(move,180);
+  }
+  useEffect(()=>{
+    if(!commentFocused)return;
+    const viewport=window.visualViewport;
+    const adjust=()=>commentInputRef.current?.scrollIntoView({block:'nearest'});
+    viewport?.addEventListener('resize',adjust);
+    viewport?.addEventListener('scroll',adjust);
+    return ()=>{viewport?.removeEventListener('resize',adjust);viewport?.removeEventListener('scroll',adjust);};
+  },[commentFocused]);
+  useEffect(()=>{
+    if(!active){
+      setCommentFocused(false);onCommentFocusChange?.(false);
+      commentInputRef.current=null;
+    }
+  },[active,onCommentFocusChange]);
   async function updatePostBody(event:FormEvent,post:Post){
     event.preventDefault();
     if(editBusy||(!editingBody.trim()&&!post.media.length))return;
@@ -492,20 +527,26 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
           </div>
           {openComments===post.id&&<section className="mt-2 space-y-3 border-t border-border pt-3" aria-label={pt?'Comentários':'Comments'}>
             {(comments[post.id]??[]).map(comment=><div key={comment.id} className="flex items-start gap-2 text-sm">
-              <UserAvatar name={comment.authorName} image={comment.authorAvatar} size="sm"/>
-              <div className="min-w-0 flex-1">
-                <span className="font-semibold">{comment.authorName}</span><span className="ml-1 text-xs text-muted-foreground">@{comment.authorHandle}</span>
-                <p className="mt-1 whitespace-pre-wrap wrap-break-word">{comment.body}</p>
-              </div>
-              {comment.mine&&<button type="button" onClick={()=>void removeComment(post,comment.id)} aria-label={pt?'Apagar comentário':'Delete comment'}
-                className="p-1 text-muted-foreground"><Trash2 className="size-3.5"/></button>}
+              {comment.deleted?<p className="flex-1 rounded-lg bg-muted/50 px-3 py-2 text-xs italic text-muted-foreground">
+                {pt?'Um comentário foi excluído.':'A comment was deleted.'}
+              </p>:<>
+                <UserAvatar name={comment.authorName??''} image={comment.authorAvatar} size="sm"/>
+                <div className="min-w-0 flex-1">
+                  <span className="font-semibold">{comment.authorName}</span><span className="ml-1 text-xs text-muted-foreground">@{comment.authorHandle}</span>
+                  <p className="mt-1 whitespace-pre-wrap wrap-break-word">{comment.body}</p>
+                </div>
+              </>}
+              {comment.canDelete&&!comment.deleted&&<button type="button" onClick={()=>setDeleteCandidate({postId:post.id,commentId:comment.id})}
+                aria-label={pt?'Excluir comentário':'Delete comment'} className="p-2 text-muted-foreground"><Trash2 className="size-4"/></button>}
             </div>)}
             <form onSubmit={event=>void sendComment(event,post)} className="flex gap-2">
               <input value={commentDraft} onChange={event=>setCommentDraft(event.target.value)} maxLength={1000}
+                onFocus={event=>commentFocus(event.currentTarget)}
+                onBlur={()=>{setCommentFocused(false);onCommentFocusChange?.(false);}}
                 placeholder={pt?'Escrever comentário…':'Write a comment…'} aria-label={pt?'Comentário':'Comment'}
                 className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base outline-none"/>
               <Button type="submit" size="icon" loading={commentBusy} disabled={commentBusy||!commentDraft.trim()} aria-label={pt?'Enviar comentário':'Send comment'}>
-                <Send className="size-4"/></Button>
+                {!commentBusy&&<Send className="size-4"/>}</Button>
             </form>
           </section>}
         </article>)}
@@ -517,7 +558,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
       </div>
     </div>
     {videoOpen&&<div role="dialog" aria-modal="true" aria-label={pt?'Modo Vídeos':'Video mode'}
-      className="fixed inset-0 z-[130] flex flex-col bg-black text-white" onWheel={wheelVideo} onTouchStart={touchStart} onTouchEnd={touchEnd}>
+      className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] z-[130] flex h-[var(--uorqui-app-height,100dvh)] flex-col bg-black text-white" onWheel={wheelVideo} onTouchStart={touchStart} onTouchEnd={touchEnd}>
       <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button type="button" onClick={()=>setVideoOpen(false)} className="flex min-h-11 items-center gap-2 px-2 text-sm" aria-label={pt?'Voltar ao feed':'Back to feed'}>
           <ArrowLeft className="size-5"/>{pt?'Voltar':'Back'}</button>
@@ -555,25 +596,49 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
         </header>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           {(comments[activeVideo.id]??[]).map(comment=><div key={comment.id} className="flex items-start gap-2 text-sm">
-            <UserAvatar name={comment.authorName} image={comment.authorAvatar} size="sm"/>
-            <div className="min-w-0 flex-1"><strong>{comment.authorName}</strong>
-              <span className="ml-2 text-xs text-muted-foreground">@{comment.authorHandle}</span>
-              <p className="mt-1 whitespace-pre-wrap wrap-break-word">{comment.body}</p></div>
-            {comment.mine&&<button type="button" aria-label={pt?'Apagar comentário':'Delete comment'}
-              onClick={()=>void removeComment(activeVideo,comment.id)}><Trash2 className="size-4"/></button>}
+            {comment.deleted?<p className="flex-1 rounded-lg bg-muted/50 px-3 py-2 text-xs italic text-muted-foreground">
+              {pt?'Um comentário foi excluído.':'A comment was deleted.'}
+            </p>:<>
+              <UserAvatar name={comment.authorName??''} image={comment.authorAvatar} size="sm"/>
+              <div className="min-w-0 flex-1"><strong>{comment.authorName}</strong>
+                <span className="ml-2 text-xs text-muted-foreground">@{comment.authorHandle}</span>
+                <p className="mt-1 whitespace-pre-wrap wrap-break-word">{comment.body}</p></div>
+            </>}
+            {comment.canDelete&&!comment.deleted&&<button type="button" aria-label={pt?'Excluir comentário':'Delete comment'}
+              onClick={()=>setDeleteCandidate({postId:activeVideo.id,commentId:comment.id})}><Trash2 className="size-4"/></button>}
           </div>)}
           {!(comments[activeVideo.id]??[]).length&&<p className="text-center text-xs text-muted-foreground">{pt?'Ainda não há comentários.':'No comments yet.'}</p>}
         </div>
         <form className="flex shrink-0 gap-2 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
           onSubmit={event=>void sendComment(event,activeVideo)}>
           <input value={commentDraft} onChange={event=>setCommentDraft(event.target.value)} maxLength={1000}
+            onFocus={event=>commentFocus(event.currentTarget)}
+            onBlur={()=>{setCommentFocused(false);onCommentFocusChange?.(false);}}
             aria-label={pt?'Comentário':'Comment'} placeholder={pt?'Escrever comentário…':'Write a comment…'}
             className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base outline-none"/>
           <Button size="icon" type="submit" disabled={!commentDraft.trim()||commentBusy} loading={commentBusy}
-            aria-label={pt?'Enviar comentário':'Send comment'}><Send className="size-4"/></Button>
+            aria-label={pt?'Enviar comentário':'Send comment'}>{!commentBusy&&<Send className="size-4"/>}</Button>
         </form>
       </section>}
       {videoLoading&&<span className="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs opacity-70">{pt?'Carregando vídeos…':'Loading videos…'}</span>}
+    </div>}
+    {deleteCandidate&&<div role="dialog" aria-modal="true" aria-label={pt?'Excluir comentário':'Delete comment'}
+      className="fixed inset-0 z-[160] flex items-center justify-center bg-black/60 px-4">
+      <div className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-card p-5 shadow-xl" role="document">
+        <h3 className="text-base font-semibold">{pt?'Excluir comentário?':'Delete comment?'}</h3>
+        <p className="text-sm text-muted-foreground">{pt?
+          'O texto do comentário será removido, mas ficará um aviso informando que um comentário foi excluído.':
+          'The comment text will be removed, but a deleted-comment notice will remain.'}</p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" disabled={deleteBusy} onClick={()=>setDeleteCandidate(null)}>
+            {pt?'Cancelar':'Cancel'}</Button>
+          <Button type="button" variant="destructive" loading={deleteBusy} disabled={deleteBusy}
+            onClick={()=>{
+              const post=[...posts,...videos].find(p=>p.id===deleteCandidate.postId);
+              if(post)void removeComment(post,deleteCandidate.commentId);
+            }}>{pt?'Excluir':'Delete'}</Button>
+        </div>
+      </div>
     </div>}
     {zoom&&<div role="dialog" aria-modal="true" aria-label={pt?'Visualizador de foto':'Photo viewer'} className="fixed inset-0 z-[140] flex flex-col bg-black/95 text-white">
       <div className="flex h-12 shrink-0 justify-end p-1"><button type="button" onClick={()=>setZoom(null)} aria-label={pt?'Fechar foto':'Close photo'}
