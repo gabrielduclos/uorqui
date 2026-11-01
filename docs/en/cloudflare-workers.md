@@ -6,7 +6,7 @@
 
 The Uorqui React/Vite/Tailwind single-page application is built to **static assets** and served by **Cloudflare Workers Static Assets**, not Cloudflare Pages. Its separate Worker handles same-origin `/api/*` and `/health*` requests and forwards them to an independent **Node.js + Fastify** API. The API will connect to **Neon PostgreSQL using Drizzle**.
 
-The Worker **does not** run Fastify or hold `DATABASE_URL`/`AUTH_SECRET`. The Fastify API is deployed separately on Render as `uorqui-social-api`. The new Cloudflare Worker `main` already exists and is connected to the `main` branch of `gabrielduclos/uorqui`; **Cloudflare Builds** now owns the frontend build and deployment. The `uorqui.app` custom-domain cutover is a separate operation: verify its actual Worker routing in Cloudflare before declaring it complete.
+The Worker **does not** run Fastify or hold `DATABASE_URL`/`AUTH_SECRET`. The Fastify API is deployed separately on Render as `uorqui-social-api`. The new Cloudflare Worker `main` already exists and is connected to the `main` branch of `gabrielduclos/uorqui`; **Cloudflare Builds** now owns the frontend build and deployment. Cloudflare confirmed `uorqui.app` is associated with Worker `main` on November 1, 2026.
 
 ## Files
 
@@ -48,8 +48,8 @@ The user has created Worker **`main`** and connected it to the **`main`** branch
 
 Cloudflare installs the web workspace dependencies, builds the React SPA, then uses the Wrangler dependency under `apps/web` to publish the Worker. For frontend changes use **commit → push to main → Cloudflare Builds → Worker**. GitHub Actions is retained for API and Drizzle tests only, not frontend deployment.
 
-**Important:** the Cloudflare Worker named `main` is not the Git branch `main`. Do not use the legacy `uorqui-chat` Worker or point this project at `uorqui.app` without separately authorizing a migration.
+**Important:** the Cloudflare Worker named `main` is not the Git branch `main`. `uorqui.app` is already routed to Worker `main`. Do not reuse the legacy `uorqui-chat` Worker or its databases and bindings.
 
-The Node.js API is deployed on Render; see [API hosting](api-hosting.md). **Technical beta `0.1.0-beta.1`** uses runtime `API_ORIGIN=https://uorqui-social-api.onrender.com`; without a valid API origin, `/api/*` returns 503. Keep database/auth credentials only on Render. Configure `AUTH_BASE_URL` and `WEB_ORIGIN` for the current canonical frontend origin and use explicit `WEB_EXTRA_ORIGINS` for a staged domain transition. Public signup is enabled behind email and Turnstile controls, but the successful real-email flow still needs device-level validation.
+The Node.js API is deployed on Render; see [API hosting](api-hosting.md). **Technical beta `0.1.0-beta.1`** uses runtime `API_ORIGIN=https://uorqui-social-api.onrender.com`; without a valid API origin, `/api/*` returns 503. Keep database/auth credentials only on Render. Keep `AUTH_BASE_URL` and `WEB_ORIGIN` aligned to `https://uorqui.app` and use only explicitly approved additional `WEB_EXTRA_ORIGINS`. Public signup is enabled behind email and Turnstile controls, but the successful real-email flow still needs device-level validation.
 
 Track builds at **Workers & Pages → main → Builds**. A successful deployment is not proof that social features are finished.
