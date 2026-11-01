@@ -56,6 +56,10 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   const room='/api/v1/communities/'+communityId+'/channels/'+voice.id+'/voice';
   const textRoom='/api/v1/communities/'+communityId+'/channels/'+text.id+'/voice';
   const a=crypto.randomUUID(),b=crypto.randomUUID();
+  const presence='/api/v1/communities/'+communityId+'/voice/presence';
+  assert.equal((await anon(presence)).status,401);
+  assert.equal((await stranger(presence)).status,403,'nonmembers cannot view room occupants');
+  assert.deepEqual((await owner(presence)).data.rooms,{},'empty rooms have no occupants');
   assert.equal((await anon(room+'/join','POST',{sessionId:a})).status,401);
   assert.equal((await owner(room+'/join','POST',{sessionId:a},false)).status,403,'origin verification');
   assert.equal((await stranger(room+'/join','POST',{sessionId:b})).status,403,'private nonmember cannot join');
@@ -63,6 +67,10 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   const joined=await owner(room+'/join','POST',{sessionId:a});
   assert.equal(joined.status,200,JSON.stringify(joined.data));
   assert.ok(joined.data.peers.some(p=>p.sessionId===a&&p.isSelf));
+  const alone=(await owner(presence)).data.rooms[voice.id];
+  assert.equal(alone.length,1);
+  assert.equal(alone[0].handle,'voice_owner');
+  assert.equal(alone[0].isSelf,true);
   assert.equal(joined.data.maxParticipants,6);
   assert.equal(joined.data.rtc.relayAvailable,false,'TURN is not guessed or silently claimed');
   assert.ok(joined.data.rtc.iceServers[0].urls.includes('stun:stun.cloudflare.com:3478'));
@@ -87,6 +95,10 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   const friendJoin=await friend(room+'/join','POST',{sessionId:b});
   assert.equal(friendJoin.status,200,JSON.stringify(friendJoin.data));
   assert.equal(friendJoin.data.peers.length,2);
+  const roomList=(await owner(presence)).data.rooms[voice.id];
+  assert.deepEqual(roomList.map(p=>p.handle),['voice_owner','voice_friend']);
+  assert.equal(roomList[0].deafened,true,'main-room roster uses the persisted deafen state');
+  assert.equal((await friend(presence)).data.rooms[voice.id].length,2);
   assert.equal(friendJoin.data.peers.find(p=>p.sessionId===a).deafened,true,
     'another participant must see deafen, not just mic mute');
   assert.equal((await owner(room+'/heartbeat','POST',{sessionId:a,muted:false,deafened:false})).status,200);
@@ -115,6 +127,7 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   assert.equal((await owner('/api/v1/blocks','POST',{handle:'voice_friend'})).status,200);
   const hidden=await owner(room+'/state?sessionId='+a);
   assert.equal(hidden.data.peers.length,1,'blocked participants must not be visible to each other');
+  assert.equal((await owner(presence)).data.rooms[voice.id].length,1,'the channel list must also honor blocks');
   assert.equal((await friend(room+'/state?sessionId='+b)).data.peers.length,1);
   assert.equal((await owner(room+'/signal','POST',{sessionId:a,recipientSessionId:b,kind:'candidate',payload:{candidate:'candidate:sample',sdpMid:'0',sdpMLineIndex:0}})).status,404,
     'a blocked pair cannot exchange WebRTC candidates');
@@ -130,6 +143,7 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   const remaining=await friend(room+'/state?sessionId='+b);
   assert.equal(remaining.data.peers.length,1);
   assert.equal((await friend(room+'/sessions/'+b,'DELETE')).status,204);
+  assert.deepEqual((await owner(presence)).data.rooms,{},'leaving must clear the main-screen roster');
   assert.equal((await friend(room+'/state?sessionId='+b)).status,410);
 });
 
@@ -142,6 +156,7 @@ test('voice: lost membership ends active RTC room access',async()=>{
   const s=crypto.randomUUID();
   assert.equal((await friend(root+'/join','POST',{sessionId:s})).status,200);
   assert.equal((await friend('/api/v1/communities/'+c.id+'/membership','DELETE')).status,204);
+  assert.equal((await friend('/api/v1/communities/'+c.id+'/voice/presence')).status,403);
   assert.equal((await friend(root+'/state?sessionId='+s)).status,403);
   assert.equal((await friend(root+'/heartbeat','POST',{sessionId:s,muted:false})).status,410);
   assert.equal((await friend(root+'/sessions/'+s,'DELETE')).status,204,'safe cleanup after membership removal');
