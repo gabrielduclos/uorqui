@@ -4,7 +4,7 @@ import {
   Bell, Home, LogOut, MessageCircle, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { BetaBadge } from './BetaBadge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -148,7 +148,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       <aside className="hidden h-full min-h-0 w-55 shrink-0 flex-col overflow-hidden border-r border-border bg-card/65 md:flex">
         <button className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('feed')} aria-label={t('Uorqui — ir para o início')}>
           <UorquiWordmark className="h-[18px] w-auto max-w-full text-foreground" />
-          <Badge variant="secondary" aria-hidden="true" className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Beta</Badge>
+          <BetaBadge />
         </button>
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
@@ -183,7 +183,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => move('feed')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
               <UorquiWordmark className="h-4 w-auto max-w-[34vw] text-foreground" />
-              <Badge variant="secondary" aria-hidden="true" className="rounded-md px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide">Beta</Badge>
+              <BetaBadge compact />
             </button>
             <Separator orientation="vertical" className="h-5 md:hidden" />
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>

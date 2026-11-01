@@ -8,10 +8,10 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 ### Incluído
 
-- Nova rede social open source em React/TypeScript, com interface inspirada no UIKit, temas claro e escuro.
+- Nova rede social open source em React/TypeScript, com interface inspirada no UIKit, temas claro e escuro e selo Beta consistente junto ao logo no header.
 - Autenticação Better Auth com e-mail/senha, perfis, privacidade e bloqueios; cadastro público com proteção Turnstile e integração de e-mail.
 - Mensageiro individual 1:1 com persistência, anexos, respostas, reações, estados de mensagens, atualizações SSE e suporte a Web Push.
-- Feed híbrido contínuo e navegação dedicada por vídeos.
+- Feed híbrido contínuo com filtros persistentes "Para você" / "Seguindo", botão + que abre o modal de postagem e navegação dedicada por vídeos.
 - Comunidades com convites, cargos, canais de texto, moderação e salas WebRTC, incluindo chamada minimizável.
 - Frontend Cloudflare Worker/R2; API Fastify no Render; PostgreSQL Neon; testes automáticos de interface, API e integração.
 - Preparação para migração de domínio, lista de origens autorizadas e substituição do service worker em PWAs instalados.
@@ -21,7 +21,7 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 - Validar **com uma conta real** envio/recebimento de e-mail, confirmação e recuperação de senha.
 - A substituição do PWA, notificações e ícone **não está garantida** para todos os aparelhos, especialmente iPhone.
 - Voz entre redes diferentes pode precisar de TURN; iOS limita execução e microfone em segundo plano.
-- Só considerar `uorqui.app` migrado depois de verificar o roteamento Cloudflare.
+- Em 01/11/2026, a Cloudflare confirmou `uorqui.app` habilitado no Worker `main` em produção. Ainda faltam conferir caches dos PWAs instalados, particularidades de dispositivos e fluxos de recuperação.
 - Não há migração automática das contas, mensagens, push ou dados do Uorqui Chat empresarial.
 - Antes de ampliar o beta: monitoramento, backups e restauração, testes de acessibilidade/segurança, operação de moderação e custos.
 
