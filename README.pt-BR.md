@@ -13,7 +13,7 @@
 O Uorqui reúne três experiências:
 
 - **Conversas individuais:** mensagens privadas 1:1, respostas, reações, anexos, estados de mensagens, push e atualização em tempo real via SSE. Não há grupos tradicionais no mensageiro.
-- **Feed híbrido:** publicações contínuas com texto, fotos e vídeos, com modo imersivo específico para vídeos.
+- **Feed híbrido:** publicações contínuas com texto, fotos e vídeos, filtros fixos "Para você" e "Seguindo", botão + à esquerda que abre o modal de nova postagem e modo imersivo para vídeos.
 - **Comunidades:** participação pública/privada, convites, canais de texto, moderação e salas de voz via WebRTC, com chamada minimizável durante a navegação.
 
 O público inicial inclui comunidades gamers, mas o produto é de uso geral.
@@ -24,7 +24,7 @@ O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 | --- | --- |
 | Cadastro e perfis | Better Auth, verificação/recuperação por e-mail, privacidade e bloqueio implementados; falta validar cadastro real e entrega de e-mails |
 | Mensageiro | Conversas 1:1 persistidas, anexos, reações, estados de leitura/entrega, SSE e Web Push implementados |
-| Feed | Publicações híbridas, mídias, API e banco de dados integrados |
+| Feed | Publicações híbridas e mídias com API/banco, filtros persistentes e criação por modal |
 | Comunidades | Membros, convites, cargos, canais de texto, presença e voz WebRTC |
 | Infraestrutura | PWA React no Worker `main` da Cloudflare, API Fastify no Render e PostgreSQL na Neon |
 | Lançamento amplo | **Ainda pendente:** testes reais no iOS/Android, push, TURN/redes diferentes, monitoramento e testes de PWA instalado após a troca do domínio |
@@ -42,7 +42,7 @@ Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes
 - **Voz:** WebRTC P2P; TURN é opcional e requer testes entre redes.
 - **Deploy:** Cloudflare Builds e Render, validados pelo GitHub Actions.
 
-A identificação do beta está nos manifestos npm dos workspaces. Consulte as [notas da versão](CHANGELOG.pt-BR.md) para limitações e pendências.
+A identificação do beta está nos manifestos npm e aparece ao lado do logo no header do Uorqui. Consulte as [notas da versão](CHANGELOG.pt-BR.md) para limitações e pendências.
 
 ## Documentação
 
