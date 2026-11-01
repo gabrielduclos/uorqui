@@ -126,3 +126,10 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - Indicadores de participantes/microfones e ligação; `audio.play()` utiliza um botão explícito de *Ativar som* quando bloqueado pelo navegador.
 - Ao trocar/fechar canal, limpa tracks, RTCPeerConnections, players e sessão. Os painéis principais e o header permanecem fixos com rolagem apenas interna no desktop/mobile.
 - Caso o navegador não consiga conectar por uma rede fechada, a tela avisa quando TURN não está disponível. Nunca exibir um estado "conectado" sem confirmação de `RTCPeerConnection.connectionState`.
+
+## Painel de moderação das comunidades
+
+- Componente de moderação expansível na coluna lateral de canais; utiliza o mesmo cabeçalho e rolagem independente do UI Kit, sem deslocar o cabeçalho do canal.
+- Operações destrutivas (banimento, expulsão, desbanimento e exclusão do canal) exigem confirmação explícita na interface.
+- Controles exibidos conforme a hierarquia dos cargos. A API valida novamente cada operação; esconder botões não é a estratégia de segurança.
+- Mensagens permitem edição do próprio autor, cancelamento e visualização de uma marcação discreta após remoção. Moderadores recebem a ação de cancelar mensagens de outros membros.
