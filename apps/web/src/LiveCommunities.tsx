@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
-import CommunityVoiceRoom from './CommunityVoiceRoom';
+import CommunityVoiceRoom, { type CommunityVoiceParticipant } from './CommunityVoiceRoom';
 import CommunityModerationPanel from './CommunityModerationPanel';
 
 type Visibility='public'|'approval'|'private';
@@ -42,6 +42,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const [detail,setDetail]=useState<Detail|null>(null);
   const [channelId,setChannelId]=useState<string|null>(null);
   const [channelOpen,setChannelOpen]=useState(false);
+  const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [discovery,setDiscovery]=useState(false);
   const [query,setQuery]=useState('');
   const [createOpen,setCreateOpen]=useState(false);
@@ -96,7 +97,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
-  const closeChannel=()=>{setChannelOpen(false);setDraft('');setMessages([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{setChannelOpen(false);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){setMessages([]);return;}
@@ -316,14 +317,28 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
           {community&&memberView(community)&&<>
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
-                onClick={()=>{setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                onClick={()=>{setVoiceParticipants([]);setChannelId(ch.id);setChannelOpen(true);setError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
                 <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="truncate">{ch.name}</span></button>)}</section>
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Salas de voz':'Voice rooms'}</p>
-              {detail?.channels.filter(ch=>ch.kind==='voice').map(ch=><button type="button" key={ch.id}
-                onClick={()=>{setChannelId(ch.id);setChannelOpen(true);setError('');}}
-                className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
-                <Volume2 className="size-4 shrink-0 text-muted-foreground"/><span className="truncate">{ch.name}</span></button>)}</section>
+              {detail?.channels.filter(ch=>ch.kind==='voice').map(ch=><div key={ch.id} className="mb-1">
+                <button type="button" onClick={()=>{setVoiceParticipants([]);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                  className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
+                  <Volume2 className="size-4 shrink-0 text-muted-foreground"/>
+                  <span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                  {channelId===ch.id&&voiceParticipants.length>0&&
+                    <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">{voiceParticipants.length}</span>}
+                </button>
+                {channelId===ch.id&&voiceParticipants.length>0&&<div className="ml-5 space-y-0.5 border-l border-border/70 py-1 pl-2">
+                  {voiceParticipants.map(person=><div key={person.sessionId}
+                    className="flex min-h-9 items-center gap-2 rounded-lg px-2 py-1 text-xs text-muted-foreground"
+                    title={person.displayName}>
+                    <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
+                    <span className="min-w-0 flex-1 truncate">{person.displayName}</span>
+                    {person.muted&&<span className="text-destructive" aria-label={pt?'Microfone silenciado':'Microphone muted'}>×</span>}
+                  </div>)}
+                </div>}
+              </div>)}</section>
             {manage(community)&&<section className="space-y-2 border-t border-border pt-3">
               <button type="button" className="flex w-full items-center gap-2 rounded-xl p-2 text-sm text-primary hover:bg-secondary"
                 onClick={()=>setNewChannelOpen(v=>!v)}><Plus className="size-4"/>{pt?'Novo canal':'New channel'}</button>
@@ -374,7 +389,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
         </header>
         {activeChannel.kind==='voice'?(
           channelOpen?<CommunityVoiceRoom key={community.id+'/'+activeChannel.id}
-            communityId={community.id} channelId={activeChannel.id}/>:
+            communityId={community.id} channelId={activeChannel.id} onParticipantsChange={setVoiceParticipants}/>:
           <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-center text-sm text-muted-foreground">
             {pt?'Selecione uma sala para conectar o áudio.':'Select a voice room to connect audio.'}
           </div>
