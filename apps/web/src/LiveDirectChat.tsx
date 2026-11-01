@@ -1,3 +1,5 @@
+import { Spinner } from '@/components/ui/spinner';
+import { SkeletonRows } from '@/components/ui/skeleton';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import { ArrowDown, ArrowLeft, MessageCircle, Search, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
@@ -858,8 +860,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
             data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             <div className="flex w-full min-w-0 flex-col gap-2.5">
               {messagesLoading && <div className="space-y-3 py-4" role="status" aria-label={pt ? 'Carregando mensagens' : 'Loading messages'}>
-                <div className="h-12 w-1/2 animate-pulse self-start bg-muted"/>
-                <div className="h-12 w-2/3 animate-pulse self-end bg-muted"/>
+                <SkeletonRows rows={4} className="w-full px-3"/>
               </div>}
               {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
               {renderedMessages.map(message => {
@@ -878,6 +879,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                     }}/>
                   {status && <div role="note" className="flex justify-center py-0.5">
                     <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1.5 rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
+                      {message.pendingStatus==='sending'&&<Spinner className="size-3.5"/>}
                       <span>{status.label}</span>
                       <span aria-hidden="true">·</span>
                       <span>{pt ? 'Atualizado às' : 'Updated at'}</span>
