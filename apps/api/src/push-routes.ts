@@ -171,6 +171,38 @@ export async function pushCommunityMessage(messageId:string){
     }catch{/* Best effort. */}
   }));
 }
+export async function pushActivityNotification(notificationId:string){
+  if(!enabled())return;
+  const row=await getPool().query(
+    'SELECT n.id,n.kind,n.recipient_id,n.actor_id,u.handle,'+
+    'COALESCE(p.display_name,u.handle) AS actor_name '+
+    'FROM activity_notifications n JOIN users u ON u.id=n.actor_id '+
+    'LEFT JOIN profiles p ON p.user_id=n.actor_id WHERE n.id=$1 AND n.read_at IS NULL '+
+    'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE '+
+    '(b.blocker_id=n.recipient_id AND b.blocked_id=n.actor_id) OR '+
+    '(b.blocked_id=n.recipient_id AND b.blocker_id=n.actor_id))',[notificationId]);
+  if(!row.rowCount)return;
+  const n=row.rows[0];
+  const verb:Record<string,string>={
+    post_like:'curtiu sua publicação',
+    post_comment:'comentou na sua publicação',
+    friend_request:'enviou uma solicitação de amizade',
+    friend_accepted:'aceitou sua solicitação de amizade',
+    follow:'começou a seguir você'
+  };
+  const subs=await getPool().query<Subscription>(
+    'SELECT endpoint,p256dh,auth,user_id FROM push_subscriptions WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 10',
+    [n.recipient_id]);
+  await Promise.allSettled(subs.rows.map(async sub=>{
+    try{
+      const status=await sendPush(sub,{kind:'activity',recipientId:n.recipient_id,
+        notificationId:n.id,title:String(n.actor_name).slice(0,80),
+        body:verb[n.kind]??'Nova atividade no Uorqui'});
+      if(status===404||status===410)await getPool().query('DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',[sub.endpoint,n.recipient_id]);
+    }catch{/* Push is best-effort; the in-app notification remains persisted. */}
+  }));
+}
+
 export function registerPushRoutes(app:FastifyInstance,readSession:SessionReader){
   async function me(request:FastifyRequest){
     const session=await readSession(request);

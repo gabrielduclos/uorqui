@@ -374,6 +374,22 @@ export const accountLegalAcceptances = pgTable('account_legal_acceptances', {
   index('account_legal_acceptances_accepted_idx').on(table.acceptedAt),
 ]);
 
+/** Persistent activity inbox; one row per server-generated event. */
+export const activityNotifications = pgTable('activity_notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  recipientId: uuid('recipient_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: varchar('kind', { length: 32 }).notNull(),
+  targetId: uuid('target_id').notNull(),
+  eventKey: text('event_key').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  readAt: timestamp('read_at', { withTimezone: true }),
+}, t => [
+  index('activity_notifications_recipient_date_idx').on(t.recipientId,t.createdAt),
+  index('activity_notifications_unread_idx').on(t.recipientId,t.readAt),
+  check('activity_notifications_no_self', sql`${t.recipientId} <> ${t.actorId}`),
+]);
+
 /** Browser Web Push subscriptions are account-bound and never reused for the next sign-in. */
 export const pushSubscriptions = pgTable('push_subscriptions', {
   id: uuid('id').defaultRandom().primaryKey(),

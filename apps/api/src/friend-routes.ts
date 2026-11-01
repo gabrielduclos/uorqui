@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { publishDmUserEvent } from './dm-events.js';
+import { recordActivity } from './activity-notifications.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 const handleSchema = { type: 'string', pattern: '^[a-z][a-z0-9_]{2,31}$' } as const;
@@ -118,6 +119,7 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
         'RETURNING user_a_id',[a,b,self]);
       if(!updated.rowCount)return reply.code(409).send({error:'Request state changed'});
       await notify(self,other);
+      await recordActivity(other,self,'friend_request',self,'request:'+other+':'+self).catch(error=>request.log.warn({err:error},'Friend request notification'));
       return reply.code(201).header('Cache-Control',noCache).send({status:'sent'});
     }catch(error){
       request.log.error({err:error},'Friend request');
@@ -142,6 +144,7 @@ export function registerFriendRoutes(app: FastifyInstance, readSession: SessionR
         [a,b,other]);
       if(!result.rowCount)return reply.code(404).send({error:'Request unavailable'});
       await notify(self,other);
+      await recordActivity(other,self,'friend_accepted',self,'accepted:'+other+':'+self).catch(error=>request.log.warn({err:error},'Friend accepted notification'));
       return reply.header('Cache-Control',noCache).send({status:'friends'});
     }catch(error){request.log.error({err:error},'Accept friend');return reply.code(503).send({error:'Service unavailable'});}
   });

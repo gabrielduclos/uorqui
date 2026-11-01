@@ -11,6 +11,7 @@ import { profiles, users } from './db/schema.js';
 import { registerProfileRoutes } from './profile-routes.js';
 import { registerDirectMessageRoutes } from './direct-message-routes.js';
 import { registerPushRoutes } from './push-routes.js';
+import { registerNotificationRoutes } from './notification-routes.js';
 import { registerFriendRoutes } from './friend-routes.js';
 import { registerBlockRoutes } from './block-routes.js';
 import { registerCommunityRoutes } from './community-routes.js';
@@ -278,6 +279,7 @@ app.post('/api/v1/onboarding', {
 registerProfileRoutes(app, async request => readSession(request));
 registerDirectMessageRoutes(app, async request => readSession(request));
 registerPushRoutes(app, async request => readSession(request));
+registerNotificationRoutes(app, async request => readSession(request));
 registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));
 registerCommunityRoutes(app, async request => readSession(request));

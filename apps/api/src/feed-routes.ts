@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getPool } from './db/client.js';
+import { recordActivity,recordPostActivity } from './activity-notifications.js';
 
 type SessionReader=(request:FastifyRequest)=>Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -277,7 +278,8 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
           'FROM feed_follows WHERE follower_id=$1',[me]);
         if(count.rows[0].n>=1000||count.rows[0].daily>=150)return reply.code(429).send({error:'FOLLOW_LIMIT'});
       }
-      await getPool().query('INSERT INTO feed_follows(follower_id,followed_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[me,target.id]);
+      const inserted=await getPool().query('INSERT INTO feed_follows(follower_id,followed_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING followed_id',[me,target.id]);
+      if(inserted.rowCount)await recordActivity(target.id,me,'follow',me,'follow:'+target.id+':'+me).catch(error=>req.log.warn({err:error},'Follow notification'));
       return reply.header('Cache-Control',cache).send({following:true});
     }catch(err){return failed(req,reply,err,'Follow user');}
   });
@@ -299,7 +301,8 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const me=await self(req);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=req.params as {id:string};
       if(!await visible(id,me))return reply.code(404).send({error:'Post unavailable'});
-      await getPool().query('INSERT INTO feed_likes(post_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[id,me]);
+      const inserted=await getPool().query('INSERT INTO feed_likes(post_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING post_id',[id,me]);
+      if(inserted.rowCount)await recordPostActivity(id,me,'post_like','like:'+id+':'+me).catch(error=>req.log.warn({err:error},'Like notification'));
       return reply.header('Cache-Control',cache).send({liked:true});
     }catch(err){return failed(req,reply,err,'Like post');}
   });
@@ -345,6 +348,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const recent=await getPool().query("SELECT count(*)::int AS n FROM feed_comments WHERE author_id=$1 AND created_at>now()-interval '1 minute'",[me]);
       if(recent.rows[0].n>=20)return reply.code(429).send({error:'COMMENT_RATE_LIMIT'});
       const r=await getPool().query('INSERT INTO feed_comments(post_id,author_id,body) VALUES($1,$2,$3) RETURNING id',[id,me,clean]);
+      await recordPostActivity(id,me,'post_comment','comment:'+r.rows[0].id).catch(error=>req.log.warn({err:error},'Comment notification'));
       return reply.code(201).header('Cache-Control',cache).send({id:r.rows[0].id});
     }catch(err){return failed(req,reply,err,'Add feed comment');}
   });
