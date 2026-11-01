@@ -242,6 +242,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const [videoCommentsOpen,setVideoCommentsOpen]=useState(false);
   const [videos,setVideos]=useState<Post[]>([]);
   const [shareSource,setShareSource]=useState<InternalShareSource|null>(null);
+  const requestedPost=useRef<string|null>(null);
   const [videoIndex,setVideoIndex]=useState(0);
   const [videoDirection,setVideoDirection]=useState<1|-1>(1);
   const [videoCursor,setVideoCursor]=useState<string|null>(null);
@@ -371,6 +372,37 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     }).catch(()=>{});
     return ()=>{active=false;};
   },[]);
+
+  // A shared post opens in the existing feed; no page reload or lost feed cache.
+  useEffect(()=>{
+    let disposed=false;
+    const open=(event:Event)=>{
+      const id=(event as CustomEvent<string>).detail;
+      if(typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id))return;
+      requestedPost.current=id;
+      void api<{post:Post}>('/api/v1/feed/posts/'+id).then(({post})=>{
+        if(disposed||requestedPost.current!==id)return;
+        setPosts(old=>old.some(item=>item.id===id)?old:[post,...old]);
+      }).catch(()=>{
+        if(!disposed&&requestedPost.current===id){
+          requestedPost.current=null;
+          setError(pt?'Publicação indisponível ou privada.':'Post unavailable or private.');
+        }
+      });
+    };
+    window.addEventListener('uorqui:open-feed-post',open);
+    return ()=>{disposed=true;window.removeEventListener('uorqui:open-feed-post',open);};
+  },[pt]);
+  useEffect(()=>{
+    const id=requestedPost.current;
+    if(!id||!active||!posts.some(post=>post.id===id))return;
+    const frame=window.requestAnimationFrame(()=>{
+      const target=Array.from(scrollRef.current?.querySelectorAll<HTMLElement>('[data-feed-post-id]')??[])
+        .find(node=>node.dataset.feedPostId===id);
+      if(target){target.scrollIntoView({block:'start'});requestedPost.current=null;}
+    });
+    return ()=>window.cancelAnimationFrame(frame);
+  },[posts,active]);
 
   function resetComposer(){setDraft('');setFiles([]);setDraftId(null);setUploadProgress('');}
   async function discardPendingDraft(){
@@ -688,7 +720,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         {!loading&&!error&&!posts.length&&<div className="rounded-2xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
           {pt?'Ainda não há publicações. Compartilhe a primeira!':'No posts yet. Share the first one!'}
         </div>}
-        {posts.map(post=><article key={post.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+        {posts.map(post=><article key={post.id} data-feed-post-id={post.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
           <header className="flex items-center gap-3">
             <a href={'/@'+post.authorHandle} target="_blank" rel="noopener noreferrer" aria-label={'@'+post.authorHandle}>
               <UserAvatar name={post.authorName} image={post.authorAvatar} size="sm"/></a>
