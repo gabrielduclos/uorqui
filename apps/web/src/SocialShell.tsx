@@ -210,7 +210,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 when switching between Feed, Messages, Profile and Communities. */}
             <div hidden={area!=='communities'} className="h-full min-h-0">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
-                onMobileOpenChange={setChannelOpened} initialCommunityId={invitedCommunityId}
+                onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
+                initialCommunityId={invitedCommunityId}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}/>
             </div>
             {area!=='feed'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
