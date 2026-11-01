@@ -108,3 +108,9 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - Ao focar o campo de comentário no celular, o menu inferior fica oculto e o campo acompanha o teclado; no Modo Vídeos o painel acompanha a altura visível. O botão de envio usa somente o spinner durante a ação, sem duplicar a seta.
 - Excluir um comentário exige confirmação. Quando alguém exclui **o próprio comentário**, ele desaparece por completo e não deixa aviso. O autor da publicação pode moderar comentários de terceiros; o backend oculta o texto e a identidade e mantém o aviso **“Um comentário foi excluído.”**. A migração `0021_feed_comment_moderation` dá suporte a esses avisos de moderação.
 - O perfil público oferece **Seguir/Seguindo**, totais e listas paginadas de seguidores e contas seguidas, independentes da amizade. Perfis privados **mostram os totais reais**, mas **não permitem consultar as listas**. As listas de perfis públicos não revelam identidades de contas privadas e respeitam bloqueios.
+
+### Perfil público, chat e acesso mobile
+
+- O perfil público mostra publicações em grade responsiva de **três colunas** com miniaturas de imagem, prévias de vídeo e texto para posts sem mídia; há visualizador de publicação e paginação. A API `GET /api/v1/feed/posts?author=handle` exige sessão e retorna apenas posts publicados de contas públicas, respeitando bloqueios. Visitantes sem login recebem uma orientação para entrar antes de visualizar mídias.
+- Os balões das conversas individuais (reais e demonstração) usam cantos discretos de **5 px**; os canais comunitários continuam no estilo de mensagens em sequência.
+- O acesso mobile prioriza o formulário em vez do material promocional, abre diretamente em **Entrar**, oferece abas Entrar/Criar conta, campos sensíveis a teclado móvel, mostrar/ocultar senha acessível e ações com área de toque confortável. Disponibilidade do cadastro e verificações antiabuso continuam governadas pelo servidor.
