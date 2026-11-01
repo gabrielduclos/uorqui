@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type TouchEvent, type WheelEvent } from 'react';
-import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Plus, Send, Share2, Flag, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Plus, Send, Share2, Flag, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
@@ -705,10 +705,10 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
           <Button size="sm" variant={filter==='following'?'secondary':'ghost'} onClick={()=>changeFilter('following')}
             aria-pressed={filter==='following'} className="px-3">{pt?'Seguindo':'Following'}</Button>
         </div>
-        <Button type="button" variant="ghost" size="icon" className="shrink-0"
+        <Button type="button" variant="ghost" size="icon" className="size-11 shrink-0"
           onClick={()=>openVideo()} disabled={!feedReady}
           aria-label={pt?'Ver vídeos':'View videos'} title={pt?'Vídeos':'Videos'}>
-          <Video className="size-4"/>
+          <Play className="size-6" fill="currentColor"/>
         </Button>
       </div>
     </div>
