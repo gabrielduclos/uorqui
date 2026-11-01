@@ -128,6 +128,7 @@ const en: Record<string, string> = {
   'Escolher forma de acesso': 'Choose sign-in method',
   'Como devemos chamar você?': 'What should we call you?',
   'Voltar para entrar': 'Back to sign in',
+  'Servidor indisponível. Tente novamente.': 'Server unavailable. Try again.',
   'Converse, compartilhe e participe das suas comunidades.': 'Chat, share and join your communities.',
   'Converse, compartilhe e participe de comunidades em um só lugar.': 'Chat, share and join communities in one place.',
   'Crie seu perfil para participar do feed e das comunidades.': 'Create your profile to join the feed and communities.',
