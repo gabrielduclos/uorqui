@@ -288,7 +288,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const visibilityLabel=(v:Visibility)=>v==='public'?(pt?'Pública':'Public'):v==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Privada':'Private');
   const communityIcon=(group:Community)=>group.name.trim().charAt(0).toUpperCase()||'C';
   const communityAvatar=(group:Community,classes:string)=>group.avatarUrl?
-    <img src={group.avatarUrl} alt="" className={classes+' object-cover'}/>:
+    <img src={group.avatarUrl} alt="" className={classes+' block min-h-0 min-w-0 object-cover'}/>:
     <span aria-hidden="true">{communityIcon(group)}</span>;
 
   return <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
@@ -302,7 +302,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       <div className="h-px w-8 shrink-0 bg-border"/>
       {owned.map(group=><button type="button" key={group.id} title={group.name}
         aria-label={group.name} aria-current={selectedId===group.id&&!discovery?'page':undefined}
-        onClick={()=>selectCommunity(group.id)} className={cn('grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!discovery&&'ring-2 ring-primary')}>
+        onClick={()=>selectCommunity(group.id)} className={cn('grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!discovery&&'ring-2 ring-primary')}>
         {communityAvatar(group,'size-full rounded-2xl')}
       </button>)}
       <button type="button" onClick={()=>{closeChannel();setDiscovery(true);setCreateOpen(true);}}
@@ -347,7 +347,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
             {loading&&<SkeletonRows className="p-3" rows={5}/>}
             {matches.map(group=><button type="button" key={group.id} onClick={()=>selectCommunity(group.id)}
               className="flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-secondary">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/15 font-bold text-primary">{communityAvatar(group,'size-full rounded-xl')}</div>
+              <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-primary/15 font-bold text-primary">{communityAvatar(group,'size-full rounded-xl')}</div>
               <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{group.name}</strong>
                 <span className="block truncate text-xs text-muted-foreground">{visibilityLabel(group.visibility)} · {group.memberCount} {pt?'membros':'members'}</span>
                 {group.description&&<span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{group.description}</span>}</span>
@@ -359,7 +359,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
         <div className="shrink-0 border-b border-border bg-card/95 p-4">
           {detailLoading?<div className="space-y-2"><Skeleton className="h-5 w-3/4"/><Skeleton className="h-3 w-1/2"/></div>:
           <div className="flex items-center gap-2">
-            {community?.avatarUrl&&<img src={community.avatarUrl} alt="" className="size-10 rounded-xl object-cover"/>}
+            {community?.avatarUrl&&<div className="size-10 shrink-0 overflow-hidden rounded-xl"><img src={community.avatarUrl} alt="" className="block size-full object-cover"/></div>}
             <div className="min-w-0 flex-1 truncate text-base font-semibold">{community?.name??(pt?'Comunidade':'Community')}</div>
           </div>}
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{community?.description|| (community?visibilityLabel(community.visibility):'…')}</p>
@@ -514,7 +514,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                   </form>:isCommunityGifUrl(message.body)?
                     <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" referrerPolicy="no-referrer"
                       className="mt-2 max-h-64 max-w-full rounded-xl object-contain"/>:
-                    <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>
+                    <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>}
                 {isPendingMessage(message)&&<div role="status" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                   {message.pending==='sending'?<><Spinner className="size-3.5"/>{pt?'Enviando…':'Sending…'}</>:
                     <><span className="text-destructive">{pt?'Falha no envio':'Send failed'}</span>
