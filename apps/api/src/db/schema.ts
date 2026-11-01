@@ -334,3 +334,18 @@ export const contentReports = pgTable('content_reports', {
   check('content_reports_reason', sql`${table.reason} IN ('spam','harassment','hate','sexual','violence','scam','privacy','other')`),
   check('content_reports_status', sql`${table.status} IN ('pending','reviewing','resolved','dismissed')`),
 ]);
+
+/** Restricted audit trail of platform moderator decisions. */
+export const moderationReportActions = pgTable('moderation_report_actions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reportId: uuid('report_id').notNull().references(() => contentReports.id, { onDelete: 'cascade' }),
+  moderatorId: uuid('moderator_id').references(() => users.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 16 }).notNull(),
+  previousStatus: varchar('previous_status', { length: 16 }).notNull(),
+  nextStatus: varchar('next_status', { length: 16 }).notNull(),
+  note: varchar('note', { length: 1000 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index('moderation_report_actions_report_idx').on(table.reportId, table.createdAt),
+  check('moderation_report_actions_action', sql`${table.action} IN ('review','resolve','dismiss','remove')`),
+]);

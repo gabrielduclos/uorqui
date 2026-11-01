@@ -19,3 +19,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS "content_reports_reporter_target_idx" ON "cont
 CREATE INDEX IF NOT EXISTS "content_reports_status_created_idx" ON "content_reports" ("status","created_at");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "content_reports_reporter_created_idx" ON "content_reports" ("reporter_id","created_at");
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "moderation_report_actions" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "report_id" uuid NOT NULL REFERENCES "content_reports"("id") ON DELETE CASCADE,
+  "moderator_id" uuid REFERENCES "users"("id") ON DELETE SET NULL,
+  "action" varchar(16) NOT NULL,
+  "previous_status" varchar(16) NOT NULL,
+  "next_status" varchar(16) NOT NULL,
+  "note" varchar(1000),
+  "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT "moderation_report_actions_action" CHECK ("action" IN ('review','resolve','dismiss','remove'))
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "moderation_report_actions_report_idx" ON "moderation_report_actions" ("report_id","created_at");
