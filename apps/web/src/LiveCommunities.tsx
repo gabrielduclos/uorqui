@@ -235,7 +235,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
-    if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){
+    if(!selectedId||!channelId||!activeChannel||!community?.myRole){
       setMessages([]);setMessagesLoadFailed(false);return;
     }
     let active=true,loadedOnce=false,requestId=0;
@@ -287,7 +287,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   // selected by default in the community sidebar. Never mark unseen messages
   // in background tabs; the cursor is tied to a message present in our response.
   useEffect(()=>{
-    if(!channelOpen||!selectedId||!channelId||activeChannel?.kind!=='text'||
+    if(!channelOpen||!selectedId||!channelId||!activeChannel||
        document.visibilityState!=='visible'||messagesLoading)return;
     const lastMessageId=messages.at(-1)?.id;
     if(!lastMessageId)return;
@@ -403,7 +403,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   }
   function enqueueMessage(text:string,attachment?:File){
     const selected=channelId;
-    if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!selected||
+    if(!community?.myRole||!activeChannel||!selectedId||!selected||
       (!text.trim()&&!attachment)||text.length>4000)return;
     const clientId=crypto.randomUUID(),now=new Date().toISOString();
     const preview=attachment?URL.createObjectURL(attachment):null;
@@ -726,8 +726,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.name}</h2>
             <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
         </header>
-        {activeChannel.kind==='voice'?(
-          <div ref={voiceHostRef} className="relative flex min-h-0 flex-1 flex-col">
+        {activeChannel.kind==='voice'&&(
+          <div ref={voiceHostRef} className="relative flex min-h-44 max-h-[48%] shrink-0 flex-col overflow-hidden border-b border-border">
             {!voiceInline&&<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground">
               <Headphones className="size-9 text-primary"/>
               <p>{pt?'Entre e converse sem sair da comunidade.':'Join the conversation right inside your community.'}</p>
@@ -736,11 +736,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               })}>{pt?'Abrir sala de voz':'Open voice room'}</Button>
             </div>}
           </div>
-        ):<>
+        )}
+        <>
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             {!messages.length&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{pt?'Mensagens salvas na comunidade, visíveis aos seus membros.':'Messages are saved to the community and visible to its members.'}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{pt?'Compartilhe textos, fotos e links com os membros da sala.':'Share text, photos and links with room members.'}</p>
             </div>}
             {messagesLoading&&<SkeletonRows rows={4} className="mb-5"/>}
             {messagesLoadFailed&&!messagesLoading&&<div role="status" className="mb-4 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
