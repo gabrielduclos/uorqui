@@ -6,6 +6,12 @@ on:
       - 'apps/api/test/production-smoke.test.mjs'
       - '.github/workflows/production-smoke.yml'
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'Frontend to verify after a safe domain switch'
+        type: choice
+        default: preview
+        options: [preview, production]
 permissions:
   contents: read
 jobs:
@@ -14,6 +20,7 @@ jobs:
     timeout-minutes: 8
     env:
       EXPECT_PUBLIC_REGISTRATION: 'true'
+      FRONTEND_ORIGIN: ${{ inputs.target == 'production' && 'https://uorqui.app' || 'https://main.uorqui1.workers.dev' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
