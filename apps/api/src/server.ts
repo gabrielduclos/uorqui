@@ -18,6 +18,7 @@ import { registerCommunityModerationRoutes } from './community-moderation-routes
 import { registerFeedRoutes } from './feed-routes.js';
 import { registerContentReportRoutes } from './content-report-routes.js';
 import { registerPlatformModerationRoutes } from './platform-moderation-routes.js';
+import { TERMS_VERSION, PRIVACY_NOTICE_VERSION, validSignupAgreement } from './legal-policy.js';
 import { closeDmEvents } from './dm-events.js';
 import {closeCommunityEvents} from './community-events.js';
 
@@ -98,6 +99,8 @@ app.get('/api/v1/status', async () => ({
   emailVerificationRequired: isPublicSignupEnabled(),
   passwordRecoveryAvailable: isPublicSignupEnabled(),
   turnstileSiteKey: isPublicSignupEnabled() ? process.env.TURNSTILE_SITE_KEY : null,
+  termsVersion: TERMS_VERSION,
+  privacyVersion: PRIVACY_NOTICE_VERSION,
 }));
 
 // Better Auth uses Fetch API Request/Response semantics; Fastify handles the network.
@@ -121,6 +124,14 @@ app.route({
         }
         const { captchaToken: _captchaToken, ...clean } = payload ?? {};
         authBody = clean;
+      }
+      const isSignup=request.method==='POST' && request.url.split('?')[0]==='/api/auth/sign-up/email';
+      if(isSignup){
+        const payload=authBody as Record<string,unknown>|undefined;
+        if(!payload||!validSignupAgreement(payload))return reply.status(400)
+          .send({error:'LEGAL_ACCEPTANCE_REQUIRED',message:'Você precisa aceitar os Termos e confirmar ciência da Política de Privacidade.'});
+        const {termsAccepted:_a,privacyNoticeAcknowledged:_b,termsVersion:_t,privacyVersion:_p,...clean}=payload;
+        authBody=clean;
       }
       const url = new URL(request.raw.url ?? request.url, process.env.AUTH_BASE_URL ?? 'http://localhost:3001');
       if (request.method === 'GET' && url.pathname === '/api/auth/verify-email') {
@@ -147,7 +158,21 @@ app.route({
         ...(authBody ? { body: JSON.stringify(authBody) } : {}),
       });
       const response = await getAuth().handler(authRequest);
-
+      if(isSignup&&response.ok){
+        const created=await response.clone().json().catch(()=>null) as {user?:{id?:string}}|null;
+        const userId=created?.user?.id;
+        if(!userId||!/^[0-9a-f-]{36}$/i.test(userId))return reply.status(503).send({error:'LEGAL_RECORD_UNAVAILABLE'});
+        try{
+          await getPool().query(
+            'INSERT INTO account_legal_acceptances (user_id,terms_version,privacy_version) VALUES ($1,$2,$3) ON CONFLICT (user_id,terms_version) DO NOTHING',
+            [userId,TERMS_VERSION,PRIVACY_NOTICE_VERSION]);
+        }catch(error){
+          request.log.error({err:error},'Could not record legal acceptance');
+          await getPool().query('DELETE FROM "user" WHERE id=$1',[userId])
+            .catch(cleanup=>request.log.error({err:cleanup},'Signup rollback failed'));
+          return reply.status(503).send({error:'LEGAL_RECORD_UNAVAILABLE'});
+        }
+      }
       reply.status(response.status);
       if (request.method === 'GET' && url.pathname === '/api/auth/verify-email') {
         reply.header('Cache-Control', 'no-store');

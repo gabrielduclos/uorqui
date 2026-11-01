@@ -169,6 +169,13 @@
       "when": 1793540400000,
       "tag": "0023_content_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793544600000,
+      "tag": "0024_legal_acceptances",
+      "breakpoints": true
     }
   ]
 }
