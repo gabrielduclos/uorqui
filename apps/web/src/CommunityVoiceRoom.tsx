@@ -470,6 +470,45 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       if(foregroundTimer.current!==null)window.clearTimeout(foregroundTimer.current);
     };
   },[base,sync,restoreMic,renegotiate]);
+  // Keep the screen awake for an active voice session in the installed PWA.
+  // This component stays mounted even when the call is a floating mini-player
+  // and the user navigates to another Uorqui tab.
+  useEffect(()=>{
+    if(phase!=='joined')return;
+    const installed=window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & {standalone?:boolean}).standalone===true;
+    if(!installed||!('wakeLock' in navigator))return;
+
+    let cancelled=false;
+    let requesting=false;
+    let lock:WakeLockSentinel|null=null;
+    const acquire=async()=>{
+      if(cancelled||requesting||lock||document.visibilityState!=='visible')return;
+      requesting=true;
+      try{
+        const next=await navigator.wakeLock.request('screen');
+        if(cancelled){void next.release().catch(()=>{});return;}
+        lock=next;
+        next.addEventListener('release',()=>{
+          if(lock===next)lock=null;
+        });
+      }catch{
+        // Unsupported, denied or power saving: the operating system retains control.
+      }finally{requesting=false;}
+    };
+    const onResume=()=>{if(document.visibilityState==='visible')void acquire();};
+    document.addEventListener('visibilitychange',onResume);
+    window.addEventListener('focus',onResume);
+    void acquire();
+    return ()=>{
+      cancelled=true;
+      document.removeEventListener('visibilitychange',onResume);
+      window.removeEventListener('focus',onResume);
+      const current=lock;lock=null;
+      if(current)void current.release().catch(()=>{});
+    };
+  },[phase]);
+
   useEffect(()=>{onPhaseChange?.(phase);},[onPhaseChange,phase]);
 
   // Send real presence to the channel list; do not invent participants.
