@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, Smile, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -11,6 +11,8 @@ import CommunityVoiceRoom, { type CommunityVoiceParticipant } from './CommunityV
 import CommunityModerationPanel from './CommunityModerationPanel';
 import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
 import CommunityMessageReactions, { type CommunityReaction } from './CommunityMessageReactions';
+import { LiveMessageComposer } from './LiveMessageComposer';
+import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -20,7 +22,7 @@ type Community={
 type Channel={id:string;name:string;kind:'text'|'voice';createdAt:string};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
-type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[]};
+type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
 type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
@@ -84,7 +86,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const scrollRef=useRef<HTMLDivElement>(null);
+  const composerRef=useRef<HTMLTextAreaElement>(null);
+  const pendingFiles=useRef(new Map<string,File>());
+  const pendingBlobUrls=useRef(new Map<string,string>());
   const previousLastMessage=useRef<string|null>(null);
+  useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
   const community=detail?.community??null;
   const renderedMessages=[...messages,...pendingMessages.filter(p=>p.channelId===channelId&&!messages.some(m=>m.clientId===p.clientId))];
@@ -241,37 +247,82 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       pt?'Convite enviado.':'Invitation sent.',selectedId,'inviteUser');
     setInviteHandle('');
   }
+  function releasePending(clientId:string){
+    pendingFiles.current.delete(clientId);
+    const url=pendingBlobUrls.current.get(clientId);
+    if(url){URL.revokeObjectURL(url);pendingBlobUrls.current.delete(clientId);}
+  }
   async function submitPending(p:PendingMessage){
     const currentCommunity=selectedId;
+    if(!currentCommunity)return;
     try{
-      await api('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages',
-        body({clientId:p.clientId,body:p.body}));
-      // Only refresh the currently visible channel. Keep pending entry until the
-      // server's message list contains this clientId (prevents flashing/disappearing).
+      if(p.attachment){
+        const file=pendingFiles.current.get(p.clientId);
+        if(!file)throw Error('MISSING_ATTACHMENT');
+        const response=await fetch('/api/media/community-attachment/'+currentCommunity+'/'+p.channelId,{
+          method:'POST',credentials:'same-origin',cache:'no-store',
+          headers:{
+            'Content-Type':p.attachment.type,
+            'x-uorqui-client-id':p.clientId,
+            'x-uorqui-filename':encodeURIComponent(p.attachment.name),
+            ...(p.body?{'x-uorqui-caption':encodeURIComponent(p.body)}:{})
+          },body:file
+        });
+        if(!response.ok)throw Error('UPLOAD_'+response.status);
+      }else{
+        await api('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages',
+          body({clientId:p.clientId,body:p.body}));
+      }
       if(channelId===p.channelId&&currentCommunity){
         const updated=await api<{messages:Message[]}>('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages');
         setMessages(updated.messages);
         setPendingMessages(old=>old.filter(msg=>msg.clientId!==p.clientId || !updated.messages.some(m=>m.clientId===msg.clientId)));
+        if(updated.messages.some(m=>m.clientId===p.clientId))releasePending(p.clientId);
+      }else{
+        setPendingMessages(old=>old.filter(x=>x.clientId!==p.clientId));
+        releasePending(p.clientId);
       }
     }catch{
       setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'failed'}:x));
     }
   }
-  function queueText(text:string,clearDraft=false){
+  function enqueueMessage(text:string,attachment?:File){
     const selected=channelId;
-    if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!selected||!text||text.length>4000)return;
+    if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!selected||
+      (!text.trim()&&!attachment)||text.length>4000)return;
     const clientId=crypto.randomUUID(),now=new Date().toISOString();
-    const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text,createdAt:now,
-      authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,canEdit:false,canDelete:false,canReact:false,reactions:[],pending:'sending'};
+    const preview=attachment?URL.createObjectURL(attachment):null;
+    if(attachment){
+      pendingFiles.current.set(clientId,attachment);
+      if(preview)pendingBlobUrls.current.set(clientId,preview);
+    }
+    const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text.trim(),createdAt:now,
+      authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,
+      canEdit:false,canDelete:false,canReact:false,reactions:[],pending:'sending',
+      attachment:attachment?{id:clientId,name:attachment.name,type:attachment.type||'application/octet-stream',size:attachment.size}:null,
+      attachmentUrl:preview};
     setPendingMessages(old=>[...old,pending]);
-    if(clearDraft)setDraft('');
     setError('');
     window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
     void submitPending(pending);
   }
-  function send(event?:FormEvent){
-    event?.preventDefault();
+  function queueText(text:string,clearDraft=false){
+    if(!text.trim())return;
+    enqueueMessage(text);
+    if(clearDraft)setDraft('');
+  }
+  function send(){
     queueText(draft.trim(),true);
+  }
+  function sendAttachment(file:File,caption:string){
+    const mime=file.type||'application/octet-stream';
+    const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif',
+      'video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip',
+      'application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
+    if(!file.size||file.size>50*1024*1024||!allowed.has(mime)){
+      setError(pt?'Arquivo inválido ou maior que 50 MB.':'Invalid file or larger than 50 MB.');return;
+    }
+    enqueueMessage(caption,file);
   }
   function retryPending(p:PendingMessage){
     setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'sending'}:x));
@@ -319,9 +370,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     }finally{
       reactionSubmitting.current=null;setReactionBusyId(null);
     }
-  }
-  function onComposerKeyDown(event:KeyboardEvent<HTMLTextAreaElement>){
-    if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void send();}
   }
 
   const owned=list.filter(group=>group.myRole);
@@ -561,6 +609,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                     <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" referrerPolicy="no-referrer"
                       className="mt-2 max-h-64 max-w-full rounded-xl object-contain"/>:
                     <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>}
+                {message.attachment&&!message.deletedAt&&selectedId&&channelId&&
+                  <CommunityMessageAttachment attachment={message.attachment}
+                    src={message.attachmentUrl||('/media/community-attachment/'+selectedId+'/'+channelId+'/'+message.attachment.id)}
+                    locale={locale}/>}
                 {isPendingMessage(message)&&<div role="status" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                   {message.pending==='sending'?<><Spinner className="size-3.5"/>{pt?'Enviando…':'Sending…'}</>:
                     <><span className="text-destructive">{pt?'Falha no envio':'Send failed'}</span>
@@ -586,26 +638,19 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
               </div>
             </div>)}</div>
           </div>
-          <form onSubmit={event=>void send(event)} className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-            {mediaPicker&&<CommunityMediaPicker key={mediaPicker} tab={mediaPicker} pt={pt}
+          <div className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            {mediaPicker==='gif'&&<CommunityMediaPicker key="gif" tab="gif" pt={pt}
               onClose={()=>setMediaPicker(null)}
               onEmoji={symbol=>{setDraft(old=>old+symbol);setMediaPicker(null);}}
               onGif={url=>{queueText(url);setMediaPicker(null);}}/>}
-            <div className="flex items-end gap-2 rounded-xl bg-secondary/60 p-2">
-              <Button type="button" size="icon" variant="ghost" className="shrink-0" aria-label={pt?'Emojis':'Emojis'}
-                aria-expanded={mediaPicker==='emoji'} onClick={()=>setMediaPicker(old=>old==='emoji'?null:'emoji')}>
-                <Smile className="size-5"/></Button>
-              <button type="button" aria-label={pt?'Enviar GIF':'Send GIF'} aria-expanded={mediaPicker==='gif'}
-                onClick={()=>setMediaPicker(old=>old==='gif'?null:'gif')}
-                className="mb-1 shrink-0 rounded-md border border-border px-1.5 py-1.5 text-[11px] font-bold hover:bg-secondary">GIF</button>
-              <textarea aria-label={pt?'Mensagem do canal':'Channel message'} value={draft}
-                onChange={event=>setDraft(event.target.value)} onKeyDown={onComposerKeyDown} maxLength={4000} rows={1}
-                placeholder={(pt?'Mensagem em #':'Message in #')+activeChannel.name}
-                className="max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none placeholder:text-muted-foreground"/>
-              <Button type="submit" size="icon" disabled={!draft.trim()} aria-label={pt?'Enviar mensagem':'Send message'}>
-                <Send className="size-4"/></Button>
-            </div>
-          </form>
+            <LiveMessageComposer key={selectedId+'/'+channelId} value={draft} onChange={setDraft}
+              onSubmit={send} onAttach={sendAttachment}
+              onShareLocation={(latitude,longitude,caption)=>{
+                enqueueMessage((caption?caption+'\n':'')+'https://www.google.com/maps?q='+latitude+','+longitude);
+              }}
+              sending={false} locale={locale} textareaRef={composerRef}
+              onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'}/>
+          </div>
         </>}
       </>:<div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-xs"><Users className="mx-auto size-11 text-primary"/>
