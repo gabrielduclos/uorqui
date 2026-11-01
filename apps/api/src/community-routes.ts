@@ -269,6 +269,15 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       if(!readerRole)return reply.code(403).send({error:'MEMBERS_ONLY'});
       const check=await getPool().query('SELECT 1 FROM community_channels WHERE id=$1 AND community_id=$2 AND kind=\'text\'',[channelId,id]);
       if(!check.rowCount)return reply.code(404).send({error:'Text channel not found'});
+      // An additive migration can deploy after the API; keep channel history readable
+      // until the reactions table is actually available in the active database.
+      const ready=await getPool().query("SELECT to_regclass('public.community_message_reactions') IS NOT NULL AS enabled");
+      const reactionProjection=ready.rows[0]?.enabled?
+        'CASE WHEN m.deleted_at IS NOT NULL THEN \'[]\'::jsonb ELSE COALESCE(('+
+        'SELECT jsonb_agg(jsonb_build_object(\'emoji\',rx.emoji,\'count\',rx.total,\'mine\',rx.mine) ORDER BY rx.total DESC,rx.emoji) '+
+        'FROM (SELECT emoji,COUNT(*)::int AS total,BOOL_OR(user_id=$2) AS mine FROM community_message_reactions '+
+        'WHERE message_id=m.id GROUP BY emoji) rx),\'[]\'::jsonb) END AS reactions ':
+        "\'[]\'::jsonb AS reactions ";
       const result=await getPool().query(
         'SELECT m.id,m.client_id AS "clientId",m.author_id AS "authorId",'+
         'CASE WHEN m.deleted_at IS NULL THEN m.body ELSE NULL END AS body,m.created_at AS "createdAt",'+
@@ -277,11 +286,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'CASE WHEN p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "authorName",'+
         'CASE WHEN (p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\') AND '+
         'NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=m.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=m.author_id)) '+
-        'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+
-        'CASE WHEN m.deleted_at IS NOT NULL THEN \'[]\'::jsonb ELSE COALESCE(('+ 
-        'SELECT jsonb_agg(jsonb_build_object(\'emoji\',rx.emoji,\'count\',rx.total,\'mine\',rx.mine) ORDER BY rx.total DESC,rx.emoji) '+
-        'FROM (SELECT emoji,COUNT(*)::int AS total,BOOL_OR(user_id=$2) AS mine FROM community_message_reactions '+
-        'WHERE message_id=m.id GROUP BY emoji) rx),\'[]\'::jsonb) END AS reactions '+
+        'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+reactionProjection+
         'FROM community_messages m JOIN users u ON u.id=m.author_id JOIN profiles p ON p.user_id=m.author_id '+
         'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
         'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
@@ -333,6 +338,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       if(!reactionEmojis.includes(emoji as typeof reactionEmojis[number]))
         return reply.code(400).send({error:'Invalid reaction'});
       if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const ready=await getPool().query("SELECT to_regclass('public.community_message_reactions') IS NOT NULL AS enabled");
+      if(!ready.rows[0]?.enabled)return reply.code(503).send({error:'REACTIONS_NOT_READY'});
       const allowed=await getPool().query(
         'SELECT m.author_id,m.deleted_at FROM community_messages m JOIN community_channels ch ON ch.id=m.channel_id '+
         "WHERE m.id=$1 AND ch.id=$2 AND ch.community_id=$3 AND ch.kind='text' LIMIT 1",
