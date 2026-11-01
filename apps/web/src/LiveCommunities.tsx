@@ -43,7 +43,10 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange,initialCommunityId}:{myId:string;onMobileOpenChange?:(value:boolean)=>void;initialCommunityId?:string|null}){
+export default function LiveCommunities({myId,onMobileOpenChange,initialCommunityId,unreadChannels,unreadCommunities}:{
+  myId:string;onMobileOpenChange?:(value:boolean)=>void;initialCommunityId?:string|null;
+  unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;
+}){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [list,setList]=useState<Community[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(initialCommunityId??null);
@@ -93,6 +96,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const pendingFiles=useRef(new Map<string,File>());
   const pendingBlobUrls=useRef(new Map<string,string>());
   const previousLastMessage=useRef<string|null>(null);
+  const acknowledged=useRef(new Map<string,string>());
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
   const community=detail?.community??null;
@@ -219,6 +223,29 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     }
     previousLastMessage.current=latest;
   },[messages]);
+
+  // A message is read only while its text channel is actually open, not merely
+  // selected by default in the community sidebar. Never mark unseen messages
+  // in background tabs; the cursor is tied to a message present in our response.
+  useEffect(()=>{
+    if(!channelOpen||!selectedId||!channelId||activeChannel?.kind!=='text'||
+       document.visibilityState!=='visible'||messagesLoading)return;
+    const lastMessageId=messages.at(-1)?.id;
+    if(!lastMessageId)return;
+    const key=selectedId+'/'+channelId;
+    if(acknowledged.current.get(key)===lastMessageId)return;
+    let cancelled=false;
+    const timer=window.setTimeout(()=>{
+      void api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/read',
+        body({lastMessageId})).then(()=>{
+        if(cancelled)return;
+        acknowledged.current.set(key,lastMessageId);
+        window.dispatchEvent(new CustomEvent('uorqui:community-channel-read',{
+          detail:{channelId,communityId:selectedId}}));
+      }).catch(()=>{/* Leave badge intact and retry after next successful load. */});
+    },250);
+    return ()=>{cancelled=true;window.clearTimeout(timer);};
+  },[channelOpen,selectedId,channelId,activeChannel?.kind,messages,messagesLoading]);
 
   async function refresh(id=selectedId){
     await loadList();
@@ -420,9 +447,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
         <Compass className="size-5"/></button>
       <div className="h-px w-8 shrink-0 bg-border"/>
       {owned.map(group=><button type="button" key={group.id} title={group.name}
-        aria-label={group.name} aria-current={selectedId===group.id&&!discovery?'page':undefined}
-        onClick={()=>selectCommunity(group.id)} className={cn('grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!discovery&&'ring-2 ring-primary')}>
-        {communityAvatar(group,'size-full rounded-2xl')}
+        aria-label={group.name+(unreadCommunities[group.id]?' · '+unreadCommunities[group.id]+(pt?' mensagens não lidas':' unread messages'):'')}
+        aria-current={selectedId===group.id&&!discovery?'page':undefined}
+        onClick={()=>selectCommunity(group.id)} className={cn('relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!discovery&&'ring-2 ring-primary')}>
+        <span className="grid size-full place-items-center overflow-hidden rounded-2xl">{communityAvatar(group,'size-full rounded-2xl')}</span>
+        {!!unreadCommunities[group.id]&&<span aria-hidden="true"
+          className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-card bg-destructive px-1 text-[10px] font-bold text-white">
+          {unreadCommunities[group.id]>99?'99+':unreadCommunities[group.id]}
+        </span>}
       </button>)}
       <button type="button" onClick={()=>{closeChannel();setDiscovery(true);setCreateOpen(true);}}
         aria-label={pt?'Criar comunidade':'Create community'} title={pt?'Criar comunidade':'Create community'}
@@ -502,9 +534,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
           {community&&memberView(community)&&<>
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
+                aria-label={ch.name+(unreadChannels[ch.id]?' · '+unreadChannels[ch.id]+(pt?' não lidas':' unread'):'')}
                 onClick={()=>{setVoiceParticipants([]);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
-                className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
-                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="truncate">{ch.name}</span></button>)}</section>
+                className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
+                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                {!!unreadChannels[ch.id]&&<span aria-hidden="true"
+                  className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                  {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
+              </button>)}</section>
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Salas de voz':'Voice rooms'}</p>
               {detail?.channels.filter(ch=>ch.kind==='voice').map(ch=>{
                 const occupants=channelOpen&&activeChannel?.id===ch.id&&voiceParticipants.length
