@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, Smile, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -9,6 +9,7 @@ import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import CommunityVoiceRoom, { type CommunityVoiceParticipant } from './CommunityVoiceRoom';
 import CommunityModerationPanel from './CommunityModerationPanel';
+import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -68,6 +69,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [messagesLoading,setMessagesLoading]=useState(false);
   const [detailLoading,setDetailLoading]=useState(false);
   const [draft,setDraft]=useState('');
+  const [mediaPicker,setMediaPicker]=useState<'emoji'|'gif'|null>(null);
   const [editingId,setEditingId]=useState<string|null>(null);
   const [editingBody,setEditingBody]=useState('');
   const [deletingId,setDeletingId]=useState<string|null>(null);
@@ -131,7 +133,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       setShareNotice(pt?'Link copiado!':'Link copied!');}
     catch{setShareNotice(window.location.origin+'/invite/'+inviteLink.id);}
   }
-  const closeChannel=()=>{setChannelOpen(false);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{setChannelOpen(false);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){setMessages([]);return;}
@@ -230,17 +232,21 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'failed'}:x));
     }
   }
-  function send(event?:FormEvent){
-    event?.preventDefault();
-    const text=draft.trim(),selected=channelId;
+  function queueText(text:string,clearDraft=false){
+    const selected=channelId;
     if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!selected||!text||text.length>4000)return;
     const clientId=crypto.randomUUID(),now=new Date().toISOString();
     const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text,createdAt:now,
       authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,canEdit:false,canDelete:false,pending:'sending'};
     setPendingMessages(old=>[...old,pending]);
-    setDraft('');setError('');
+    if(clearDraft)setDraft('');
+    setError('');
     window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
     void submitPending(pending);
+  }
+  function send(event?:FormEvent){
+    event?.preventDefault();
+    queueText(draft.trim(),true);
   }
   function retryPending(p:PendingMessage){
     setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'sending'}:x));
@@ -377,12 +383,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
           {community&&memberView(community)&&<>
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
-                onClick={()=>{setVoiceParticipants([]);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                onClick={()=>{setVoiceParticipants([]);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
                 <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="truncate">{ch.name}</span></button>)}</section>
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Salas de voz':'Voice rooms'}</p>
               {detail?.channels.filter(ch=>ch.kind==='voice').map(ch=><div key={ch.id} className="mb-1">
-                <button type="button" onClick={()=>{setVoiceParticipants([]);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                <button type="button" onClick={()=>{setVoiceParticipants([]);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
                   className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
                   <Volume2 className="size-4 shrink-0 text-muted-foreground"/>
                   <span className="min-w-0 flex-1 truncate">{ch.name}</span>
@@ -454,7 +460,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
             </div>
             {['owner','admin','moderator'].includes(community.myRole??'')&&
               <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
-                name={community.name} description={community.description} avatarUrl={community.avatarUrl}
+                name={community.name} description={community.description} visibility={community.visibility} avatarUrl={community.avatarUrl}
                 channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}
                 onDeleted={async()=>{closeChannel();setDetail(null);setSelectedId(null);setDiscovery(true);await loadList();}}/>}
             {community.myRole!=='owner'&&<Button variant="ghost" size="sm" className="w-full text-muted-foreground"
@@ -505,7 +511,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                       <Button type="button" size="sm" variant="outline" onClick={()=>{setEditingId(null);setEditingBody('');}}>
                         {pt?'Cancelar':'Cancel'}</Button>
                     </div>
-                  </form>:<p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>}
+                  </form>:isCommunityGifUrl(message.body)?
+                    <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" referrerPolicy="no-referrer"
+                      className="mt-2 max-h-64 max-w-full rounded-xl object-contain"/>:
+                    <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>
                 {isPendingMessage(message)&&<div role="status" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                   {message.pending==='sending'?<><Spinner className="size-3.5"/>{pt?'Enviando…':'Sending…'}</>:
                     <><span className="text-destructive">{pt?'Falha no envio':'Send failed'}</span>
@@ -526,8 +535,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
               </div>
             </div>)}</div>
           </div>
-          <form onSubmit={event=>void send(event)} className="shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+          <form onSubmit={event=>void send(event)} className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            {mediaPicker&&<CommunityMediaPicker key={mediaPicker} tab={mediaPicker} pt={pt}
+              onClose={()=>setMediaPicker(null)}
+              onEmoji={symbol=>{setDraft(old=>old+symbol);setMediaPicker(null);}}
+              onGif={url=>{queueText(url);setMediaPicker(null);}}/>}
             <div className="flex items-end gap-2 rounded-xl bg-secondary/60 p-2">
+              <Button type="button" size="icon" variant="ghost" className="shrink-0" aria-label={pt?'Emojis':'Emojis'}
+                aria-expanded={mediaPicker==='emoji'} onClick={()=>setMediaPicker(old=>old==='emoji'?null:'emoji')}>
+                <Smile className="size-5"/></Button>
+              <button type="button" aria-label={pt?'Enviar GIF':'Send GIF'} aria-expanded={mediaPicker==='gif'}
+                onClick={()=>setMediaPicker(old=>old==='gif'?null:'gif')}
+                className="mb-1 shrink-0 rounded-md border border-border px-1.5 py-1.5 text-[11px] font-bold hover:bg-secondary">GIF</button>
               <textarea aria-label={pt?'Mensagem do canal':'Channel message'} value={draft}
                 onChange={event=>setDraft(event.target.value)} onKeyDown={onComposerKeyDown} maxLength={4000} rows={1}
                 placeholder={(pt?'Mensagem em #':'Message in #')+activeChannel.name}
