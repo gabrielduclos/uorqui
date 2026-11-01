@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { ZoomableChatImage } from './ZoomableChatImage';
+import { invalidateChatMedia, useCachedChatMedia } from './chatMediaCache';
 
 type Media={id:string;type:string;size:number;position:number};
 type Post={
@@ -58,6 +59,7 @@ function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
   const swiped=useRef(false);
   if(!items.length)return null;
   const current=items[Math.min(index,items.length-1)];
+  const cached=useCachedChatMedia(current?mediaUrl(current.id):null,!!current);
   return <div className="relative mt-3 overflow-hidden rounded-xl bg-muted/50"
     onTouchStart={event=>{touchStart.current=event.touches[0]?.clientX??null;swiped.current=false;}}
     onTouchEnd={event=>{
@@ -67,7 +69,7 @@ function PostGallery({post,onZoom}:{post:Post;onZoom:(src:string)=>void}){
       if(Math.abs(diff)>45){swiped.current=true;setIndex(old=>(old+(diff>0?1:-1)+items.length)%items.length);}
     }}>
     <button type="button" onClick={()=>{if(!swiped.current)onZoom(mediaUrl(current.id));swiped.current=false;}} className="block w-full" aria-label="Ampliar imagem">
-      <img src={mediaUrl(current.id)} alt={'Imagem '+(index+1)+' de '+items.length} loading="lazy"
+      <img src={cached||mediaUrl(current.id)} alt={'Imagem '+(index+1)+' de '+items.length} loading="lazy"
         className="mx-auto max-h-[min(70dvh,620px)] w-full object-contain"/>
     </button>
     {items.length>1&&<>
@@ -280,6 +282,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
     if(deleting!==post.id){setDeleting(post.id);return;}
     try{
       await api('/api/v1/feed/posts/'+post.id,{method:'DELETE'});
+      for(const media of post.media)invalidateChatMedia(mediaUrl(media.id));
       setPosts(old=>old.filter(p=>p.id!==post.id));
       setVideos(old=>old.filter(p=>p.id!==post.id));setDeleting(null);
     }catch{setError(pt?'Não foi possível excluir a publicação.':'Could not remove post.');}
