@@ -72,3 +72,11 @@ Grupos tradicionais, lives em grande escala, pagamentos para criadores, marketpl
 ## Experiência de presença da sala de voz
 
 O cartão de um participante mostra uma borda verde pulsante apenas quando um analisador Web Audio detecta atividade na trilha WebRTC recebida ou enviada. O estado visual de mute e deafen é derivado da própria sessão e sincronizado entre os participantes (migração `0014_voice_deafen_status`). Efeitos discretos de entrada e saída são gerados localmente, sem arquivos e sem gravação. Indicadores também aparecem na lista lateral de canais. O áudio da chamada continua pelo WebRTC, sem novas gravações ou armazenamento de voz.
+
+## Reações nos canais de texto
+
+- Mensagens ativas podem receber reações por emoji de outros participantes da comunidade. O autor não pode reagir à própria mensagem, conforme a regra atual de conversa do Uorqui.
+- Cada pessoa pode marcar **uma vez por emoji** em uma mensagem, mas pode escolher emojis diferentes. Os chips mostram emoji e total; a própria escolha aparece destacada. Clicar novamente na reação remove a escolha pessoal; o controle `+` abre o seletor compacto de emojis.
+- A API inclui `reactions: [{emoji,count,mine}]` e `canReact` na listagem de mensagens, sincronizada pela atualização periódica do canal. Endpoints: `PUT` e `DELETE /api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions`, com corpo `{emoji}`, sessão obrigatória, verificação da origem e controle de acesso.
+- Reações não são mensagens separadas; mensagens canceladas não exibem contagens nem podem receber novas reações.
+- A migração aditiva **`0017_community_message_reactions`** cria a tabela `community_message_reactions`. Deve ser aplicada ao PostgreSQL da Neon antes de habilitar reações em produção. Até a migração, o histórico de mensagens continua legível e a operação de reação responde como indisponível.
