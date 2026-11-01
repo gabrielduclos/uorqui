@@ -25,6 +25,8 @@ const COMMUNITY_AVATAR_WRITE = /^\/api\/media\/community\/([0-9a-f-]{36})$/;
 const COMMUNITY_DELETE_PATH = /^\/api\/media\/community\/([0-9a-f-]{36})\/delete$/;
 const DM_UPLOAD_PATH = /^\/api\/media\/dm\/([0-9a-f-]{36})$/;
 const DM_MEDIA_PATH = /^\/media\/dm\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
+const COMMUNITY_ATTACHMENT_UPLOAD = /^\/api\/media\/community-attachment\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
+const COMMUNITY_ATTACHMENT_READ = /^\/media\/community-attachment\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
 const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
 const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream',
   'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
@@ -192,7 +194,7 @@ async function handleMediaRead(request: Request, env: Env, origin: URL, matched:
 
 // Attachments are private objects under a conversation-scoped, random key.
 // The API performs both upload membership and live message download authorization.
-async function handleDmUpload(request: Request, env: Env, current: URL, origin: URL, conversationId: string): Promise<Response> {
+async function handleDmUpload(request: Request, env: Env, current: URL, origin: URL, conversationId: string, communityId?:string): Promise<Response> {
   if (!env.DM_ATTACHMENTS) return jsonError(503, 'Attachment storage is not configured');
   if(!env.DM_ATTACHMENT_PROOF_SECRET || env.DM_ATTACHMENT_PROOF_SECRET.length<32)
     return jsonError(503,'Attachment signing is not configured');
@@ -216,7 +218,10 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
   if (contentLength > MAX_DM_BYTES) return jsonError(413, 'Attachment exceeds 50 MB');
 
   try {
-    const auth = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/attachments/allowed');
+    const accessPath=communityId
+      ?'/api/v1/communities/'+communityId+'/channels/'+conversationId+'/attachments/allowed'
+      :'/api/v1/dm/conversations/'+conversationId+'/attachments/allowed';
+    const auth = await callApi(request, origin, accessPath);
     if (!auth.ok) return jsonError(auth.status === 401 ? 401 : auth.status === 403 ? 403 : auth.status === 404 ? 404 : 503, 'Attachment upload not authorized');
   } catch { return jsonError(503, 'Attachment authentication unavailable'); }
 
@@ -235,17 +240,22 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
       ((type === 'video/mp4' || type === 'video/quicktime' || type === 'image/heic' || type === 'image/heif' || type === 'audio/mp4' || type === 'audio/x-m4a') && magic.slice(4, 8) !== 'ftyp')) return jsonError(415, 'Invalid attachment format');
 
   const attachmentId = crypto.randomUUID();
-  const proofContent=JSON.stringify([conversationId,clientId,attachmentId,name,type,bytes.byteLength]);
+  const proofContent=JSON.stringify(communityId
+    ?[communityId,conversationId,clientId,attachmentId,name,type,bytes.byteLength]
+    :[conversationId,clientId,attachmentId,name,type,bytes.byteLength]);
   const hmacKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.DM_ATTACHMENT_PROOF_SECRET),
     {name:'HMAC',hash:'SHA-256'},false,['sign']);
   const proofSignature=await crypto.subtle.sign('HMAC',hmacKey,new TextEncoder().encode(proofContent));
   const proof=Array.from(new Uint8Array(proofSignature),byte=>byte.toString(16).padStart(2,'0')).join('');
-  const key = 'dm/' + conversationId + '/' + attachmentId;
+  const key = (communityId?'community/'+communityId+'/'+conversationId:'dm/'+conversationId)+'/'+attachmentId;
   try { await env.DM_ATTACHMENTS.put(key, bytes, { httpMetadata: { contentType: type } }); }
   catch { return jsonError(503, 'Attachment storage unavailable'); }
 
   try {
-    const saved = await callApi(request, origin, '/api/v1/dm/conversations/' + conversationId + '/messages','POST',{
+    const destination=communityId
+      ?'/api/v1/communities/'+communityId+'/channels/'+conversationId+'/messages'
+      :'/api/v1/dm/conversations/'+conversationId+'/messages';
+    const saved = await callApi(request, origin, destination,'POST',{
       body:caption,clientId,...(replyToId ? {replyToId} : {}),
       attachment:{id:attachmentId,name,type,size:bytes.byteLength},
     },{'x-uorqui-attachment-proof':proof});
@@ -254,8 +264,8 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
       return jsonError(saved.status === 401 ? 401 : saved.status === 404 ? 404 : saved.status === 400 ? 400 : 503,
         'Could not attach file to a message');
     }
-    const result = await saved.json() as {message?:{attachment?:{id?:string}}};
-    if (result.message?.attachment?.id !== attachmentId) {
+    const result = await saved.json() as {message?:{attachment?:{id?:string}};duplicate?:boolean};
+    if (communityId?result.duplicate:result.message?.attachment?.id !== attachmentId) {
       // An idempotent retry might have already created the message with
       // the old object's UUID. Delete the duplicate upload.
       await env.DM_ATTACHMENTS.delete(key).catch(() => {});
@@ -269,18 +279,21 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
   }
 }
 
-async function handleDmDownload(request: Request, env: Env, origin: URL, conversationId: string, attachmentId: string): Promise<Response> {
+async function handleDmDownload(request: Request, env: Env, origin: URL, conversationId: string, attachmentId: string, communityId?:string): Promise<Response> {
   if (!env.DM_ATTACHMENTS) return jsonError(503, 'Attachment storage is not configured');
   let access: { allowed?: boolean; name?: string; type?: string; size?: number };
   try {
-    const response = await callApi(request, origin,
-      '/api/v1/dm/conversations/' + conversationId + '/attachments/' + attachmentId + '/access');
+    const accessPath=communityId
+      ?'/api/v1/communities/'+communityId+'/channels/'+conversationId+'/attachments/'+attachmentId+'/access'
+      :'/api/v1/dm/conversations/'+conversationId+'/attachments/'+attachmentId+'/access';
+    const response = await callApi(request, origin, accessPath);
     if (!response.ok) return jsonError(response.status === 503 ? 503 : 404,'Attachment unavailable');
     access = await response.json() as typeof access;
     if (!access.allowed || !access.name || !access.type) return jsonError(404, 'Attachment unavailable');
   } catch { return jsonError(503,'Attachment authorization unavailable'); }
   try {
-    const object = await env.DM_ATTACHMENTS.get('dm/' + conversationId + '/' + attachmentId,
+    const path=(communityId?'community/'+communityId+'/'+conversationId:'dm/'+conversationId)+'/'+attachmentId;
+    const object = await env.DM_ATTACHMENTS.get(path,
       request.headers.has('range') ? {range:request.headers} : undefined);
     if (!object) return jsonError(404,'Attachment unavailable');
     const partial=!!request.headers.get('range') && !!object.range;
@@ -374,6 +387,8 @@ export default {
     const communityDelete=COMMUNITY_DELETE_PATH.exec(current.pathname);
     const dmUpload = DM_UPLOAD_PATH.exec(current.pathname);
     const dmMedia = DM_MEDIA_PATH.exec(current.pathname);
+    const communityAttachmentUpload=COMMUNITY_ATTACHMENT_UPLOAD.exec(current.pathname);
+    const communityAttachmentRead=COMMUNITY_ATTACHMENT_READ.exec(current.pathname);
     // Worker Static Assets normalizes unknown navigations (sometimes 307 to '/').
     // Explicitly return the SPA entry on public profile URLs while retaining the
     // requested /@handle in the browser for React's route parser.
@@ -392,7 +407,7 @@ export default {
     const apiPath = current.pathname.startsWith('/api/');
     const healthPath = current.pathname === '/health' || current.pathname.startsWith('/health/');
 
-    if (!media && !write && !communityImage && !communityWrite && !communityDelete && !dmUpload && !dmMedia && !apiPath && !healthPath) return jsonError(404, 'Not found');
+    if (!media && !write && !communityImage && !communityWrite && !communityDelete && !dmUpload && !dmMedia && !communityAttachmentUpload && !communityAttachmentRead && !apiPath && !healthPath) return jsonError(404, 'Not found');
     const origin = apiOrigin(env.API_ORIGIN, current);
     if (!origin) return jsonError(503, 'API unavailable');
 
@@ -416,6 +431,14 @@ export default {
     if (dmMedia) {
       if (!['GET','HEAD'].includes(request.method)) return jsonError(405,'Method not allowed');
       return handleDmDownload(request,env,origin,dmMedia[1],dmMedia[2]);
+    }
+    if(communityAttachmentRead){
+      if(!['GET','HEAD'].includes(request.method))return jsonError(405,'Method not allowed');
+      return handleDmDownload(request,env,origin,communityAttachmentRead[2],communityAttachmentRead[3],communityAttachmentRead[1]);
+    }
+    if(communityAttachmentUpload){
+      if(request.method!=='POST')return jsonError(405,'Method not allowed');
+      return handleDmUpload(request,env,current,origin,communityAttachmentUpload[2],communityAttachmentUpload[1]);
     }
     if (dmUpload) {
       if (request.method !== 'POST') return jsonError(405,'Method not allowed');
