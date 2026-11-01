@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type TouchEvent, type WheelEvent } from 'react';
-import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Send, Share2, Flag, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, Play, Plus, Send, Share2, Flag, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
@@ -216,6 +216,10 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     container.addEventListener('scroll',onScroll,{passive:true});
     return ()=>{container.removeEventListener('scroll',onScroll);onScroll();};
   },[userId,filter]);
+  const [composerOpen,setComposerOpen]=useState(false);
+  const [composerError,setComposerError]=useState('');
+  const composerTextareaRef=useRef<HTMLTextAreaElement>(null);
+  const composerTriggerRef=useRef<HTMLButtonElement>(null);
   const [draft,setDraft]=useState('');
   const [files,setFiles]=useState<File[]>([]);
   const [preview,setPreview]=useState<string[]>([]);
@@ -255,6 +259,22 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const videoCursorRef=useRef<string|null>(null);
   const videoBusy=useRef(false);
   useEffect(()=>{videosRef.current=videos;videoCursorRef.current=videoCursor;},[videos,videoCursor]);
+  useEffect(()=>{
+    if(!composerOpen)return;
+    const scroller=scrollRef.current;
+    const oldOverflow=scroller?.style.overflowY;
+    if(scroller)scroller.style.overflowY='hidden';
+    const frame=window.requestAnimationFrame(()=>composerTextareaRef.current?.focus());
+    const onEscape=(event:KeyboardEvent)=>{
+      if(event.key==='Escape'&&!posting){event.preventDefault();closeComposer();}
+    };
+    window.addEventListener('keydown',onEscape);
+    return ()=>{
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown',onEscape);
+      if(scroller)scroller.style.overflowY=oldOverflow??'';
+    };
+  },[composerOpen,posting]);
 
   useEffect(()=>{
     const purge=()=>{
@@ -327,7 +347,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:cached?.scrollTop??0,behavior:'instant'}));
   }
   useEffect(()=>{
-    if(!active){setVideoOpen(false);setVideoCommentsOpen(false);}
+    if(!active){setVideoOpen(false);setVideoCommentsOpen(false);setComposerOpen(false);}
   },[active]);
   useEffect(()=>{
     if(!active)return;
@@ -406,7 +426,12 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     return ()=>window.cancelAnimationFrame(frame);
   },[posts,active]);
 
-  function resetComposer(){setDraft('');setFiles([]);setDraftId(null);setUploadProgress('');}
+  function closeComposer(){
+    if(posting)return;
+    setComposerOpen(false);
+    window.requestAnimationFrame(()=>composerTriggerRef.current?.focus());
+  }
+  function resetComposer(){setDraft('');setFiles([]);setDraftId(null);setUploadProgress('');setComposerError('');}
   async function discardPendingDraft(){
     if(posting)return;
     const id=draftId;
@@ -414,29 +439,29 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     setPosting(true);
     try{
       await api('/api/v1/feed/posts/'+id,{method:'DELETE'});
-      resetComposer();setError('');
-    }catch{setError(pt?'Falha ao descartar o envio. Tente novamente.':'Could not discard upload. Retry.');}
+      resetComposer();setComposerError('');
+    }catch{setComposerError(pt?'Falha ao descartar o envio. Tente novamente.':'Could not discard upload. Retry.');}
     finally{setPosting(false);}
   }
   function selectFiles(event:ChangeEvent<HTMLInputElement>){
     const chosen=Array.from(event.target.files??[]);event.target.value='';
     if(!chosen.length)return;
     if(draftId){
-      setError(pt?'Descarte o envio pendente antes de trocar as mídias.':'Discard the pending upload before changing media.');
+      setComposerError(pt?'Descarte o envio pendente antes de trocar as mídias.':'Discard the pending upload before changing media.');
       return;
     }
     const combined=[...files,...chosen],videos=combined.filter(f=>f.type.startsWith('video/'));
     if(combined.some(f=>!mimeTypes.has(f.type)||!f.size||f.size>LIMIT)||
       combined.length>6||(videos.length>0&&combined.length!==1)){
-      setError(pt?'Envie até 6 imagens ou 1 vídeo, com até 50 MB por arquivo.':
+      setComposerError(pt?'Envie até 6 imagens ou 1 vídeo, com até 50 MB por arquivo.':
         'Use up to 6 images or 1 video, with a 50 MB limit per file.');return;
     }
-    setError('');setFiles(combined);
+    setComposerError('');setFiles(combined);
   }
   async function publish(event:FormEvent){
     event.preventDefault();
     if(posting||!feedReady||(!draft.trim()&&!files.length))return;
-    setPosting(true);setError('');
+    setPosting(true);setComposerError('');
     try{
       let id=draftId;
       if(!id){
@@ -464,9 +489,11 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         setUploadProgress(pt?'Publicando…':'Publishing…');
         await api('/api/v1/feed/posts/'+id+'/publish',requestBody({}));
       }
-      resetComposer();setRefreshKey(old=>old+1);scrollRef.current?.scrollTo({top:0,behavior:'smooth'});
+      resetComposer();setComposerOpen(false);
+      setRefreshKey(old=>old+1);scrollRef.current?.scrollTo({top:0,behavior:'smooth'});
+      window.requestAnimationFrame(()=>composerTriggerRef.current?.focus());
     }catch(e){
-      setError(pt?'Não foi possível publicar. Confira a conexão e tente novamente.':
+      setComposerError(pt?'Não foi possível publicar. Confira a conexão e tente novamente.':
         'Could not publish. Check your connection and retry.');
     }finally{setPosting(false);setUploadProgress('');}
   }
@@ -663,55 +690,28 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   useEffect(()=>()=>setFeedVideoCacheWindow([]),[]);
   const date=(raw:string)=>new Intl.DateTimeFormat(locale,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(raw));
 
-  return <div className="relative h-full min-h-0 w-full">
-    <div ref={scrollRef} className="h-full min-h-0 overflow-y-auto overscroll-contain bg-background" data-feed-scroll>
-      <div className="mx-auto max-w-2xl space-y-4 px-3 py-4 pb-28 sm:px-6 sm:py-6">
-        <div className="flex items-center justify-between gap-2">
-          <div><h2 className="text-xl font-bold sm:text-2xl">{pt?'Seu feed':'Your feed'}</h2>
-            <p className="text-xs text-muted-foreground">{pt?'Pessoas, fotos, histórias e vídeos.':'People, photos, stories and videos.'}</p></div>
-          <Button variant="outline" onClick={()=>openVideo()} disabled={!feedReady} className="gap-2" size="sm"><Video className="size-4"/>{pt?'Vídeos':'Videos'}</Button>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
-          <form onSubmit={publish} className="space-y-3">
-            <div className="flex items-start gap-2">
-              <UserAvatar name={ownName} image={ownAvatar} size="sm"/>
-              <textarea value={draft} onChange={e=>setDraft(e.target.value)} disabled={posting||!feedReady} maxLength={4000} rows={3}
-                placeholder={pt?'O que você quer compartilhar?':'What would you like to share?'}
-                aria-label={pt?'Nova publicação':'New post'}
-                className="min-h-24 min-w-0 flex-1 resize-y rounded-xl border border-input bg-background p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/40"/>
-            </div>
-            {!!preview.length&&<div className="grid grid-cols-3 gap-2">
-              {preview.map((url,i)=><div key={url} className="relative overflow-hidden rounded-xl bg-muted">
-                {files[i]?.type.startsWith('video/')?<video src={url} preload="metadata" className="aspect-square w-full object-cover"/>:
-                  <img src={url} alt={'Anexo '+(i+1)} className="aspect-square w-full object-cover"/>}
-                <button type="button" aria-label={pt?'Remover mídia':'Remove media'} disabled={posting||!!draftId}
-                  onClick={()=>setFiles(old=>old.filter((_,k)=>k!==i))}
-                  className="absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-black/75 text-white"><X className="size-4"/></button>
-              </div>)}
-            </div>}
-            {uploadProgress&&<p className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3.5"/>{uploadProgress}</p>}
-            {draftId&&!posting&&<div className="flex items-center justify-between gap-2 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span>{pt?'Envio pendente salvo. Você pode tentar publicar novamente.':'Pending upload saved. You can retry publishing.'}</span>
-              <button type="button" onClick={()=>void discardPendingDraft()} className="shrink-0 font-semibold text-destructive hover:underline">{pt?'Descartar':'Discard'}</button>
-            </div>}
-            <div className="flex items-center justify-between gap-2">
-              <button type="button" disabled={posting||!feedReady||!!draftId} onClick={()=>fileRef.current?.click()}
-                className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs font-semibold text-primary hover:bg-accent">
-                <ImagePlus className="size-5"/>{pt?'Foto ou vídeo':'Photo or video'}</button>
-              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime"
-                multiple className="sr-only" onChange={selectFiles}/>
-              <Button type="submit" disabled={posting||!feedReady||(!draft.trim()&&!files.length)} loading={posting} className="gap-2">
-                <Send className="size-4"/>{pt?'Publicar':'Post'}
-              </Button>
-            </div>
-          </form>
-        </div>
-        <div className="flex gap-2 border-b border-border pb-2">
+  return <div className="relative flex h-full min-h-0 w-full flex-col">
+    {/* Filters live outside the scroll viewport, so they remain visible while browsing posts. */}
+    <div data-feed-filter-bar className="z-20 shrink-0 border-b border-border bg-background/95 backdrop-blur">
+      <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-3 py-2 sm:px-6">
+        <div role="group" aria-label={pt?'Filtrar publicações':'Filter posts'} className="flex min-w-0 items-center gap-1">
           <Button size="sm" variant={filter==='for-you'?'secondary':'ghost'} onClick={()=>changeFilter('for-you')}
-            aria-pressed={filter==='for-you'}>{pt?'Para você':'For you'}</Button>
+            aria-pressed={filter==='for-you'} className="px-3">{pt?'Para você':'For you'}</Button>
           <Button size="sm" variant={filter==='following'?'secondary':'ghost'} onClick={()=>changeFilter('following')}
-            aria-pressed={filter==='following'}>{pt?'Seguindo':'Following'}</Button>
+            aria-pressed={filter==='following'} className="px-3">{pt?'Seguindo':'Following'}</Button>
         </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button type="button" variant="ghost" size="icon" onClick={()=>openVideo()} disabled={!feedReady}
+            aria-label={pt?'Ver vídeos':'View videos'} title={pt?'Vídeos':'Videos'}><Video className="size-4"/></Button>
+          <Button ref={composerTriggerRef} type="button" size="sm" onClick={()=>setComposerOpen(true)}
+            disabled={!feedReady} className="gap-1.5 px-2.5 sm:px-3" aria-label={pt?'Nova postagem':'New post'}>
+            <Plus className="size-4"/><span className="hidden sm:inline">{pt?'Nova postagem':'New post'}</span>
+          </Button>
+        </div>
+      </div>
+    </div>
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background" data-feed-scroll>
+      <div className="mx-auto max-w-2xl space-y-4 px-3 py-4 pb-28 sm:px-6 sm:py-6">
         {notice&&<div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
           <span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label={pt?'Fechar':'Close'}><X className="size-4"/></button>
         </div>}
@@ -799,6 +799,61 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
           <ArrowDown className="size-4"/>{pt?'Mais publicações':'More posts'}</Button>}
       </div>
     </div>
+    {composerOpen&&<div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/65 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm sm:p-6"
+      onMouseDown={event=>{if(event.target===event.currentTarget)closeComposer();}}>
+      <section role="dialog" aria-modal="true" aria-labelledby="feed-composer-title"
+        onKeyDown={event=>{
+          if(event.key!=='Tab')return;
+          const items=Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]),textarea:not([disabled])'));
+          const first=items[0],last=items[items.length-1];
+          if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+          else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+        }}
+        className="flex max-h-[min(90dvh,760px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl">
+        <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-5">
+          <h2 id="feed-composer-title" className="text-base font-semibold">{pt?'Nova postagem':'New post'}</h2>
+          <Button type="button" size="icon" variant="ghost" disabled={posting} onClick={closeComposer}
+            aria-label={pt?'Fechar criação de postagem':'Close post composer'}><X className="size-5"/></Button>
+        </header>
+        <form onSubmit={publish} className="flex min-h-0 flex-col">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <UserAvatar name={ownName} image={ownAvatar} size="sm"/>
+              <textarea ref={composerTextareaRef} value={draft} onChange={e=>setDraft(e.target.value)}
+                disabled={posting||!feedReady} maxLength={4000} rows={5}
+                placeholder={pt?'O que você quer compartilhar?':'What would you like to share?'}
+                aria-label={pt?'Texto da nova postagem':'New post text'}
+                className="min-h-32 min-w-0 flex-1 resize-y rounded-xl border border-input bg-background p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/40"/>
+            </div>
+            {!!preview.length&&<div className="grid grid-cols-3 gap-2">
+              {preview.map((url,i)=><div key={url} className="relative overflow-hidden rounded-xl bg-muted">
+                {files[i]?.type.startsWith('video/')?<video src={url} preload="metadata" className="aspect-square w-full object-cover"/>:
+                  <img src={url} alt={(pt?'Anexo ':'Attachment ')+(i+1)} className="aspect-square w-full object-cover"/>}
+                <button type="button" aria-label={pt?'Remover mídia':'Remove media'} disabled={posting||!!draftId}
+                  onClick={()=>setFiles(old=>old.filter((_,k)=>k!==i))}
+                  className="absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-black/75 text-white"><X className="size-4"/></button>
+              </div>)}
+            </div>}
+            {composerError&&<p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-foreground">{composerError}</p>}
+            {uploadProgress&&<p className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3.5"/>{uploadProgress}</p>}
+            {draftId&&!posting&&<div className="flex items-center justify-between gap-2 rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span>{pt?'Envio pendente salvo. Você pode tentar publicar novamente.':'Pending upload saved. You can retry publishing.'}</span>
+              <button type="button" onClick={()=>void discardPendingDraft()} className="shrink-0 font-semibold text-destructive hover:underline">{pt?'Descartar':'Discard'}</button>
+            </div>}
+          </div>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-4 py-3 sm:px-5">
+            <button type="button" disabled={posting||!feedReady||!!draftId} onClick={()=>fileRef.current?.click()}
+              className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs font-semibold text-primary hover:bg-accent disabled:opacity-50">
+              <ImagePlus className="size-5"/>{pt?'Foto ou vídeo':'Photo or video'}</button>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime"
+              multiple className="sr-only" onChange={selectFiles}/>
+            <Button type="submit" disabled={posting||!feedReady||(!draft.trim()&&!files.length)} loading={posting} className="gap-2">
+              <Send className="size-4"/>{pt?'Publicar':'Post'}
+            </Button>
+          </div>
+        </form>
+      </section>
+    </div>}
     {videoOpen&&<div role="dialog" aria-modal="true" aria-label={pt?'Modo Vídeos':'Video mode'}
       className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] z-[130] flex h-[var(--uorqui-app-height,100dvh)] flex-col bg-black text-white" onWheel={wheelVideo} onTouchStart={touchStart} onTouchEnd={touchEnd}>
       <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
