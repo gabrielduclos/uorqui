@@ -32,7 +32,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
   }
   async function group(id:string,me:string){
     const result=await getPool().query(
-      'SELECT c.id,c.slug,c.name,c.description,c.visibility,c.owner_id AS "ownerId",c.created_at AS "createdAt",'+
+      'SELECT c.id,c.slug,c.name,c.description,c.avatar_url AS "avatarUrl",c.visibility,c.owner_id AS "ownerId",c.created_at AS "createdAt",'+
       'm.role AS "myRole",r.kind AS "requestKind",r.status AS "requestStatus",'+
       '(SELECT COUNT(*)::int FROM community_members cm WHERE cm.community_id=c.id) AS "memberCount" '+
       'FROM communities c LEFT JOIN community_members m ON m.community_id=c.id AND m.user_id=$2 '+
@@ -51,7 +51,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     try {
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const r=await getPool().query(
-        'SELECT c.id,c.slug,c.name,c.description,c.visibility,c.created_at AS "createdAt",'+
+        'SELECT c.id,c.slug,c.name,c.description,c.avatar_url AS "avatarUrl",c.visibility,c.created_at AS "createdAt",'+
         'm.role AS "myRole",r.kind AS "requestKind",r.status AS "requestStatus",'+
         '(SELECT COUNT(*)::int FROM community_members cm WHERE cm.community_id=c.id) AS "memberCount" '+
         'FROM communities c LEFT JOIN community_members m ON m.community_id=c.id AND m.user_id=$1 '+
