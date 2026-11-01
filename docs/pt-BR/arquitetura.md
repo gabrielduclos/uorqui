@@ -1,8 +1,8 @@
-# Arquitetura — stack principal aprovada e integrações propostas
+# Arquitetura — implementação do beta técnico e próximas etapas
 
 [Português](arquitetura.md) · [English](../en/architecture.md)
 
-> Existe uma estrutura local inicial React/Fastify e um schema Drizzle. **PostgreSQL e primeira migração Drizzle com seis tabelas aplicados e verificados na Neon; a aplicação ainda não foi publicada.**
+> **Versão `0.1.0-beta.1`.** O PWA e a API Fastify estão publicados para testes controlados na Cloudflare/Render com PostgreSQL Neon. Não é lançamento público estável; testes de e-mail e aparelhos reais continuam pendentes.
 
 ## Abordagem
 
@@ -17,34 +17,34 @@ Começar com um **monólito modular**: uma API implantada com módulos e limites
 | Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de usuários, publicações, comunidades, conversas e permissões |
 | Acesso ao banco | **Drizzle ORM + Drizzle Kit** | Consultas SQL tipadas, schema e migrações versionadas |
 
-Essas escolhas estão **aprovadas para o novo Uorqui**, mas **banco Neon, migração inicial e estrutura de desenvolvimento estão prontos; ainda não há deploy da aplicação em produção**.
+Essas tecnologias estão **implementadas no beta técnico atual**. A troca do domínio oficial é uma operação separada, que deve ser confirmada antes de anunciar `uorqui.app` como migrado.
 
 ## Hospedagem web e fronteira com a API
 
 O **React está configurado para Cloudflare Workers Static Assets** (`apps/web/wrangler.jsonc`), com fallback SPA e um pequeno Worker que encaminha `/api/*` e `/health*` à API Fastify. As chamadas continuam no mesmo domínio do front-end, facilitando cookies de sessão de primeira parte. A API Node.js/Fastify permanece separada, com conexão PostgreSQL Neon; o Worker não executa o servidor Fastify nem contém credenciais do banco.
 
-O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de API retornam 503, não o HTML da SPA. Para login real, `AUTH_BASE_URL` e `WEB_ORIGIN` devem coincidir com a origem pública do novo Worker. **O Worker `main` está conectado ao GitHub para deploy automático pelo Cloudflare Builds; a hospedagem da API não foi escolhida e o domínio legado não foi migrado.** [Guia Workers](cloudflare-workers.md).
+O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de API retornam 503, não o HTML da SPA. Para login real, `AUTH_BASE_URL` e `WEB_ORIGIN` devem coincidir com a origem pública do novo Worker. **O Worker `main` é publicado pelo Cloudflare Builds e a API Fastify está no Render (`uorqui-social-api`).** O domínio será migrado por procedimento reversível, mantendo os bancos antigos isolados. [Guia Workers](cloudflare-workers.md).
 
 ## Decisões de autenticação
 
 **Escolhido:** Better Auth (e-mail/senha e sessões por cookies), integrado ao Fastify e ao Drizzle PostgreSQL. A autenticação usa tabelas próprias `user`, `account`, `session` e `verification`; o esquema social mantém `users`, `profiles`, conversas e comunidades. O ID UUID da conta autenticada passa a identificar o perfil social quando o onboarding protegido é concluído.
 
 - As tabelas de autenticação estão versionadas na migração `0001`, **aplicada e verificada na Neon main**, com dois registros no histórico do Drizzle.
-- A API usa pool PostgreSQL, origem confiável restrita, cookies de sessão, validação no servidor e mínimo de 12 caracteres para senhas.
+- A API usa pool PostgreSQL, origem confiável restrita, cookies de sessão, validação no servidor e mínimo de 8 caracteres para senhas.
 - `AUTH_SECRET` e `DATABASE_URL` não entram no repositório público.
-- Novos cadastros ficam desabilitados por padrão e **sempre bloqueados em produção** até existir verificação de e-mail, recuperação de senha, proteção contra abuso e testes de segurança.
-- Cadastro, sessão, leitura protegida, onboarding, entradas inválidas, duplicidade e logout **passaram em teste de integração com PostgreSQL temporário no GitHub Actions**; ainda não foram testados na Neon main.
+- O cadastro público em produção depende de ativação explícita e configurações de Resend e Turnstile; continuam pendentes os testes positivos de confirmação e recuperação com uma conta real.
+- Cadastro, sessão, leitura protegida, onboarding, entradas inválidas, duplicidade e logout **passaram em teste de integração com PostgreSQL temporário no GitHub Actions**; a saúde da Neon principal e o acesso anônimo são verificados separadamente; o CI usa PostgreSQL descartável e não comprova confirmação real de e-mail.
 
-### Integrações ainda em avaliação
+### Componentes implementados e avaliações pendentes
 
 | Camada | Candidato | Situação |
 | --- | --- | --- |
-| Eventos em tempo real | WebSocket | Proposta; definir infraestrutura e semântica de entrega |
-| Salas de voz | WebRTC + LiveKit ou equivalente | Proposta; validar custos, hospedagem e suporte mobile |
-| Mídias/vídeos | Armazenamento de objetos, transcodificação e CDN | Proposta; escolher fornecedores e cotas |
+| Eventos em tempo real | **Server-Sent Events (SSE)** | Implementado para atualizações de conversas e canais; validar reconexão em celulares |
+| Salas de voz | **WebRTC P2P (malha)** | Implementado para salas pequenas; TURN e segundo plano precisam de testes reais |
+| Mídias/vídeos | **Cloudflare R2** | Uploads protegidos implementados; validar transcodificação, cotas e custos |
 | Presença e distribuição de eventos | Redis | Opcional, quando houver necessidade |
-| Hospedagem do front-end | **Cloudflare Workers Static Assets (configurado, sem deploy)** | Novo Worker independente e sem alterar o domínio legado |
-| Hospedagem da API Fastify | A definir | Runtime Node.js separado, acessado pelo proxy do Worker |
+| Hospedagem do front-end | **Cloudflare Worker `main` (publicado)** | Beta em `main.uorqui1.workers.dev`, migração de domínio verificada em separado |
+| Hospedagem da API Fastify | **Render `uorqui-social-api` (publicado)** | Runtime Node.js separado, acessado pelo proxy do Worker |
 
 PostgreSQL e Drizzle armazenam **dados estruturados**, não os arquivos originais de fotos/vídeos. Mídias terão armazenamento próprio, com referências e permissões no PostgreSQL. As cotas e possíveis cobranças da hospedagem devem ser acompanhadas durante a evolução do projeto.
 
