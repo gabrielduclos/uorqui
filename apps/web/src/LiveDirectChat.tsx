@@ -9,6 +9,7 @@ import { attachmentLabel } from './chatAttachmentLabels';
 import { invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
 import { InternalShareDialog } from './InternalShareDialog';
+import { ContentReportDialog } from './ContentReportDialog';
 import { FriendsPanel } from './FriendsPanel';
 import { AccountBlockButton } from './AccountBlockButton';
 import { clearProfileImageCache } from './profileImageCache';
@@ -135,6 +136,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   }, []);
   const [editing, setEditing] = useState<Message | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Message | null>(null);
+  const [reportMessageId,setReportMessageId] = useState<string|null>(null);
   const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [mediaViewerId,setMediaViewerId] = useState<string | null>(null);
@@ -855,6 +857,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
                     disabled={!active.canMessage || actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
                     onForward={message => { setActionNotice(''); setForwardTarget(message); }}
+                     onReport={message=>setReportMessageId(message.id)}
                     onReact={(message, emoji) => void react(message, emoji)}
                     onRetry={message => {
                       const pending = pendingMessages.find(p => p.clientId === message.clientId);
@@ -937,6 +940,8 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
       </div>}
     </section>
 
+    <ContentReportDialog target={reportMessageId?{targetKind:'direct_message',targetId:reportMessageId}:null}
+      locale={locale} onClose={()=>setReportMessageId(null)}/>
     <ChatMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId}
       onClose={()=>setMediaViewerId(null)} onSendEdited={file=>sendAttachment(file,'')}
       onShareMedia={message=>{setMediaViewerId(null);setForwardTarget(message);setActionNotice('');}}

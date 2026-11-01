@@ -61,3 +61,19 @@ Na entrada autenticada de uma sala, a API chama `POST https://rtc.live.cloudflar
 Limites e operação: até 6 participantes conectados simultaneamente por sala; sessão expira após 45 s sem heartbeat; sinais de negociação expiram após 3 min. A migração `0012_voice_signaling` adiciona `community_voice_sessions` e `community_voice_signals` (sem gravações), com controle de sessão, permissões, taxa e origem.
 
 **Sequência de publicação:** validar CI e migração Drizzle; aplicar `0012` ao Neon; depois integrar/deploy da API e frontend. Antes de divulgar como pronta para uso amplo, testar dois dispositivos e TURN em redes diferentes.
+
+
+## Moderação da plataforma (beta)
+
+A moderação de conteúdo é separada dos cargos de comunidade: proprietários, administradores e moderadores de comunidade **não** recebem acesso às denúncias privadas. O painel é ocultado por padrão e o backend aplica autorização em todas as leituras e escritas.
+
+- Configure `PLATFORM_MODERATOR_USER_IDS` **somente no ambiente privado do Render**, com os UUIDs exatos das contas Uorqui da equipe, separados por vírgula. Sem a variável, ninguém tem acesso administrativo.
+- Obtenha o UUID da conta autorizada na resposta autenticada de `GET /api/v1/me` (campo `user.id`); não use e-mail, handle ou ID de GitHub.
+- Depois de ajustar a variável, reinicie/republique a API e confirme em `GET /api/v1/moderation/access` que somente as contas permitidas retornam `moderator:true`.
+- A área **Moderação** aparece no menu desktop e no perfil mobile apenas para a conta autorizada.
+- O endpoint `POST /api/v1/reports` registra denúncias de post, mensagem privada ou de canal, sem ocultar conteúdo automaticamente.
+- O painel lista evidências privadas, autores e denunciantes; oferece filtros por tipo/status, histórico de decisões e as ações **Em análise**, **Resolver sem remover**, **Descartar** e **Remover conteúdo** (esta exige nota interna).
+- A alteração de status e a trilha de auditoria são transacionadas com a remoção do conteúdo. Remoções de mensagens disparam eventos de sincronização sem expor dados da denúncia.
+- Não são enviados alertas ou dados da denúncia à pessoa denunciada. É preciso definir uma política de retenção e regras de acesso antes de abrir amplamente a plataforma.
+
+**Ordem de implantação:** aplicar a migração `0023_content_reports` à Neon, verificar `content_reports` e `moderation_report_actions`, depois publicar API e interface. Executar testes em ambiente isolado antes de configurar moderadores reais. Não apontar o projeto novo para o banco do mensageiro empresarial legado.

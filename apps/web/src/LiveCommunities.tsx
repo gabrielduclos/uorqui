@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, Mic, MicOff, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -13,6 +13,7 @@ import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker'
 import CommunityMessageReactions, { type CommunityReaction } from './CommunityMessageReactions';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
+import { ContentReportDialog } from './ContentReportDialog';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -86,6 +87,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [editingId,setEditingId]=useState<string|null>(null);
   const [editingBody,setEditingBody]=useState('');
   const [deletingId,setDeletingId]=useState<string|null>(null);
+  const [reportMessageId,setReportMessageId]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [busyAction,setBusyAction]=useState<string|null>(null);
@@ -719,8 +721,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                   open={reactionPickerId===message.id} busy={reactionBusyId===message.id}
                   pt={pt} onOpen={()=>setReactionPickerId(old=>old===message.id?null:message.id)}
                   onToggle={(emoji,mine)=>void toggleReaction(message,emoji,mine)}/>}
-                {!message.deletedAt&&(message.canEdit||message.canDelete)&&<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
-                  {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
+                {!message.deletedAt&&!isPendingMessage(message)&&<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
+                  {!message.canEdit&&<button type="button" className="inline-flex items-center gap-1 hover:text-destructive"
+                     onClick={()=>setReportMessageId(message.id)}><Flag className="size-3.5"/>{pt?'Denunciar':'Report'}</button>}
+                   {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
                     onClick={()=>{setEditingId(message.id);setEditingBody(message.body??'');setDeletingId(null);}}>
                     {pt?'Editar':'Edit'}</button>}
                   {message.canDelete&&<button type="button" className="inline-flex items-center gap-1 hover:text-destructive" disabled={busy}
@@ -756,6 +760,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
         </div>
       </div>}
     </section>
+    <ContentReportDialog target={reportMessageId?{targetKind:'community_message',targetId:reportMessageId}:null}
+      locale={locale} onClose={()=>setReportMessageId(null)}/>
     {(error||notice)&&<div role={error?'alert':'status'}
       className={cn('pointer-events-auto absolute bottom-20 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-xl border border-border bg-popover px-4 py-3 text-center text-xs shadow-xl',error?'text-destructive':'text-primary')}>
       {error||notice}<button type="button" className="ml-3 underline" onClick={()=>{setError('');setNotice('');}}>{pt?'Fechar':'Close'}</button>

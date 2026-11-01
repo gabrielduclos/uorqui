@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+// CI also runs the content-report integration suite against its own API port.
+import './content-reports.integration.test.mjs';
 import {createHmac} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {after,before,test} from 'node:test';

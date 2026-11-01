@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, Home, LogOut, MessageCircle, Users,
+  Bell, Home, LogOut, MessageCircle, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
 import LiveCommunities from './LiveCommunities';
 import LiveFeed from './LiveFeed';
+import ModerationPanel from './ModerationPanel';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 import {useCommunityUnread} from './useCommunityUnread';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
@@ -26,7 +27,7 @@ export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: UserProfileData | null;
 };
-type Area = 'feed' | 'conversations' | 'communities' | 'profile';
+type Area = 'feed' | 'conversations' | 'communities' | 'profile' | 'moderation';
 
 const navigation = [
   { id: 'feed', label: 'Início', icon: Home },
@@ -49,6 +50,15 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
   const [area, setArea] = useState<Area>(invitedCommunityId?'communities':'feed');
+  const [platformModerator,setPlatformModerator]=useState(false);
+  useEffect(()=>{
+    const controller=new AbortController();
+    void fetch('/api/v1/moderation/access',{credentials:'same-origin',cache:'no-store',signal:controller.signal})
+      .then(async response=>response.ok?response.json() as Promise<{moderator:boolean}>:{moderator:false})
+      .then(result=>{if(!controller.signal.aborted)setPlatformModerator(result.moderator===true);})
+      .catch(()=>{if(!controller.signal.aborted)setPlatformModerator(false);});
+    return ()=>controller.abort();
+  },[account.user.id]);
   const [feedTyping,setFeedTyping]=useState(false);
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
   const unreadMessageCount = useUnreadDirectMessages();
@@ -99,7 +109,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 
-  const title = area === 'profile' ? t('Perfil') : t(navigation.find(item => item.id === area)?.label ?? 'Uorqui');
+  const title = area === 'moderation' ? (locale==='pt-BR'?'Moderação':'Moderation') : area === 'profile' ? t('Perfil') : t(navigation.find(item => item.id === area)?.label ?? 'Uorqui');
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
@@ -120,6 +130,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{communityUnreadLabel}</span>}
             </Button>;
           })}
+          {platformModerator&&<Button type="button" variant={area==='moderation'?'secondary':'ghost'}
+            onClick={()=>move('moderation')} className="h-11 justify-start gap-3 text-sm">
+            <ShieldCheck className="size-4"/>{locale==='pt-BR'?'Moderação':'Moderation'}
+          </Button>}
         </nav>
         <div className="mt-auto space-y-3 border-t border-border p-3">
           <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
@@ -169,9 +183,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             {area === 'communities' && <LiveCommunities myId={account.user.id} onMobileOpenChange={setChannelOpened} initialCommunityId={invitedCommunityId}
               unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities} />}
 
+            {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
-                <div className="mx-auto flex w-full max-w-3xl justify-end px-4 pt-4 sm:px-7">
+                <div className="mx-auto flex w-full max-w-3xl justify-end gap-2 px-4 pt-4 sm:px-7">
+                  {platformModerator&&<Button type="button" variant="outline" onClick={()=>move('moderation')}
+                    className="min-h-11 gap-2"><ShieldCheck className="size-4"/>{locale==='pt-BR'?'Moderação':'Moderation'}</Button>}
                   <Button type="button" variant="outline" onClick={()=>setLogoutConfirm(true)}
                     disabled={loggingOut} aria-label={t('Sair da conta')}
                     className="min-h-11 gap-2 rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10">

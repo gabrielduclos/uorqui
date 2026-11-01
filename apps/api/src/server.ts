@@ -16,6 +16,8 @@ import { registerCommunityInviteLinks } from './community-invite-links.js';
 import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
 import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
 import { registerFeedRoutes } from './feed-routes.js';
+import { registerContentReportRoutes } from './content-report-routes.js';
+import { registerPlatformModerationRoutes } from './platform-moderation-routes.js';
 import { closeDmEvents } from './dm-events.js';
 import {closeCommunityEvents} from './community-events.js';
 
@@ -255,6 +257,8 @@ registerCommunityInviteLinks(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
 registerCommunityModerationRoutes(app, async request => readSession(request));
 registerFeedRoutes(app, async request => readSession(request));
+registerContentReportRoutes(app, async request => readSession(request));
+registerPlatformModerationRoutes(app, async request => readSession(request));
 
 const port = Number(process.env.PORT ?? 3001);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
