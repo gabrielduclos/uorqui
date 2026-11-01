@@ -27,6 +27,9 @@ const DM_UPLOAD_PATH = /^\/api\/media\/dm\/([0-9a-f-]{36})$/;
 const DM_MEDIA_PATH = /^\/media\/dm\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
 const COMMUNITY_ATTACHMENT_UPLOAD = /^\/api\/media\/community-attachment\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
 const COMMUNITY_ATTACHMENT_READ = /^\/media\/community-attachment\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
+const FEED_UPLOAD_PATH = /^\/api\/media\/feed\/([0-9a-f-]{36})\/([0-5])$/;
+const FEED_READ_PATH = /^\/media\/feed\/([0-9a-f-]{36})$/;
+const FEED_TYPES = new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime']);
 const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
 const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream',
   'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
@@ -315,6 +318,75 @@ async function handleDmDownload(request: Request, env: Env, origin: URL, convers
 }
 
 
+
+/** Persistent post media: draft-ownership check before upload, signed linking, and
+ * membership/privacy checks for every download. Never trust a browser-supplied R2 key. */
+async function handleFeedUpload(request:Request,env:Env,current:URL,origin:URL,postId:string,position:number):Promise<Response>{
+  if(!env.DM_ATTACHMENTS)return jsonError(503,'Feed media storage is not configured');
+  if(!env.DM_ATTACHMENT_PROOF_SECRET||env.DM_ATTACHMENT_PROOF_SECRET.length<32)return jsonError(503,'Feed media signing is not configured');
+  if(!validWriteOrigin(request,current))return jsonError(403,'Invalid upload origin');
+  const type=(request.headers.get('content-type')??'').split(';')[0].trim().toLowerCase();
+  if(!FEED_TYPES.has(type))return jsonError(415,'Unsupported media type');
+  if(Number(request.headers.get('content-length')??0)>MAX_DM_BYTES)return jsonError(413,'Media exceeds 50 MB');
+  try{
+    const auth=await callApi(request,origin,'/api/v1/feed/posts/'+postId+'/media/'+position+'/allowed');
+    if(!auth.ok)return jsonError([401,403,404,409].includes(auth.status)?auth.status:503,'Media upload not permitted');
+  }catch{return jsonError(503,'Media permission unavailable');}
+  const bytes=await boundedBody(request,MAX_DM_BYTES);
+  if(!bytes)return jsonError(413,'Media must be between 1 byte and 50 MB');
+  const signature=new Uint8Array(bytes.slice(0,16)),magic=String.fromCharCode(...signature);
+  if (((type==='image/jpeg'||type==='image/png'||type==='image/webp')&&!validImage(new Uint8Array(bytes),type))||
+      (type==='image/gif'&&!magic.startsWith('GIF8'))||
+      ((type==='video/webm')&&!(signature[0]===0x1a&&signature[1]===0x45&&signature[2]===0xdf&&signature[3]===0xa3))||
+      ((type==='video/mp4'||type==='video/quicktime'||type==='image/heic'||type==='image/heif')&&magic.slice(4,8)!=='ftyp'))
+    return jsonError(415,'Invalid media format');
+  const mediaId=crypto.randomUUID(),key='feed/'+postId+'/'+mediaId;
+  const value=JSON.stringify([postId,position,mediaId,type,bytes.byteLength]);
+  const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.DM_ATTACHMENT_PROOF_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const signed=await crypto.subtle.sign('HMAC',k,new TextEncoder().encode(value));
+  const proof=Array.from(new Uint8Array(signed),byte=>byte.toString(16).padStart(2,'0')).join('');
+  try{await env.DM_ATTACHMENTS.put(key,bytes,{httpMetadata:{contentType:type}});}
+  catch{return jsonError(503,'Media storage unavailable');}
+  try{
+    const resp=await callApi(request,origin,'/api/v1/feed/posts/'+postId+'/media/'+position,'POST',
+      {id:mediaId,type,size:bytes.byteLength},{'x-uorqui-attachment-proof':proof});
+    if(!resp.ok){
+      await env.DM_ATTACHMENTS.delete(key).catch(()=>{});
+      return jsonError([400,401,403,404,409,415].includes(resp.status)?resp.status:503,'Could not attach feed media');
+    }
+    const result=await resp.json();
+    return Response.json(result,{status:201,headers:{'cache-control':'no-store'}});
+  }catch{
+    // The API may already have committed; do not remove possibly linked media.
+    return jsonError(503,'Could not confirm media link');
+  }
+}
+
+async function handleFeedRead(request:Request,env:Env,origin:URL,mediaId:string):Promise<Response>{
+  if(!env.DM_ATTACHMENTS)return jsonError(503,'Media storage unavailable');
+  let access:{allowed?:boolean;postId?:string;type?:string;size?:number};
+  try{
+    const res=await callApi(request,origin,'/api/v1/feed/media/'+mediaId+'/access');
+    if(!res.ok)return jsonError(res.status===503?503:404,'Media unavailable');
+    access=await res.json() as typeof access;
+    if(!access.allowed||!access.postId||!access.type)return jsonError(404,'Media unavailable');
+  }catch{return jsonError(503,'Media permission unavailable');}
+  try{
+    const object=await env.DM_ATTACHMENTS.get('feed/'+access.postId+'/'+mediaId,
+      request.headers.has('range')?{range:request.headers}:undefined);
+    if(!object)return jsonError(404,'Media unavailable');
+    const partial=!!request.headers.get('range')&&!!object.range;
+    return new Response(request.method==='HEAD'?null:object.body,{status:partial?206:200,headers:{
+      'content-type':access.type,'content-length':String(partial?object.range!.length:object.size),
+      'accept-ranges':'bytes',
+      ...(partial?{'content-range':'bytes '+object.range!.offset+'-'+(object.range!.offset+object.range!.length-1)+'/'+object.size}:{}),
+      'cache-control':'private, no-store','x-content-type-options':'nosniff',
+      'content-security-policy':"default-src 'none'; sandbox",
+      'content-disposition':'inline',
+    }});
+  }catch{return jsonError(503,'Media storage unavailable');}
+}
+
 async function readCommunityImage(request: Request, env: Env, api: URL, match: RegExpExecArray): Promise<Response> {
   if (!env.PROFILE_MEDIA) return jsonError(503,'Media not configured');
   try {
@@ -387,6 +459,8 @@ export default {
     const communityDelete=COMMUNITY_DELETE_PATH.exec(current.pathname);
     const dmUpload = DM_UPLOAD_PATH.exec(current.pathname);
     const dmMedia = DM_MEDIA_PATH.exec(current.pathname);
+    const feedUpload=FEED_UPLOAD_PATH.exec(current.pathname);
+    const feedRead=FEED_READ_PATH.exec(current.pathname);
     const communityAttachmentUpload=COMMUNITY_ATTACHMENT_UPLOAD.exec(current.pathname);
     const communityAttachmentRead=COMMUNITY_ATTACHMENT_READ.exec(current.pathname);
     // Worker Static Assets normalizes unknown navigations (sometimes 307 to '/').
@@ -407,7 +481,7 @@ export default {
     const apiPath = current.pathname.startsWith('/api/');
     const healthPath = current.pathname === '/health' || current.pathname.startsWith('/health/');
 
-    if (!media && !write && !communityImage && !communityWrite && !communityDelete && !dmUpload && !dmMedia && !communityAttachmentUpload && !communityAttachmentRead && !apiPath && !healthPath) return jsonError(404, 'Not found');
+    if (!media && !write && !communityImage && !communityWrite && !communityDelete && !dmUpload && !dmMedia && !feedUpload && !feedRead && !communityAttachmentUpload && !communityAttachmentRead && !apiPath && !healthPath) return jsonError(404, 'Not found');
     const origin = apiOrigin(env.API_ORIGIN, current);
     if (!origin) return jsonError(503, 'API unavailable');
 
@@ -427,6 +501,14 @@ export default {
     if (media) {
       if (!['GET', 'HEAD'].includes(request.method)) return jsonError(405, 'Method not allowed');
       return handleMediaRead(request, env, origin, media);
+    }
+    if(feedRead){
+      if(!['GET','HEAD'].includes(request.method))return jsonError(405,'Method not allowed');
+      return handleFeedRead(request,env,origin,feedRead[1]);
+    }
+    if(feedUpload){
+      if(request.method!=='POST')return jsonError(405,'Method not allowed');
+      return handleFeedUpload(request,env,current,origin,feedUpload[1],Number(feedUpload[2]));
     }
     if (dmMedia) {
       if (!['GET','HEAD'].includes(request.method)) return jsonError(405,'Method not allowed');
