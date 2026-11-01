@@ -782,10 +782,10 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         transition={{duration:0.32,ease:[0.22,1,0.36,1]}}
         className="absolute inset-0 flex items-center justify-center overflow-hidden">
         <ExpandedFeedVideo mediaId={activeVideoMedia.id} pt={pt}/>
-        <div className="pointer-events-none absolute bottom-12 left-3 max-w-[75%] space-y-1 bg-gradient-to-t from-black/60 to-transparent p-2 text-sm">
+        <div className="pointer-events-none absolute bottom-12 left-3 z-10 max-w-[75%] space-y-1 bg-gradient-to-t from-black/60 to-transparent p-2 text-sm">
           <strong>@{activeVideo.authorHandle}</strong><p className="line-clamp-3 whitespace-pre-wrap">{activeVideo.body}</p>
         </div>
-        <div className="absolute bottom-16 right-3 flex flex-col gap-2">
+        <div className="absolute bottom-16 right-3 z-10 flex flex-col gap-2">
           <button type="button" className="grid size-11 place-items-center rounded-full bg-black/60"
             onClick={()=>void toggleLike(activeVideo)} aria-label={pt?'Curtir':'Like'}><Heart className="size-6" fill={activeVideo.liked?'currentColor':'none'}/><span className="text-[10px]">{activeVideo.likeCount}</span></button>
           <button type="button" className="flex size-11 flex-col items-center justify-center rounded-full bg-black/60"
