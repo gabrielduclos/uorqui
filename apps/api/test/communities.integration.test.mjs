@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {after,before,test} from 'node:test';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -21,9 +22,9 @@ after(async()=>{if(server&&server.exitCode===null){server.kill('SIGTERM');await 
 
 function visitor(){
   let cookie='';
-  return async(path,method='GET',payload,withOrigin=true)=>{
+  return async(path,method='GET',payload,withOrigin=true,extraHeaders={})=>{
     const response=await fetch(base+path,{
-      method,headers:{...(withOrigin?{origin}:{}),...(payload?{'Content-Type':'application/json'}:{}),...(cookie?{cookie}:{})},
+      method,headers:{...(withOrigin?{origin}:{}),...(payload?{'Content-Type':'application/json'}:{}),...(cookie?{cookie}:{}),...extraHeaders},
       ...(payload?{body:JSON.stringify(payload)}:{})
     });
     for(const val of response.headers.getSetCookie()){
@@ -339,4 +340,41 @@ test('community emoji reactions persist, count uniquely and respect message acce
   assert.equal(tombstone.canReact,false);
   assert.equal((await member(url,'PUT',{emoji:'👍'})).status,404,'cancelled messages cannot receive reactions');
   assert.equal((await member(url,'DELETE',{emoji:'🔥'})).status,404);
+});
+
+
+test('community attachments require signed R2 proof and are private to channel members',async()=>{
+  const created=await owner('/api/v1/communities','POST',{
+    name:'Community files test',slug:'community-files-test',visibility:'public'
+  });
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const id=created.data.id;
+  const detail=await owner('/api/v1/communities/'+id);
+  const channel=detail.data.channels.find(c=>c.kind==='text');
+  const basePath='/api/v1/communities/'+id+'/channels/'+channel.id;
+  const attachment={id:crypto.randomUUID(),name:'voice.ogg',type:'audio/ogg',size:144};
+  const clientId=crypto.randomUUID();
+  const payload={clientId,body:'',attachment};
+  assert.equal((await owner(basePath+'/messages','POST',payload)).status,403,'client cannot invent uploaded R2 object');
+  assert.equal((await anonymous(basePath+'/attachments/allowed')).status,401);
+  assert.equal((await outsider(basePath+'/attachments/allowed')).status,403);
+  assert.equal((await owner(basePath+'/attachments/allowed')).status,200);
+  const secret=process.env.DM_ATTACHMENT_PROOF_SECRET;
+  assert.ok(secret&&secret.length>=32,'test signing secret must be set');
+  const canonical=JSON.stringify([id,channel.id,clientId,attachment.id,attachment.name,attachment.type,attachment.size]);
+  const proof=createHmac('sha256',secret).update(canonical).digest('hex');
+  const sent=await owner(basePath+'/messages','POST',payload,true,{'x-uorqui-attachment-proof':proof});
+  assert.equal(sent.status,201,JSON.stringify(sent.data));
+  const read=await owner(basePath+'/messages');
+  assert.equal(read.status,200,JSON.stringify(read.data));
+  const message=read.data.messages.find(m=>m.id===sent.data.id);
+  assert.ok(message);
+  assert.equal(message.body,'');
+  assert.deepEqual(message.attachment,attachment);
+  const access=basePath+'/attachments/'+attachment.id+'/access';
+  assert.equal((await outsider(access)).status,403);
+  assert.equal((await owner(access)).status,200);
+  assert.equal((await owner(basePath+'/messages/'+message.id,'DELETE')).status,204);
+  assert.equal((await owner(access)).status,404,'removed messages cannot expose attachments');
+  assert.equal((await owner(basePath+'/messages')).data.messages.find(m=>m.id===message.id).attachment,null);
 });
