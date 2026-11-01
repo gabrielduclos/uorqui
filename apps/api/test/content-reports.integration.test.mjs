@@ -31,7 +31,7 @@ after(async () => {
 
 function visitor() {
   let cookie = '';
-  return async (path, method = 'GET', payload, withOrigin = true) => {
+  const send = async (path, method = 'GET', payload, withOrigin = true) => {
     const response = await fetch(base + path, {
       method, headers: {
         ...(withOrigin ? { origin } : {}),
@@ -47,6 +47,8 @@ function visitor() {
     }
     return { status: response.status, data: await response.json().catch(() => null) };
   };
+  send.cookie=()=>cookie;
+  return send;
 }
 
 const alice = visitor(), bob = visitor(), outsider = visitor(), anonymous = visitor();
@@ -120,4 +122,92 @@ test('reports: three kinds, access checks, origin, duplicate and durable evidenc
     assert.equal(byKind.community_message.evidence.body, 'Flagged channel message');
     assert.ok(result.rows.every(item => item.status === 'pending'));
   } finally { await db.end(); }
+});
+
+test('platform moderation: default deny, privileged review, audit log and removal',async()=>{
+  // The regular API deliberately has no platform moderators configured.
+  const regular=await bob('/api/v1/moderation/access');
+  assert.equal(regular.status,200);
+  assert.equal(regular.data.moderator,false);
+  assert.equal((await bob('/api/v1/moderation/reports')).status,403);
+
+  const me=await bob('/api/v1/me');
+  const moderatorId=me.data.user.id;
+  const secondBase='http://127.0.0.1:3071';
+  const moderatorServer=spawn(process.execPath,['apps/api/dist/server.js'],{
+    cwd:process.cwd(),stdio:'ignore',
+    env:{...process.env,NODE_ENV:'test',ENABLE_DEV_SIGNUP:'true',
+      AUTH_BASE_URL:base,WEB_ORIGIN:origin,HOST:'127.0.0.1',PORT:'3071',
+      PLATFORM_MODERATOR_USER_IDS:moderatorId},
+  });
+  async function requestAs(person,path,method='GET',payload,withOrigin=true){
+    const response=await fetch(secondBase+path,{method,
+      headers:{...(withOrigin?{origin}:{}),
+        ...(payload?{'Content-Type':'application/json'}:{}),
+        ...(person.cookie()?{cookie:person.cookie()}:{}),
+      },
+      ...(payload?{body:JSON.stringify(payload)}:{})});
+    return {status:response.status,data:await response.json().catch(()=>null)};
+  }
+  try{
+    let ready=false;
+    for(let i=0;i<100;i++){
+      if(moderatorServer.exitCode!==null)break;
+      try{if((await fetch(secondBase+'/health/ready')).ok){ready=true;break;}}catch{}
+      await delay(200);
+    }
+    assert.ok(ready,'separate moderator test API must start');
+    assert.equal((await requestAs(anonymous,'/api/v1/moderation/reports')).status,401);
+    assert.equal((await requestAs(outsider,'/api/v1/moderation/reports')).status,403);
+    assert.equal((await requestAs(alice,'/api/v1/moderation/access')).data.moderator,false);
+    assert.equal((await requestAs(bob,'/api/v1/moderation/access')).data.moderator,true);
+
+    const listing=await requestAs(bob,'/api/v1/moderation/reports?status=pending&kind=all&page=0');
+    assert.equal(listing.status,200,JSON.stringify(listing.data));
+    assert.equal(listing.data.reports.length,3);
+    const byKind=Object.fromEntries(listing.data.reports.map(r=>[r.targetKind,r]));
+    assert.equal(byKind.post.evidence.body,'Flagged original post');
+    assert.equal(byKind.direct_message.evidence.body,'Flagged direct message');
+    assert.equal(byKind.community_message.evidence.body,'Flagged channel message');
+    assert.equal((await requestAs(bob,'/api/v1/moderation/reports?status=not-valid')).status,400);
+
+    const path=(id)=>'/api/v1/moderation/reports/'+id+'/review';
+    assert.equal((await requestAs(outsider,path(byKind.post.id),'POST',{action:'remove',note:'abuse'})).status,403);
+    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'review'},false)).status,403);
+    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'invalid'})).status,400);
+    const reviewing=await requestAs(bob,path(byKind.post.id),'POST',{action:'review',note:'Under review'});
+    assert.equal(reviewing.status,200,JSON.stringify(reviewing.data));
+    assert.equal(reviewing.data.status,'reviewing');
+    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'resolve',note:'No violation found'})).status,200);
+    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'remove',note:'late'})).status,409,
+      'closed report cannot be acted upon again');
+    assert.equal((await requestAs(bob,path(byKind.direct_message.id),'POST',{action:'dismiss'})).status,200);
+    assert.equal((await requestAs(bob,path(byKind.community_message.id),'POST',{action:'remove'})).status,400,
+      'content removal requires an internal note');
+    assert.equal((await requestAs(bob,path(byKind.community_message.id),'POST',
+      {action:'remove',note:'Hate speech confirmed'})).status,200);
+    const audit=await requestAs(bob,'/api/v1/moderation/reports/'+byKind.post.id+'/actions');
+    assert.equal(audit.status,200);
+    assert.equal(audit.data.actions.length,2);
+    assert.deepEqual(audit.data.actions.map(a=>a.action),['review','resolve']);
+    assert.equal(audit.data.actions[1].moderatorHandle,'report_bob');
+    assert.equal((await requestAs(outsider,'/api/v1/moderation/reports/'+byKind.post.id+'/actions')).status,403);
+    const closed=await requestAs(bob,'/api/v1/moderation/reports?status=resolved');
+    assert.equal(closed.status,200);
+    assert.equal(closed.data.reports.length,2,'resolved includes post and removed community content');
+    assert.equal((await alice('/api/v1/feed/posts/'+byKind.post.targetId)).status,200,
+      'reviewing a post without removal preserves it');
+    const db=new pg.Client({connectionString:process.env.DATABASE_URL});
+    await db.connect();
+    try{
+      const removed=await db.query('SELECT deleted_at FROM community_messages WHERE id=$1',
+        [byKind.community_message.targetId]);
+      assert.ok(removed.rows[0].deleted_at,'removal hides the original message');
+      const log=await db.query('SELECT action,next_status FROM moderation_report_actions ORDER BY created_at');
+      assert.equal(log.rows.length,4,'every decision is audited');
+    }finally{await db.end();}
+  }finally{
+    moderatorServer.kill('SIGTERM');await delay(300);
+    if(moderatorServer.exitCode===null)moderatorServer.kill('SIGKILL');
+  }
 });
