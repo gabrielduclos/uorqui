@@ -361,3 +361,14 @@ export const accountLegalAcceptances = pgTable('account_legal_acceptances', {
   primaryKey({ columns: [table.userId, table.termsVersion] }),
   index('account_legal_acceptances_accepted_idx').on(table.acceptedAt),
 ]);
+
+/** Browser Web Push subscriptions are account-bound and never reused for the next sign-in. */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: varchar('p256dh', { length: 120 }).notNull(),
+  auth: varchar('auth', { length: 80 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('push_subscriptions_account_idx').on(t.userId,t.updatedAt)]);

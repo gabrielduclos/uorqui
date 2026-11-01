@@ -176,6 +176,13 @@
       "when": 1793544600000,
       "tag": "0024_legal_acceptances",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793548200000,
+      "tag": "0025_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }
