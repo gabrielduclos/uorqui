@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useUorquiPreferences } from './UorquiPreferences';
 
 type Role='owner'|'admin'|'moderator'|'member';
+type Visibility='public'|'approval'|'private';
 type Member={handle:string;displayName:string;role:Role;joinedAt:string};
 type BanEntry={handle:string;reason:string|null;bannedAt:string};
 type Channel={id:string;name:string;kind:'text'|'voice'};
@@ -18,8 +19,8 @@ const api=async(path:string,init?:RequestInit)=>{
   return r.status===204?undefined:r.json();
 };
 
-export default function CommunityModerationPanel({id,role,channels,name,description,avatarUrl,onChanged,onDeleted}:{
-  id:string;role:Role;channels:Channel[];name:string;description:string|null;avatarUrl:string|null;
+export default function CommunityModerationPanel({id,role,channels,name,description,visibility,avatarUrl,onChanged,onDeleted}:{
+  id:string;role:Role;channels:Channel[];name:string;description:string|null;visibility:Visibility;avatarUrl:string|null;
   onChanged:()=>Promise<void>;onDeleted:()=>Promise<void>;
 }){
   const {locale}=useUorquiPreferences();const pt=locale==='pt-BR';
@@ -36,9 +37,10 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   const [newName,setNewName]=useState('');
   const [groupName,setGroupName]=useState(name);
   const [groupDescription,setGroupDescription]=useState(description??'');
+  const [groupVisibility,setGroupVisibility]=useState<Visibility>(visibility);
   const [photo,setPhoto]=useState(avatarUrl);
   const [confirmDeleteText,setConfirmDeleteText]=useState('');
-  useEffect(()=>{setGroupName(name);setGroupDescription(description??'');setPhoto(avatarUrl);},[name,description,avatarUrl]);
+  useEffect(()=>{setGroupName(name);setGroupDescription(description??'');setGroupVisibility(visibility);setPhoto(avatarUrl);},[name,description,visibility,avatarUrl]);
   const base='/api/v1/communities/'+id;
   const canAdmin=weight[role]>=3;
   const load=useCallback(async()=>{
@@ -97,7 +99,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
               <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={busy} onChange={event=>{
                 const file=event.target.files?.[0];event.target.value='';
                 if(!file)return;
-                if(file.size>3*1024*1024){setError(pt?'Imagem limitada a 3 MB.':'Maximum image size is 3 MB.');return;}
+                if(file.size>10*1024*1024){setError(pt?'Imagem limitada a 10 MB.':'Maximum image size is 10 MB.');return;}
                 void action('photo',async()=>{
                   const res=await fetch('/api/media/community/'+id,{method:'POST',body:file,headers:{'Content-Type':file.type}});
                   if(!res.ok)throw Error('PHOTO_UPLOAD');
@@ -115,7 +117,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
           event.preventDefault();
           void action('settings',()=>api(base,{
             method:'PATCH',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({name:groupName.trim(),description:groupDescription.trim()})
+            body:JSON.stringify({name:groupName.trim(),description:groupDescription.trim(),visibility:groupVisibility})
           }),pt?'Comunidade atualizada.':'Community updated.');
         }}>
           <label className="block text-xs">{pt?'Nome da comunidade':'Community name'}
@@ -123,6 +125,16 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
           <label className="block text-xs">{pt?'Descrição':'Description'}
             <textarea className="mt-1 min-h-20 w-full rounded-lg border border-input bg-background p-2 text-base" maxLength={500}
               value={groupDescription} onChange={e=>setGroupDescription(e.target.value)}/></label>
+          <label className="block text-xs">{pt?'Privacidade da comunidade':'Community privacy'}
+            <select value={groupVisibility} disabled={busy} onChange={e=>setGroupVisibility(e.target.value as Visibility)}
+              className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-2 text-base">
+              <option value="public">{pt?'Pública — entrada livre':'Public — open join'}</option>
+              <option value="approval">{pt?'Por aprovação':'Approval required'}</option>
+              <option value="private">{pt?'Privada — somente convite':'Private — invitation only'}</option>
+            </select></label>
+          {groupVisibility!==visibility&&<p className="text-xs text-muted-foreground">{pt?
+            'Os membros atuais permanecem. Solicitações de entrada pendentes serão canceladas ao mudar para pública ou privada.':
+            'Existing members stay. Pending join requests will be cleared when switching to public or private.'}</p>}
           <Button type="submit" size="sm" loading={busyKey==='settings'} disabled={busy||groupName.trim().length<2}>
             <Check className="size-4"/>{pt?'Salvar alterações':'Save changes'}</Button>
         </form>
