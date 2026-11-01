@@ -120,7 +120,7 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
     if(!running.current||signal.senderSessionId===selfSession.current)return;
     const id=signal.senderSessionId;
     try{
-      let pc=pcMap.current.get(id);
+      let pc:RTCPeerConnection|null|undefined=pcMap.current.get(id);
       if(signal.kind==='offer'){
         if(!pc)pc=await connect(id,false);
         if(!pc)return;
