@@ -31,6 +31,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uorqui_test
       AUTH_SECRET: test-only-secret-1234567890-abcdefghijklmnopqrstuvwxyz
+      DM_ATTACHMENT_PROOF_SECRET: temporary-ci-signature-key-only-1234567890-abcdefghijklmnopqrstuvwxyz
       AUTH_BASE_URL: http://127.0.0.1:3001
       WEB_ORIGIN: http://localhost:5173
       ENABLE_DEV_SIGNUP: 'true'
