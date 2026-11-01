@@ -73,11 +73,12 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
     }catch(error){request.log.error({err:error},'Set community role');return reply.code(503).send({error:'Unavailable'});}
   });
 
-  async function removeMember(request:FastifyRequest,reply:any,ban:boolean){
+  async function removeMember(request:FastifyRequest,reply:any,ban:boolean,targetHandle?:string){
     if(!origin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
-      const {id,handle:h}=request.params as {id:string;handle:string};
+      const {id,handle:requestedHandle}=request.params as {id:string;handle?:string};
+      const h=targetHandle??requestedHandle;
       const reason=ban?((request.body as {handle:string;reason?:string}).reason??'').trim():null;
       const client=await getPool().connect();
       try {
@@ -113,9 +114,7 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
   app.post('/api/v1/communities/:id/bans',{schema:{params:idParams,body:banBody}},async(request,reply)=>{
     // The target handle comes from the body; reuse role-aware atomic enforcement.
     const h=(request.body as {handle:string}).handle;
-    return removeMember(Object.assign(Object.create(request),{
-      params:{id:(request.params as {id:string}).id,handle:h},
-    }) as FastifyRequest,reply,true);
+    return removeMember(request,reply,true,h);
   });
 
   app.delete('/api/v1/communities/:id/bans/:handle',{schema:{params:memberParams}},async(request,reply)=>{
@@ -136,7 +135,7 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
     try {
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
-      if(ranks[await role(id,me)??'']<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      if((ranks[(await role(id,me))??'']??0)<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
       const name=(request.body as {name:string}).name.trim();
       if(name.length<2)return reply.code(400).send({error:'Invalid channel'});
       const changed=await getPool().query('UPDATE community_channels SET name=$3 WHERE community_id=$1 AND id=$2 RETURNING id,name,kind',[id,channelId,name]);

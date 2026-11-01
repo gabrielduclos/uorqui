@@ -37,7 +37,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       '(SELECT COUNT(*)::int FROM community_members cm WHERE cm.community_id=c.id) AS "memberCount" '+
       'FROM communities c LEFT JOIN community_members m ON m.community_id=c.id AND m.user_id=$2 '+
       'LEFT JOIN community_join_requests r ON r.community_id=c.id AND r.user_id=$2 '+
-      'WHERE c.id=$1 AND (c.visibility<>\'private\' OR m.user_id IS NOT NULL OR (r.kind=\'invite\' AND r.status=\'pending\')) LIMIT 1',
+      'WHERE c.id=$1 AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=c.id AND b.user_id=$2) ' +
+      'AND (c.visibility<>\'private\' OR m.user_id IS NOT NULL OR (r.kind=\'invite\' AND r.status=\'pending\')) LIMIT 1',
       [id,me]);
     return result.rows[0]??null;
   }
@@ -55,7 +56,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         '(SELECT COUNT(*)::int FROM community_members cm WHERE cm.community_id=c.id) AS "memberCount" '+
         'FROM communities c LEFT JOIN community_members m ON m.community_id=c.id AND m.user_id=$1 '+
         'LEFT JOIN community_join_requests r ON r.community_id=c.id AND r.user_id=$1 '+
-        'WHERE c.visibility<>\'private\' OR m.user_id IS NOT NULL OR (r.kind=\'invite\' AND r.status=\'pending\') '+
+        'WHERE NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=c.id AND b.user_id=$1) ' +
+        'AND (c.visibility<>\'private\' OR m.user_id IS NOT NULL OR (r.kind=\'invite\' AND r.status=\'pending\')) '+
         'ORDER BY (m.role IS NOT NULL) DESC, c.created_at DESC LIMIT 150',[me]);
       return reply.header('Cache-Control',noCache).send({communities:r.rows});
     }catch(error){request.log.error({err:error},'List communities');return reply.code(503).send({error:'Unavailable'});}
@@ -137,7 +139,10 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           [id,me]);
         return reply.code(201).header('Cache-Control',noCache).send({status:'pending'});
       }
-      await getPool().query('INSERT INTO community_members(community_id,user_id,role) VALUES($1,$2,\'member\') ON CONFLICT DO NOTHING',[id,me]);
+      const inserted=await getPool().query("INSERT INTO community_members(community_id,user_id,role) "+
+        "SELECT $1,$2,'member' WHERE NOT EXISTS (SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2) "+
+        "ON CONFLICT DO NOTHING RETURNING user_id",[id,me]);
+      if(!inserted.rowCount && !await membership(id,me))return reply.code(403).send({error:'COMMUNITY_BANNED'});
       return reply.header('Cache-Control',noCache).send({status:'member'});
     }catch(error){request.log.error({err:error},'Join community');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -156,7 +161,10 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           'WHERE community_id=$1 AND user_id=(SELECT id FROM users WHERE handle=$2) AND kind=\'join\' AND status=\'pending\' RETURNING user_id',
           [id,handle]);
         if(!r.rowCount){await client.query('ROLLBACK');return reply.code(404).send({error:'Request not found'});}
-        await client.query('INSERT INTO community_members(community_id,user_id,role) VALUES($1,$2,\'member\') ON CONFLICT DO NOTHING',[id,r.rows[0].user_id]);
+        const added=await client.query("INSERT INTO community_members(community_id,user_id,role) "+
+          "SELECT $1,$2,'member' WHERE NOT EXISTS (SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2) "+
+          "ON CONFLICT DO NOTHING RETURNING user_id",[id,r.rows[0].user_id]);
+        if(!added.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'COMMUNITY_BANNED'});}
         await client.query('COMMIT');
         return reply.header('Cache-Control',noCache).send({status:'member'});
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
@@ -176,6 +184,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const already=await membership(id,target);if(already)return reply.code(409).send({error:'ALREADY_MEMBER'});
       const blocked=await getPool().query('SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',[me,target]);
       if(blocked.rowCount)return reply.code(404).send({error:'Account unavailable'});
+      const banned=await getPool().query('SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2',[id,target]);
+      if(banned.rowCount)return reply.code(404).send({error:'Account unavailable'});
       const old=await getPool().query('SELECT kind,status,updated_at FROM community_join_requests WHERE community_id=$1 AND user_id=$2',[id,target]);
       if(old.rows[0]?.status==='pending')return reply.code(409).send({error:'REQUEST_PENDING'});
       if(old.rows[0] && Date.now()-new Date(old.rows[0].updated_at).getTime()<86400000)
@@ -202,7 +212,10 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           [id,me,action==='accept'?'approved':'declined']);
         if(!result.rowCount){await client.query('ROLLBACK');return reply.code(404).send({error:'Invite not found'});}
         if(action==='accept')
-          await client.query('INSERT INTO community_members(community_id,user_id,role) VALUES($1,$2,\'member\') ON CONFLICT DO NOTHING',[id,me]);
+          const added=await client.query("INSERT INTO community_members(community_id,user_id,role) "+
+            "SELECT $1,$2,'member' WHERE NOT EXISTS (SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2) "+
+            "ON CONFLICT DO NOTHING RETURNING user_id",[id,me]);
+          if(!added.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'COMMUNITY_BANNED'});}
         await client.query('COMMIT');
         return reply.header('Cache-Control',noCache).send({status:action==='accept'?'member':'declined'});
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
