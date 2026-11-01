@@ -9,6 +9,7 @@ import { ZoomableChatImage } from './ZoomableChatImage';
 import { ensureChatMediaCached, invalidateChatMedia, setFeedVideoCacheWindow, useCachedChatMedia, useCachedFeedVideo } from './chatMediaCache';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { clearFeedSessionCache,readFeedSession,readFeedSessionFilter,writeFeedSession } from './feedSessionCache';
+import { InternalShareDialog, type InternalShareSource } from './InternalShareDialog';
 
 type Media={id:string;type:string;size:number;position:number};
 type Post={
@@ -240,6 +241,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const [videoOpen,setVideoOpen]=useState(false);
   const [videoCommentsOpen,setVideoCommentsOpen]=useState(false);
   const [videos,setVideos]=useState<Post[]>([]);
+  const [shareSource,setShareSource]=useState<InternalShareSource|null>(null);
   const [videoIndex,setVideoIndex]=useState(0);
   const [videoDirection,setVideoDirection]=useState<1|-1>(1);
   const [videoCursor,setVideoCursor]=useState<string|null>(null);
@@ -545,12 +547,8 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
       setVideos(old=>old.filter(p=>p.id!==post.id));setDeleting(null);
     }catch{setError(pt?'Não foi possível excluir a publicação.':'Could not remove post.');}
   }
-  async function share(post:Post){
-    const url=window.location.origin+'/?post='+post.id;
-    try{
-      if(navigator.share)await navigator.share({url});
-      else{await navigator.clipboard.writeText(url);setNotice(pt?'Link copiado.':'Link copied.');}
-    }catch{/* User may dismiss share sheet. */}
+  function share(post:Post){
+    setShareSource({kind:'post',postId:post.id,video:post.media.some(media=>media.type.startsWith('video/'))});
   }
   async function openVideoComments(post:Post){
     setVideoCommentsOpen(true);setCommentDraft('');
@@ -728,7 +726,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
               aria-pressed={post.liked}><Heart className="size-4" fill={post.liked?'currentColor':'none'}/>{post.likeCount}</Button>
             <Button type="button" size="sm" variant="ghost" onClick={()=>void showComments(post)}>
               <MessageCircle className="size-4"/>{post.commentCount}</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={()=>void share(post)}>
+            <Button type="button" size="sm" variant="ghost" onClick={()=>share(post)}>
               <Share2 className="size-4"/>{pt?'Compartilhar':'Share'}</Button>
           </div>
           {openComments===post.id&&<section className="mt-2 space-y-3 border-t border-border pt-3" aria-label={pt?'Comentários':'Comments'}>
@@ -792,7 +790,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
             onClick={()=>void openVideoComments(activeVideo)} aria-label={pt?'Comentários':'Comments'}>
             <MessageCircle className="size-5"/><span className="text-[10px]">{activeVideo.commentCount}</span></button>
           <button type="button" className="grid size-11 place-items-center rounded-full bg-black/60"
-            onClick={()=>void share(activeVideo)} aria-label={pt?'Compartilhar':'Share'}><Share2 className="size-5"/></button>
+            onClick={()=>share(activeVideo)} aria-label={pt?'Compartilhar':'Share'}><Share2 className="size-5"/></button>
         </div>
       </motion.div>:<div className="absolute inset-0 flex items-center justify-center text-sm">{videoLoading?<Spinner/>:(pt?'Nenhum vídeo disponível.':'No videos yet.')}</div>}
       </AnimatePresence>
@@ -858,6 +856,8 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         </div>
       </div>
     </div>}
+    <InternalShareDialog source={shareSource} onClose={()=>setShareSource(null)}
+      onSent={name=>setNotice(pt?'Compartilhado com '+name:'Shared with '+name)}/>
     {zoom&&<div role="dialog" aria-modal="true" aria-label={pt?'Visualizador de foto':'Photo viewer'} className="fixed inset-0 z-[140] flex flex-col bg-black/95 text-white">
       <div className="flex h-12 shrink-0 justify-end p-1"><button type="button" onClick={()=>setZoom(null)} aria-label={pt?'Fechar foto':'Close photo'}
         className="grid size-10 place-items-center"><X className="size-6"/></button></div>
