@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, Pencil, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Pencil, Share2, X } from 'lucide-react';
 import { ChatImageEditor } from './ChatImageEditor';
 import { ZoomableChatImage } from './ZoomableChatImage';
 import { attachmentLabel } from './chatAttachmentLabels';
@@ -9,12 +9,13 @@ import type { DirectChatMessage } from './DirectMessageBubble';
 
 type MediaMessage = DirectChatMessage & { attachment: NonNullable<DirectChatMessage['attachment']> };
 
-export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEdited, locale }: {
+export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEdited, onShareMedia, locale }: {
   items: MediaMessage[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onClose: () => void;
   onSendEdited?: (file: File) => void;
+  onShareMedia?: (message: MediaMessage) => void;
   locale: string;
 }) {
   const closeRef=useRef<HTMLButtonElement>(null);
@@ -69,6 +70,11 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
             onClick={()=>setEditing(true)} className="flex min-h-10 items-center gap-1 border border-white/20 px-2 text-xs hover:bg-white/15"
             aria-label={pt?'Editar e reenviar foto':'Edit and resend image'}>
             <Pencil className="size-4"/><span className="hidden sm:inline">{pt?'Editar foto':'Edit photo'}</span>
+          </button>}
+          {onShareMedia && !editing && !active.pendingStatus && <button type="button"
+            onClick={()=>onShareMedia(active)} className="flex min-h-10 items-center gap-1.5 rounded-[5px] border border-white/20 px-2 text-xs hover:bg-white/15"
+            aria-label={pt?'Compartilhar mídia com contatos':'Share media with contacts'}>
+            <Share2 className="size-4"/><span className="hidden sm:inline">{pt?'Compartilhar':'Share'}</span>
           </button>}
           <a href={url} download={active.attachment.name} className="grid size-10 place-items-center hover:bg-white/15"
             aria-label={pt?'Salvar mídia':'Download media'}><Download className="size-5"/></a>
