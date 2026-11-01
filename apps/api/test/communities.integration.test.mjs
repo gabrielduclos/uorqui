@@ -292,3 +292,51 @@ test('community visibility can be changed by admins without removing existing me
     'pending join requests are cleared on opening the community');
   assert.equal((await outsider(path+'/join','POST')).data.status,'member');
 });
+
+test('community emoji reactions persist, count uniquely and respect message access',async()=>{
+  const lurker=visitor();
+  await signUp(lurker,'reaction_lurker');
+  const created=await owner('/api/v1/communities','POST',{
+    name:'Reaction Arena',slug:'reaction-arena-integration',visibility:'public'
+  });
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const root='/api/v1/communities/'+created.data.id;
+  const channel=(await owner(root)).data.channels.find(c=>c.kind==='text');
+  assert.ok(channel);
+  const messages=root+'/channels/'+channel.id+'/messages';
+  const sent=await owner(messages,'POST',{clientId:crypto.randomUUID(),body:'Vote with reactions'});
+  assert.equal(sent.status,201,JSON.stringify(sent.data));
+  const url=messages+'/'+sent.data.id+'/reactions';
+  assert.equal((await owner(messages)).data.messages.at(-1).canReact,false,'cannot react to own message');
+  assert.equal((await anonymous(url,'PUT',{emoji:'👍'})).status,401);
+  assert.equal((await lurker(url,'PUT',{emoji:'👍'})).status,403,'nonmembers cannot react');
+  assert.equal((await owner(url,'PUT',{emoji:'👍'})).status,403,'authors cannot react to themselves');
+  assert.equal((await member(root+'/join','POST')).status,200);
+  assert.equal((await outsider(root+'/join','POST')).status,200);
+  assert.equal((await member(url,'PUT',{emoji:'text'})).status,400);
+  assert.equal((await member(url,'PUT',{emoji:'👍'},false)).status,403,'origin check applies');
+  assert.equal((await member(url,'PUT',{emoji:'👍'})).status,200);
+  assert.equal((await member(url,'PUT',{emoji:'👍'})).status,200,'retries cannot double-count');
+  const both=await outsider(url,'PUT',{emoji:'👍'});
+  assert.equal(both.status,200,JSON.stringify(both.data));
+  assert.equal(both.data.reactions.find(r=>r.emoji==='👍').count,2);
+  assert.equal((await outsider(url,'PUT',{emoji:'🔥'})).status,200,'other emojis are independently selectable');
+  const memberView=(await member(messages)).data.messages.find(m=>m.id===sent.data.id);
+  const ownerView=(await owner(messages)).data.messages.find(m=>m.id===sent.data.id);
+  assert.equal(memberView.reactions.find(r=>r.emoji==='👍').count,2);
+  assert.equal(memberView.reactions.find(r=>r.emoji==='👍').mine,true);
+  assert.equal(memberView.reactions.find(r=>r.emoji==='🔥').mine,false);
+  assert.equal(ownerView.reactions.find(r=>r.emoji==='👍').mine,false);
+  assert.equal(ownerView.canReact,false);
+  assert.equal((await member(url,'DELETE',{emoji:'👍'})).status,200);
+  assert.equal((await member(url,'DELETE',{emoji:'👍'})).status,200,'removal is idempotent');
+  const after=(await owner(messages)).data.messages.find(m=>m.id===sent.data.id);
+  assert.equal(after.reactions.find(r=>r.emoji==='👍').count,1);
+  assert.equal(after.reactions.find(r=>r.emoji==='🔥').count,1);
+  assert.equal((await owner(messages+'/'+sent.data.id,'DELETE')).status,204);
+  const tombstone=(await outsider(messages)).data.messages.find(m=>m.id===sent.data.id);
+  assert.deepEqual(tombstone.reactions,[],'cancelled messages hide reactions');
+  assert.equal(tombstone.canReact,false);
+  assert.equal((await member(url,'PUT',{emoji:'👍'})).status,404,'cancelled messages cannot receive reactions');
+  assert.equal((await member(url,'DELETE',{emoji:'🔥'})).status,404);
+});
