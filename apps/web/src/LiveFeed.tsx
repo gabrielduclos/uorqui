@@ -12,7 +12,7 @@ type Media={id:string;type:string;size:number;position:number};
 type Post={
   id:string;body:string;mediaCount:number;createdAt:string;publishedAt:string;
   authorHandle:string;authorName:string;authorAvatar:string|null;
-  mine:boolean;likeCount:number;liked:boolean;commentCount:number;media:Media[];
+  mine:boolean;following:boolean;likeCount:number;liked:boolean;commentCount:number;media:Media[];
 };
 type Comment={id:string;body:string;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;mine:boolean};
 type FeedFilter='for-you'|'following';
@@ -109,6 +109,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   const [commentDraft,setCommentDraft]=useState('');
   const [commentBusy,setCommentBusy]=useState(false);
   const [likeBusy,setLikeBusy]=useState<string|null>(null);
+  const [followBusy,setFollowBusy]=useState<string|null>(null);
   const [deleting,setDeleting]=useState<string|null>(null);
   const [editingPost,setEditingPost]=useState<string|null>(null);
   const [editingBody,setEditingBody]=useState('');
@@ -249,6 +250,24 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   function updatePost(id:string,update:(p:Post)=>Post){
     setPosts(old=>old.map(p=>p.id===id?update(p):p));
     setVideos(old=>old.map(p=>p.id===id?update(p):p));
+  }
+  function setAuthorFollow(handle:string,following:boolean){
+    setPosts(old=>old.map(p=>p.authorHandle===handle?{...p,following}:p));
+    setVideos(old=>old.map(p=>p.authorHandle===handle?{...p,following}:p));
+  }
+  async function toggleFollow(post:Post){
+    if(followBusy||post.mine)return;
+    setFollowBusy(post.authorHandle);setError('');
+    setAuthorFollow(post.authorHandle,!post.following);
+    try{
+      await api('/api/v1/feed/follows/'+encodeURIComponent(post.authorHandle),
+        {method:post.following?'DELETE':'PUT'});
+    }catch(error){
+      setAuthorFollow(post.authorHandle,post.following);
+      setError(error instanceof Error&&error.message==='PRIVATE_PROFILE'
+        ?(pt?'Este perfil aceita apenas amigos.':'This profile is available only to friends.')
+        :(pt?'Não foi possível atualizar quem você segue.':'Could not update following.'));
+    }finally{setFollowBusy(null);}
   }
   async function toggleLike(post:Post){
     if(likeBusy)return;
@@ -436,6 +455,10 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
               <a className="block truncate text-sm font-semibold hover:underline" href={'/@'+post.authorHandle} target="_blank" rel="noopener noreferrer">{post.authorName}</a>
               <span className="text-xs text-muted-foreground">@{post.authorHandle} · {date(post.publishedAt)}</span>
             </div>
+            {!post.mine&&<Button type="button" size="sm" variant={post.following?'secondary':'outline'}
+              disabled={followBusy===post.authorHandle} loading={followBusy===post.authorHandle}
+              onClick={()=>void toggleFollow(post)} aria-pressed={post.following}
+              className="shrink-0 text-xs">{post.following?(pt?'Seguindo':'Following'):(pt?'Seguir':'Follow')}</Button>}
             {post.mine&&<div className="flex shrink-0 items-center gap-1">
               <Button size="sm" variant="ghost" disabled={editBusy} onClick={()=>{
                 if(editingPost===post.id){setEditingPost(null);setEditingBody('');}
