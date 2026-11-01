@@ -2,6 +2,8 @@
  * Real audio-level detection for local and remote streams (no voice data saved).
  * Connect analysers to a silent gain sink so remote audio does not play twice.
  */
+import { getVoiceRoomAudioContext } from './communityVoiceSounds';
+
 type Watch={source:MediaStreamAudioSourceNode;analyser:AnalyserNode;values:Uint8Array;lastSound:number};
 export class VoiceActivityMonitor {
   private ctx:AudioContext|null=null;
@@ -11,7 +13,8 @@ export class VoiceActivityMonitor {
     if(this.streams.has(id)||!stream.getAudioTracks().length)return;
     try{
       if(!this.ctx){
-        this.ctx=new AudioContext();
+        this.ctx=getVoiceRoomAudioContext();
+        if(!this.ctx)return;
         this.sink=this.ctx.createGain();
         this.sink.gain.value=0;
         this.sink.connect(this.ctx.destination);
@@ -52,7 +55,7 @@ export class VoiceActivityMonitor {
   dispose(){
     for(const id of this.streams.keys())this.remove(id);
     this.sink?.disconnect();this.sink=null;
-    if(this.ctx)void this.ctx.close().catch(()=>{});
+    // The shared audio context stays alive for the departure chime after unmount.
     this.ctx=null;
   }
 }

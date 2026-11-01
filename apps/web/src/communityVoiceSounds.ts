@@ -8,6 +8,7 @@ function getAudio(): AudioContext | null {
     return sharedAudio;
   }catch{return null;}
 }
+export function getVoiceRoomAudioContext(): AudioContext | null { return getAudio(); }
 export function unlockVoiceRoomAudio(){
   const ctx=getAudio();
   if(ctx?.state==='suspended')void ctx.resume().catch(()=>{});

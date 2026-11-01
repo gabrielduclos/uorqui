@@ -348,7 +348,8 @@ export default function CommunityVoiceRoom({communityId,channelId,onParticipants
             const ready=peer.isSelf||connection==='connected';
             const talking=ready&&!!peer.speaking;
             return <div key={peer.sessionId}
-              className={'relative flex min-h-44 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border bg-card px-3 py-5 text-center shadow-sm transition-[box-shadow,border-color] sm:min-h-48 '+(talking?'border-emerald-500 ring-2 ring-emerald-500/65 shadow-[0_0_16px_rgba(16,185,129,0.35)] animate-pulse':'border-border/70')}>
+              className={'relative flex min-h-44 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border bg-card px-3 py-5 text-center shadow-sm transition-[box-shadow,border-color] sm:min-h-48 '+(talking?'border-emerald-500 ring-2 ring-emerald-500/65 shadow-[0_0_16px_rgba(16,185,129,0.35)]':'border-border/70')}>
+              {talking&&<span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-emerald-400 animate-pulse"/>}
               <div className={'rounded-full p-1 '+(talking?'ring-2 ring-emerald-500':ready?'ring-1 ring-border':'ring-2 ring-border')}>
                 <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="lg"/>
               </div>
