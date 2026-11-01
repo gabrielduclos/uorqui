@@ -238,7 +238,7 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
       method:'POST',rawBody:largePng,contentType:'image/png'
     });
     assert.equal(communityImage.response.status,200,JSON.stringify(communityImage.body));
-    assert.match(communityImage.body.url,/^\\/media\\/community\\/[0-9a-f-]{36}\\/[0-9a-f-]{36}\\.png$/);
+    assert.match(communityImage.body.url,/^\/media\/community\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.png$/);
     const communityPhoto=await fetch(browserOrigin+communityImage.body.url,{headers:{cookie}});
     assert.equal(communityPhoto.status,200,'community image must reach Worker and R2');
     assert.equal(communityPhoto.headers.get('content-type'),'image/png');
