@@ -48,7 +48,10 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
       <div aria-hidden="true" className="pointer-events-none absolute -top-48 left-1/2 size-120 -translate-x-1/2 rounded-full bg-primary/15 blur-[100px]" />
       <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col px-0 sm:px-8 lg:px-10">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:px-0 sm:py-4">
-          <UorquiWordmark className="h-5 w-auto max-w-[45vw] text-foreground"/>
+          <div className="flex min-w-0 items-center gap-2">
+            <UorquiWordmark className="h-5 w-auto max-w-[38vw] text-foreground"/>
+            <Badge variant="secondary" aria-hidden="true" className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Beta</Badge>
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             <PreferencesControls />
           </div>
