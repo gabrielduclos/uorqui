@@ -316,7 +316,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         className={cn('grid h-11 shrink-0 place-items-center rounded-lg px-1.5 text-[11px] font-bold text-muted-foreground hover:bg-accent',gifOpen&&'text-primary')}>GIF</button>}
     {canSend
       ? <button type="submit" aria-label={pt ? 'Enviar mensagem' : 'Send message'}
-        className="grid size-11 shrink-0 place-items-center bg-primary text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        className="grid size-11 shrink-0 place-items-center rounded-[5px] bg-primary text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         <Send className="size-5"/>
       </button>
       : <button type="button" onClick={()=>void toggleRecording()} disabled={sending || editing || (!!pending && recording==='idle')}
