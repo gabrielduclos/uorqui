@@ -31,9 +31,12 @@ declare global {
 }
 
 async function requestJson(path: string, options?: RequestInit) {
+  // Session/status probes must never leave the login form behind an endless skeleton.
   const response = await fetch(path, {
     ...options,
+    signal: options?.signal ?? AbortSignal.timeout(options?.method==='POST' ? 15_000 : 8_000),
     credentials: 'same-origin',
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
   const body: unknown = await response.json().catch(() => ({}));
@@ -215,10 +218,8 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await doAction(async () => {
-      if (!apiReady) {
-        setMessage(t("A API está indisponível. Verifique a conexão e tente novamente."));
-        return;
-      }
+      // Allow an actual sign-in attempt even if an earlier readiness probe failed:
+      // a cold-starting API can recover without a full page refresh.
       if (view === 'register' && !canRegister) {
         setMessage(t("O cadastro público está sendo preparado. A verificação por e-mail e a proteção contra abuso ainda precisam ser ativadas."));
         return;
