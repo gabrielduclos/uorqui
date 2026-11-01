@@ -122,7 +122,8 @@ function AppContent() {
   useEffect(() => {
     const controller = new AbortController();
     let mounted = true;
-    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    // Do not block the login screen for a slow or cold-starting session service.
+    const timeout = window.setTimeout(() => controller.abort(), 3_500);
     void (async () => {
       try {
         const response = await fetch('/api/v1/me', { credentials: 'same-origin', signal: controller.signal });
