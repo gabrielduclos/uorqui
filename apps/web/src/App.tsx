@@ -9,6 +9,7 @@ import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
 import { clearProfileImageCache } from './profileImageCache';
 import { clearChatMediaCache } from './chatMediaCache';
+import { clearFeedSessionCache } from './feedSessionCache';
 import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
@@ -153,7 +154,9 @@ function AppContent() {
       .finally(()=>{if(active)setInviteBusy(false);});
     return ()=>{active=false;};
   },[account?.profile,inviteToken,invitedCommunity]);
-  const onAuthenticated = useCallback((next: Account) => { clearChatMediaCache(); setAccount(next); }, []);
+  const onAuthenticated = useCallback((next: Account) => {
+    clearChatMediaCache();clearFeedSessionCache();setAccount(next);
+  }, []);
   const signOut = useCallback(async () => {
     const response = await fetch('/api/auth/sign-out', {
       method: 'POST',
@@ -164,6 +167,7 @@ function AppContent() {
     if (!response.ok) throw new Error('Logout failed');
     clearProfileImageCache();
     clearChatMediaCache();
+    clearFeedSessionCache();
     setAccount(null);
   }, []);
 
