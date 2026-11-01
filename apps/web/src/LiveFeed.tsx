@@ -7,7 +7,7 @@ import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { ZoomableChatImage } from './ZoomableChatImage';
 import { invalidateChatMedia, useCachedChatMedia } from './chatMediaCache';
-import { readFeedSession,readFeedSessionFilter,writeFeedSession } from './feedSessionCache';
+import { clearFeedSessionCache,readFeedSession,readFeedSessionFilter,writeFeedSession } from './feedSessionCache';
 
 type Media={id:string;type:string;size:number;position:number};
 type Post={
@@ -167,6 +167,18 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const videoCursorRef=useRef<string|null>(null);
   const videoBusy=useRef(false);
   useEffect(()=>{videosRef.current=videos;videoCursorRef.current=videoCursor;},[videos,videoCursor]);
+
+  useEffect(()=>{
+    const purge=()=>{
+      clearFeedSessionCache();
+      snapshots.current={};
+      fetchedAtRef.current={};
+      setPosts([]);setVideos([]);setCursor(null);setHasMore(true);
+      setLoading(true);setRefreshKey(k=>k+1);
+    };
+    window.addEventListener('uorqui:blocks-updated',purge);
+    return ()=>window.removeEventListener('uorqui:blocks-updated',purge);
+  },[]);
 
   useEffect(()=>{
     const urls=files.map(f=>URL.createObjectURL(f));
