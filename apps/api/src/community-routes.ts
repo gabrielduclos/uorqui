@@ -5,6 +5,7 @@ type SessionReader = (request: FastifyRequest) => Promise<{user:{id:string}}|nul
 const uuid={type:'string',format:'uuid'} as const;
 const groupParams={type:'object',required:['id'],additionalProperties:false,properties:{id:uuid}};
 const channelParams={type:'object',required:['id','channelId'],additionalProperties:false,properties:{id:uuid,channelId:uuid}};
+const reactionParams={type:'object',required:['id','channelId','messageId'],additionalProperties:false,properties:{id:uuid,channelId:uuid,messageId:uuid}};
 const handleParams={type:'object',required:['id','handle'],additionalProperties:false,properties:{id:uuid,handle:{type:'string',pattern:'^[a-z][a-z0-9_]{2,31}$'}}};
 const groupBody={type:'object',required:['name','slug','visibility'],additionalProperties:false,properties:{
   name:{type:'string',minLength:2,maxLength:120},
@@ -18,6 +19,8 @@ const channelBody={type:'object',required:['name','kind'],additionalProperties:f
 const messageBody={type:'object',required:['clientId','body'],additionalProperties:false,properties:{
   clientId:uuid,body:{type:'string',minLength:1,maxLength:4000}
 }};
+const reactionEmojis=['👍','❤️','😂','😮','😢','🔥','👏','🎉','💯','💜','✅','🤔','🙌','👎','😍','🥰','🙏','😎'] as const;
+const reactionBody={type:'object',required:['emoji'],additionalProperties:false,properties:{emoji:{type:'string',enum:[...reactionEmojis]}}};
 const inviteBody={type:'object',required:['handle'],additionalProperties:false,properties:{handle:{type:'string',pattern:'^[a-z][a-z0-9_]{2,31}$'}}};
 const noCache='private, no-store';
 const manager=(role:string|null)=>role==='owner'||role==='admin';
@@ -274,13 +277,17 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'CASE WHEN p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "authorName",'+
         'CASE WHEN (p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\') AND '+
         'NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=m.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=m.author_id)) '+
-        'THEN p.avatar_url ELSE NULL END AS "authorAvatar" '+
+        'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+
+        'CASE WHEN m.deleted_at IS NOT NULL THEN \'[]\'::jsonb ELSE COALESCE(('+ 
+        'SELECT jsonb_agg(jsonb_build_object(\'emoji\',rx.emoji,\'count\',rx.total,\'mine\',rx.mine) ORDER BY rx.total DESC,rx.emoji) '+
+        'FROM (SELECT emoji,COUNT(*)::int AS total,BOOL_OR(user_id=$2) AS mine FROM community_message_reactions '+
+        'WHERE message_id=m.id GROUP BY emoji) rx),\'[]\'::jsonb) END AS reactions '+
         'FROM community_messages m JOIN users u ON u.id=m.author_id JOIN profiles p ON p.user_id=m.author_id '+
         'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
         'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
       return reply.header('Cache-Control',noCache).send({
         messages:result.rows.reverse().map(({authorId,...row})=>({
-          ...row,canEdit:authorId===me&&!row.deletedAt,
+          ...row,canReact:authorId!==me&&!row.deletedAt,canEdit:authorId===me&&!row.deletedAt,
           canDelete:(!row.deletedAt)&&(authorId===me||['owner','admin','moderator'].includes(readerRole)),
         }))
       });
@@ -313,5 +320,53 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       }
       return reply.code(201).header('Cache-Control',noCache).send({id:saved.rows[0].id});
     }catch(error){request.log.error({err:error},'Send community message');return reply.code(503).send({error:'Unavailable'});}
+
+  // Each member can add or remove one reaction per emoji. Mutations are idempotent,
+  // so retries never toggle a reaction twice on a slow or interrupted connection.
+  async function react(request:FastifyRequest,reply:any,add:boolean){
+    if(!originValid(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,channelId,messageId}=request.params as {id:string;channelId:string;messageId:string};
+      const {emoji}=request.body as {emoji:string};
+      if(!reactionEmojis.includes(emoji as typeof reactionEmojis[number]))
+        return reply.code(400).send({error:'Invalid reaction'});
+      if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const allowed=await getPool().query(
+        'SELECT m.author_id,m.deleted_at FROM community_messages m JOIN community_channels ch ON ch.id=m.channel_id '+
+        "WHERE m.id=$1 AND ch.id=$2 AND ch.community_id=$3 AND ch.kind='text' LIMIT 1",
+        [messageId,channelId,id]);
+      if(!allowed.rowCount||allowed.rows[0].deleted_at)return reply.code(404).send({error:'Message unavailable'});
+      if(allowed.rows[0].author_id===me)return reply.code(403).send({error:'OWN_MESSAGE_REACTION'});
+      if(add){
+        await getPool().query(
+          'INSERT INTO community_message_reactions(message_id,user_id,emoji) '+
+          'SELECT m.id,$2,$3 FROM community_messages m '+
+          'JOIN community_channels ch ON ch.id=m.channel_id '+
+          'JOIN community_members cm ON cm.community_id=ch.community_id AND cm.user_id=$2 '+
+          'WHERE m.id=$1 AND m.deleted_at IS NULL AND m.author_id<>$2 AND ch.id=$4 AND ch.community_id=$5 AND ch.kind=\'text\' '+
+          'ON CONFLICT DO NOTHING',[messageId,me,emoji,channelId,id]);
+      }else{
+        await getPool().query(
+          'DELETE FROM community_message_reactions r USING community_messages m,community_channels ch,community_members cm '+
+          'WHERE r.message_id=m.id AND m.channel_id=ch.id AND cm.community_id=ch.community_id AND cm.user_id=$2 '+
+          'AND m.deleted_at IS NULL AND m.author_id<>$2 AND r.message_id=$1 AND r.user_id=$2 '+
+          'AND r.emoji=$3 AND ch.id=$4 AND ch.community_id=$5 AND ch.kind=\'text\'',
+          [messageId,me,emoji,channelId,id]);
+      }
+      const counts=await getPool().query(
+        'SELECT emoji,COUNT(*)::int AS count,BOOL_OR(user_id=$2) AS mine '+
+        'FROM community_message_reactions WHERE message_id=$1 GROUP BY emoji ORDER BY count DESC,emoji',
+        [messageId,me]);
+      return reply.header('Cache-Control',noCache).send({reactions:counts.rows});
+    }catch(error){request.log.error({err:error},'React to community message');return reply.code(503).send({error:'Unavailable'});}
+  }
+
+  app.put('/api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions',
+    {schema:{params:reactionParams,body:reactionBody}},async(request,reply)=>react(request,reply,true));
+
+  app.delete('/api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions',
+    {schema:{params:reactionParams,body:reactionBody}},async(request,reply)=>react(request,reply,false));
+
   });
 }
