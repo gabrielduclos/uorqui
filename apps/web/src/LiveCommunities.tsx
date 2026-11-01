@@ -51,6 +51,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [channelId,setChannelId]=useState<string|null>(null);
   const [channelOpen,setChannelOpen]=useState(false);
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
+  const [voiceRooms,setVoiceRooms]=useState<Record<string,CommunityVoiceParticipant[]>>({});
+  const [voicePresenceLoading,setVoicePresenceLoading]=useState(false);
+  const [voicePresenceFailed,setVoicePresenceFailed]=useState(false);
   const [discovery,setDiscovery]=useState(false);
   const [query,setQuery]=useState('');
   const [createOpen,setCreateOpen]=useState(false);
@@ -124,6 +127,32 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
+  // Visible voice presence is independent of an audio connection. Members should
+  // see who is in every room without granting microphone access or joining it.
+  useEffect(()=>{
+    let mounted=true;
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    setVoiceRooms({});setVoicePresenceFailed(false);
+    if(!selectedId||!community?.myRole){setVoicePresenceLoading(false);return;}
+    setVoicePresenceLoading(true);
+    const poll=async()=>{
+      if(!mounted)return;
+      try{
+        const response=await api<{rooms:Record<string,CommunityVoiceParticipant[]>}>(
+          '/api/v1/communities/'+encodeURIComponent(selectedId)+'/voice/presence');
+        if(mounted){setVoiceRooms(response.rooms);setVoicePresenceFailed(false);}
+      }catch{if(mounted)setVoicePresenceFailed(true);}
+      finally{
+        if(mounted){
+          setVoicePresenceLoading(false);
+          timer=setTimeout(poll,document.visibilityState==='visible'?5000:15000);
+        }
+      }
+    };
+    void poll();
+    return ()=>{mounted=false;if(timer)clearTimeout(timer);};
+  },[selectedId,community?.myRole]);
+
   useEffect(()=>{if(initialCommunityId){setSelectedId(initialCommunityId);setDiscovery(false);void loadList();}},[initialCommunityId,loadList]);
   async function shareCommunity(){
     if(!selectedId)return;
@@ -477,27 +506,36 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
                 <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="truncate">{ch.name}</span></button>)}</section>
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Salas de voz':'Voice rooms'}</p>
-              {detail?.channels.filter(ch=>ch.kind==='voice').map(ch=><div key={ch.id} className="mb-1">
-                <button type="button" onClick={()=>{setVoiceParticipants([]);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
-                  className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&'bg-secondary font-semibold')}>
-                  <Volume2 className="size-4 shrink-0 text-muted-foreground"/>
-                  <span className="min-w-0 flex-1 truncate">{ch.name}</span>
-                  {channelId===ch.id&&voiceParticipants.length>0&&
-                    <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">{voiceParticipants.length}</span>}
-                </button>
-                {channelId===ch.id&&voiceParticipants.length>0&&<div className="ml-5 space-y-0.5 border-l border-border/70 py-1 pl-2">
-                  {voiceParticipants.map(person=><div key={person.sessionId}
-                    className="flex min-h-9 items-center gap-2 rounded-lg px-2 py-1 text-xs text-muted-foreground"
-                    title={person.displayName}>
-                    <div className={cn('rounded-full p-0.5',person.speaking&&'ring-2 ring-emerald-500 animate-pulse')}>
-                      <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
-                    </div>
-                    <span className="min-w-0 flex-1 truncate">{person.displayName}</span>
-                    {person.deafened&&<VolumeX className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Áudio desligado':'Audio disabled'}/>}
-                    {person.muted&&<MicOff className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Microfone silenciado':'Microphone muted'}/>}
-                  </div>)}
-                </div>}
-              </div>)}</section>
+              {detail?.channels.filter(ch=>ch.kind==='voice').map(ch=>{
+                const occupants=channelOpen&&activeChannel?.id===ch.id&&voiceParticipants.length
+                  ?voiceParticipants:(voiceRooms[ch.id]??[]);
+                return <div key={ch.id} className="mb-1">
+                  <button type="button" onClick={()=>{setVoiceParticipants([]);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                    className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
+                    <Volume2 className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>
+                    <span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                    {!!occupants.length&&<span aria-label={occupants.length+(pt?' na sala':' in room')}
+                      className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{occupants.length}</span>}
+                    {voicePresenceLoading&&!occupants.length&&<Spinner className="size-3.5 text-muted-foreground"/>}
+                  </button>
+                  {!!occupants.length&&<div className="ml-5 space-y-0.5 border-l border-border/70 py-1 pl-2"
+                    aria-label={pt?'Pessoas na sala '+ch.name:'People in '+ch.name}>
+                    {occupants.map(person=><div key={person.sessionId}
+                      className="flex min-h-9 items-center gap-2 rounded-lg px-2 py-1 text-xs text-muted-foreground"
+                      title={person.displayName}>
+                      <div className={cn('rounded-full p-0.5',person.speaking&&'ring-2 ring-emerald-500 animate-pulse')}>
+                        <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
+                      </div>
+                      <span className="min-w-0 flex-1 truncate">{person.displayName}{person.isSelf&&(pt?' (você)':' (you)')}</span>
+                      {person.deafened&&<VolumeX className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Áudio desligado':'Audio disabled'}/>}
+                      {person.muted&&<MicOff className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Microfone silenciado':'Microphone muted'}/>}
+                    </div>)}
+                  </div>}
+                </div>;
+              })}
+              {voicePresenceFailed&&<p role="status" className="px-2 text-xs text-muted-foreground">
+                {pt?'Atualizando a lista de participantes…':'Updating the participant list…'}
+              </p>}</section>
             {manage(community)&&<section className="space-y-2 border-t border-border pt-3">
               <button type="button" className="flex w-full items-center gap-2 rounded-xl p-2 text-sm text-primary hover:bg-secondary"
                 onClick={()=>setNewChannelOpen(v=>!v)}><Plus className="size-4"/>{pt?'Novo canal':'New channel'}</button>
