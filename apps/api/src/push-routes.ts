@@ -217,7 +217,7 @@ export function registerPushRoutes(app:FastifyInstance,readSession:SessionReader
         'UPDATE direct_messages m SET delivered_at=now() FROM direct_conversations c '+
         'WHERE m.id=$1 AND m.conversation_id=$2 AND m.conversation_id=c.id '+
         'AND m.author_id<>$3 AND (c.participant_a_id=$3 OR c.participant_b_id=$3) '+
-        'AND m.deleted_at IS NULL AND date_trunc('milliseconds',COALESCE(m.edited_at,m.created_at))=$4::timestamptz '+
+        "AND m.deleted_at IS NULL AND date_trunc('milliseconds',COALESCE(m.edited_at,m.created_at))=$4::timestamptz "+
         'AND (m.delivered_at IS NULL OR (m.edited_at IS NOT NULL AND m.delivered_at<m.edited_at)) '+
         'RETURNING m.id',[messageId,conversationId,userId,revision]);
       if(r.rowCount)await publishDmConversationEvent(conversationId,'received')
