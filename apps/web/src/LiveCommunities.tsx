@@ -73,6 +73,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [deletingId,setDeletingId]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
+  const [busyAction,setBusyAction]=useState<string|null>(null);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const scrollRef=useRef<HTMLDivElement>(null);
@@ -161,9 +162,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     await loadList();
     if(id)await loadDetail(id);
   }
-  async function act(run:()=>Promise<unknown>,success:string,id=selectedId){
+  async function act(run:()=>Promise<unknown>,success:string,id=selectedId,key='action'){
     if(busy)return;
-    setBusy(true);setError('');setNotice('');
+    setBusy(true);setBusyAction(key);setError('');setNotice('');
     try{await run();await refresh(id);setNotice(success);}
     catch(reason){
       const err=reason instanceof Error?reason.message:'';
@@ -173,7 +174,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
         :err==='COMMUNITY_LIMIT'?(pt?'Limite de comunidades criadas atingido.':'Community creation limit reached.')
         :err==='OWNER_CANNOT_LEAVE'?(pt?'O proprietário não pode sair sem transferir a comunidade.':'Owners cannot leave without transferring ownership.')
         :(pt?'Não foi possível concluir a operação.':'Could not complete this operation.'));
-    }finally{setBusy(false);}
+    }finally{setBusy(false);setBusyAction(null);}
   }
 
   function selectCommunity(id:string){
@@ -184,7 +185,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     event.preventDefault();
     if(!allowedSlug.test(createSlug)) {setError(pt?'Use um endereço com letras minúsculas, números ou hífens (3–64).':'Use a lowercase slug, numbers or hyphens (3–64).');return;}
     if(busy)return;
-    setBusy(true);setError('');
+    setBusy(true);setBusyAction('create');setError('');
     try{
       const result=await api<{id:string}>('/api/v1/communities',body({
         name:createName.trim(),slug:createSlug.trim(),description:createDescription.trim(),visibility:createVisibility
@@ -195,13 +196,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     }catch(reason){setError(reason instanceof Error&&reason.message==='SLUG_TAKEN'
       ?(pt?'Este endereço já pertence a uma comunidade.':'This slug already exists.')
       :(pt?'Falha ao criar comunidade.':'Could not create community.'));}
-    finally{setBusy(false);}
+    finally{setBusy(false);setBusyAction(null);}
   }
   async function createChannel(event:FormEvent){
     event.preventDefault();
     if(!selectedId||!newChannelName.trim())return;
     await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind})),
-      pt?'Canal criado.':'Channel created.');
+      pt?'Canal criado.':'Channel created.',selectedId,'createChannel');
     setNewChannelOpen(false);setNewChannelName('');
   }
   async function invite(event:FormEvent){
@@ -210,7 +211,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     const handle=inviteHandle.trim().replace(/^@/,'').toLowerCase();
     if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)){setError(pt?'Digite um @usuário válido.':'Enter a valid @username.');return;}
     await act(()=>api('/api/v1/communities/'+selectedId+'/invite',body({handle})),
-      pt?'Convite enviado.':'Invitation sent.');
+      pt?'Convite enviado.':'Invitation sent.',selectedId,'inviteUser');
     setInviteHandle('');
   }
   async function submitPending(p:PendingMessage){
@@ -250,24 +251,26 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     if(!selectedId||!channelId||!editingId||!editingBody.trim()||busy)return;
     setBusy(true);setError('');
     try{
+      setBusyAction('editMessage');
       await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+editingId,{
         method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:editingBody.trim()})
       });
       const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
       setMessages(updated.messages);setEditingId(null);setEditingBody('');
     }catch{setError(pt?'Não foi possível editar a mensagem.':'Could not edit message.');}
-    finally{setBusy(false);}
+    finally{setBusy(false);setBusyAction(null);}
   }
   async function removeMessage(messageId:string){
     if(!selectedId||!channelId||busy)return;
     if(deletingId!==messageId){setDeletingId(messageId);return;}
     setBusy(true);setError('');
     try{
+      setBusyAction('deleteMessage:'+messageId);
       await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+messageId,{method:'DELETE'});
       const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
       setMessages(updated.messages);setDeletingId(null);
     }catch{setError(pt?'Não foi possível cancelar a mensagem.':'Could not remove message.');}
-    finally{setBusy(false);}
+    finally{setBusy(false);setBusyAction(null);}
   }
   function onComposerKeyDown(event:KeyboardEvent<HTMLTextAreaElement>){
     if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void send();}
@@ -330,7 +333,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                 <option value="approval">{pt?'Por aprovação':'Approval required'}</option>
                 <option value="private">{pt?'Privada (somente convite)':'Private (invitation only)'}</option>
               </select></label>
-            <Button type="submit" className="w-full" disabled={busy||createName.trim().length<2||!allowedSlug.test(createSlug)}>
+            <Button type="submit" className="w-full" loading={busyAction==='create'} disabled={busy||createName.trim().length<2||!allowedSlug.test(createSlug)}>
               <Plus className="size-4"/>{pt?'Criar comunidade':'Create community'}</Button>
           </form>:<div className="space-y-2">
             <div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground"/>
@@ -364,11 +367,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
             <p className="text-sm text-muted-foreground">{community.visibility==='private'?(pt?'Entrada apenas por convite.':'Invitation only.'):
               community.visibility==='approval'?(pt?'O responsável aprova a entrada.':'A manager approves requests.'):(pt?'Entre para acessar os canais.':'Join to access channels.')}</p>
             {community.requestKind==='invite'&&community.requestStatus==='pending'?<div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/accept',{method:'POST'}),pt?'Convite aceito.':'Invitation accepted.')}><Check className="size-4"/>{pt?'Aceitar convite':'Accept invite'}</Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/decline',{method:'POST'}),pt?'Convite recusado.':'Invitation declined.')}><X className="size-4"/>{pt?'Recusar':'Decline'}</Button>
+              <Button size="sm" loading={busyAction==='acceptInvite'} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/accept',{method:'POST'}),pt?'Convite aceito.':'Invitation accepted.',community.id,'acceptInvite')}><Check className="size-4"/>{pt?'Aceitar convite':'Accept invite'}</Button>
+              <Button size="sm" variant="outline" loading={busyAction==='declineInvite'} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/decline',{method:'POST'}),pt?'Convite recusado.':'Invitation declined.',community.id,'declineInvite')}><X className="size-4"/>{pt?'Recusar':'Decline'}</Button>
             </div>:community.requestKind==='join'&&community.requestStatus==='pending'?
               <p className="text-xs font-medium text-primary">{pt?'Solicitação pendente':'Request pending'}</p>:
-              community.visibility!=='private'&&<Button size="sm" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/join',{method:'POST'}),pt?'Solicitação registrada ou entrada concluída.':'Joined or request submitted.')}>
+              community.visibility!=='private'&&<Button size="sm" loading={busyAction==='joinCommunity'} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/join',{method:'POST'}),pt?'Solicitação registrada ou entrada concluída.':'Joined or request submitted.',community.id,'joinCommunity')}>
                 <UserPlus className="size-4"/>{community.visibility==='approval'?(pt?'Solicitar entrada':'Request to join'):(pt?'Entrar':'Join')}</Button>}
           </div>}
           {community&&memberView(community)&&<>
@@ -409,18 +412,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                   className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
                   <option value="text">{pt?'Texto':'Text'}</option><option value="voice">{pt?'Voz':'Voice'}</option>
                 </select>
-                <Button size="sm" type="submit" disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
+                <Button size="sm" type="submit" loading={busyAction==='createChannel'} disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
               </form>}
               <form className="space-y-2 pt-2" onSubmit={event=>void invite(event)}>
                 <label className="text-xs font-semibold">{pt?'Convidar pelo @usuário':'Invite by @username'}</label>
                 <Input value={inviteHandle} onChange={e=>setInviteHandle(e.target.value)} maxLength={40} className="text-base" placeholder="@usuario"/>
-                <Button size="sm" variant="outline" type="submit" disabled={busy||!inviteHandle.trim()}><UserPlus className="size-4"/>{pt?'Convidar':'Invite'}</Button>
+                <Button size="sm" variant="outline" type="submit" loading={busyAction==='inviteUser'} disabled={busy||!inviteHandle.trim()}><UserPlus className="size-4"/>{pt?'Convidar':'Invite'}</Button>
               </form>
               {!!detail?.pendingRequests.length&&<div className="space-y-2 border-t border-border pt-3">
                 <p className="text-xs font-semibold">{pt?'Pedidos de entrada':'Join requests'}</p>
                 {detail.pendingRequests.map(person=><div key={person.handle} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-xs">{person.displayName} (@{person.handle})</span>
-                  <Button size="sm" variant="outline" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/requests/'+person.handle+'/approve',{method:'POST'}),pt?'Membro aprovado.':'Member approved.')}>
+                  <Button size="sm" variant="outline" loading={busyAction==='approve:'+person.handle} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/requests/'+person.handle+'/approve',{method:'POST'}),pt?'Membro aprovado.':'Member approved.',community.id,'approve:'+person.handle)}>
                     <Check className="size-4"/></Button>
                 </div>)}
               </div>}
@@ -455,9 +458,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                 channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}
                 onDeleted={async()=>{closeChannel();setDetail(null);setSelectedId(null);setDiscovery(true);await loadList();}}/>}
             {community.myRole!=='owner'&&<Button variant="ghost" size="sm" className="w-full text-muted-foreground"
-              disabled={busy} onClick={()=>void act(async()=>{
+              loading={busyAction==='leaveCommunity'} disabled={busy} onClick={()=>void act(async()=>{
                 await api('/api/v1/communities/'+community.id+'/membership',{method:'DELETE'});closeChannel();setDiscovery(true);setSelectedId(null);setDetail(null);
-              },pt?'Você saiu da comunidade.':'You left the community.',null)}>{pt?'Sair da comunidade':'Leave community'}</Button>}
+              },pt?'Você saiu da comunidade.':'You left the community.',null,'leaveCommunity')}>{pt?'Sair da comunidade':'Leave community'}</Button>}
           </>}
         </div>
       </>}
@@ -498,7 +501,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                       className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={pt?'Editar mensagem':'Edit message'}/>
                     <div className="flex gap-2">
-                      <Button type="submit" size="sm" disabled={busy||!editingBody.trim()}>{pt?'Salvar':'Save'}</Button>
+                      <Button type="submit" size="sm" loading={busyAction==='editMessage'} disabled={busy||!editingBody.trim()}>{pt?'Salvar':'Save'}</Button>
                       <Button type="button" size="sm" variant="outline" onClick={()=>{setEditingId(null);setEditingBody('');}}>
                         {pt?'Cancelar':'Cancel'}</Button>
                     </div>
@@ -514,8 +517,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
                   {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
                     onClick={()=>{setEditingId(message.id);setEditingBody(message.body??'');setDeletingId(null);}}>
                     {pt?'Editar':'Edit'}</button>}
-                  {message.canDelete&&<button type="button" className="hover:text-destructive" disabled={busy}
-                    onClick={()=>void removeMessage(message.id)}>{deletingId===message.id?
+                  {message.canDelete&&<button type="button" className="inline-flex items-center gap-1 hover:text-destructive" disabled={busy}
+                    onClick={()=>void removeMessage(message.id)}>{busyAction==='deleteMessage:'+message.id&&<Spinner className="size-3.5"/>}{deletingId===message.id?
                       (pt?'Confirmar cancelamento':'Confirm removal'):(pt?'Cancelar mensagem':'Remove message')}</button>}
                   {deletingId===message.id&&<button type="button" className="hover:text-foreground" onClick={()=>setDeletingId(null)}>
                     {pt?'Voltar':'Back'}</button>}
