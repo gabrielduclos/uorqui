@@ -812,7 +812,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               sending={false} locale={locale} textareaRef={composerRef}
               onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'}/>
           </div>
-        </>}
+        </>
       </>:<div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-xs"><Users className="mx-auto size-11 text-primary"/>
           <h3 className="mt-4 font-semibold">{pt?'Suas comunidades':'Your communities'}</h3>
