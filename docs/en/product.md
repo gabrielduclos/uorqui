@@ -86,3 +86,9 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Focusing a mobile comment field hides the bottom navigation and scrolls the field above the soft keyboard; fullscreen video comments follow the visible viewport. The send button displays only its spinner while busy.
 - Comment deletion requires confirmation. Deleting **your own** comment removes it entirely without a notice; post authors can moderate comments written by other people, redacting their content and identity while keeping an **“A comment was deleted.”** placeholder. Migration `0021_feed_comment_moderation` supports moderator tombstones.
 - Public profiles offer **Follow/Following**, follower and following totals, and paginated relationship lists independent of friendship. Private profiles **show the real totals** but **never expose the lists**. Public lists do not expose private accounts and respect blocks.
+
+### Public profiles, chat and mobile sign-in
+
+- Public profiles display a responsive **three-column** post grid with photo/video thumbnails, text-only previews, a post viewer and pagination. The `GET /api/v1/feed/posts?author=handle` API requires a session and returns only published posts from public accounts, honoring blocks. Signed-out visitors are prompted to sign in to see post media.
+- One-to-one chat bubbles (live and demo) use subtle **5 px** corner radii; community channels keep their threaded message appearance.
+- Mobile authentication puts sign-in ahead of promotional content, opens directly on **Sign in**, and offers Sign in/Create account tabs, mobile-friendly fields, accessible password visibility and larger touch targets. Server-side registration availability and abuse protection remain enforced.
