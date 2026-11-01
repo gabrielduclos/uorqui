@@ -131,7 +131,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <motion.div key={area} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }} className="h-full min-h-0 overflow-hidden">
-            {area === 'feed' && <LiveFeed myId={account.user.id} />}
+            {area === 'feed' && <LiveFeed ownName={account.profile?.displayName??account.user.name} ownAvatar={account.profile?.avatarUrl??null} />}
 
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle}
