@@ -30,6 +30,8 @@ jobs:
         run: npm run build -w @uorqui/api
       - name: Test Resend provider diagnostics without external email
         run: node --test apps/api/test/email-provider.test.mjs
+      - name: Verify controlled domain migration origins
+        run: node --test apps/api/test/web-origins.test.mjs
       - name: Check Drizzle migration files for schema drift
         shell: bash
         run: |
