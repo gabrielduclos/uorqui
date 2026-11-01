@@ -19,6 +19,9 @@ interface Env {
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const MAX_DM_BYTES = 50 * 1024 * 1024;
+const COMMUNITY_AVATAR_PATH = /^\/media\/community\/([0-9a-f-]{36})\/([0-9a-f-]{36})\.(webp|jpg|png)$/;
+const COMMUNITY_AVATAR_WRITE = /^\/api\/media\/community\/([0-9a-f-]{36})$/;
+const COMMUNITY_DELETE_PATH = /^\/api\/media\/community\/([0-9a-f-]{36})\/delete$/;
 const DM_UPLOAD_PATH = /^\/api\/media\/dm\/([0-9a-f-]{36})$/;
 const DM_MEDIA_PATH = /^\/media\/dm\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/;
 const DM_CANCEL_PATH = /^\/api\/v1\/dm\/conversations\/([0-9a-f-]{36})\/messages\/([0-9a-f-]{36})$/;
@@ -297,11 +300,77 @@ async function handleDmDownload(request: Request, env: Env, origin: URL, convers
   } catch { return jsonError(503,'Attachment storage unavailable'); }
 }
 
+
+async function readCommunityImage(request: Request, env: Env, api: URL, match: RegExpExecArray): Promise<Response> {
+  if (!env.PROFILE_MEDIA) return jsonError(503,'Media not configured');
+  try {
+    const auth=await callApi(request,api,'/api/v1/communities/'+match[1]+'/media/'+match[2]+'.'+match[3]+'/access');
+    if(!auth.ok)return jsonError(auth.status===503?503:404,'Image unavailable');
+    const obj=await env.PROFILE_MEDIA.get('media/community/'+match[1]+'/'+match[2]+'.'+match[3]);
+    if(!obj)return jsonError(404,'Image unavailable');
+    return new Response(request.method==='HEAD'?null:obj.body,{headers:{
+      'content-type':obj.httpMetadata?.contentType??'application/octet-stream',
+      'content-length':String(obj.size),'cache-control':'private, no-store',
+      'x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox",
+    }});
+  }catch{return jsonError(503,'Image unavailable');}
+}
+async function writeCommunityImage(request: Request,env: Env,current: URL,api: URL,id:string):Promise<Response>{
+  if(!env.PROFILE_MEDIA)return jsonError(503,'Media not configured');
+  if(!validWriteOrigin(request,current))return jsonError(403,'Invalid upload origin');
+  let old:string|null=null;
+  try {
+    const auth=await callApi(request,api,'/api/v1/communities/'+id+'/media/upload-access');
+    if(!auth.ok)return jsonError(auth.status===401?401:auth.status===403?403:503,'Community media upload unauthorized');
+    old=(await auth.json() as {avatarUrl?:string|null}).avatarUrl??null;
+  }catch{return jsonError(503,'Media permission unavailable');}
+  if(request.method==='DELETE'){
+    try{
+      const update=await callApi(request,api,'/api/v1/communities/'+id,'PATCH',{avatarUrl:null});
+      if(!update.ok)return jsonError(update.status,'Could not remove avatar');
+      if(old?.startsWith('/media/community/'+id+'/'))await env.PROFILE_MEDIA.delete(old.slice(1)).catch(()=>{});
+      return Response.json({url:null},{headers:{'cache-control':'no-store'}});
+    }catch{return jsonError(503,'Could not remove avatar');}
+  }
+  const type=request.headers.get('content-type')?.split(';')[0]?.toLowerCase().trim()??'';
+  const ext=TYPE_EXTENSION[type];if(!ext)return jsonError(415,'Only WebP, PNG and JPEG images supported');
+  const bytes=await boundedBody(request,MAX_IMAGE_BYTES);
+  if(!bytes)return jsonError(413,'Image too large');
+  if(!validImage(new Uint8Array(bytes),type))return jsonError(415,'Invalid image');
+  const url='/media/community/'+id+'/'+crypto.randomUUID()+'.'+ext;
+  try {
+    await env.PROFILE_MEDIA.put(url.slice(1),bytes,{httpMetadata:{contentType:type}});
+    const update=await callApi(request,api,'/api/v1/communities/'+id,'PATCH',{avatarUrl:url});
+    if(!update.ok){
+      await env.PROFILE_MEDIA.delete(url.slice(1)).catch(()=>{});
+      return jsonError(update.status,'Could not save community photo');
+    }
+    if(old?.startsWith('/media/community/'+id+'/'))await env.PROFILE_MEDIA.delete(old.slice(1)).catch(()=>{});
+    return Response.json({url},{headers:{'cache-control':'no-store'}});
+  }catch{
+    await env.PROFILE_MEDIA.delete(url.slice(1)).catch(()=>{});
+    return jsonError(503,'Community image upload unavailable');
+  }
+}
+async function deleteCommunityWithImage(request:Request,env:Env,api:URL,id:string):Promise<Response>{
+  try {
+    const response=await callApi(request,api,'/api/v1/communities/'+id,'DELETE');
+    if(!response.ok)return jsonError(response.status,'Community deletion denied');
+    const data=await response.json() as {deleted:boolean;avatarUrl?:string|null};
+    if(data.avatarUrl?.startsWith('/media/community/'+id+'/'))
+      await env.PROFILE_MEDIA?.delete(data.avatarUrl.slice(1)).catch(()=>{});
+    return Response.json({deleted:true},{headers:{'cache-control':'no-store'}});
+  }catch{return jsonError(503,'Could not delete community');}
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const current = new URL(request.url);
     const media = MEDIA_PATH.exec(current.pathname);
     const write = UPLOAD_PATH.exec(current.pathname);
+    const communityImage=COMMUNITY_AVATAR_PATH.exec(current.pathname);
+    const communityWrite=COMMUNITY_AVATAR_WRITE.exec(current.pathname);
+    const communityDelete=COMMUNITY_DELETE_PATH.exec(current.pathname);
     const dmUpload = DM_UPLOAD_PATH.exec(current.pathname);
     const dmMedia = DM_MEDIA_PATH.exec(current.pathname);
     // Worker Static Assets normalizes unknown navigations (sometimes 307 to '/').
@@ -320,10 +389,23 @@ export default {
     const apiPath = current.pathname.startsWith('/api/');
     const healthPath = current.pathname === '/health' || current.pathname.startsWith('/health/');
 
-    if (!media && !write && !dmUpload && !dmMedia && !apiPath && !healthPath) return jsonError(404, 'Not found');
+    if (!media && !write && !communityImage && !communityWrite && !communityDelete && !dmUpload && !dmMedia && !apiPath && !healthPath) return jsonError(404, 'Not found');
     const origin = apiOrigin(env.API_ORIGIN, current);
     if (!origin) return jsonError(503, 'API unavailable');
 
+    if(communityImage){
+      if(!['GET','HEAD'].includes(request.method))return jsonError(405,'Method not allowed');
+      return readCommunityImage(request,env,origin,communityImage);
+    }
+    if(communityWrite){
+      if(!['POST','DELETE'].includes(request.method))return jsonError(405,'Method not allowed');
+      return writeCommunityImage(request,env,current,origin,communityWrite[1]);
+    }
+    if(communityDelete){
+      if(request.method!=='DELETE')return jsonError(405,'Method not allowed');
+      if(!validWriteOrigin(request,current))return jsonError(403,'Invalid origin');
+      return deleteCommunityWithImage(request,env,origin,communityDelete[1]);
+    }
     if (media) {
       if (!['GET', 'HEAD'].includes(request.method)) return jsonError(405, 'Method not allowed');
       return handleMediaRead(request, env, origin, media);
