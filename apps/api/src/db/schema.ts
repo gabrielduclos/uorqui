@@ -183,6 +183,7 @@ export const communityVoiceSessions = pgTable('community_voice_sessions', {
   channelId: uuid('channel_id').notNull().references(() => communityChannels.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   muted: boolean('muted').notNull().default(false),
+  deafened: boolean('deafened').notNull().default(false),
   joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
 }, table => [
