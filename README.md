@@ -1,76 +1,80 @@
 # Uorqui
 
-**An open-source social platform for conversations, discovery, and communities.**
+**Open-source social platform for direct messages, a hybrid feed, and communities.**
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Status: pre-MVP development.** The React/Fastify app now includes authentication screens and server endpoints. The social product is not launched, and both initial database migrations are applied to Neon main.
+> **Version: `0.1.0-beta.1` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, email verification and domain cutover are still being completed.
 
-## What is Uorqui?
+**Try the current build:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
-Uorqui combines three connected experiences:
+## Product
 
-1. **Direct messages:** private, one-to-one conversations. Traditional group chats are intentionally out of scope.
-2. **Hybrid feed:** one continuous vertical feed for text, photos, carousels, and videos. A separate immersive **Videos** mode displays only videos, with access directly from the feed or by opening a video.
-3. **Communities:** public or private spaces with organized text channels and live voice rooms, roles, permissions, and moderation.
+Uorqui brings together three connected experiences:
 
-The goal is a seamless journey from **discovering content → joining a community → building personal connections**, without copying any single existing social network.
+- **Direct messages:** private 1:1 text conversations, replies, reactions, media attachments, message status, background push and SSE-driven updates. No conventional private group chats.
+- **Hybrid feed:** continuous mixed text/photo/video posts and a dedicated immersive video browsing experience.
+- **Communities:** public/private membership, invitations, text channels, moderation and live WebRTC voice rooms, including a floating call control when navigating.
 
-Uorqui starts by validating use cases among gaming communities, particularly MMORPG players, but the product and brand are **general-purpose**.
+The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
 
-## Confirmed core technology
+## Beta status
 
-**React + TypeScript + Tailwind CSS on Cloudflare Workers Static Assets** (web/PWA), **Node.js + Fastify** (separately hosted API), and **PostgreSQL on Neon + Drizzle ORM** (database access and migrations). The **Neon database and both Drizzle migrations (10 application tables) are applied and verified**. Authentication and profile API endpoints exist, but they have not been tested with the production Neon connection. Realtime, voice, media and deployment integrations remain under evaluation.
+| Area | Current technical state |
+| --- | --- |
+| Login and profiles | Better Auth sessions, email verification/recovery flow, profile visibility and blocking implemented; real signup + email delivery need final validation |
+| Direct messages | Persisted 1:1 messages, media, reactions, read/delivery state, SSE updates and Web Push implementation |
+| Feed | Hybrid social posts and media, backed by the API and database |
+| Communities | Membership, invitations, roles, text channels, voice presence and WebRTC |
+| Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
+| Public launch | **Not yet approved:** real-device tests, push, TURN/network coverage, operational monitoring and final custom-domain checks |
+
+The project has automated CI for the API, UI and integration flows. Passing CI does **not** mean the iOS/Android installed-PWA experience has been fully certified.
+
+**Domain transition:** `uorqui.app` is being migrated separately. Until a verified cutover, use the preview URL above. Do not assume the domain already points here. The legacy business messenger has its **own** Worker and databases; its accounts and messages are not automatically imported.
+
+## Architecture
+
+- **Frontend:** React, TypeScript, Tailwind CSS, Cloudflare Workers Static Assets, PWA and service worker.
+- **Backend:** Node.js 22, Fastify, Better Auth and SSE events.
+- **Database:** Neon PostgreSQL with Drizzle ORM and versioned migrations.
+- **Media:** Cloudflare R2 with authorization checks.
+- **Voice:** WebRTC peer-to-peer; TURN is optional and connectivity must be tested across networks.
+- **Deployment:** Cloudflare Builds and Render, with GitHub Actions verification.
+
+This beta version is defined in the npm workspace manifests. See [release notes](CHANGELOG.md) for the exact scope and known risks.
 
 ## Documentation
 
-**UI kit / Design system:** [English](docs/en/ui-kit.md) · [Português (Brasil)](docs/pt-BR/ui-kit.md) — documentation only; no app page.
-
-
-
 | Topic | English | Português |
 | --- | --- | --- |
-| Run locally | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
-| Cloudflare Workers web hosting | [Workers guide](docs/en/cloudflare-workers.md) | [Guia Workers](docs/pt-BR/cloudflare-workers.md) |
-| Node.js API hosting | [API hosting](docs/en/api-hosting.md) | [Guia da API](docs/pt-BR/hospedagem-api.md) |
-| Vision and principles | [Vision](docs/en/vision.md) | [Visão](docs/pt-BR/visao.md) |
-| Product requirements | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
-| Proposed architecture | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
-| Milestones | [Roadmap](docs/en/roadmap.md) | [Roadmap](docs/pt-BR/roadmap.md) |
+| Beta release notes | [Changelog](CHANGELOG.md) | [Notas da versão](CHANGELOG.pt-BR.md) |
+| Local setup | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
+| API & deployment | [API hosting](docs/en/api-hosting.md) | [Hospedagem da API](docs/pt-BR/hospedagem-api.md) |
+| Cloudflare Worker | [Workers](docs/en/cloudflare-workers.md) | [Workers](docs/pt-BR/cloudflare-workers.md) |
+| Architecture | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
+| Features and goals | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
+| Roadmap | [Roadmap](docs/en/roadmap.md) | [Roadmap](docs/pt-BR/roadmap.md) |
+| UI design system | [UI kit](docs/en/ui-kit.md) | [UI kit](docs/pt-BR/ui-kit.md) |
+| Domain migration | [Portuguese runbook](docs/pt-BR/migracao-dominio-uorqui-app.md) | [Plano de migração](docs/pt-BR/migracao-dominio-uorqui-app.md) |
 | Contributing | [Contributing](CONTRIBUTING.md) | [Contribuindo](CONTRIBUTING.pt-BR.md) |
-| Security | [Security](SECURITY.md) | [Segurança](SECURITY.pt-BR.md) |
-| Community standards | [Code of conduct](CODE_OF_CONDUCT.md) | [Código de conduta](CODE_OF_CONDUCT.pt-BR.md) |
-
-## Current state
-
-- **Done:** project creation, MIT license, initial bilingual product and technical documentation.
-- **Validated in temporary PostgreSQL CI:** Real Cloudflare Worker proxy, Fastify API, Better Auth email/password, cookie sessions, protected profile endpoints, onboarding and logout. Not yet connected end-to-end to Neon main; requires private settings and real Neon connectivity testing.
-- **Not done:** production-ready email verification, password recovery, social messaging, feed, video, voice, production deployment and user validation.
-- **Next:** connect a Node.js API host (optional Render Blueprint in `render.yaml`), set private secrets, validate sessions with Neon and add email verification/abuse protection before opening registration.
-
-The architecture documents distinguish **confirmed core stack decisions** from **proposed integrations**; neither implies working code. See the roadmap for acceptance criteria. Internal business planning, pricing hypotheses and financial projections are managed separately from this public repository.
+| Security | [Security policy](SECURITY.md) | [Política de segurança](SECURITY.pt-BR.md) |
 
 ## Development
 
-The npm workspaces contain a **React + Tailwind starter**, **Fastify API and authentication endpoints**, and a **Drizzle schema applied to Neon**. With Node.js 22+:
+Node.js 22+ and PostgreSQL are required for complete authenticated testing:
 
 ```sh
 npm install
 npm run dev
+npm run typecheck
+npm run build
 ```
 
-Web: `http://localhost:5173` · API: `http://127.0.0.1:3001/health`. The database is not required to see this starter. See [Getting started](docs/en/getting-started.md) for secure Neon configuration.
-
-## Cloudflare Workers web hosting
-
-The React SPA uses **Cloudflare Workers Static Assets** via `apps/web/wrangler.jsonc`. Cloudflare Worker **`main`** is connected to GitHub, and **Cloudflare Builds** runs the frontend build/deploy after commits to `main`. Without `API_ORIGIN`, proxied API requests return HTTP 503. See the [Workers setup](docs/en/cloudflare-workers.md).
+Web: `http://localhost:5173`; API: `http://127.0.0.1:3001`. The interface can start without a connected database, but authentication and live features will not work. Follow [Getting started](docs/en/getting-started.md) to use a private test database and local secrets.
 
 ## Open source
 
-Licensed under the [MIT License](LICENSE). Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing, and [SECURITY.md](SECURITY.md) before reporting a vulnerability.
+Licensed under [MIT](LICENSE). See [contribution guidelines](CONTRIBUTING.md) and [responsible security reporting](SECURITY.md). Do not submit credentials, customer data or sensitive vulnerability details in public issues.
 
-The existing business messenger is a **separate legacy product**; this repository must not be mistaken for its source code or live service. The registered **uorqui.app** domain is not proof this new application has launched.
-
----
-
-**Uorqui — converse, discover, belong.** *(Working tagline.)*
+**Uorqui — converse, discover, belong.**
