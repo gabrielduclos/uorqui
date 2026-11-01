@@ -38,7 +38,7 @@ const fields=`
  EXISTS (SELECT 1 FROM feed_follows ff WHERE ff.followed_id=p.author_id AND ff.follower_id=$1::uuid) AS "following",
  (SELECT COUNT(*)::int FROM feed_likes l WHERE l.post_id=p.id) AS "likeCount",
  EXISTS(SELECT 1 FROM feed_likes l WHERE l.post_id=p.id AND l.user_id=$1::uuid) AS "liked",
- (SELECT COUNT(*)::int FROM feed_comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL) AS "commentCount",
+ (SELECT COUNT(*)::int FROM feed_comments c WHERE c.post_id=p.id AND to_jsonb(c)->>'deleted_at' IS NULL) AS "commentCount",
  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'type',m.type,'size',m.size,'position',m.position)
  ORDER BY m.position) FROM feed_media m WHERE m.post_id=p.id),'[]'::jsonb) AS media
 `;
@@ -317,14 +317,14 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const {id}=req.params as {id:string};
       if(!await visible(id,me))return reply.code(404).send({error:'Post unavailable'});
       const r=await getPool().query(
-        'SELECT c.id,CASE WHEN c.deleted_at IS NOT NULL THEN \'\' ELSE c.body END AS body, '+
-        'c.created_at AS "createdAt",(c.deleted_at IS NOT NULL) AS deleted, '+
-        'CASE WHEN c.deleted_at IS NULL THEN u.handle ELSE NULL END AS "authorHandle", '+
-        "CASE WHEN c.deleted_at IS NOT NULL THEN NULL WHEN pr.is_public OR c.author_id=$2::uuid OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(c.author_id,$2::uuid) AND f.user_b_id=GREATEST(c.author_id,$2::uuid) AND f.status='accepted') THEN pr.display_name ELSE u.handle END AS \"authorName\", "+
-        "CASE WHEN c.deleted_at IS NOT NULL THEN NULL WHEN pr.is_public OR c.author_id=$2::uuid OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(c.author_id,$2::uuid) AND f.user_b_id=GREATEST(c.author_id,$2::uuid) AND f.status='accepted') THEN pr.avatar_url ELSE NULL END AS \"authorAvatar\", "+
-        '(c.author_id=$2::uuid) AS mine,(c.deleted_at IS NULL AND (c.author_id=$2::uuid OR p.author_id=$2::uuid)) AS "canDelete" '+
+        'SELECT c.id,CASE WHEN (to_jsonb(c)->>'deleted_at') IS NOT NULL THEN \'\' ELSE c.body END AS body, '+
+        'c.created_at AS "createdAt",((to_jsonb(c)->>'deleted_at') IS NOT NULL) AS deleted, '+
+        'CASE WHEN (to_jsonb(c)->>'deleted_at') IS NULL THEN u.handle ELSE NULL END AS "authorHandle", '+
+        "CASE WHEN (to_jsonb(c)->>'deleted_at') IS NOT NULL THEN NULL WHEN pr.is_public OR c.author_id=$2::uuid OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(c.author_id,$2::uuid) AND f.user_b_id=GREATEST(c.author_id,$2::uuid) AND f.status='accepted') THEN pr.display_name ELSE u.handle END AS \"authorName\", "+
+        "CASE WHEN (to_jsonb(c)->>'deleted_at') IS NOT NULL THEN NULL WHEN pr.is_public OR c.author_id=$2::uuid OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(c.author_id,$2::uuid) AND f.user_b_id=GREATEST(c.author_id,$2::uuid) AND f.status='accepted') THEN pr.avatar_url ELSE NULL END AS \"authorAvatar\", "+
+        '(c.author_id=$2::uuid) AS mine,((to_jsonb(c)->>'deleted_at') IS NULL AND (c.author_id=$2::uuid OR p.author_id=$2::uuid)) AS "canDelete" '+
         'FROM feed_comments c JOIN feed_posts p ON p.id=c.post_id JOIN users u ON u.id=c.author_id JOIN profiles pr ON pr.user_id=c.author_id '+
-        'WHERE c.post_id=$1 AND (c.deleted_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
+        'WHERE c.post_id=$1 AND ((to_jsonb(c)->>'deleted_at') IS NOT NULL OR NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
         '(b.blocker_id=c.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=c.author_id))) '+
         'ORDER BY c.created_at DESC,c.id DESC LIMIT 80',[id,me]);
       return reply.header('Cache-Control',cache).send({comments:r.rows.reverse()});
