@@ -52,6 +52,7 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
       '--ip', '127.0.0.1',
       '--port', String(WORKER_PORT),
       '--var', `API_ORIGIN:${apiOrigin}`,
+      '--var', `DM_ATTACHMENT_PROOF_SECRET:${process.env.DM_ATTACHMENT_PROOF_SECRET}`,
     ], {
       cwd: resolve(process.cwd(), 'apps/web'),
       env: { ...process.env, CI: 'true' },
@@ -68,6 +69,7 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
           origin: browserOrigin,
           ...(options.rawBody ? { 'content-type': options.contentType } : options.body ? { 'content-type': 'application/json' } : {}),
           ...(cookie ? { cookie } : {}),
+          ...(options.headers??{}),
         },
         ...(options.rawBody ? { body: options.rawBody } : options.body ? { body: JSON.stringify(options.body) } : {}),
         redirect: 'manual',
@@ -249,6 +251,37 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
       method:'POST',rawBody:Buffer.concat([png,Buffer.alloc(10*1024*1024)]),contentType:'image/png'
     });
     assert.equal(oversize.response.status,413,'larger than 10 MB cannot be uploaded');
+
+    // Channel attachments share the DM upload pipeline but use independent
+    // community-scoped authorization and a separate R2 object namespace.
+    const communityDetail=await request('/api/v1/communities/'+communityId);
+    assert.equal(communityDetail.response.status,200);
+    const textChannel=communityDetail.body.channels.find(c=>c.kind==='text');
+    assert.ok(textChannel);
+    const uploadId=crypto.randomUUID();
+    const attachmentUpload=await request('/api/media/community-attachment/'+communityId+'/'+textChannel.id,{
+      method:'POST',rawBody:png,contentType:'image/png',
+      headers:{
+        'x-uorqui-client-id':uploadId,
+        'x-uorqui-filename':encodeURIComponent('image-from-channel.png'),
+      }
+    });
+    assert.equal(attachmentUpload.response.status,201,JSON.stringify(attachmentUpload.body));
+    const channelMessages=await request('/api/v1/communities/'+communityId+'/channels/'+textChannel.id+'/messages');
+    assert.equal(channelMessages.response.status,200);
+    const attachmentMessage=channelMessages.body.messages.find(m=>m.clientId===uploadId);
+    assert.equal(attachmentMessage.attachment.type,'image/png');
+    const attachmentUrl='/media/community-attachment/'+communityId+'/'+textChannel.id+'/'+attachmentMessage.attachment.id;
+    const mediaResponse=await fetch(browserOrigin+attachmentUrl,{headers:{cookie}});
+    assert.equal(mediaResponse.status,200);
+    assert.deepEqual(Buffer.from(await mediaResponse.arrayBuffer()),png);
+    const anonymousAttachment=await fetch(browserOrigin+attachmentUrl);
+    assert.equal(anonymousAttachment.status,404,'community attachment needs membership');
+    const deletedAttachment=await request('/api/v1/communities/'+communityId+'/channels/'+textChannel.id+'/messages/'+attachmentMessage.id,{
+      method:'DELETE'
+    });
+    assert.equal(deletedAttachment.response.status,204);
+    assert.equal((await fetch(browserOrigin+attachmentUrl,{headers:{cookie}})).status,404);
 
     const logout = await request('/api/auth/sign-out', { method: 'POST', body: {} });
     assert.equal(logout.response.status, 200, JSON.stringify(logout.body));
