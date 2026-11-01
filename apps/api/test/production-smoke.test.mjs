@@ -3,7 +3,9 @@ import { test } from 'node:test';
 
 // Read-only health checks and *invalid* Turnstile challenges only.
 // Never send a real production registration or email from CI.
-const frontend = 'https://main.uorqui1.workers.dev';
+const frontend = process.env.FRONTEND_ORIGIN ?? 'https://main.uorqui1.workers.dev';
+assert.ok(['https://main.uorqui1.workers.dev','https://uorqui.app'].includes(frontend),
+  'Live tests may only target known Uorqui origins');
 const backend = 'https://uorqui-social-api.onrender.com';
 
 async function request(base, path, init = {}) {
