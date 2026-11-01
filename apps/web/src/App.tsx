@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion, MotionConfig } from 'motion/react';
-import { Github, MessageCircle, Users, Newspaper } from 'lucide-react';
+import { Github, MessageCircle, Users, Newspaper, X } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import AuthPanel, { type Account } from './AuthPanel';
 import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
@@ -171,11 +173,22 @@ function AppContent() {
         <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)}
           invitedCommunityId={invitedCommunity} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
-      {inviteToken && !publicHandle && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
-        <strong>{invitePreview??'Convite para comunidade / Community invitation'}</strong>
-        <p className="mt-1 text-muted-foreground">{inviteError||(inviteBusy?'Entrando na comunidade… / Joining community…':
-          account?.profile?'Convite pronto para aceitar… / Accepting invite…':
-          'Entre ou crie sua conta para participar. / Sign in or create an account to join.')}</p>
+      {inviteToken && !publicHandle && !isVerificationResult && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
+        <button type="button" className="absolute right-2 top-2 rounded-md p-1.5 hover:bg-secondary"
+          aria-label="Fechar convite / Dismiss invitation" onClick={()=>{
+            try{localStorage.removeItem(INVITE_KEY);}catch{}
+            if(/^\/invite\//.test(window.location.pathname))window.history.replaceState(null,'','/');
+            setInviteToken(null);setInviteError('');
+          }}><X className="size-4"/></button>
+        {invitePreview?<strong className="block pr-8">{invitePreview}</strong>:
+          inviteError?<strong>Convite indisponível / Invitation unavailable</strong>:
+          <Skeleton className="mx-auto h-4 w-48"/>}
+        <p className="mt-2 flex items-center justify-center gap-2 text-muted-foreground">
+          {inviteBusy&&<Spinner className="size-4"/>}
+          {inviteError||(inviteBusy?'Entrando na comunidade… / Joining community…':
+            account?.profile?'Convite pronto para aceitar… / Accepting invite…':
+            'Entre ou crie sua conta para participar. / Sign in or create an account to join.')}
+        </p>
       </div>}
       {!isVerificationResult && publicHandle && (
         <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-background">
