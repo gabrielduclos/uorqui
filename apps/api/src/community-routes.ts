@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 type SessionReader = (request: FastifyRequest) => Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -16,9 +17,23 @@ const groupBody={type:'object',required:['name','slug','visibility'],additionalP
 const channelBody={type:'object',required:['name','kind'],additionalProperties:false,properties:{
   name:{type:'string',minLength:2,maxLength:64},kind:{type:'string',enum:['text','voice']}
 }};
-const messageBody={type:'object',required:['clientId','body'],additionalProperties:false,properties:{
-  clientId:uuid,body:{type:'string',minLength:1,maxLength:4000}
+const attachmentSchema={type:'object',additionalProperties:false,required:['id','name','type','size'],properties:{
+  id:uuid,name:{type:'string',minLength:1,maxLength:180},type:{type:'string',maxLength:100},
+  size:{type:'integer',minimum:1,maximum:52428800}
 }};
+const messageBody={type:'object',required:['clientId','body'],additionalProperties:false,properties:{
+  clientId:uuid,body:{type:'string',maxLength:4000},attachment:attachmentSchema
+}};
+const mediaParams={type:'object',required:['id','channelId','attachmentId'],additionalProperties:false,properties:{id:uuid,channelId:uuid,attachmentId:uuid}};
+const communityAttachmentTypes=new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
+function verifiedCommunityUpload(request:FastifyRequest,id:string,channelId:string,clientId:string,a:{id:string;name:string;type:string;size:number}){
+  const secret=process.env.DM_ATTACHMENT_PROOF_SECRET;
+  const proof=request.headers['x-uorqui-attachment-proof'];
+  if(!secret||secret.length<32||typeof proof!=='string'||!/^[0-9a-f]{64}$/.test(proof))return false;
+  const canonical=JSON.stringify([id,channelId,clientId,a.id,a.name,a.type,a.size]);
+  const expected=createHmac('sha256',secret).update(canonical).digest('hex');
+  return timingSafeEqual(Buffer.from(proof,'hex'),Buffer.from(expected,'hex'));
+}
 const reactionEmojis=['👍','❤️','😂','😮','😢','🔥','👏','🎉','💯','💜','✅','🤔','🙌','👎','😍','🥰','🙏','😎'] as const;
 const reactionBody={type:'object',required:['emoji'],additionalProperties:false,properties:{emoji:{type:'string',enum:[...reactionEmojis]}}};
 const inviteBody={type:'object',required:['handle'],additionalProperties:false,properties:{handle:{type:'string',pattern:'^[a-z][a-z0-9_]{2,31}$'}}};
@@ -272,6 +287,10 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       // An additive migration can deploy after the API; keep channel history readable
       // until the reactions table is actually available in the active database.
       const ready=await getPool().query("SELECT to_regclass('public.community_message_reactions') IS NOT NULL AS enabled");
+      const attachmentReady=await getPool().query("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='community_messages' AND column_name='attachment_id') AS enabled");
+      const attachmentProjection=attachmentReady.rows[0]?.enabled?
+        'CASE WHEN m.deleted_at IS NOT NULL OR m.attachment_id IS NULL THEN NULL ELSE jsonb_build_object(\'id\',m.attachment_id,\'name\',m.attachment_name,\'type\',m.attachment_type,\'size\',m.attachment_size) END AS attachment,':
+        'NULL::jsonb AS attachment,';
       const reactionProjection=ready.rows[0]?.enabled?
         'CASE WHEN m.deleted_at IS NOT NULL THEN \'[]\'::jsonb ELSE COALESCE(('+
         'SELECT jsonb_agg(jsonb_build_object(\'emoji\',rx.emoji,\'count\',rx.total,\'mine\',rx.mine) ORDER BY rx.total DESC,rx.emoji) '+
@@ -286,7 +305,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'CASE WHEN p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "authorName",'+
         'CASE WHEN (p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\') AND '+
         'NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=m.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=m.author_id)) '+
-        'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+reactionProjection+
+        'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+attachmentProjection+reactionProjection+
         'FROM community_messages m JOIN users u ON u.id=m.author_id JOIN profiles p ON p.user_id=m.author_id '+
         'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
         'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
@@ -304,20 +323,29 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
-      const {clientId,body}=request.body as {clientId:string;body:string};
+      const {clientId,body,attachment}=request.body as {clientId:string;body:string;attachment?:{id:string;name:string;type:string;size:number}};
       const clean=body.trim();
-      if(!clean||clean.length>4000)return reply.code(400).send({error:'Invalid message'});
+      if((!clean&&!attachment)||clean.length>4000)return reply.code(400).send({error:'Invalid message'});
       if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      if(attachment){
+        if(!communityAttachmentTypes.has(attachment.type)||attachment.name!==attachment.name.trim()||
+           /[\\/\r\n\u0000-\u001f]/.test(attachment.name)||!verifiedCommunityUpload(request,id,channelId,clientId,attachment))
+          return reply.code(403).send({error:'Invalid attachment upload proof'});
+        const ready=await getPool().query("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='community_messages' AND column_name='attachment_id') AS enabled");
+        if(!ready.rows[0]?.enabled)return reply.code(503).send({error:'ATTACHMENTS_NOT_READY'});
+      }
       const limit=await getPool().query(
         'SELECT COUNT(*)::int AS n FROM community_messages WHERE channel_id=$1 AND author_id=$2 AND created_at>now()-interval \'1 minute\'',
         [channelId,me]);
       if(Number(limit.rows[0].n)>=30)return reply.code(429).send({error:'MESSAGE_RATE_LIMIT'});
+      const insertColumns=attachment?'(channel_id,author_id,client_id,body,attachment_id,attachment_name,attachment_type,attachment_size)':'(channel_id,author_id,client_id,body)';
+      const insertValues=attachment?'SELECT ch.id,$3,$4,$5,$6,$7,$8,$9 ':'SELECT ch.id,$3,$4,$5 ';
       const saved=await getPool().query(
-        'INSERT INTO community_messages(channel_id,author_id,client_id,body) '+
-        'SELECT ch.id,$3,$4,$5 FROM community_channels ch '+
-        'JOIN community_members cm ON cm.community_id=ch.community_id AND cm.user_id=$3 '+
-        'WHERE ch.id=$1 AND ch.community_id=$2 AND ch.kind=\'text\' '+
-        'ON CONFLICT(client_id) DO NOTHING RETURNING id',[channelId,id,me,clientId,clean]);
+        'INSERT INTO community_messages'+insertColumns+' '+insertValues+
+        'FROM community_channels ch JOIN community_members cm ON cm.community_id=ch.community_id AND cm.user_id=$3 '+
+        "WHERE ch.id=$1 AND ch.community_id=$2 AND ch.kind='text' "+
+        'ON CONFLICT(client_id) DO NOTHING RETURNING id',
+        attachment?[channelId,id,me,clientId,clean,attachment.id,attachment.name,attachment.type,attachment.size]:[channelId,id,me,clientId,clean]);
       if(!saved.rowCount){
         const existing=await getPool().query('SELECT id,body,author_id FROM community_messages WHERE client_id=$1 AND channel_id=$2',[clientId,channelId]);
         if(!existing.rowCount||existing.rows[0].author_id!==me)return reply.code(404).send({error:'Channel unavailable'});
@@ -326,6 +354,36 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       return reply.code(201).header('Cache-Control',noCache).send({id:saved.rows[0].id});
     }catch(error){request.log.error({err:error},'Send community message');return reply.code(503).send({error:'Unavailable'});}
   });
+
+  // The Worker authorizes and signs uploads before saving objects in private R2.
+  app.get('/api/v1/communities/:id/channels/:channelId/attachments/allowed',
+    {schema:{params:channelParams}},async(request,reply)=>{
+      try{
+        const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+        const {id,channelId}=request.params as {id:string;channelId:string};
+        if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+        const ch=await getPool().query("SELECT 1 FROM community_channels WHERE id=$1 AND community_id=$2 AND kind='text'",[channelId,id]);
+        if(!ch.rowCount)return reply.code(404).send({error:'Channel unavailable'});
+        const ready=await getPool().query("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='community_messages' AND column_name='attachment_id') AS enabled");
+        if(!ready.rows[0]?.enabled)return reply.code(503).send({error:'ATTACHMENTS_NOT_READY'});
+        return reply.header('Cache-Control',noCache).send({allowed:true});
+      }catch(error){request.log.error({err:error},'Community upload permission');return reply.code(503).send({error:'Unavailable'});}
+    });
+  app.get('/api/v1/communities/:id/channels/:channelId/attachments/:attachmentId/access',
+    {schema:{params:mediaParams}},async(request,reply)=>{
+      try{
+        const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+        const {id,channelId,attachmentId}=request.params as {id:string;channelId:string;attachmentId:string};
+        if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+        const r=await getPool().query(
+          'SELECT m.attachment_name AS name,m.attachment_type AS type,m.attachment_size AS size '+
+          'FROM community_messages m JOIN community_channels ch ON ch.id=m.channel_id '+
+          "WHERE ch.community_id=$1 AND ch.id=$2 AND ch.kind='text' AND m.attachment_id=$3 AND m.deleted_at IS NULL",
+          [id,channelId,attachmentId]);
+        if(!r.rowCount)return reply.code(404).send({error:'Attachment unavailable'});
+        return reply.header('Cache-Control',noCache).send({allowed:true,...r.rows[0]});
+      }catch(error){request.log.error({err:error},'Community attachment access');return reply.code(503).send({error:'Unavailable'});}
+    });
 
   // Each member can add or remove one reaction per emoji. Mutations are idempotent,
   // so retries never toggle a reaction twice on a slow or interrupted connection.
