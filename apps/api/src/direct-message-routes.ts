@@ -140,20 +140,22 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'reaction.user_id AS "lastReactionAuthorId",',
         '(COALESCE(unread.n,0) + COALESCE(unread_reactions.n,0))::int AS "unreadCount",',
         'COALESCE(unread_reactions.n,0)::int AS "unreadReactionCount",',
-        'incoming.pending_received_at AS "pendingReceivedAt"',
+        'incoming.pending_received_at AS "pendingReceivedAt",',
+        '(state.archived_at IS NOT NULL AND (m.created_at IS NULL OR m.created_at <= state.archived_at)) AS "archived"',
         'FROM direct_conversations c',
         'JOIN users u ON u.id=CASE WHEN c.participant_a_id=$1 THEN c.participant_b_id ELSE c.participant_a_id END',
         'JOIN profiles p ON p.user_id=u.id',
+        'LEFT JOIN direct_conversation_user_states state ON state.conversation_id=c.id AND state.user_id=$1',
         'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(c.participant_a_id,c.participant_b_id) AND f.user_b_id=GREATEST(c.participant_a_id,c.participant_b_id)',
-        'LEFT JOIN LATERAL (SELECT body,attachment_type,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
-        'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL) unread ON true',
+        'LEFT JOIN LATERAL (SELECT body,attachment_type,created_at,author_id,deleted_at FROM direct_messages WHERE conversation_id=c.id AND (state.cleared_at IS NULL OR created_at > state.cleared_at) ORDER BY created_at DESC,id DESC LIMIT 1) m ON true',
+        'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_messages WHERE conversation_id=c.id AND author_id<>$1 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL AND (state.cleared_at IS NULL OR created_at > state.cleared_at)) unread ON true',
         'LEFT JOIN LATERAL (SELECT MAX(COALESCE(edited_at,created_at)) AS pending_received_at FROM direct_messages',
-        ' WHERE conversation_id=c.id AND author_id<>$1 AND deleted_at IS NULL AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at))) incoming ON true',
+        ' WHERE conversation_id=c.id AND author_id<>$1 AND deleted_at IS NULL AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at)) AND (state.cleared_at IS NULL OR created_at > state.cleared_at)) incoming ON true',
         'LEFT JOIN LATERAL (SELECT r.emoji,r.notified_at,r.message_id,r.user_id FROM direct_message_reactions r JOIN direct_messages dm ON dm.id=r.message_id',
-        '  WHERE dm.conversation_id=c.id AND (dm.author_id=$1 OR r.user_id=$1) AND dm.deleted_at IS NULL AND r.notified_at IS NOT NULL ORDER BY r.notified_at DESC,r.message_id DESC LIMIT 1) reaction ON true',
+        '  WHERE dm.conversation_id=c.id AND (dm.author_id=$1 OR r.user_id=$1) AND dm.deleted_at IS NULL AND (state.cleared_at IS NULL OR dm.created_at > state.cleared_at) AND r.notified_at IS NOT NULL ORDER BY r.notified_at DESC,r.message_id DESC LIMIT 1) reaction ON true',
         'LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM direct_message_reactions r JOIN direct_messages dm ON dm.id=r.message_id',
-        '  WHERE dm.conversation_id=c.id AND dm.author_id=$1 AND dm.deleted_at IS NULL AND r.notified_at IS NOT NULL AND r.read_at IS NULL) unread_reactions ON true',
-        'WHERE c.participant_a_id=$1 OR c.participant_b_id=$1',
+        '  WHERE dm.conversation_id=c.id AND dm.author_id=$1 AND dm.deleted_at IS NULL AND (state.cleared_at IS NULL OR dm.created_at > state.cleared_at) AND r.notified_at IS NOT NULL AND r.read_at IS NULL) unread_reactions ON true',
+        'WHERE (c.participant_a_id=$1 OR c.participant_b_id=$1) AND (state.cleared_at IS NULL OR m.created_at > state.cleared_at OR state.revived_at > state.cleared_at)',
         'ORDER BY GREATEST(COALESCE(m.created_at,c.created_at),COALESCE(reaction.notified_at,c.created_at)) DESC LIMIT 100'
       ].join(' ');
       const r=await getPool().query(query,[me]);
@@ -174,9 +176,40 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!match.rowCount)return reply.code(404).send({error:'User unavailable'});
       const [a,b]=[me,match.rows[0].id as string].sort();
       const r=await getPool().query('INSERT INTO direct_conversations(participant_a_id,participant_b_id) VALUES($1,$2) ON CONFLICT(participant_a_id,participant_b_id) DO UPDATE SET participant_a_id=EXCLUDED.participant_a_id RETURNING id',[a,b]);
+      await getPool().query('UPDATE direct_conversation_user_states SET revived_at=now(), archived_at=NULL WHERE conversation_id=$1 AND user_id=$2', [r.rows[0].id,me]);
       await publishDmConversationEvent(r.rows[0].id as string, 'conversation').catch(error => request.log.warn({err:error},'DM event unavailable'));
       return reply.header('Cache-Control',noCache).send({id:r.rows[0].id});
     }catch(e){request.log.error({err:e},'DM open');return reply.code(503).send({error:'Unavailable'});}
+  });
+  // User-specific archive/clear: neither operation deletes the peer's messages.
+  app.put('/api/v1/dm/conversations/:id/archive',{
+    schema:{params:pathParams,body:{type:'object',additionalProperties:false,required:['archived'],properties:{archived:{type:'boolean'}}}}
+  },async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const {archived}=request.body as {archived:boolean};
+      await getPool().query(
+        'INSERT INTO direct_conversation_user_states(conversation_id,user_id,archived_at) VALUES($1,$2,CASE WHEN $3::boolean THEN now() ELSE NULL END) '+
+        'ON CONFLICT (conversation_id,user_id) DO UPDATE SET archived_at=EXCLUDED.archived_at',[id,me,archived]);
+      await publishDmConversationEvent(id,'update').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({archived});
+    }catch(e){request.log.error({err:e},'Archive DM');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.delete('/api/v1/dm/conversations/:id',{schema:{params:pathParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      await getPool().query(
+        'INSERT INTO direct_conversation_user_states(conversation_id,user_id,cleared_at,archived_at,revived_at) VALUES($1,$2,now(),NULL,NULL) '+
+        'ON CONFLICT (conversation_id,user_id) DO UPDATE SET cleared_at=now(),archived_at=NULL,revived_at=NULL',[id,me]);
+      await publishDmConversationEvent(id,'update').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({removed:true});
+    }catch(e){request.log.error({err:e},'Remove DM for self');return reply.code(503).send({error:'Unavailable'});}
   });
   app.get('/api/v1/dm/conversations/:id/messages',{
     schema:{params:pathParams,querystring:{type:'object',additionalProperties:false,properties:{around:uuidParam}}}
@@ -189,7 +222,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const {around}=request.query as {around?:string};
       let anchor: {created_at: string; id: string} | undefined;
       if(around){
-        const source=await getPool().query('SELECT created_at,id FROM direct_messages WHERE id=$1 AND conversation_id=$2',[around,id]);
+        const source=await getPool().query('SELECT created_at,id FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$2 AND user_id=$3),\'-infinity\'::timestamptz)',[around,id,me]);
         if(!source.rowCount)return reply.code(404).send({error:'Message unavailable'});
         anchor=source.rows[0];
       }
@@ -199,10 +232,10 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         ', (SELECT emoji FROM direct_message_reactions WHERE message_id=dm.id AND user_id=$2) AS "myReaction"'+
         ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN COALESCE(NULLIF(original.body,\'\'),CASE WHEN original.attachment_type LIKE \'image/%\' THEN \'📷 Foto\' WHEN original.attachment_type LIKE \'video/%\' THEN \'🎬 Vídeo\' WHEN original.attachment_type LIKE \'audio/%\' THEN \'🎤 Áudio\' WHEN original.attachment_type IS NOT NULL THEN \'📎 Arquivo\' END) ELSE \'\' END,'+
         '\'authorId\',original.author_id,\'deleted\',original.deleted_at IS NOT NULL) FROM direct_messages original'+
-        ' WHERE original.id=dm.reply_to_id AND original.conversation_id=dm.conversation_id) AS "replyTo"'+
+        ' WHERE original.id=dm.reply_to_id AND original.conversation_id=dm.conversation_id AND original.created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz)) AS "replyTo"'+
         (anchor
-          ? ' FROM (SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND (created_at,id) <= ($3::timestamptz,$4::uuid) ORDER BY created_at DESC,id DESC LIMIT 50) older UNION ALL SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND (created_at,id) > ($3::timestamptz,$4::uuid) ORDER BY created_at ASC,id ASC LIMIT 50) newer) dm ORDER BY created_at ASC,id ASC'
-          : ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC');
+          ? ' FROM (SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),'-infinity'::timestamptz) AND (created_at,id) <= ($3::timestamptz,$4::uuid) ORDER BY created_at DESC,id DESC LIMIT 50) older UNION ALL SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),'-infinity'::timestamptz) AND (created_at,id) > ($3::timestamptz,$4::uuid) ORDER BY created_at ASC,id ASC LIMIT 50) newer) dm ORDER BY created_at ASC,id ASC'
+          : ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),'-infinity'::timestamptz) ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC');
       const r=await getPool().query(query,anchor?[id,me,anchor.created_at,anchor.id]:[id,me]);
       return reply.header('Cache-Control',noCache).send({messages:r.rows});
     }catch(e){request.log.error({err:e},'DM messages');return reply.code(503).send({error:'Unavailable'});}
@@ -227,8 +260,8 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const {id,attachmentId}=request.params as {id:string;attachmentId:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
       const r=await getPool().query(
-        'SELECT attachment_name AS name,attachment_type AS type,attachment_size AS size FROM direct_messages WHERE conversation_id=$1 AND attachment_id=$2 AND deleted_at IS NULL',
-        [id,attachmentId]);
+        'SELECT attachment_name AS name,attachment_type AS type,attachment_size AS size FROM direct_messages WHERE conversation_id=$1 AND attachment_id=$2 AND deleted_at IS NULL AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$3),\'-infinity\'::timestamptz)',
+        [id,attachmentId,me]);
       if(!r.rowCount)return reply.code(404).send({error:'Not found'});
       return reply.header('Cache-Control',noCache).send({allowed:true,...r.rows[0]});
     }catch(e){request.log.error({err:e},'DM attachment download access');return reply.code(503).send({error:'Unavailable'});}
@@ -288,7 +321,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET delivered_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at)) AND deleted_at IS NULL RETURNING id',[id,me]);
+      const r=await getPool().query('UPDATE direct_messages SET delivered_at=now() WHERE conversation_id=$1 AND author_id<>$2 AND (delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at)) AND deleted_at IS NULL AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz) RETURNING id',[id,me]);
       if(r.rowCount)await publishDmConversationEvent(id,'received').catch(error=>request.log.warn({err:error},'DM delivery notification failed'));
       return reply.header('Cache-Control',noCache).send({received:r.rowCount??0});
     }catch(e){request.log.error({err:e},'DM received');return reply.code(503).send({error:'Unavailable'});}
@@ -300,10 +333,10 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const r=await getPool().query('UPDATE direct_messages SET read_at=now(), delivered_at=CASE WHEN delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at) THEN now() ELSE delivered_at END WHERE conversation_id=$1 AND author_id<>$2 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL RETURNING id',[id,me]);
+      const r=await getPool().query('UPDATE direct_messages SET read_at=now(), delivered_at=CASE WHEN delivered_at IS NULL OR (edited_at IS NOT NULL AND delivered_at < edited_at) THEN now() ELSE delivered_at END WHERE conversation_id=$1 AND author_id<>$2 AND (read_at IS NULL OR (edited_at IS NOT NULL AND read_at < edited_at)) AND deleted_at IS NULL AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz) RETURNING id',[id,me]);
       // Only the original author can acknowledge reactions, and only from the opened conversation.
       const reactions=await getPool().query(
-        'UPDATE direct_message_reactions reaction SET read_at=now() FROM direct_messages m WHERE reaction.message_id=m.id AND m.conversation_id=$1 AND m.author_id=$2 AND m.deleted_at IS NULL AND reaction.notified_at IS NOT NULL AND reaction.read_at IS NULL RETURNING reaction.message_id',[id,me]);
+        'UPDATE direct_message_reactions reaction SET read_at=now() FROM direct_messages m WHERE reaction.message_id=m.id AND m.conversation_id=$1 AND m.author_id=$2 AND m.deleted_at IS NULL AND reaction.notified_at IS NOT NULL AND reaction.read_at IS NULL AND m.created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz) RETURNING reaction.message_id',[id,me]);
       if(r.rowCount || reactions.rowCount) await publishDmConversationEvent(id,'read').catch(error=>request.log.warn({err:error},'DM read notification failed'));
       return reply.header('Cache-Control',noCache).send({read:r.rowCount??0,reactionsRead:reactions.rowCount??0});
     }catch(e){request.log.error({err:e},'DM read');return reply.code(503).send({error:'Unavailable'});}
