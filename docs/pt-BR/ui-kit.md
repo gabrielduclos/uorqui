@@ -48,7 +48,7 @@ Use classes Tailwind semânticas, não cores fixas que só funcionem no dark. Ve
 | DemoAudioPlayer, DemoMediaViewer | Áudio e visualização de fotos/vídeos |
 | DemoImageEditor | Desenhos e formas em fotos antes de enviar e no visualizador |
 
-O mensageiro 1:1 **já está conectado** à API e ao Neon. Os canais de texto comunitários também usam API e Neon; as salas de voz estão persistidas, mas as chamadas WebRTC ainda não estão habilitadas. O layout do chat real deve manter paridade com este UI Kit; funções que dependem de novas APIs não podem fingir persistência.
+O mensageiro 1:1 **já está conectado** à API e ao Neon. Os canais de texto comunitários também usam API e Neon; as salas de voz integram WebRTC P2P para grupos pequenos, com autorização pelo backend; dependerão de TURN para redes restritivas. O layout do chat real deve manter paridade com este UI Kit; funções que dependem de novas APIs não podem fingir persistência.
 
 ## Idiomas
 
@@ -119,3 +119,10 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - Cabeçalho dos canais com `data-uorqui-context-header` fixo, lista de mensagens ocupando a largura e rolando isoladamente, campo de texto fixo próximo ao rodapé do painel.
 - Modos públicos/por aprovação/privados claramente identificados. Nas comunidades privadas, os canais só aparecem depois da aceitação do convite. Proprietário/admin vê solicitações pendentes e o formulário de convite por @usuário.
 - Seletores, botões, estados vazios e erros usam tokens semânticos do tema light/dark. Mensagens de usuário não são traduzidas.
+
+## Voz em comunidades
+
+- As salas apresentam botão **Entrar na sala**, permissão do microfone sob gesto do usuário, **Ligar/Desligar microfone** e **Sair**. A conexão de áudio não abre vídeo, não grava e não persiste o som.
+- Indicadores de participantes/microfones e ligação; `audio.play()` utiliza um botão explícito de *Ativar som* quando bloqueado pelo navegador.
+- Ao trocar/fechar canal, limpa tracks, RTCPeerConnections, players e sessão. Os painéis principais e o header permanecem fixos com rolagem apenas interna no desktop/mobile.
+- Caso o navegador não consiga conectar por uma rede fechada, a tela avisa quando TURN não está disponível. Nunca exibir um estado "conectado" sem confirmação de `RTCPeerConnection.connectionState`.
