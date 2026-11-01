@@ -109,7 +109,9 @@ test('feed: drafts, media proof, video-only filtering and attachment permissions
   const uploaded=await owner(basePath+'/media/0','POST',media,true,{'x-uorqui-attachment-proof':proof});
   assert.equal(uploaded.status,201,JSON.stringify(uploaded.data));
   assert.equal((await owner(basePath+'/media/0/allowed')).status,409);
+  assert.equal((await owner(basePath,'PATCH',{body:'Updated caption after interrupted upload'})).status,200);
   assert.equal((await owner(basePath+'/publish','POST',{})).status,200);
+  assert.equal((await owner(basePath)).data.post.body,'Updated caption after interrupted upload');
   assert.equal((await stranger('/api/v1/feed/media/'+media.id+'/access')).status,404,'private author hides media');
   assert.equal((await friend('/api/v1/feed/media/'+media.id+'/access')).status,200);
   assert.ok((await friend('/api/v1/feed/posts?filter=videos')).data.posts.some(p=>p.id===id));
