@@ -9,6 +9,7 @@ import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 import { registerProfileRoutes } from './profile-routes.js';
 import { registerDirectMessageRoutes } from './direct-message-routes.js';
+import { registerPushRoutes } from './push-routes.js';
 import { registerFriendRoutes } from './friend-routes.js';
 import { registerBlockRoutes } from './block-routes.js';
 import { registerCommunityRoutes } from './community-routes.js';
@@ -92,7 +93,7 @@ app.get('/health/ready', async (request, reply) => {
 app.get('/api/v1/status', async () => ({
   project: 'uorqui',
   stage: 'auth-development',
-  featuresEnabled: ['auth-scaffold', 'user-profiles', 'direct-messaging', 'realtime-dm-sse', 'friend-requests', 'account-blocks', 'community-channels', 'community-text', 'community-voice-mesh'],
+  featuresEnabled: ['auth-scaffold', 'user-profiles', 'direct-messaging', 'realtime-dm-sse', 'web-push', 'pwa-install', 'friend-requests', 'account-blocks', 'community-channels', 'community-text', 'community-voice-mesh'],
   publicRegistration: isPublicSignupEnabled(),
   registrationAvailable: isRegistrationAvailable(),
   developmentRegistrationEnabled: isDevelopmentSignupEnabled(),
@@ -275,6 +276,7 @@ app.post('/api/v1/onboarding', {
 
 registerProfileRoutes(app, async request => readSession(request));
 registerDirectMessageRoutes(app, async request => readSession(request));
+registerPushRoutes(app, async request => readSession(request));
 registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));
 registerCommunityRoutes(app, async request => readSession(request));

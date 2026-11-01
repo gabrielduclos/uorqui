@@ -99,8 +99,8 @@ function statusForOutgoingBlock(messages: Message[], pt: boolean): BlockReceipt 
   return { label, updatedAt };
 }
 
-export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobileOpenChange }: {
-  myId: string; initialHandle?: string | null; onStarted?: () => void;
+export default function LiveDirectChat({ myId, initialHandle, initialConversationId, onStarted, onMobileOpenChange }: {
+  myId: string; initialHandle?: string | null; initialConversationId?: string|null; onStarted?: () => void;
   onMobileOpenChange?: (open: boolean) => void;
 }) {
   const { locale } = useUorquiPreferences();
@@ -221,6 +221,7 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
   const openThread = useCallback((id: string) => {
     setListView('conversations');
     setActiveId(id);
+    try{navigator.serviceWorker?.controller?.postMessage({type:'uorqui:clear-dm-push',conversationId:id});}catch{}
     setMobileOpened(true);
     setMessages([]);
     setJumpTarget(null);
@@ -240,6 +241,9 @@ export default function LiveDirectChat({ myId, initialHandle, onStarted, onMobil
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
   }, []);
+  useEffect(()=>{
+    if(initialConversationId&&/^[0-9a-f-]{36}$/i.test(initialConversationId))openThread(initialConversationId);
+  },[initialConversationId,openThread]);
   const closeThread = useCallback(() => {
     setActiveId(null);
     activeIdRef.current = null;

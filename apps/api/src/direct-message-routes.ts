@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getPool } from './db/client.js';
 import { subscribeDmEvents, publishDmConversationEvent } from './dm-events.js';
+import { pushDirectMessage } from './push-routes.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 const uuidParam = { type: 'string', format: 'uuid' } as const;
@@ -266,6 +267,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const r=await getPool().query(q,[id,me,text,clientId,replyToId??null,attachment?.id??null,attachment?.name??null,attachment?.type??null,attachment?.size??null]);
       if(r.rowCount){
         await publishDmConversationEvent(id,'message').catch(error=>request.log.warn({err:error},'DM notification failed'));
+        void pushDirectMessage(r.rows[0].id).catch(error=>request.log.warn({err:error},'DM push unavailable'));
         return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
       }
       const prev=await getPool().query('SELECT '+messageColumns+' FROM direct_messages WHERE client_id=$1 AND conversation_id=$2 AND author_id=$3',[clientId,id,me]);
@@ -325,6 +327,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const r=await getPool().query('UPDATE direct_messages SET body=$1, edited_at=now() WHERE id=$2 AND conversation_id=$3 AND author_id=$4 AND deleted_at IS NULL RETURNING '+messageColumns,[text,messageId,id,me]);
       if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
       await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM edit notification failed'));
+      void pushDirectMessage(messageId).catch(error=>request.log.warn({err:error},'Edited DM push unavailable'));
       return reply.header('Cache-Control',noCache).send({message:r.rows[0]});
     }catch(e){request.log.error({err:e},'DM edit');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -393,6 +396,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const r=await getPool().query(q,[targetConversationId,me,clientId,messageId,id]);
       if(r.rowCount){
         await publishDmConversationEvent(targetConversationId,'message').catch(error=>request.log.warn({err:error},'DM forward notification failed'));
+        void pushDirectMessage(r.rows[0].id).catch(error=>request.log.warn({err:error},'Forward push unavailable'));
         return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
       }
       const prior=await getPool().query('SELECT '+messageColumns+' FROM direct_messages WHERE client_id=$1 AND conversation_id=$2 AND author_id=$3 AND forwarded_from_id=$4',[clientId,targetConversationId,me,messageId]);

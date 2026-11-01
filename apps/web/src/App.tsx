@@ -10,6 +10,7 @@ import { publicProfileHandle } from './publicProfileNavigation';
 import { clearProfileImageCache } from './profileImageCache';
 import { clearChatMediaCache } from './chatMediaCache';
 import { clearFeedSessionCache } from './feedSessionCache';
+import { deactivatePush } from './useSocialPush';
 import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
@@ -57,7 +58,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
             <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-primary">{t("Conecte pessoas e interesses")}</p>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">{t('Descubra. Converse.')} <span className="text-primary">{t('Participe.')}</span></h1>
             <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg">{t('Uma plataforma social que reúne conversas individuais, comunidades e conteúdo em um só lugar.')}</p>
-            <Button variant="outline" className="mt-8" asChild><a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noreferrer"><Github className="size-4" /> {t("Conheça o projeto")}</a></Button>
+
           </div>
           <div className="mx-auto w-full max-w-[440px] lg:max-w-none">
             <AuthPanel onAuthenticated={onAuthenticated} />
@@ -75,7 +76,10 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
           </article>)}
         </section>
         <footer className="mt-4 space-y-2 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground sm:px-0 lg:text-left">
-          <p>{t('Uorqui · Construído em código aberto · Funcionalidades sociais em desenvolvimento')}</p>
+          <a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent">
+            <Github className="size-5"/>{t('Conheça o projeto')}
+          </a>
           <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 lg:justify-start" aria-label={t('Documentos legais')}>
             <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{t('Termos de Uso')}</a>
             <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">{t('Política de Privacidade')}</a>
@@ -181,6 +185,8 @@ function AppContent() {
     clearChatMediaCache();clearFeedSessionCache();setAccount(next);
   }, []);
   const signOut = useCallback(async () => {
+    // Revoke the authenticated subscription before ending the session.
+    await deactivatePush().catch(()=>{});
     const response = await fetch('/api/auth/sign-out', {
       method: 'POST',
       credentials: 'same-origin',

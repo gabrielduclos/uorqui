@@ -22,6 +22,8 @@ import ModerationPanel from './ModerationPanel';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 import {useCommunityUnread} from './useCommunityUnread';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
+import {PwaFirstRun} from './PwaFirstRun';
+import {PushPreferences} from './PushPreferences';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -67,6 +69,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const [tourVisible,setTourVisible]=useState(()=>{try{return localStorage.getItem(onboardingStorageKey(account.user.id))!=='done';}catch{return true;}});
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
+  const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
   const [channelOpened, setChannelOpened] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -100,6 +103,27 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     setConversationOpened(false);
     setChannelOpened(false);
   }, []);
+
+  useEffect(()=>{
+    const open=(urlValue:string)=>{
+      const url=new URL(urlValue,window.location.origin);
+      if(url.origin!==window.location.origin)return;
+      const id=url.searchParams.get('conversation');
+      const community=url.searchParams.get('community');
+      if(id&&/^[0-9a-f-]{36}$/i.test(id)){setRequestedConversationId(id);move('conversations');}
+      else if(community&&/^[0-9a-f-]{36}$/i.test(community))move('communities');
+    };
+    const onMessage=(event:MessageEvent)=>{
+      if(event.data?.type==='uorqui:push-open'&&typeof event.data.url==='string')open(event.data.url);
+    };
+    navigator.serviceWorker?.addEventListener('message',onMessage);
+    const current=new URL(window.location.href);
+    if(current.searchParams.has('conversation')||current.searchParams.has('community')){
+      open(current.toString());current.searchParams.delete('conversation');current.searchParams.delete('community');
+      window.history.replaceState({},'',current.pathname+current.search);
+    }
+    return()=>navigator.serviceWorker?.removeEventListener('message',onMessage);
+  },[move]);
 
   async function logout() {
     if (loggingOut) return;
@@ -175,7 +199,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             {area!=='feed'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
               transition={{duration:0.16}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
-              <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle}
+              <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
                 onMobileOpenChange={setConversationOpened}
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
@@ -196,6 +220,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                   </Button>
                 </div>
                 <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })} />
+                <PushPreferences accountId={account.user.id}/>
                 <nav className="mx-auto mb-10 flex max-w-3xl flex-wrap justify-center gap-4 border-t border-border px-4 pt-5 text-xs text-primary sm:gap-6"
                   aria-label={locale==='pt-BR'?'Documentos legais':'Legal documents'}>
                   <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{locale==='pt-BR'?'Termos de Uso':'Terms of Use'}</a>
@@ -241,6 +266,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           })}
         </nav>}
       </div>
+      {!tourVisible&&<PwaFirstRun accountId={account.user.id}/>}
       {tourVisible&&account.profile&&<OnboardingTour userId={account.user.id} profile={account.profile}
         onNavigate={move}
         onProfileSaved={next=>onAccountUpdate({...account,profile:next})}

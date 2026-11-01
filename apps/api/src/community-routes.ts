@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {publishCommunityEvent,subscribeCommunityEvents} from './community-events.js';
+import {pushCommunityMessage} from './push-routes.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -443,6 +444,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         return reply.header('Cache-Control',noCache).send({id:existing.rows[0].id,duplicate:true});
       }
       void publishCommunityEvent(id,channelId,'message').catch(()=>{});
+      void pushCommunityMessage(saved.rows[0].id).catch(error=>request.log.warn({err:error},'Channel push unavailable'));
       return reply.code(201).header('Cache-Control',noCache).send({id:saved.rows[0].id});
     }catch(error){request.log.error({err:error},'Send community message');return reply.code(503).send({error:'Unavailable'});}
   });
