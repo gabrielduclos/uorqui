@@ -64,7 +64,7 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
   try{
     // Confirm receipt only after the browser accepts the visible notification.
     await self.registration.showNotification(title,{
-      body,icon:'/icon.svg',badge:'/icon.svg',tag,renotify:false,
+      body,icon:'/icon-192.png',badge:'/icon-192.png',tag,renotify:false,
       data:{url,kind:payload.kind,conversationId:payload.conversationId||'',messageId:payload.messageId||''}
     });
     await acknowledge(payload);
