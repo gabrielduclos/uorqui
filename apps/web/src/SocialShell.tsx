@@ -49,14 +49,16 @@ function EmptyState({ icon: Icon, title, description }: { icon: typeof Home; tit
   );
 }
 
-export default function SocialShell({ account, onLogout, onAccountUpdate }: {
+export default function SocialShell({ account, onLogout, onAccountUpdate, invitedCommunityId }: {
   account: SignedInAccount;
   onLogout: () => Promise<void>;
   onAccountUpdate: (next: SignedInAccount) => void;
+  invitedCommunityId?: string | null;
 }) {
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
-  const [area, setArea] = useState<Area>('feed');
+  const [area, setArea] = useState<Area>(invitedCommunityId?'communities':'feed');
+  useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
   const unreadMessageCount = useUnreadDirectMessages();
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
@@ -170,7 +172,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate }: {
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
 
-            {area === 'communities' && <LiveCommunities myId={account.user.id} onMobileOpenChange={setChannelOpened} />}
+            {area === 'communities' && <LiveCommunities myId={account.user.id} onMobileOpenChange={setChannelOpened} initialCommunityId={invitedCommunityId} />}
 
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">

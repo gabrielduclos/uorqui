@@ -38,10 +38,10 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;onMobileOpenChange?:(value:boolean)=>void}){
+export default function LiveCommunities({myId,onMobileOpenChange,initialCommunityId}:{myId:string;onMobileOpenChange?:(value:boolean)=>void;initialCommunityId?:string|null}){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [list,setList]=useState<Community[]>([]);
-  const [selectedId,setSelectedId]=useState<string|null>(null);
+  const [selectedId,setSelectedId]=useState<string|null>(initialCommunityId??null);
   const [detail,setDetail]=useState<Detail|null>(null);
   const [channelId,setChannelId]=useState<string|null>(null);
   const [channelOpen,setChannelOpen]=useState(false);
@@ -54,6 +54,10 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const [slugTouched,setSlugTouched]=useState(false);
   const [createDescription,setCreateDescription]=useState('');
   const [createVisibility,setCreateVisibility]=useState<Visibility>('public');
+  const [inviteLink,setInviteLink]=useState<{id:string;expiresAt:string}|null>(null);
+  const [shareBusy,setShareBusy]=useState(false);
+  const [shareNotice,setShareNotice]=useState('');
+  const [shareOpen,setShareOpen]=useState(false);
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'>('text');
@@ -93,7 +97,8 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
       if(!active)return;
       if(!groups.some(group=>group.myRole))setDiscovery(true);
       const first=groups.find(group=>group.myRole);
-      if(first)setSelectedId(first.id);
+      if(initialCommunityId&&groups.some(g=>g.id===initialCommunityId&&g.myRole))setSelectedId(initialCommunityId);
+      else if(first)setSelectedId(first.id);
     }).catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar as comunidades.':'Could not load communities.');}});
     return ()=>{active=false;};
   },[loadList,pt]);
@@ -104,6 +109,26 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
+  useEffect(()=>{if(initialCommunityId){setSelectedId(initialCommunityId);setDiscovery(false);void loadList();}},[initialCommunityId,loadList]);
+  async function shareCommunity(){
+    if(!selectedId)return;
+    setShareBusy(true);setShareNotice('');
+    try{
+      const existing=await api<{link:{id:string;expiresAt:string}|null}>('/api/v1/communities/'+selectedId+'/share');
+      if(!existing.link&&manage(community!)){
+        const made=await api<{link:{id:string;expiresAt:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
+        setInviteLink(made.link);
+      }else setInviteLink(existing.link);
+      setShareOpen(true);
+    }catch{setShareNotice(pt?'Não foi possível carregar o convite.':'Could not load invitation.');}
+    finally{setShareBusy(false);}
+  }
+  async function copyInvite(){
+    if(!inviteLink)return;
+    try{await navigator.clipboard.writeText(window.location.origin+'/invite/'+inviteLink.id);
+      setShareNotice(pt?'Link copiado!':'Link copied!');}
+    catch{setShareNotice(window.location.origin+'/invite/'+inviteLink.id);}
+  }
   const closeChannel=()=>{setChannelOpen(false);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
@@ -399,6 +424,30 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                 </div>)}
               </div>}
             </section>}
+            <div className="space-y-2 border-t border-border pt-3">
+              <Button variant="outline" size="sm" className="w-full" loading={shareBusy} onClick={()=>void shareCommunity()}>
+                {pt?'Compartilhar comunidade':'Share community'}</Button>
+              {shareOpen&&<div className="space-y-2 rounded-xl border border-border p-2">
+                {inviteLink?<><p className="break-all text-[11px] text-muted-foreground">{window.location.origin+'/invite/'+inviteLink.id}</p>
+                <Button type="button" size="sm" className="w-full" onClick={()=>void copyInvite()}>{pt?'Copiar link':'Copy link'}</Button>
+                {manage(community)&&<Button type="button" size="sm" variant="outline" disabled={shareBusy} onClick={()=>{
+                  if(!selectedId)return;setShareBusy(true);
+                  void api<{link:{id:string;expiresAt:string}}>('/api/v1/communities/'+selectedId+'/share',body({}))
+                    .then(data=>{setInviteLink(data.link);setShareNotice(pt?'Novo link criado; o anterior foi revogado.':'New link created; previous link revoked.');})
+                    .catch(()=>setShareNotice(pt?'Falha ao renovar.':'Could not rotate invitation.'))
+                    .finally(()=>setShareBusy(false));
+                }}>{pt?'Gerar novo link':'Rotate invitation link'}</Button>}
+                {manage(community)&&<Button type="button" size="sm" variant="ghost" className="w-full" disabled={shareBusy} onClick={()=>{
+                  if(!selectedId)return;setShareBusy(true);
+                  void api('/api/v1/communities/'+selectedId+'/share',{method:'DELETE'})
+                    .then(()=>{setInviteLink(null);setShareNotice(pt?'Link revogado.':'Invitation revoked.');})
+                    .catch(()=>setShareNotice(pt?'Falha ao revogar.':'Could not revoke link.'))
+                    .finally(()=>setShareBusy(false));
+                }}>{pt?'Revogar link':'Revoke link'}</Button>}</>:
+                  <p className="text-xs text-muted-foreground">{pt?'Peça a um administrador para gerar o link.':'Ask an administrator to create an invitation link.'}</p>}
+              </div>}
+              {shareNotice&&<p role="status" className="break-words text-xs text-muted-foreground">{shareNotice}</p>}
+            </div>
             {['owner','admin','moderator'].includes(community.myRole??'')&&
               <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
                 name={community.name} description={community.description} avatarUrl={community.avatarUrl}

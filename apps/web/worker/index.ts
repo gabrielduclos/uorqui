@@ -376,9 +376,10 @@ export default {
     // Worker Static Assets normalizes unknown navigations (sometimes 307 to '/').
     // Explicitly return the SPA entry on public profile URLs while retaining the
     // requested /@handle in the browser for React's route parser.
+    const communityInviteNavigation = /^\/invite\/[0-9a-f-]{36}\/?$/i.test(current.pathname);
     const publicProfileNavigation = /^\/(?:@|%40)[a-z][a-z0-9_]{2,31}\/?$/i.test(current.pathname);
     const emailVerificationNavigation = /^\/auth\/email-verification\/?$/.test(current.pathname);
-    if ((publicProfileNavigation || emailVerificationNavigation) && (request.method === 'GET' || request.method === 'HEAD')) {
+    if ((publicProfileNavigation || communityInviteNavigation || emailVerificationNavigation) && (request.method === 'GET' || request.method === 'HEAD')) {
       const response = await env.ASSETS.fetch(new Request(new URL('/index.html', current), {
         method: 'GET', headers: { accept: 'text/html' },
       }));

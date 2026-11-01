@@ -70,7 +70,26 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
   );
 }
 
+const INVITE_KEY='uorqui:pending-community-invite';
+function invitationFromUrl(){
+  const match=/^\/invite\/([0-9a-f-]{36})\/?$/i.exec(window.location.pathname);
+  return match?.[1]??new URLSearchParams(window.location.search).get('invite');
+}
+function pendingInvitation(){
+  const token=invitationFromUrl();
+  if(token&&/^[0-9a-f-]{36}$/i.test(token)){
+    try{localStorage.setItem(INVITE_KEY,token);}catch{}
+    return token;
+  }
+  try{return localStorage.getItem(INVITE_KEY);}catch{return null;}
+}
+
 function AppContent() {
+  const [inviteToken,setInviteToken]=useState<string|null>(pendingInvitation);
+  const [invitePreview,setInvitePreview]=useState<string|null>(null);
+  const [inviteError,setInviteError]=useState('');
+  const [inviteBusy,setInviteBusy]=useState(false);
+  const [invitedCommunity,setInvitedCommunity]=useState<string|null>(null);
   const [isVerificationResult, setIsVerificationResult] = useState(() => /^\/auth\/email-verification\/?$/.test(window.location.pathname));
   const [publicHandle, setPublicHandle] = useState<string | null>(() => publicProfileHandle(window.location.pathname));
   const [loading, setLoading] = useState(true);
@@ -79,6 +98,7 @@ function AppContent() {
   useEffect(() => {
     const onNavigation = () => {
       setPublicHandle(publicProfileHandle(window.location.pathname));
+      setInviteToken(pendingInvitation());
       setIsVerificationResult(/^\/auth\/email-verification\/?$/.test(window.location.pathname));
     };
     window.addEventListener('popstate', onNavigation);
@@ -105,6 +125,32 @@ function AppContent() {
     window.dispatchEvent(new CustomEvent<string>('uorqui:open-dm', { detail: handle }));
   }, []);
 
+  useEffect(()=>{
+    if(!inviteToken)return;
+    let active=true;
+    void fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken),{cache:'no-store'})
+      .then(async r=>{if(!r.ok)throw Error('INVITE_EXPIRED');return r.json() as Promise<{community:{name:string}}>})
+      .then(data=>{if(active){setInvitePreview(data.community.name);setInviteError('');}})
+      .catch(()=>{if(active)setInviteError('Este convite expirou ou foi revogado. / This invitation is no longer valid.');});
+    return ()=>{active=false;};
+  },[inviteToken]);
+  useEffect(()=>{
+    if(!inviteToken||!account?.profile||inviteBusy||invitedCommunity)return;
+    let active=true;setInviteBusy(true);
+    void fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken)+'/redeem',{
+      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'
+    }).then(async r=>{if(!r.ok)throw Error((await r.json().catch(()=>({error:'JOIN_FAILED'})) as {error:string}).error);return r.json() as Promise<{communityId:string}>;})
+      .then(data=>{
+        if(!active)return;
+        setInvitedCommunity(data.communityId);setInviteToken(null);
+        try{localStorage.removeItem(INVITE_KEY);}catch{}
+        window.history.replaceState(null,'','/');
+      }).catch(err=>{if(active){setInviteError(err instanceof Error&&err.message==='COMMUNITY_BANNED'?
+          'Você foi banido desta comunidade. / You are banned from this community.':
+          'Não foi possível aceitar o convite. / Could not redeem the invitation.');}})
+      .finally(()=>{if(active)setInviteBusy(false);});
+    return ()=>{active=false;};
+  },[account?.profile,inviteToken,inviteBusy,invitedCommunity]);
   const onAuthenticated = useCallback((next: Account) => { clearChatMediaCache(); setAccount(next); }, []);
   const signOut = useCallback(async () => {
     const response = await fetch('/api/auth/sign-out', {
@@ -122,8 +168,15 @@ function AppContent() {
   return (
     <MotionConfig reducedMotion="user">
       {isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
-        <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)} />
+        <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)}
+          invitedCommunityId={invitedCommunity} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
+      {inviteToken && !publicHandle && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
+        <strong>{invitePreview??'Convite para comunidade / Community invitation'}</strong>
+        <p className="mt-1 text-muted-foreground">{inviteError||(inviteBusy?'Entrando na comunidade… / Joining community…':
+          account?.profile?'Convite pronto para aceitar… / Accepting invite…':
+          'Entre ou crie sua conta para participar. / Sign in or create an account to join.')}</p>
+      </div>}
       {!isVerificationResult && publicHandle && (
         <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-background">
           <PublicProfilePage handle={publicHandle} onMessage={account?.profile && account.profile.handle !== publicHandle ? onPublicProfileMessage : undefined} />
