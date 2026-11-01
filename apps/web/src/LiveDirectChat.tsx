@@ -202,7 +202,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     const result = await api<{ conversations: Conversation[] }>('/api/v1/dm/conversations');
     setThreads(result.conversations);
     window.dispatchEvent(new CustomEvent('uorqui:dm-unread-count', {
-      detail: result.conversations.reduce((total, thread) => total + Math.max(0, thread.unreadCount), 0),
+      detail: result.conversations.reduce((total, thread) => total + (thread.archived ? 0 : Math.max(0, thread.unreadCount)), 0),
     }));
     setError('');
     setLoading(false);
@@ -764,6 +764,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     try{
       await api('/api/v1/dm/conversations/'+encodeURIComponent(thread.id),{method:'DELETE'});
       clearChatMediaCache();
+      setPendingMessages(previous=>previous.filter(p=>p.conversationId!==thread.id));
       closeThread();setFilter('all');
       await loadThreads();
     }catch{setChatError(pt?'Não foi possível apagar esta conversa.':'Could not delete this conversation.');}
