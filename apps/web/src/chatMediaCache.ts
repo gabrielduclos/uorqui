@@ -107,3 +107,28 @@ export function useCachedChatMedia(src: string | null | undefined, eager = true)
   useEffect(()=>{if(eager && src && PRIVATE_MEDIA_URL.test(src))void ensureChatMediaCached(src);},[src,eager]);
   return cached;
 }
+
+/**
+ * Video players share the same authorized blob URL. Unlike the image viewer,
+ * wait for the initial download before assigning a media src, so the feed and
+ * fullscreen player never start two overlapping network downloads.
+ * On a failed cache download, fall back to the Worker's authenticated URL.
+ */
+export function useCachedFeedVideo(url: string | null | undefined, eager = true) {
+  const source=useSyncExternalStore(subscribe,()=>{
+    if(!url)return '';
+    if(!PRIVATE_MEDIA_URL.test(url))return url;
+    const item=entries.get(url);
+    if(item?.blobUrl)return item.blobUrl;
+    if(item?.failedAt)return url; // Preserve playback when caching fails.
+    return '';
+  },()=> '');
+  useEffect(()=>{
+    if(!eager||!url||!PRIVATE_MEDIA_URL.test(url))return;
+    const load=()=>{if(document.visibilityState==='visible')void ensureChatMediaCached(url);};
+    load();
+    document.addEventListener('visibilitychange',load);
+    return ()=>document.removeEventListener('visibilitychange',load);
+  },[url,eager]);
+  return {src:source||null,loading:!!url&&!source};
+}
