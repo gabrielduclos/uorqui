@@ -23,6 +23,7 @@
       "/media/profile/*",
       "/media/community/*",
       "/media/community-attachment/*",
+      "/media/feed/*",
       "/media/dm/*",
       "/health",
       "/health/*"
