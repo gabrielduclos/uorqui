@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { VoicePortalShell } from './VoicePortalShell';
 import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,18 +60,19 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
   const [voiceMinimized,setVoiceMinimized]=useState(false);
   const [voicePhase,setVoicePhase]=useState<VoicePhase>('idle');
-  const [voiceSwitchNotice,setVoiceSwitchNotice]=useState(false);
-  useEffect(()=>{if(!active)setVoiceMinimized(true);},[active]);
-  useEffect(()=>{if(voicePhase==='idle'&&activeVoiceRoom&&voiceMinimized)setVoiceMinimized(false);},
-    [voicePhase,activeVoiceRoom,voiceMinimized]);
+  const voiceHostRef=useRef<HTMLDivElement|null>(null);
+  useEffect(()=>{if(!active){setVoiceMinimized(true);if(voicePhase==='idle')setActiveVoiceRoom(null);}},[active,voicePhase]);
   function openVoiceRoom(target:VoiceRoomTarget){
     if(activeVoiceRoom?.communityId===target.communityId&&activeVoiceRoom.channelId===target.channelId){
-      setVoiceMinimized(false);setVoiceSwitchNotice(false);return;
+      setVoiceMinimized(false);return;
     }
     if(activeVoiceRoom&&voicePhase!=='idle'){
-      setVoiceMinimized(false);setVoiceSwitchNotice(true);return;
+      setVoiceMinimized(true);
+      setNotice(pt?'Você já está conectado a outra sala. Desconecte antes de entrar em outra.':
+        'You are already connected to another room. Disconnect before joining another.');
+      return;
     }
-    setActiveVoiceRoom(target);setVoiceMinimized(false);setVoiceSwitchNotice(false);
+    setActiveVoiceRoom(target);setVoiceMinimized(false);
   }
   const [voiceRooms,setVoiceRooms]=useState<Record<string,CommunityVoiceParticipant[]>>({});
   const [voicePresenceLoading,setVoicePresenceLoading]=useState(false);
@@ -208,7 +210,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       setShareNotice(pt?'Link copiado!':'Link copied!');}
     catch{setShareNotice(window.location.origin+'/invite/'+inviteLink.id);}
   }
-  const closeChannel=()=>{setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){
@@ -472,6 +474,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     <img src={group.avatarUrl} alt="" className={classes+' block min-h-0 min-w-0 object-cover'}/>:
     <span aria-hidden="true">{communityIcon(group)}</span>;
 
+  const voiceInline=Boolean(activeVoiceRoom&&active&&channelOpen&&!voiceMinimized&&!discovery&&
+    community?.id===activeVoiceRoom.communityId&&activeChannel?.id===activeVoiceRoom.channelId&&
+    activeChannel?.kind==='voice');
+
   return <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
     <nav data-uorqui-community-rail aria-label={pt?'Minhas comunidades':'My communities'}
       className={cn('relative z-20 w-16 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-card/95 py-4',
@@ -570,7 +576,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
                 aria-label={ch.name+(unreadChannels[ch.id]?' · '+unreadChannels[ch.id]+(pt?' não lidas':' unread'):'')}
-                onClick={()=>{setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
                 <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>
                 {!!unreadChannels[ch.id]&&<span aria-hidden="true"
@@ -686,19 +692,23 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden',channelOpen?'flex':'hidden md:flex')}>
       {community&&memberView(community)&&activeChannel&&!discovery?<>
         <header data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-3 backdrop-blur sm:px-4">
-          <Button type="button" size="icon" variant="ghost" className="md:hidden" aria-label={pt?'Voltar aos canais':'Back to channels'} onClick={closeChannel}>
+          <Button type="button" size="icon" variant="ghost"
+            className={activeChannel.kind==='voice'?'shrink-0':'shrink-0 md:hidden'}
+            aria-label={pt?'Voltar aos canais':'Back to channels'} onClick={closeChannel}>
             <ArrowLeft className="size-5"/></Button>
           {activeChannel.kind==='voice'?<Volume2 className="size-5 text-muted-foreground"/>:<Hash className="size-5 text-muted-foreground"/>}
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.name}</h2>
             <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
         </header>
         {activeChannel.kind==='voice'?(
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground">
-            <Headphones className="size-9 text-primary"/>
-            <p>{pt?'A chamada continua ao navegar por outras telas.':'Your call stays connected while you navigate.'}</p>
-            <Button type="button" variant="outline" onClick={()=>openVoiceRoom({
-              communityId:community.id,channelId:activeChannel.id,communityName:community.name,channelName:activeChannel.name
-            })}>{pt?'Abrir sala de voz':'Open voice room'}</Button>
+          <div ref={voiceHostRef} className="relative flex min-h-0 flex-1 flex-col">
+            {!voiceInline&&<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground">
+              <Headphones className="size-9 text-primary"/>
+              <p>{pt?'Entre e converse sem sair da comunidade.':'Join the conversation right inside your community.'}</p>
+              <Button type="button" variant="outline" onClick={()=>openVoiceRoom({
+                communityId:community.id,channelId:activeChannel.id,communityName:community.name,channelName:activeChannel.name
+              })}>{pt?'Abrir sala de voz':'Open voice room'}</Button>
+            </div>}
           </div>
         ):<>
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
@@ -787,26 +797,21 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
       </div>}
     </section>
     {activeVoiceRoom&&createPortal(
-      <div className={voiceMinimized?
-        'fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-3 z-[180] w-[min(23rem,calc(100vw-1.5rem))] md:bottom-5 md:right-5':
-        'fixed inset-0 z-[180] min-h-0 bg-background'}>
-        {voiceSwitchNotice&&!voiceMinimized&&<div role="status"
-          className="absolute inset-x-3 top-3 z-20 rounded-xl border border-primary/40 bg-card p-3 text-sm shadow-xl">
-          {pt?'Você já está conectado a outra sala. Saia dela antes de entrar em uma nova.':
-            'You are already connected to another room. Leave it before joining a new one.'}
-          <button type="button" className="ml-3 font-medium text-primary underline" onClick={()=>setVoiceSwitchNotice(false)}>
-            {pt?'Entendi':'Got it'}</button>
-        </div>}
+      <VoicePortalShell floating={!voiceInline} anchorRef={voiceHostRef} pt={pt}>
         <CommunityVoiceRoom key={activeVoiceRoom.communityId+'/'+activeVoiceRoom.channelId}
-          {...activeVoiceRoom} mode={voiceMinimized?'floating':'expanded'}
+          {...activeVoiceRoom} mode={voiceInline?'expanded':'floating'}
           onParticipantsChange={setVoiceParticipants} onPhaseChange={setVoicePhase}
           onMinimize={()=>{
-            if(voicePhase==='joined')setVoiceMinimized(true);
-            else{setActiveVoiceRoom(null);setVoiceSwitchNotice(false);}
+            if(voicePhase==='joined')closeChannel();
+            else{setActiveVoiceRoom(null);setVoiceMinimized(true);}
           }}
-          onRestore={()=>{setVoiceMinimized(false);setVoiceSwitchNotice(false);}}
-          onLeave={()=>{setActiveVoiceRoom(null);setVoiceParticipants([]);setVoicePhase('idle');setVoiceSwitchNotice(false);}}/>
-      </div>,document.body)}
+          onRestore={()=>{
+            setSelectedId(activeVoiceRoom.communityId);setDiscovery(false);
+            setChannelId(activeVoiceRoom.channelId);setChannelOpen(true);
+            setVoiceMinimized(false);
+          }}
+          onLeave={()=>{setActiveVoiceRoom(null);setVoiceParticipants([]);setVoicePhase('idle');}}/>
+      </VoicePortalShell>,document.body)}
     <ContentReportDialog target={reportMessageId?{targetKind:'community_message',targetId:reportMessageId}:null}
       locale={locale} onClose={()=>setReportMessageId(null)}/>
     {(error||notice)&&<div role={error?'alert':'status'}

@@ -6,6 +6,14 @@
 
 Definir a linguagem visual compartilhada do Uorqui para mensagens individuais, feed híbrido e comunidades. O sistema precisa funcionar no desktop e no celular, com temas semânticos, acessibilidade e português/inglês.
 
+## Identidade da marca
+
+- Identidade oficial: **uorqui.** em lettering pixelado de 43 × 7 módulos, reproduzindo o ícone original do PWA (não usar o logotipo arredondado das propostas descartadas).
+- A marca em cabeçalhos, tela de entrada e tela de confirmação usa o componente vetorial `UorquiWordmark`, com píxeis brancos no tema escuro e cor de texto no tema claro.
+- O ponto final verde-menta `#69d2aa` é parte da assinatura da marca; o fundo escuro é `#101827` a `#080e1b`, compatível com o UI Kit.
+- O PWA mantém os ícones `/icon-192.png` e `/icon-512.png` já escolhidos. O favicon `/icon.svg` replica a tipografia pixelada em alta definição.
+- Evitar fontes remotas para compor a marca; preservar o desenho nítido nos tamanhos pequenos.
+
 ## Temas
 
 O **Dark é o tema inicial padrão**. O botão de sol/lua no cabeçalho alterna imediatamente entre Dark e Light. A escolha explícita fica no localStorage, chave uorqui:theme.
