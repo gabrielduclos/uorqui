@@ -324,7 +324,9 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
         "CASE WHEN (to_jsonb(c)->>$$deleted_at$$) IS NOT NULL THEN NULL WHEN pr.is_public OR c.author_id=$2::uuid OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(c.author_id,$2::uuid) AND f.user_b_id=GREATEST(c.author_id,$2::uuid) AND f.status='accepted') THEN pr.avatar_url ELSE NULL END AS \"authorAvatar\", "+
         '(c.author_id=$2::uuid) AS mine,((to_jsonb(c)->>$$deleted_at$$) IS NULL AND (c.author_id=$2::uuid OR p.author_id=$2::uuid)) AS "canDelete" '+
         'FROM feed_comments c JOIN feed_posts p ON p.id=c.post_id JOIN users u ON u.id=c.author_id JOIN profiles pr ON pr.user_id=c.author_id '+
-        'WHERE c.post_id=$1 AND ((to_jsonb(c)->>$$deleted_at$$) IS NOT NULL OR NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
+        'WHERE c.post_id=$1 AND ((to_jsonb(c)->>$deleted_at$) IS NULL OR '+
+        "(to_jsonb(c)->>$deleted_by_id$) IS DISTINCT FROM c.author_id::text) AND "+
+        '((to_jsonb(c)->>$deleted_at$) IS NOT NULL OR NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
         '(b.blocker_id=c.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=c.author_id))) '+
         'ORDER BY c.created_at DESC,c.id DESC LIMIT 80',[id,me]);
       return reply.header('Cache-Control',cache).send({comments:r.rows.reverse()});
@@ -348,14 +350,20 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
     try{
       const me=await self(req);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,commentId}=req.params as {id:string;commentId:string};
-      // Either the commenter or the author of the post can moderate the comment.
-      // Keep a tombstone in its original position without exposing deleted content.
-      const r=await getPool().query(
+      // An author deleting their own comment leaves no placeholder.
+      const selfDeleted=await getPool().query(
+        'DELETE FROM feed_comments WHERE id=$1 AND post_id=$2 AND author_id=$3 AND deleted_at IS NULL RETURNING id',
+        [commentId,id,me]);
+      if(selfDeleted.rowCount)return reply.code(204).send();
+      // The post owner can moderate someone else's comment: preserve its position,
+      // but erase the original text and author identity from the response.
+      const moderated=await getPool().query(
         'UPDATE feed_comments c SET deleted_at=now(),deleted_by_id=$3,body=\'[deleted]\' '+
-        'WHERE c.id=$1 AND c.post_id=$2 AND c.deleted_at IS NULL '+
-        'AND EXISTS (SELECT 1 FROM feed_posts p WHERE p.id=c.post_id AND p.deleted_at IS NULL '+
-        'AND (p.author_id=$3 OR c.author_id=$3)) RETURNING c.id',[commentId,id,me]);
-      if(!r.rowCount)return reply.code(404).send({error:'Comment unavailable'});
+        'WHERE c.id=$1 AND c.post_id=$2 AND c.deleted_at IS NULL AND c.author_id<>$3 '+
+        'AND EXISTS (SELECT 1 FROM feed_posts p WHERE p.id=c.post_id '+
+        'AND p.deleted_at IS NULL AND p.author_id=$3) RETURNING c.id',
+        [commentId,id,me]);
+      if(!moderated.rowCount)return reply.code(404).send({error:'Comment unavailable'});
       return reply.code(204).send();
     }catch(err){return failed(req,reply,err,'Delete feed comment');}
   });
