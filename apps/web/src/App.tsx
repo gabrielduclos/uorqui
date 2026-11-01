@@ -50,6 +50,11 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:px-0 sm:py-4">
           <UorquiWordmark className="h-5 w-auto max-w-[45vw] text-foreground"/>
           <div className="flex shrink-0 items-center gap-2">
+            <a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noopener noreferrer"
+              aria-label="GitHub" title="GitHub"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              <Github aria-hidden="true" className="size-5" />
+            </a>
             <PreferencesControls />
           </div>
         </header>
@@ -77,10 +82,6 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
           </article>)}
         </section>
         <footer className="mt-4 space-y-2 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground sm:px-0 lg:text-left">
-          <a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent">
-            <Github className="size-5"/>{t('Conheça o projeto')}
-          </a>
           <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 lg:justify-start" aria-label={t('Documentos legais')}>
             <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{t('Termos de Uso')}</a>
             <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">{t('Política de Privacidade')}</a>
