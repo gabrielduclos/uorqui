@@ -119,13 +119,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     let active=true;
     void loadList().then(groups=>{
       if(!active)return;
-      if(!groups.some(group=>group.myRole))setDiscovery(true);
-      const first=groups.find(group=>group.myRole);
-      if(initialCommunityId&&groups.some(g=>g.id===initialCommunityId&&g.myRole))setSelectedId(initialCommunityId);
-      else if(first)setSelectedId(first.id);
+      // Do not let a first-load response override an invite accepted during this load.
+      if(initialCommunityId&&groups.some(g=>g.id===initialCommunityId&&g.myRole)){
+        setSelectedId(initialCommunityId);
+        setDiscovery(false);
+      }else{
+        const first=groups.find(group=>group.myRole);
+        setSelectedId(first?.id??null);
+        setDiscovery(!first);
+      }
     }).catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar as comunidades.':'Could not load communities.');}});
     return ()=>{active=false;};
-  },[loadList,pt]);
+  },[loadList,pt,initialCommunityId]);
   useEffect(()=>{
     if(!selectedId){setDetail(null);setChannelId(null);return;}
     let active=true;setDetail(null);setDetailLoading(true);
@@ -167,7 +172,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
     };
   },[selectedId,community?.myRole]);
 
-  useEffect(()=>{if(initialCommunityId){setSelectedId(initialCommunityId);setDiscovery(false);void loadList();}},[initialCommunityId,loadList]);
   async function shareCommunity(){
     if(!selectedId)return;
     setShareBusy(true);setShareNotice('');

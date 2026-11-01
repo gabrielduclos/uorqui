@@ -43,11 +43,12 @@ function ProfileAvatar({ name, image, className }: { name: string; image?: strin
   return <Avatar className={cn('size-9', className)}>{source && <AvatarImage src={source} alt={name} referrerPolicy="no-referrer" className="object-cover" />}<AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
 }
 
-export default function SocialShell({ account, onLogout, onAccountUpdate, invitedCommunityId }: {
+export default function SocialShell({ account, onLogout, onAccountUpdate, invitedCommunityId, deferOnboarding = false }: {
   account: SignedInAccount;
   onLogout: () => Promise<void>;
   onAccountUpdate: (next: SignedInAccount) => void;
   invitedCommunityId?: string | null;
+  deferOnboarding?: boolean;
 }) {
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
@@ -66,7 +67,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const unreadMessageCount = useUnreadDirectMessages();
   const communityUnread = useCommunityUnread();
   const communityUnreadLabel=communityUnread.total>99?'99+':String(communityUnread.total);
-  const [tourVisible,setTourVisible]=useState(()=>{try{return localStorage.getItem(onboardingStorageKey(account.user.id))!=='done';}catch{return true;}});
+  // Joining through an invite takes priority; present the tour on a later normal visit.
+  const [tourVisible,setTourVisible]=useState(()=>{
+    if(deferOnboarding)return false;
+    try{return localStorage.getItem(onboardingStorageKey(account.user.id))!=='done';}catch{return true;}
+  });
+  useEffect(()=>{if(deferOnboarding)setTourVisible(false);},[deferOnboarding]);
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
@@ -270,7 +276,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       {tourVisible&&account.profile&&<OnboardingTour userId={account.user.id} profile={account.profile}
         onNavigate={move}
         onProfileSaved={next=>onAccountUpdate({...account,profile:next})}
-        onFinish={()=>{setTourVisible(false);move('feed');}}/>}
+        onFinish={()=>{setTourVisible(false);move(invitedCommunityId?'communities':'feed');}}/>}
     </div>
   );
 }
