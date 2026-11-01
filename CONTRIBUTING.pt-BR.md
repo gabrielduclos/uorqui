@@ -4,7 +4,7 @@
 
 Obrigado pelo interesse em contribuir com o Uorqui.
 
-> **Situação atual:** pré-MVP. Já existe uma estrutura inicial de interface/API para desenvolvimento local, mas a rede social, o banco e o deploy ainda não estão prontos. Veja [Primeiros passos](docs/pt-BR/primeiros-passos.md).
+> **Situação atual:** `0.1.0-beta.1`, beta técnico inicial. O PWA, a API e o banco estão publicados para testes controlados; a validação de e-mail real e em celulares continua pendente. Veja [Primeiros passos](docs/pt-BR/primeiros-passos.md) e [notas de versão](CHANGELOG.pt-BR.md).
 
 ## Antes de começar
 
