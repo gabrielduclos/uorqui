@@ -155,6 +155,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         'expired-callback': () => setCaptchaToken(''),
         'error-callback': () => setCaptchaToken(''),
         theme,
+        size: 'flexible', // Fit Cloudflare Turnstile into narrow mobile forms.
       });
       captchaWidgetId.current = widgetId;
     };
@@ -368,6 +369,10 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         </button>
       </div>}
 
+      {apiChecked&&!apiReady&&!account&&!loading&&<div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/35 bg-amber-500/10 p-3 text-sm">
+        <span>{t('Servidor indisponível. Tente novamente.')}</span>
+        <Button type="button" variant="outline" size="sm" onClick={()=>void checkApi()}>{t('Tentar novamente')}</Button>
+      </div>}
       {loading ? (
         <div role="status" aria-label={t("Verificando sessão")} className="space-y-3">
           <div aria-hidden="true" className="h-12 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
