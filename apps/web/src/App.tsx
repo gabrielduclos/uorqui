@@ -135,7 +135,7 @@ function AppContent() {
     return ()=>{active=false;};
   },[inviteToken]);
   useEffect(()=>{
-    if(!inviteToken||!account?.profile||inviteBusy||invitedCommunity)return;
+    if(!inviteToken||!account?.profile||invitedCommunity)return;
     let active=true;setInviteBusy(true);
     void fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken)+'/redeem',{
       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'
@@ -150,7 +150,7 @@ function AppContent() {
           'Não foi possível aceitar o convite. / Could not redeem the invitation.');}})
       .finally(()=>{if(active)setInviteBusy(false);});
     return ()=>{active=false;};
-  },[account?.profile,inviteToken,inviteBusy,invitedCommunity]);
+  },[account?.profile,inviteToken,invitedCommunity]);
   const onAuthenticated = useCallback((next: Account) => { clearChatMediaCache(); setAccount(next); }, []);
   const signOut = useCallback(async () => {
     const response = await fetch('/api/auth/sign-out', {
