@@ -70,10 +70,11 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 
 ### Initial persistent feed implementation
 
-- Home now shows a real cursor-paginated hybrid timeline: **For you** contains authorized posts (public, friends and own); **Following** initially uses accepted friends plus own posts.
-- Publish text, up to **6 images** as a carousel or **1 video** (50 MB per media file), like/unlike, comment and delete own posts. Private profiles require an accepted friendship; blocks hide posts.
-- The Worker validates file signatures and draft ownership, stores media in private R2, and uses an HMAC signature to link uploaded media through the API. Posts with media are not visible until all expected assets are confirmed; upload retries resume completed slots.
+- Home now shows a real cursor-paginated hybrid timeline: **For you** contains authorized posts (public, friends and own); **Following** contains explicitly followed accounts and own posts; following is independent of mutual friendship.
+- Publish text, up to **6 images** as a carousel or **1 video** (50 MB per media file), like/unlike, comment, edit and delete own posts. Private profiles require an accepted friendship; blocks hide posts.
+- The Worker validates file signatures and draft ownership, stores media in private R2, and uses an HMAC signature to link uploaded media through the API. Posts with media are not visible until all expected assets are confirmed; upload retries resume completed slots, with editable captions and explicit draft discard.
 - Separate fullscreen **Videos** mode starts at the tapped video, navigates vertically by swipe/keys, and returns without losing the feed scroll position. Visible feed videos can autoplay muted.
-- Share URLs use `/?post=<id>`; image zoom is available. Access to private shared posts remains authorization-gated.
+- Share URLs use `/?post=<id>`; image zoom is available. Private images use bounded per-tab memory caching, cleared on sign-out. Access to private shared posts remains authorization-gated.
 - Drizzle migration `0019_hybrid_feed` creates `feed_posts`, `feed_media`, `feed_likes` and `feed_comments`. Production must be migrated before enabling feed endpoints; missing schema returns `FEED_NOT_READY`.
-- Future work: directional follows, comment pagination, discovery ranking, video transcoding, reporting/moderation, previews, accessibility, and cleanup of orphaned uploads after interrupted sessions.
+- Migration `0020_feed_follows` adds independent directional follows. Private accounts may only be followed by accepted friends; account blocks override follows. Follow/Following controls appear on posts.
+- Future work: comment pagination, discovery ranking, video transcoding, reporting/moderation, previews, accessibility, and cleanup of orphaned uploads after interrupted sessions.
