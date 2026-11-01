@@ -60,6 +60,12 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     });
 
     await waitFor(browserOrigin + '/api/v1/status', worker, 'Cloudflare Worker');
+    // The entry document must not remain stale when hashed JS assets rotate.
+    const loginPage=await fetch(browserOrigin+'/');
+    assert.equal(loginPage.status,200,'SPA entry must load at root');
+    assert.match(loginPage.headers.get('cache-control')??'',/no-store/,'login bootstrap must be revalidated');
+    assert.match(await loginPage.text(),/<div id="root">/);
+
 
     let cookie = '';
     async function request(path, options = {}) {
