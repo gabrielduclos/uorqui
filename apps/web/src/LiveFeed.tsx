@@ -756,18 +756,20 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
           </form>:post.body&&<p className="mt-3 whitespace-pre-wrap wrap-break-word text-sm leading-6 sm:text-base">{post.body}</p>}
           <PostGallery post={post} onZoom={setZoom}/>
           <FeedVideo post={post} open={()=>openVideo(post)} paused={videoOpen||!active}/>
-          <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/70 pt-2">
+          <div className="mt-3 flex flex-nowrap items-center gap-1 border-t border-border/70 pt-2">
             <Button type="button" size="sm" variant="ghost" disabled={likeBusy===post.id}
-              onClick={()=>void toggleLike(post)} className={post.liked?'text-rose-500':''}
+              onClick={()=>void toggleLike(post)} className={post.liked?'shrink-0 text-rose-500':'shrink-0'}
               aria-pressed={post.liked}><Heart className="size-4" fill={post.liked?'currentColor':'none'}/>{post.likeCount}</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={()=>void showComments(post)}>
+            <Button type="button" size="sm" variant="ghost" className="shrink-0" onClick={()=>void showComments(post)}>
               <MessageCircle className="size-4"/>{post.commentCount}</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={()=>share(post)}>
-              <Share2 className="size-4"/>{pt?'Compartilhar':'Share'}</Button>
-            {!post.mine&&<Button type="button" size="sm" variant="ghost"
+            <Button type="button" size="sm" variant="ghost" className="shrink-0" onClick={()=>share(post)}
+              aria-label={pt?'Compartilhar publicação':'Share post'}>
+              <Share2 className="size-4"/><span className="hidden sm:inline">{pt?'Compartilhar':'Share'}</span></Button>
+            {!post.mine&&<Button type="button" size="icon" variant="ghost"
               onClick={()=>setReportTarget({targetKind:'post',targetId:post.id})}
-              aria-label={pt?'Denunciar publicação':'Report post'} className="text-muted-foreground">
-              <Flag className="size-4"/>{pt?'Denunciar':'Report'}</Button>}
+              title={pt?'Denunciar publicação':'Report post'}
+              aria-label={pt?'Denunciar publicação':'Report post'} className="ml-auto size-9 shrink-0 text-muted-foreground">
+              <Flag className="size-4"/></Button>}
           </div>
           {openComments===post.id&&<section className="mt-2 space-y-3 border-t border-border pt-3" aria-label={pt?'Comentários':'Comments'}>
             {(comments[post.id]??[]).map(comment=><div key={comment.id} className="flex items-start gap-2 text-sm">
