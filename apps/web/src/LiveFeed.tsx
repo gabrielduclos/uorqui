@@ -108,6 +108,10 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
   const [commentBusy,setCommentBusy]=useState(false);
   const [likeBusy,setLikeBusy]=useState<string|null>(null);
   const [deleting,setDeleting]=useState<string|null>(null);
+  const [editingPost,setEditingPost]=useState<string|null>(null);
+  const [editingBody,setEditingBody]=useState('');
+  const [editBusy,setEditBusy]=useState(false);
+  const [notice,setNotice]=useState('');
   const [zoom,setZoom]=useState<string|null>(null);
   const [videoOpen,setVideoOpen]=useState(false);
   const [videoCommentsOpen,setVideoCommentsOpen]=useState(false);
@@ -258,6 +262,20 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
       updatePost(post.id,p=>({...p,commentCount:Math.max(0,p.commentCount-1)}));
     }catch{setError(pt?'Não foi possível remover o comentário.':'Could not remove comment.');}
   }
+  async function updatePostBody(event:FormEvent,post:Post){
+    event.preventDefault();
+    if(editBusy||(!editingBody.trim()&&!post.media.length))return;
+    setEditBusy(true);setError('');
+    try{
+      const clean=editingBody.trim();
+      await api('/api/v1/feed/posts/'+post.id,{
+        method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:clean})
+      });
+      updatePost(post.id,item=>({...item,body:clean}));
+      setEditingPost(null);setEditingBody('');
+    }catch{setError(pt?'Não foi possível editar a publicação.':'Could not edit post.');}
+    finally{setEditBusy(false);}
+  }
   async function removePost(post:Post){
     if(deleting!==post.id){setDeleting(post.id);return;}
     try{
@@ -270,7 +288,7 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
     const url=window.location.origin+'/?post='+post.id;
     try{
       if(navigator.share)await navigator.share({url});
-      else{await navigator.clipboard.writeText(url);setError(pt?'Link copiado.':'Link copied.');}
+      else{await navigator.clipboard.writeText(url);setNotice(pt?'Link copiado.':'Link copied.');}
     }catch{/* User may dismiss share sheet. */}
   }
   async function openVideoComments(post:Post){
@@ -372,6 +390,9 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
           <Button size="sm" variant={filter==='following'?'secondary':'ghost'} onClick={()=>{setFilter('following');scrollRef.current?.scrollTo(0,0);}}
             aria-pressed={filter==='following'}>{pt?'Seguindo':'Following'}</Button>
         </div>
+        {notice&&<div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+          <span>{notice}</span><button type="button" onClick={()=>setNotice('')} aria-label={pt?'Fechar':'Close'}><X className="size-4"/></button>
+        </div>}
         {error&&<div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
           <span>{error}</span><button type="button" onClick={()=>setError('')} aria-label={pt?'Fechar':'Close'}><X className="size-4"/></button>
         </div>}
@@ -387,10 +408,24 @@ export default function LiveFeed({ownName,ownAvatar}:{ownName:string;ownAvatar:s
               <a className="block truncate text-sm font-semibold hover:underline" href={'/@'+post.authorHandle} target="_blank" rel="noopener noreferrer">{post.authorName}</a>
               <span className="text-xs text-muted-foreground">@{post.authorHandle} · {date(post.publishedAt)}</span>
             </div>
-            {post.mine&&<Button size="sm" variant="ghost" onClick={()=>void removePost(post)} className="gap-1 text-xs text-muted-foreground">
-              <Trash2 className="size-4"/>{deleting===post.id?(pt?'Confirmar':'Confirm'):(pt?'Excluir':'Delete')}</Button>}
+            {post.mine&&<div className="flex shrink-0 items-center gap-1">
+              <Button size="sm" variant="ghost" disabled={editBusy} onClick={()=>{
+                if(editingPost===post.id){setEditingPost(null);setEditingBody('');}
+                else{setEditingPost(post.id);setEditingBody(post.body);}
+              }} className="text-xs text-muted-foreground">{editingPost===post.id?(pt?'Voltar':'Cancel'):(pt?'Editar':'Edit')}</Button>
+              <Button size="sm" variant="ghost" onClick={()=>void removePost(post)} className="gap-1 text-xs text-muted-foreground">
+                <Trash2 className="size-4"/>{deleting===post.id?(pt?'Confirmar':'Confirm'):(pt?'Excluir':'Delete')}</Button>
+            </div>}
           </header>
-          {post.body&&<p className="mt-3 whitespace-pre-wrap wrap-break-word text-sm leading-6 sm:text-base">{post.body}</p>}
+          {editingPost===post.id?<form onSubmit={event=>void updatePostBody(event,post)} className="mt-3 space-y-2">
+            <textarea aria-label={pt?'Editar publicação':'Edit post'} value={editingBody}
+              onChange={event=>setEditingBody(event.target.value)} rows={3} maxLength={4000}
+              className="min-h-20 w-full resize-y rounded-xl border border-input bg-background p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/40"/>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={()=>{setEditingPost(null);setEditingBody('');}}>{pt?'Cancelar':'Cancel'}</Button>
+              <Button type="submit" size="sm" loading={editBusy} disabled={editBusy||(!editingBody.trim()&&!post.media.length)}>{pt?'Salvar':'Save'}</Button>
+            </div>
+          </form>:post.body&&<p className="mt-3 whitespace-pre-wrap wrap-break-word text-sm leading-6 sm:text-base">{post.body}</p>}
           <PostGallery post={post} onZoom={setZoom}/>
           <FeedVideo post={post} open={()=>openVideo(post)} paused={videoOpen}/>
           <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/70 pt-2">
