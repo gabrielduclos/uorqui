@@ -114,3 +114,11 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - O perfil público mostra publicações em grade responsiva de **três colunas** com miniaturas de imagem, prévias de vídeo e texto para posts sem mídia; há visualizador de publicação e paginação. A API `GET /api/v1/feed/posts?author=handle` exige sessão e retorna apenas posts publicados de contas públicas, respeitando bloqueios. Visitantes sem login recebem uma orientação para entrar antes de visualizar mídias.
 - Os balões das conversas individuais (reais e demonstração) usam cantos discretos de **5 px**; os canais comunitários continuam no estilo de mensagens em sequência.
 - O acesso mobile prioriza o formulário em vez do material promocional, abre diretamente em **Entrar**, oferece abas Entrar/Criar conta, campos sensíveis a teclado móvel, mostrar/ocultar senha acessível e ações com área de toque confortável. Disponibilidade do cadastro e verificações antiabuso continuam governadas pelo servidor.
+
+### Compartilhamento integrado e saída da conta
+
+- O botão **Enviar** do chat individual adota os mesmos cantos discretos de **5 px** dos balões.
+- Ações de mensagem e galeria permitem compartilhar texto, fotos, vídeos, áudios e arquivos com **contatos (amigos)** ou **conversas existentes**. O seletor oferece busca, retorno visual de envio e não permite mensagens para conversas bloqueadas/restritas.
+- Mídias privadas são lidas somente após autorização e reenviadas como **novo anexo no destino**, com regras de upload e limites de 50 MB, sem reutilizar links privados da conversa de origem. Encaminhamento de texto utiliza a API com marcação de encaminhamento e idempotência por destinatário.
+- Compartilhar **publicações e vídeos do feed** envia um link interno autorizado para a conversa escolhida; o destinatário pode abrir a publicação no feed montado, sem recarregar a aplicação, sujeito às permissões atuais. O seletor também oferece copiar link e compartilhar via outros aplicativos. Conteúdo privado não é tornado público por meio do link.
+- No perfil do usuário, inclusive **mobile**, o botão **Sair da conta** fica visível no início da página e exige confirmação. A saída limpa os caches de sessão, mídia e feed.
