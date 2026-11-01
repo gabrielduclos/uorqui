@@ -4,7 +4,7 @@
  */
 import { getVoiceRoomAudioContext } from './communityVoiceSounds';
 
-type Watch={source:MediaStreamAudioSourceNode;analyser:AnalyserNode;values:Uint8Array;lastSound:number};
+type Watch={source:MediaStreamAudioSourceNode;analyser:AnalyserNode;values:Uint8Array<ArrayBuffer>;lastSound:number};
 export class VoiceActivityMonitor {
   private ctx:AudioContext|null=null;
   private sink:GainNode|null=null;
