@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -10,13 +12,14 @@ import CommunityModerationPanel from './CommunityModerationPanel';
 
 type Visibility='public'|'approval'|'private';
 type Community={
-  id:string;name:string;slug:string;description:string|null;visibility:Visibility;
+  id:string;name:string;slug:string;description:string|null;avatarUrl:string|null;visibility:Visibility;
   memberCount:number;myRole:string|null;requestKind:string|null;requestStatus:string|null;
 };
 type Channel={id:string;name:string;kind:'text'|'voice';createdAt:string};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean};
+type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
 const allowedSlug=/^[a-z][a-z0-9-]{2,63}$/;
 
@@ -56,6 +59,9 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'>('text');
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
+  const [pendingMessages,setPendingMessages]=useState<PendingMessage[]>([]);
+  const [messagesLoading,setMessagesLoading]=useState(false);
+  const [detailLoading,setDetailLoading]=useState(false);
   const [draft,setDraft]=useState('');
   const [editingId,setEditingId]=useState<string|null>(null);
   const [editingBody,setEditingBody]=useState('');
@@ -68,6 +74,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const previousLastMessage=useRef<string|null>(null);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
   const community=detail?.community??null;
+  const renderedMessages=[...messages,...pendingMessages.filter(p=>p.channelId===channelId&&!messages.some(m=>m.clientId===p.clientId))];
 
   const loadList=useCallback(async()=>{
     const data=await api<{communities:Community[]}>('/api/v1/communities');
@@ -92,8 +99,8 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   },[loadList,pt]);
   useEffect(()=>{
     if(!selectedId){setDetail(null);setChannelId(null);return;}
-    let active=true;setDetail(null);
-    void loadDetail(selectedId).catch(()=>{if(active)setError(pt?'Não foi possível abrir a comunidade.':'Could not open community.');});
+    let active=true;setDetail(null);setDetailLoading(true);
+    void loadDetail(selectedId).catch(()=>{if(active)setError(pt?'Não foi possível abrir a comunidade.':'Could not open community.');}).finally(()=>{if(active)setDetailLoading(false);});
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
@@ -103,12 +110,12 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){setMessages([]);return;}
     let active=true;
     previousLastMessage.current=null;
-    setMessages([]);
+    setMessages([]);setMessagesLoading(true);
     const poll=async()=>{
       try{
         const result=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
-        if(active)setMessages(result.messages);
-      }catch{if(active)setError(pt?'Não foi possível atualizar as mensagens.':'Could not refresh messages.');}
+        if(active){setMessages(result.messages);setPendingMessages(old=>old.filter(p=>p.channelId!==channelId||!result.messages.some(m=>m.clientId===p.clientId)));setMessagesLoading(false);}
+      }catch{if(active){setMessagesLoading(false);setError(pt?'Não foi possível atualizar as mensagens.':'Could not refresh messages.');}}
     };
     void poll();
     const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void poll();},5000);
@@ -180,20 +187,37 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
       pt?'Convite enviado.':'Invitation sent.');
     setInviteHandle('');
   }
-  async function send(event?:FormEvent){
-    event?.preventDefault();
-    const text=draft.trim();
-    if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!text||busy)return;
-    setBusy(true);setError('');
-    const clientId=crypto.randomUUID();
+  async function submitPending(p:PendingMessage){
+    const currentCommunity=selectedId;
     try{
-      await api('/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/messages',body({clientId,body:text}));
-      setDraft('');
-      const updated=await api<{messages:Message[]}>('/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/messages');
-      setMessages(updated.messages);
-      window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
-    }catch{setError(pt?'Falha ao enviar mensagem. O texto foi mantido.':'Could not send; your text was preserved.');}
-    finally{setBusy(false);}
+      await api('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages',
+        body({clientId:p.clientId,body:p.body}));
+      // Only refresh the currently visible channel. Keep pending entry until the
+      // server's message list contains this clientId (prevents flashing/disappearing).
+      if(channelId===p.channelId&&currentCommunity){
+        const updated=await api<{messages:Message[]}>('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages');
+        setMessages(updated.messages);
+        setPendingMessages(old=>old.filter(msg=>msg.clientId!==p.clientId || !updated.messages.some(m=>m.clientId===msg.clientId)));
+      }
+    }catch{
+      setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'failed'}:x));
+    }
+  }
+  function send(event?:FormEvent){
+    event?.preventDefault();
+    const text=draft.trim(),selected=channelId;
+    if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!selected||!text||text.length>4000)return;
+    const clientId=crypto.randomUUID(),now=new Date().toISOString();
+    const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text,createdAt:now,
+      authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,canEdit:false,canDelete:false,pending:'sending'};
+    setPendingMessages(old=>[...old,pending]);
+    setDraft('');setError('');
+    window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
+    void submitPending(pending);
+  }
+  function retryPending(p:PendingMessage){
+    setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'sending'}:x));
+    void submitPending({...p,pending:'sending'});
   }
   async function updateMessage(event:FormEvent){
     event.preventDefault();
@@ -228,6 +252,9 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const matches=available.filter(group=>(group.name+' '+group.slug).toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   const visibilityLabel=(v:Visibility)=>v==='public'?(pt?'Pública':'Public'):v==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Privada':'Private');
   const communityIcon=(group:Community)=>group.name.trim().charAt(0).toUpperCase()||'C';
+  const communityAvatar=(group:Community,classes:string)=>group.avatarUrl?
+    <img src={group.avatarUrl} alt="" className={classes+' object-cover'}/>:
+    <span aria-hidden="true">{communityIcon(group)}</span>;
 
   return <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
     <nav data-uorqui-community-rail aria-label={pt?'Minhas comunidades':'My communities'}
@@ -241,7 +268,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
       {owned.map(group=><button type="button" key={group.id} title={group.name}
         aria-label={group.name} aria-current={selectedId===group.id&&!discovery?'page':undefined}
         onClick={()=>selectCommunity(group.id)} className={cn('grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!discovery&&'ring-2 ring-primary')}>
-        {communityIcon(group)}
+        {communityAvatar(group,'size-full rounded-2xl')}
       </button>)}
       <button type="button" onClick={()=>{closeChannel();setDiscovery(true);setCreateOpen(true);}}
         aria-label={pt?'Criar comunidade':'Create community'} title={pt?'Criar comunidade':'Create community'}
@@ -282,10 +309,10 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
           </form>:<div className="space-y-2">
             <div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground"/>
               <Input value={query} onChange={e=>setQuery(e.target.value)} className="h-10 pl-9 text-base" placeholder={pt?'Buscar comunidade':'Search communities'}/></div>
-            {loading&&<p role="status" className="p-4 text-xs text-muted-foreground">{pt?'Carregando…':'Loading…'}</p>}
+            {loading&&<SkeletonRows className="p-3" rows={5}/>}
             {matches.map(group=><button type="button" key={group.id} onClick={()=>selectCommunity(group.id)}
               className="flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-secondary">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/15 font-bold text-primary">{communityIcon(group)}</div>
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/15 font-bold text-primary">{communityAvatar(group,'size-full rounded-xl')}</div>
               <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{group.name}</strong>
                 <span className="block truncate text-xs text-muted-foreground">{visibilityLabel(group.visibility)} · {group.memberCount} {pt?'membros':'members'}</span>
                 {group.description&&<span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{group.description}</span>}</span>
@@ -295,7 +322,11 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
         </div>
       </div>:<>
         <div className="shrink-0 border-b border-border bg-card/95 p-4">
-          <div className="truncate text-base font-semibold">{community?.name??(pt?'Comunidade':'Community')}</div>
+          {detailLoading?<div className="space-y-2"><Skeleton className="h-5 w-3/4"/><Skeleton className="h-3 w-1/2"/></div>:
+          <div className="flex items-center gap-2">
+            {community?.avatarUrl&&<img src={community.avatarUrl} alt="" className="size-10 rounded-xl object-cover"/>}
+            <div className="min-w-0 flex-1 truncate text-base font-semibold">{community?.name??(pt?'Comunidade':'Community')}</div>
+          </div>}
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{community?.description|| (community?visibilityLabel(community.visibility):'…')}</p>
           <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
             <Users className="size-3.5"/>{community?.memberCount??'…'} {pt?'membros':'members'}
@@ -370,7 +401,9 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
             </section>}
             {['owner','admin','moderator'].includes(community.myRole??'')&&
               <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
-                channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}/>}
+                name={community.name} description={community.description} avatarUrl={community.avatarUrl}
+                channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}
+                onDeleted={async()=>{closeChannel();setDetail(null);setSelectedId(null);setDiscovery(true);await loadList();}}/>}
             {community.myRole!=='owner'&&<Button variant="ghost" size="sm" className="w-full text-muted-foreground"
               disabled={busy} onClick={()=>void act(async()=>{
                 await api('/api/v1/communities/'+community.id+'/membership',{method:'DELETE'});closeChannel();setDiscovery(true);setSelectedId(null);setDetail(null);
@@ -402,7 +435,8 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{pt?'Mensagens salvas na comunidade, visíveis aos seus membros.':'Messages are saved to the community and visible to its members.'}</p>
             </div>}
-            <div className="space-y-4">{messages.map(message=><div key={message.id} className="flex min-w-0 gap-3">
+            {messagesLoading&&<SkeletonRows rows={4} className="mb-5"/>}
+            <div className="space-y-4">{renderedMessages.map(message=><div key={message.clientId} className="flex min-w-0 gap-3">
               <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-2"><strong className="text-sm">{message.authorName}</strong>
@@ -419,6 +453,12 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                         {pt?'Cancelar':'Cancel'}</Button>
                     </div>
                   </form>:<p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>}
+                {'pending' in message&&<div role="status" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                  {message.pending==='sending'?<><Spinner className="size-3.5"/>{pt?'Enviando…':'Sending…'}</>:
+                    <><span className="text-destructive">{pt?'Falha no envio':'Send failed'}</span>
+                    <button type="button" className="text-primary underline" onClick={()=>retryPending(message)}>
+                      {pt?'Reenviar':'Retry'}</button></>}
+                </div>}
                 {!message.deletedAt&&message.editedAt&&<span className="mt-1 block text-[11px] text-muted-foreground">{pt?'Editada':'Edited'}</span>}
                 {!message.deletedAt&&(message.canEdit||message.canDelete)&&<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
                   {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
@@ -439,7 +479,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                 onChange={event=>setDraft(event.target.value)} onKeyDown={onComposerKeyDown} maxLength={4000} rows={1}
                 placeholder={(pt?'Mensagem em #':'Message in #')+activeChannel.name}
                 className="max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none placeholder:text-muted-foreground"/>
-              <Button type="submit" size="icon" disabled={busy||!draft.trim()} aria-label={pt?'Enviar mensagem':'Send message'}>
+              <Button type="submit" size="icon" disabled={!draft.trim()} aria-label={pt?'Enviar mensagem':'Send message'}>
                 <Send className="size-4"/></Button>
             </div>
           </form>
