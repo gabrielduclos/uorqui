@@ -14,6 +14,8 @@ type ApiStatus = {
   emailVerificationRequired?: boolean;
   passwordRecoveryAvailable?: boolean;
   turnstileSiteKey?: string | null;
+  termsVersion?: string;
+  privacyVersion?: string;
 };
 export type Account = {
   user: { id: string; email: string; name: string };
@@ -88,6 +90,8 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const [handle, setHandle] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
+  const [termsAccepted,setTermsAccepted] = useState(false);
+  const [privacyRead,setPrivacyRead] = useState(false);
   const captchaRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetId = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -224,7 +228,11 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         setMessage(t("O cadastro público está sendo preparado. A verificação por e-mail e a proteção contra abuso ainda precisam ser ativadas."));
         return;
       }
-      const token = view === 'register' ? challenge() : '';
+      if(view==='register'&&(!termsAccepted||!privacyRead)){
+         setMessage(t('É necessário aceitar os Termos de Uso e confirmar a leitura da Política de Privacidade.'));
+         return;
+       }
+       const token = view === 'register' ? challenge() : '';
       if (token === null) return;
       const signup = view === 'register';
       const { response, body } = await requestJson(
@@ -232,7 +240,10 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         {
           method: 'POST',
           body: JSON.stringify(signup
-            ? { name: name.trim(), email: email.trim(), password, callbackURL: verificationCallback(), ...(token ? { captchaToken: token } : {}) }
+            ? { name: name.trim(), email: email.trim(), password, callbackURL: verificationCallback(),
+                termsAccepted,privacyNoticeAcknowledged:privacyRead,
+                termsVersion:status.termsVersion??'2026-11-01',privacyVersion:status.privacyVersion??'2026-11-01',
+                ...(token ? { captchaToken: token } : {}) }
             : { email: email.trim(), password }),
         },
       );
@@ -393,7 +404,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               <Input id="handle" className={inputClass} placeholder="seu_usuario" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[a-z][a-z0-9_]{2,31}" required minLength={3} maxLength={32} autoComplete="username" />
               <Label className="block text-sm font-medium" htmlFor="displayName">{t('Nome exibido')}</Label>
               <Input id="displayName" className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} maxLength={120} />
-              <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Salvando…')}</> : t("Criar meu perfil")}</Button>
+              <Button type="submit" disabled={busy||(view==='register'&&(!termsAccepted||!privacyRead))} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Salvando…')}</> : t("Criar meu perfil")}</Button>
             </form>
           )}
           <Button type="button" disabled={busy} aria-busy={busy} onClick={() => void logout()} variant="outline" className={minorButton}>{busy ? <><Spinner /> {t("Saindo…")}</> : t('Sair da conta')}</Button>
@@ -441,6 +452,25 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
                   {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-muted-foreground">{t("Use pelo menos 12 caracteres.")}</p>}
                 </div>
               )}
+              {view==='register'&&<fieldset className="space-y-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <legend className="px-1 text-xs font-semibold">{t('Termos e privacidade')}</legend>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" checked={termsAccepted} onChange={e=>setTermsAccepted(e.target.checked)}
+                    required className="mt-1 size-4 shrink-0 accent-primary"/>
+                  <span>{t('Li e aceito os')} <a href="/termos" target="_blank" rel="noopener noreferrer"
+                    className="font-medium text-primary underline">{t('Termos de Uso')}</a> <span className="text-xs text-muted-foreground">(v{status.termsVersion??'2026-11-01'})</span>.</span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" checked={privacyRead} onChange={e=>setPrivacyRead(e.target.checked)}
+                    required className="mt-1 size-4 shrink-0 accent-primary"/>
+                  <span>{t('Declaro que li a')} <a href="/privacidade" target="_blank" rel="noopener noreferrer"
+                    className="font-medium text-primary underline">{t('Política de Privacidade')}</a> {t('e entendo como meus dados são tratados')}.</span>
+                </label>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {t('O Uorqui utiliza cookies essenciais de autenticação e segurança.')} <a href="/cookies"
+                    target="_blank" rel="noopener noreferrer" className="text-primary underline">{t('Ver política de cookies')}</a>.
+                </p>
+              </fieldset>}
               {siteKey && ['register', 'forgot'].includes(view) && <div ref={captchaRef} aria-label={t("Verificação de segurança")} />}
               <Button type="submit" disabled={busy} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'forgot' ? t("Enviar link de recuperação") : view === 'reset' ? t('Salvar nova senha') : submitLabel}</Button>
               {view === 'register' && apiChecked && !canRegister && <p role="status" className="text-sm text-amber-600 dark:text-amber-200">{t("Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.")}</p>}
