@@ -15,6 +15,7 @@ const editBody={type:'object',required:['body'],additionalProperties:false,prope
 const communitySettingsBody={type:'object',additionalProperties:false,minProperties:1,properties:{
   name:{type:'string',minLength:2,maxLength:120},
   description:{type:'string',maxLength:500},
+  visibility:{type:'string',enum:['public','approval','private']},
   avatarUrl:{anyOf:[{type:'string',pattern:'^/media/community/[0-9a-f-]{36}/[0-9a-f-]{36}\\.(webp|jpg|png)$'},{type:'null'}]}
 }};
 const communityMediaParams={type:'object',required:['id','asset'],additionalProperties:false,properties:{
@@ -69,7 +70,7 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
-      const updates=request.body as {name?:string;description?:string;avatarUrl?:string|null};
+      const updates=request.body as {name?:string;description?:string;visibility?:'public'|'approval'|'private';avatarUrl?:string|null};
       const roleValue=await role(id,me);
       if(!roleValue||ranks[roleValue]<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
       const name=updates.name?.trim();
@@ -77,14 +78,30 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
       const url=updates.avatarUrl;
       if(url!==undefined&&url!==null&&!url.startsWith('/media/community/'+id+'/'))
         return reply.code(400).send({error:'Invalid community image'});
-      const r=await getPool().query(
-        'UPDATE communities SET name=COALESCE($3,name),description=CASE WHEN $4::boolean THEN $5 ELSE description END,'+
-        'avatar_url=CASE WHEN $6::boolean THEN $7 ELSE avatar_url END '+
-        'WHERE id=$1 AND EXISTS(SELECT 1 FROM community_members WHERE community_id=$1 AND user_id=$2 AND role IN (\'owner\',\'admin\')) '+
-        'RETURNING id,name,description,avatar_url AS "avatarUrl"',
-        [id,me,name??null,updates.description!==undefined,updates.description?.trim()??null,url!==undefined,url??null]);
-      if(!r.rowCount)return reply.code(403).send({error:'ADMIN_REQUIRED'});
-      return reply.header('Cache-Control',noCache).send({community:r.rows[0]});
+      const client=await getPool().connect();
+      try{
+        await client.query('BEGIN');
+        const r=await client.query(
+          'UPDATE communities SET name=COALESCE($3,name),description=CASE WHEN $4::boolean THEN $5 ELSE description END,'+
+          'avatar_url=CASE WHEN $6::boolean THEN $7 ELSE avatar_url END,'+
+          'visibility=COALESCE($8::community_visibility,visibility) '+
+          'WHERE id=$1 AND EXISTS(SELECT 1 FROM community_members WHERE community_id=$1 AND user_id=$2 AND role IN (\'owner\',\'admin\')) '+
+          'RETURNING id,name,description,avatar_url AS "avatarUrl",visibility',
+          [id,me,name??null,updates.description!==undefined,updates.description?.trim()??null,url!==undefined,url??null,updates.visibility??null]);
+        if(!r.rowCount){
+          await client.query('ROLLBACK');
+          return reply.code(403).send({error:'ADMIN_REQUIRED'});
+        }
+        // Pending requests are no longer applicable when entry becomes open or invite-only.
+        // Keep pending direct invitations: they can still be accepted in either mode.
+        if(updates.visibility==='public'||updates.visibility==='private'){
+          await client.query(
+            "DELETE FROM community_join_requests WHERE community_id=$1 AND kind='join' AND status='pending'",
+            [id]);
+        }
+        await client.query('COMMIT');
+        return reply.header('Cache-Control',noCache).send({community:r.rows[0]});
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
     }catch(error){request.log.error({err:error},'Edit community');return reply.code(503).send({error:'Unavailable'});}
   });
 
