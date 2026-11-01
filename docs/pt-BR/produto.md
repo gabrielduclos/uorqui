@@ -135,3 +135,9 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - A foto do onboarding reutiliza o editor de recorte e o endpoint de mídia privada do perfil; pode ser trocada novamente no editor de Perfil.
 - Comunidades exibem **badges numéricos** nos canais de texto, nos ícones individuais de comunidade e na navegação principal mobile/desktop. Mensagens próprias e excluídas não contam; a leitura só é confirmada quando um canal de texto está aberto com as mensagens efetivamente carregadas. Um cursor de leitura por usuário e canal é persistido em PostgreSQL, funcionando entre dispositivos. A API autentica as leituras, exige associação à comunidade, valida origem e nunca retrocede a leitura.
 - Login e criação de conta usam layout mobile mais próximo das bordas, com links de recuperação e verificação realmente estilizados como links, compatíveis com temas claro e escuro.
+
+### Atualização em tempo real das comunidades
+
+- A lista principal de cada sala de voz exibe **nome, microfone ligado/desligado e áudio ligado/desligado**, sem foto de perfil. Uma pequena indicação de presença permanece ao lado do nome; o destaque de fala em tempo real só é apresentado quando a atividade é efetivamente conhecida.
+- Mensagens de canais, badges de não lidas e estados da lista de voz recebem **Server-Sent Events (SSE)** autenticados, usando o mesmo padrão empregado nas conversas individuais. O endpoint `GET /api/v1/communities/events` exige uma sessão, revalida a inscrição a cada cinco minutos e publica apenas IDs e tipo de alteração; o conteúdo continua sendo buscado em endpoints com verificação de associação. Um fallback de aproximadamente 30 segundos cobre desconexões.
+- O backend usa um único `LISTEN/NOTIFY` PostgreSQL por instância para distribuir mudanças de mensagem, canais e voz. A conexão de eventos não contém textos ou dados privados e é encerrada no shutdown da API.
