@@ -90,12 +90,18 @@ test('Auth + social profile local integration', async () => {
       termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2020-01-01',privacyVersion:'2026-11-01'},
   });
   assert.equal(wrongVersion.response.status,400);
+  const tooShortSignup = await send('/api/auth/sign-up/email', {
+    method: 'POST',
+    body: {name:'Short Password', email:'short-password@example.invalid', password:'Short7!',
+      termsAccepted:true, privacyNoticeAcknowledged:true, termsVersion:'2026-11-01', privacyVersion:'2026-11-01'},
+  });
+  assert.equal(tooShortSignup.response.status, 400, 'seven-character password must be rejected');
   const signup = await send('/api/auth/sign-up/email', {
     method: 'POST',
     body: {
       name: 'Uorqui Test',
       email: 'uorqui-test@example.invalid',
-      password: 'correct-horse-battery-staple-demo',
+      password: 'Eight8!!',
     termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'},
   });
   assert.equal(signup.response.status, 200, JSON.stringify(signup.data));
