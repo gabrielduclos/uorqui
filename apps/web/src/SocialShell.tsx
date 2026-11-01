@@ -68,6 +68,16 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     window.addEventListener('uorqui:open-dm', listener);
     return () => window.removeEventListener('uorqui:open-dm', listener);
   }, []);
+  useEffect(()=>{
+    const openSharedPost=(event:Event)=>{
+      const id=(event as CustomEvent<string>).detail;
+      if(typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id))return;
+      setFeedTyping(false);
+      setArea('feed');
+    };
+    window.addEventListener('uorqui:open-feed-post',openSharedPost);
+    return ()=>window.removeEventListener('uorqui:open-feed-post',openSharedPost);
+  },[]);
 
   function move(next: Area) {
     setFeedTyping(false);
