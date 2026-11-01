@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useUorquiPreferences } from './UorquiPreferences';
 import type { UserProfileData } from './UserProfiles';
@@ -71,7 +72,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const [account, setAccount] = useState<Account | null>(null);
   const [view, setView] = useState<AuthView>(() => {
     const q = new URLSearchParams(window.location.search);
-    return q.has('token') ? 'reset' : q.has('verify') ? 'verify' : q.has('login') ? 'login' : /^\/invite\//.test(window.location.pathname) ? 'register' : 'welcome';
+    return q.has('token') ? 'reset' : q.has('verify') ? 'verify' : /^\/invite\//.test(window.location.pathname) ? 'register' : 'login';
   });
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
   const [status, setStatus] = useState<ApiStatus>({});
@@ -173,7 +174,6 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         script?.removeEventListener('load', mount);
         if (widgetId) window.turnstile?.remove(widgetId);
       captchaWidgetId.current = null;
-        captchaWidgetId.current = null;
       };
     }
     return () => {
@@ -337,22 +337,36 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       if (!response.ok) throw new Error('Logout unsuccessful');
       setAccount(null);
       setPassword('');
-      navigate('welcome');
+      navigate('login');
     });
   }
 
-  const inputClass = 'w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40';
-  const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
-  const minorButton = 'w-full min-h-11 rounded-xl border border-border px-4 py-2.5 text-base font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const inputClass = 'min-h-12 w-full rounded-lg border border-input bg-background px-3.5 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40';
+  const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
+  const minorButton = 'w-full min-h-11 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
   const submitLabel = busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'register' ? t("Criar minha conta") : t("Entrar");
 
   return (
-    <section aria-label={t('Acesso à conta')} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-      <div className="mb-5">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t("Identidade Uorqui")}</div>
-        <h2 className="mt-2 text-2xl font-semibold">{account ? t('Sua conta') : view === 'welcome' ? t("Bem-vindo ao Uorqui") : view === 'register' ? t("Criar sua conta") : view === 'forgot' ? t('Recuperar acesso') : view === 'verify' ? t("Confirme seu e-mail") : view === 'reset' ? t('Definir nova senha') : t("Entrar")}</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? t('Seu perfil no Uorqui.') : view === 'welcome' ? t("Comece sua jornada. O feed e as comunidades ainda estão em desenvolvimento.") : view === 'register' ? t("Cadastre-se para criar sua identidade no Uorqui.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
+    <section aria-label={t('Acesso à conta')} className="w-full min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:rounded-2xl sm:p-7">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10"><LockKeyhole className="size-4"/></span>
+          {t("Identidade Uorqui")}
+        </div>
+        <h2 className="mt-3 text-[1.65rem] font-semibold tracking-tight sm:text-3xl">{account ? t('Sua conta') : view === 'welcome' ? t("Bem-vindo ao Uorqui") : view === 'register' ? t("Criar sua conta") : view === 'forgot' ? t('Recuperar acesso') : view === 'verify' ? t("Confirme seu e-mail") : view === 'reset' ? t('Definir nova senha') : t("Entrar")}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? t('Seu perfil no Uorqui.') : view === 'welcome' ? t("Converse, compartilhe e participe das suas comunidades.") : view === 'register' ? t("Crie seu perfil para participar do feed e das comunidades.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
       </div>
+      {!loading&&!account&&(view==='login'||view==='register')&&<div role="group" aria-label={t('Escolher forma de acesso')}
+        className="mb-5 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+        <button type="button" aria-pressed={view==='login'} onClick={()=>navigate('login')}
+          className={'min-h-11 rounded-md text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring '+(view==='login'?'bg-card text-foreground shadow-sm':'text-muted-foreground hover:text-foreground')}>
+          {t('Entrar')}
+        </button>
+        <button type="button" aria-pressed={view==='register'} onClick={()=>navigate('register')}
+          className={'min-h-11 rounded-md text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring '+(view==='register'?'bg-card text-foreground shadow-sm':'text-muted-foreground hover:text-foreground')}>
+          {t('Criar conta')}
+        </button>
+      </div>}
 
       {loading ? (
         <div role="status" aria-label={t("Verificando sessão")} className="space-y-3">
@@ -395,23 +409,28 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Já confirmei · Entrar")}</Button>
             </div>
           ) : (
-            <form className="space-y-3" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
+            <form className="space-y-4" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
               {view === 'register' && (
                 <div>
-                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-name">{t('Seu nome')}</Label>
-                  <Input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" />
+                  <Label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium" htmlFor="auth-name"><UserRound className="size-4 text-muted-foreground"/>{t('Seu nome')}</Label>
+                  <Input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" placeholder={t('Como devemos chamar você?')} />
                 </div>
               )}
               {view !== 'reset' && <div>
-                <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-email">{t("E-mail")}</Label>
-                <Input id="auth-email" type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+                <Label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium" htmlFor="auth-email"><Mail className="size-4 text-muted-foreground"/>{t("E-mail")}</Label>
+                <Input id="auth-email" type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="voce@exemplo.com" />
               </div>}
               {view !== 'forgot' && (
                 <div>
-                  <Label className="mb-1.5 block text-sm font-medium" htmlFor="auth-password">{t('Senha')}</Label>
+                  <Label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium" htmlFor="auth-password"><LockKeyhole className="size-4 text-muted-foreground"/>{t('Senha')}</Label>
                   <div className="relative">
-                    <Input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-24'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
-                    <Button type="button" aria-label={showPassword ? t("Ocultar senha") : t('Mostrar senha')} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute inset-y-1 right-1 min-w-20 rounded-lg text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-ring">{showPassword ? t("Ocultar") : t('Mostrar')}</Button>
+                    <Input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-12'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
+                    <button type="button" aria-label={showPassword ? t("Ocultar senha") : t('Mostrar senha')} aria-pressed={showPassword}
+                      onClick={() => setShowPassword(v => !v)}
+                      className="absolute inset-y-1 right-1 grid min-w-11 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+                      {showPassword?<EyeOff className="size-5"/>:<Eye className="size-5"/>}
+                    </button>
                   </div>
                   {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-muted-foreground">{t("Use pelo menos 12 caracteres.")}</p>}
                 </div>
@@ -425,8 +444,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
               </div>}
             </form>
           )}
-          <Button type="button" onClick={() => navigate('welcome')} className={minorButton}>{t("Voltar às boas-vindas")}</Button>
-          {view === 'register' && <Button type="button" onClick={() => navigate('login')} className="w-full text-sm font-medium text-primary underline underline-offset-4">{t('Já tenho uma conta · Entrar')}</Button>}
+          {view !== 'login' && view !== 'register' && <Button type="button" onClick={() => navigate('login')} className={minorButton}>{t("Voltar para entrar")}</Button>}
         </div>
       )}
       {message && <p role={view === 'verify' && message.startsWith('Conta criada') ? 'status' : 'alert'} className="mt-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-foreground">{message}</p>}
