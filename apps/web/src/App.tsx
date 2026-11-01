@@ -58,7 +58,7 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
             <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-primary">{t("Conecte pessoas e interesses")}</p>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">{t('Descubra. Converse.')} <span className="text-primary">{t('Participe.')}</span></h1>
             <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg">{t('Uma plataforma social que reúne conversas individuais, comunidades e conteúdo em um só lugar.')}</p>
-            <Button variant="outline" className="mt-8" asChild><a href="https://github.com/gabrielduclos/uorqui" target="_blank" rel="noreferrer"><Github className="size-4" /> {t("Conheça o projeto")}</a></Button>
+
           </div>
           <div className="mx-auto w-full max-w-[440px] lg:max-w-none">
             <AuthPanel onAuthenticated={onAuthenticated} />
