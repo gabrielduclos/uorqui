@@ -320,6 +320,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       }
       return reply.code(201).header('Cache-Control',noCache).send({id:saved.rows[0].id});
     }catch(error){request.log.error({err:error},'Send community message');return reply.code(503).send({error:'Unavailable'});}
+  });
 
   // Each member can add or remove one reaction per emoji. Mutations are idempotent,
   // so retries never toggle a reaction twice on a slow or interrupted connection.
@@ -367,6 +368,4 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
 
   app.delete('/api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions',
     {schema:{params:reactionParams,body:reactionBody}},async(request,reply)=>react(request,reply,false));
-
-  });
 }
