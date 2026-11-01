@@ -107,8 +107,16 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const cursor=Number(after);
       if(!Number.isSafeInteger(cursor)||cursor<0)return reply.code(400).send({error:'Invalid cursor'});
       const result=await getPool().query(
-        "SELECT id::text,sender_session_id AS \"senderSessionId\",kind,payload FROM community_voice_signals "+
-        "WHERE channel_id=$1 AND recipient_session_id=$2 AND id>$3 AND created_at>now()-interval '3 minutes' ORDER BY id ASC LIMIT 150",
+        "SELECT sig.id::text,sig.sender_session_id AS \"senderSessionId\",sig.kind,sig.payload FROM community_voice_signals sig "+
+        "JOIN community_voice_sessions source ON source.id=sig.sender_session_id AND source.channel_id=sig.channel_id "+
+        "JOIN community_voice_sessions target ON target.id=sig.recipient_session_id AND target.channel_id=sig.channel_id "+
+        "JOIN community_channels channel ON channel.id=sig.channel_id "+
+        "JOIN community_members source_member ON source_member.community_id=channel.community_id AND source_member.user_id=source.user_id "+
+        "JOIN community_members target_member ON target_member.community_id=channel.community_id AND target_member.user_id=target.user_id "+
+        "WHERE sig.channel_id=$1 AND sig.recipient_session_id=$2 AND sig.id>$3 AND sig.created_at>now()-interval '3 minutes' "+
+        "AND source.last_seen_at>now()-interval '45 seconds' "+
+        "AND NOT EXISTS (SELECT 1 FROM user_blocks block WHERE (block.blocker_id=source.user_id AND block.blocked_id=target.user_id) "+
+        "OR (block.blocker_id=target.user_id AND block.blocked_id=source.user_id)) ORDER BY sig.id ASC LIMIT 150",
         [channelId,sessionId,cursor],
       );
       return reply.header('Cache-Control',noCache).send({
