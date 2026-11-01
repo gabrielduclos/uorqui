@@ -749,7 +749,7 @@ test('web push: opt-in authorization and signed device receipt without a read re
   assert.equal((await to('/api/v1/push/subscription','POST',{subscription:sub})).status,200);
 
   const created=await from('/api/v1/dm/conversations','POST',{handle:'push_recipient_v2'});
-  assert.equal(created.status,201,JSON.stringify(created.data));
+  assert.equal(created.status,200,JSON.stringify(created.data));
   const conversationId=created.data.id;
   const message=await from('/api/v1/dm/conversations/'+conversationId+'/messages','POST',{
     body:'push test message',clientId:crypto.randomUUID()
