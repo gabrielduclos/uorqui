@@ -101,6 +101,16 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   assert.equal(received.data.signals[0].kind,'answer');
   assert.equal((await owner(room+'/heartbeat','POST',{sessionId:a,muted:false},false)).status,403);
 
+  assert.equal((await owner('/api/v1/blocks','POST',{handle:'voice_friend'})).status,200);
+  const hidden=await owner(room+'/state?sessionId='+a);
+  assert.equal(hidden.data.peers.length,1,'blocked participants must not be visible to each other');
+  assert.equal((await friend(room+'/state?sessionId='+b)).data.peers.length,1);
+  assert.equal((await owner(room+'/signal','POST',{sessionId:a,recipientSessionId:b,kind:'candidate',payload:{candidate:'candidate:sample',sdpMid:'0',sdpMLineIndex:0}})).status,404,
+    'a blocked pair cannot exchange WebRTC candidates');
+  assert.equal((await owner('/api/v1/blocks/voice_friend','DELETE')).status,204);
+  assert.equal((await friend(room+'/state?sessionId='+b)).data.peers.length,2,
+    'unblocked participants can see their peers again');
+
   assert.equal((await friend(room+'/sessions/'+a,'DELETE')).status,204,'cannot remove someone else');
   assert.equal((await owner(room+'/state?sessionId='+a)).status,200);
   assert.equal((await owner(room+'/sessions/'+a,'DELETE',undefined,false)).status,403);
