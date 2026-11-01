@@ -148,6 +148,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       <aside className="hidden h-full min-h-0 w-55 shrink-0 flex-col overflow-hidden border-r border-border bg-card/65 md:flex">
         <button className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('feed')} aria-label={t('Uorqui — ir para o início')}>
           <UorquiWordmark className="h-[18px] w-auto max-w-full text-foreground" />
+          <Badge variant="secondary" aria-hidden="true" className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Beta</Badge>
         </button>
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
@@ -180,12 +181,14 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6 md:h-16 md:min-h-16 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
-            <button type="button" onClick={() => move('feed')} aria-label={t('Uorqui — voltar ao início')} className="shrink-0 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden"><UorquiWordmark className="h-4 w-auto max-w-[40vw] text-foreground" /></button>
+            <button type="button" onClick={() => move('feed')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+              <UorquiWordmark className="h-4 w-auto max-w-[34vw] text-foreground" />
+              <Badge variant="secondary" aria-hidden="true" className="rounded-md px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide">Beta</Badge>
+            </button>
             <Separator orientation="vertical" className="h-5 md:hidden" />
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
           </div>
           <div className="flex items-center gap-2">
-             <Badge variant="secondary" className="hidden gap-1.5 font-normal xl:inline-flex">{t('Beta')}</Badge>
              <PreferencesControls />
             <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label={t("Notificações indisponíveis")} title={t("Notificações chegam em uma próxima etapa")} disabled><Bell className="size-4" /></Button>
             <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
