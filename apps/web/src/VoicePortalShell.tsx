@@ -58,7 +58,7 @@ export function VoicePortalShell({ floating, anchorRef, children, pt }: {
     const height = box?.height ?? 140;
     return {
       x: Math.max(8, Math.min(x, Math.max(8, window.innerWidth - width - 8))),
-      y: Math.max(8, Math.min(y, Math.max(8, window.innerHeight - height - 8))),
+      y: Math.max(32, Math.min(y, Math.max(32, window.innerHeight - height - 8))),
     };
   }
   function beginDrag(event: PointerEvent<HTMLButtonElement>) {
