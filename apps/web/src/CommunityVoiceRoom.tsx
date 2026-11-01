@@ -27,6 +27,7 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
   const running=useRef(false);
+  const disposed=useRef(false);
   const joining=useRef(false);
   const selfSession=useRef<string|null>(null);
   const local=useRef<MediaStream|null>(null);
@@ -191,8 +192,14 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
       stream=await navigator.mediaDevices.getUserMedia({
         audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false
       });
+      if(disposed.current){stream.getTracks().forEach(track=>track.stop());return;}
       const sessionId=crypto.randomUUID();
       const result=await req<VoiceJoin>(base+'/join',json({sessionId}));
+      if(disposed.current){
+        stream.getTracks().forEach(track=>track.stop());
+        void fetch(base+'/sessions/'+sessionId,{method:'DELETE',credentials:'same-origin',keepalive:true}).catch(()=>{});
+        return;
+      }
       local.current=stream;selfSession.current=sessionId;
       config.current=result.rtc.iceServers;
       setRelayAvailable(result.rtc.relayAvailable);
@@ -229,9 +236,14 @@ export default function CommunityVoiceRoom({communityId,channelId}:{communityId:
       .catch(()=>setAudioBlocked(true));
   }
   useEffect(()=>{
+    disposed.current=false;
     const unload=()=>stop();
     window.addEventListener('pagehide',unload);
-    return ()=>{window.removeEventListener('pagehide',unload);stop();};
+    return ()=>{
+      disposed.current=true;
+      window.removeEventListener('pagehide',unload);
+      stop();
+    };
   },[stop]);
 
   return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4 pb-8 sm:p-6">
