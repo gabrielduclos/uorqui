@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, Copy, Compass, Hash, Headphones, LockKeyhole, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, MessageSquareText, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -59,10 +59,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
   const [voiceMinimized,setVoiceMinimized]=useState(false);
+  const [voiceTextExpanded,setVoiceTextExpanded]=useState(false);
   const [voicePhase,setVoicePhase]=useState<VoicePhase>('idle');
   const voiceHostRef=useRef<HTMLDivElement|null>(null);
   useEffect(()=>{if(!active){setVoiceMinimized(true);if(voicePhase==='idle')setActiveVoiceRoom(null);}},[active,voicePhase]);
   function openVoiceRoom(target:VoiceRoomTarget){
+    // Voice controls and participants take priority; the room chat is opt-in.
+    setVoiceTextExpanded(false);
     if(activeVoiceRoom?.communityId===target.communityId&&activeVoiceRoom.channelId===target.channelId){
       setVoiceMinimized(false);return;
     }
@@ -232,7 +235,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       showShareToast('error',pt?'Não foi possível copiar o link.':'Could not copy the link.');
     }
   }
-  const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{setVoiceTextExpanded(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||!activeChannel||!community?.myRole){
@@ -282,12 +285,21 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     }
     previousLastMessage.current=latest;
   },[messages]);
+  useEffect(()=>{
+    if(activeChannel?.kind!=='voice'||!voiceTextExpanded)return;
+    const frame=window.requestAnimationFrame(()=>{
+      const el=scrollRef.current;
+      if(el)el.scrollTop=el.scrollHeight;
+    });
+    return ()=>window.cancelAnimationFrame(frame);
+  },[voiceTextExpanded,channelId,activeChannel?.kind]);
 
-  // A message is read only while its text channel is actually open, not merely
+  // A message is read only while its text chat panel is actually open, not merely
   // selected by default in the community sidebar. Never mark unseen messages
   // in background tabs; the cursor is tied to a message present in our response.
   useEffect(()=>{
     if(!channelOpen||!selectedId||!channelId||!activeChannel||
+       (activeChannel.kind==='voice'&&!voiceTextExpanded)||
        document.visibilityState!=='visible'||messagesLoading)return;
     const lastMessageId=messages.at(-1)?.id;
     if(!lastMessageId)return;
@@ -304,7 +316,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       }).catch(()=>{/* Leave badge intact and retry after next successful load. */});
     },250);
     return ()=>{cancelled=true;window.clearTimeout(timer);};
-  },[channelOpen,selectedId,channelId,activeChannel?.kind,messages,messagesLoading]);
+  },[channelOpen,selectedId,channelId,activeChannel?.kind,voiceTextExpanded,messages,messagesLoading]);
 
   async function refresh(id=selectedId){
     await loadList();
@@ -727,7 +739,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
         </header>
         {activeChannel.kind==='voice'&&(
-          <div ref={voiceHostRef} className="relative flex min-h-44 max-h-[48%] shrink-0 flex-col overflow-hidden border-b border-border">
+          <div ref={voiceHostRef} className={cn('relative flex min-h-0 flex-col overflow-hidden border-b border-border',
+            voiceTextExpanded?'h-[42%] min-h-36 shrink-0 sm:h-[48%]':'flex-1')}>
             {!voiceInline&&<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground">
               <Headphones className="size-9 text-primary"/>
               <p>{pt?'Entre e converse sem sair da comunidade.':'Join the conversation right inside your community.'}</p>
@@ -737,7 +750,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </div>}
           </div>
         )}
-        <>
+        {activeChannel.kind==='voice'&&<button type="button" onClick={()=>{setVoiceTextExpanded(v=>!v);setMediaPicker(null);}}
+          aria-expanded={voiceTextExpanded} aria-controls={voiceTextExpanded?'uorqui-voice-text-panel':undefined}
+          className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 text-sm font-medium hover:bg-secondary"
+          title={voiceTextExpanded?(pt?'Recolher conversa de texto':'Collapse text chat'):(pt?'Expandir conversa de texto':'Expand text chat')}>
+          <span className="flex min-w-0 items-center gap-2"><MessageSquareText className="size-4 shrink-0 text-primary"/>
+            {voiceTextExpanded?(pt?'Recolher chat':'Collapse chat'):(pt?'Expandir chat de texto':'Expand text chat')}
+            {!voiceTextExpanded&&!!unreadChannels[activeChannel.id]&&<span className="rounded-full bg-destructive px-2 py-0.5 text-[11px] font-semibold text-white">{unreadChannels[activeChannel.id]>99?'99+':unreadChannels[activeChannel.id]}</span>}
+          </span>
+          {voiceTextExpanded?<ChevronDown className="size-4 shrink-0"/>:<ChevronUp className="size-4 shrink-0"/>}
+        </button>}
+        {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind==='voice'?'uorqui-voice-text-panel':undefined}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             {!messages.length&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
@@ -812,7 +836,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               sending={false} locale={locale} textareaRef={composerRef}
               onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'}/>
           </div>
-        </>
+        </div>}
       </>:<div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-xs"><Users className="mx-auto size-11 text-primary"/>
           <h3 className="mt-4 font-semibold">{pt?'Suas comunidades':'Your communities'}</h3>
