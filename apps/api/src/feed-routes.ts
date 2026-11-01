@@ -191,7 +191,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const me=await self(req);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=req.params as {id:string};
       const r=await getPool().query(
-        'UPDATE feed_posts p SET published_at=now() WHERE id=$1 AND author_id=$2 AND deleted_at IS NULL '+
+        'UPDATE feed_posts p SET published_at=COALESCE(p.published_at,now()) WHERE id=$1 AND author_id=$2 AND deleted_at IS NULL '+
         'AND (published_at IS NOT NULL OR (media_count>0 AND (SELECT count(*) FROM feed_media WHERE post_id=p.id)=p.media_count)) '+
         'RETURNING id,published_at AS "publishedAt"',[id,me]);
       if(!r.rowCount)return reply.code(409).send({error:'UPLOAD_INCOMPLETE'});
@@ -264,7 +264,8 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       if(!await visible(id,me))return reply.code(404).send({error:'Post unavailable'});
       const r=await getPool().query(
         'SELECT c.id,c.body,c.created_at AS "createdAt",u.handle AS "authorHandle", '+
-        'pr.display_name AS "authorName",pr.avatar_url AS "authorAvatar",(c.author_id=$2::uuid) AS mine '+
+        "CASE WHEN pr.is_public OR c.author_id=$2::uuid OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(c.author_id,$2::uuid) AND f.user_b_id=GREATEST(c.author_id,$2::uuid) AND f.status='accepted') THEN pr.display_name ELSE u.handle END AS \"authorName\", "+
+        "CASE WHEN pr.is_public OR c.author_id=$2::uuid OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(c.author_id,$2::uuid) AND f.user_b_id=GREATEST(c.author_id,$2::uuid) AND f.status='accepted') THEN pr.avatar_url ELSE NULL END AS \"authorAvatar\",(c.author_id=$2::uuid) AS mine "+
         'FROM feed_comments c JOIN users u ON u.id=c.author_id JOIN profiles pr ON pr.user_id=c.author_id '+
         'WHERE c.post_id=$1 AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
         '(b.blocker_id=c.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=c.author_id)) '+
