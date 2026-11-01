@@ -6,7 +6,7 @@ const uuid={type:'string',format:'uuid'} as const;
 const params={type:'object',required:['id','channelId'],additionalProperties:false,properties:{id:uuid,channelId:uuid}};
 const paramsSession={type:'object',required:['id','channelId','sessionId'],additionalProperties:false,properties:{id:uuid,channelId:uuid,sessionId:uuid}};
 const joinBody={type:'object',required:['sessionId'],additionalProperties:false,properties:{sessionId:uuid}};
-const heartbeatBody={type:'object',required:['sessionId','muted'],additionalProperties:false,properties:{sessionId:uuid,muted:{type:'boolean'}}};
+const heartbeatBody={type:'object',required:['sessionId','muted'],additionalProperties:false,properties:{sessionId:uuid,muted:{type:'boolean'},deafened:{type:'boolean'}}};
 const stateQuery={type:'object',required:['sessionId'],additionalProperties:false,properties:{sessionId:uuid,after:{type:'string',pattern:'^[0-9]{1,16}$'}}};
 const signalBody={type:'object',additionalProperties:false,required:['sessionId','recipientSessionId','kind','payload'],
   properties:{sessionId:uuid,recipientSessionId:uuid,kind:{type:'string',enum:['offer','answer','candidate']},payload:{type:'object'}}};
@@ -51,7 +51,7 @@ async function roomPeers(channelId:string,me:string,sessionId:string){
     'CASE WHEN p.is_public=true OR s.user_id=$2 OR f.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "displayName",'+
     "CASE WHEN (p.is_public=true OR s.user_id=$2 OR f.status='accepted') AND NOT EXISTS ("+
     'SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) '+
-    'THEN p.avatar_url ELSE NULL END AS "avatarUrl",s.muted,s.joined_at AS "joinedAt" '+
+    'THEN p.avatar_url ELSE NULL END AS "avatarUrl",s.muted,s.deafened,s.joined_at AS "joinedAt" '+
     'FROM community_voice_sessions s JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=s.user_id '+
     'JOIN community_channels c ON c.id=s.channel_id JOIN community_members m ON m.community_id=c.community_id AND m.user_id=s.user_id '+
     'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
@@ -84,7 +84,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         }
         await client.query(
           'INSERT INTO community_voice_sessions(id,channel_id,user_id) VALUES($1,$2,$3) '+
-          'ON CONFLICT(channel_id,user_id) DO UPDATE SET id=EXCLUDED.id,muted=false,joined_at=now(),last_seen_at=now()',
+          'ON CONFLICT(channel_id,user_id) DO UPDATE SET id=EXCLUDED.id,muted=false,deafened=false,joined_at=now(),last_seen_at=now()',
           [sessionId,channelId,me]);
         await client.query('COMMIT');
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
@@ -131,12 +131,12 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
     try{
       const me=await self(request,readSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
-      const {sessionId,muted}=request.body as {sessionId:string;muted:boolean};
+      const {sessionId,muted,deafened=false}=request.body as {sessionId:string;muted:boolean;deafened?:boolean};
       const result=await getPool().query(
-        'UPDATE community_voice_sessions s SET last_seen_at=now(),muted=$4 '+
+        'UPDATE community_voice_sessions s SET last_seen_at=now(),muted=$4,deafened=$6 '+
         'FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
         "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind='voice' AND s.last_seen_at>now()-interval '45 seconds' RETURNING s.id",
-        [sessionId,channelId,me,muted,id]);
+        [sessionId,channelId,me,muted,id,deafened]);
       if(!result.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       return reply.header('Cache-Control',noCache).send({ok:true});
     }catch(error){request.log.error({err:error},'Voice heartbeat');return reply.code(503).send({error:'Unavailable'});}

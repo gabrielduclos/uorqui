@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, UserPlus, Users, Volume2, X } from 'lucide-react';
+import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -333,8 +333,11 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                   {voiceParticipants.map(person=><div key={person.sessionId}
                     className="flex min-h-9 items-center gap-2 rounded-lg px-2 py-1 text-xs text-muted-foreground"
                     title={person.displayName}>
-                    <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
+                    <div className={cn('rounded-full p-0.5',person.speaking&&'ring-2 ring-emerald-500 animate-pulse')}>
+                      <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
+                    </div>
                     <span className="min-w-0 flex-1 truncate">{person.displayName}</span>
+                    {person.deafened&&<VolumeX className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Áudio desligado':'Audio disabled'}/>}
                     {person.muted&&<MicOff className="size-3.5 shrink-0 text-destructive" aria-label={pt?'Microfone silenciado':'Microphone muted'}/>}
                   </div>)}
                 </div>}

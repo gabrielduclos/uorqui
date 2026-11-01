@@ -75,12 +75,23 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   assert.equal((await owner(room+'/heartbeat','POST',{sessionId:a,muted:true})).status,200);
   const afterMute=await owner(room+'/state?sessionId='+a);
   assert.equal(afterMute.data.peers.find(p=>p.sessionId===a).muted,true);
+  assert.equal(afterMute.data.peers.find(p=>p.sessionId===a).deafened,false);
+  assert.equal((await owner(room+'/heartbeat','POST',{sessionId:a,muted:true,deafened:true})).status,200);
+  const deafened=(await owner(room+'/state?sessionId='+a)).data.peers.find(p=>p.sessionId===a);
+  assert.equal(deafened.muted,true);
+  assert.equal(deafened.deafened,true,'server must propagate audio-off state');
+
 
   assert.equal((await owner('/api/v1/communities/'+communityId+'/invite','POST',{handle:'voice_friend'})).status,201);
   assert.equal((await friend('/api/v1/communities/'+communityId+'/invite/accept','POST')).status,200);
   const friendJoin=await friend(room+'/join','POST',{sessionId:b});
   assert.equal(friendJoin.status,200,JSON.stringify(friendJoin.data));
   assert.equal(friendJoin.data.peers.length,2);
+  assert.equal(friendJoin.data.peers.find(p=>p.sessionId===a).deafened,true,
+    'another participant must see deafen, not just mic mute');
+  assert.equal((await owner(room+'/heartbeat','POST',{sessionId:a,muted:false,deafened:false})).status,200);
+  assert.equal((await friend(room+'/state?sessionId='+b)).data.peers.find(p=>p.sessionId===a).deafened,false);
+
   assert.equal((await stranger(room+'/heartbeat','POST',{sessionId:b,muted:false})).status,410);
   assert.equal((await friend(room+'/heartbeat','POST',{sessionId:a,muted:false})).status,410,'session ownership is enforced');
   assert.equal((await stranger(room+'/signal','POST',{sessionId:a,recipientSessionId:b,kind:'offer',payload:{type:'offer',sdp:'fake'}})).status,404);
