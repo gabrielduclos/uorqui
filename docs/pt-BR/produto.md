@@ -80,3 +80,12 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - A API inclui `reactions: [{emoji,count,mine}]` e `canReact` na listagem de mensagens, sincronizada pela atualização periódica do canal. Endpoints: `PUT` e `DELETE /api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions`, com corpo `{emoji}`, sessão obrigatória, verificação da origem e controle de acesso.
 - Reações não são mensagens separadas; mensagens canceladas não exibem contagens nem podem receber novas reações.
 - A migração aditiva **`0017_community_message_reactions`** cria a tabela `community_message_reactions`. Deve ser aplicada ao PostgreSQL da Neon antes de habilitar reações em produção. Até a migração, o histórico de mensagens continua legível e a operação de reação responde como indisponível.
+
+## Campo de mensagens unificado nos canais de texto
+
+- Os canais de texto usam o mesmo `LiveMessageComposer` do mensageiro direto: galeria, câmera, arquivos, localização do Google Maps, edição de imagem, gravação de áudio com pausa/retomada e seleção de emojis.
+- O seletor de **GIFs permanece**, usando o catálogo existente da comunidade integrado ao mesmo campo.
+- Mensagens do canal continuam sem indicadores individuais de **enviado, entregue ou lido**; somente o progresso temporário de envio/upload e opção de reenviar quando falhar.
+- Arquivos (máximo 50 MB, formatos permitidos) e áudio são validados no Worker e armazenados em uma área `community/<communityId>/<channelId>` do bucket R2 privado, reutilizando a infraestrutura assinada de uploads do chat, mas com autorização específica por comunidade/canal.
+- O acesso à mídia exige participação ativa na comunidade e mensagem não cancelada. A API verifica uploads e downloads individualmente, e os uploads só são aceitos com assinatura HMAC produzida pelo Worker.
+- A migração Drizzle `0018_community_message_attachments` adiciona campos de anexo às mensagens comunitárias e permite corpo vazio quando houver anexo. Deve estar aplicada na Neon antes de habilitar uploads em produção; as mensagens de texto existentes são preservadas.
