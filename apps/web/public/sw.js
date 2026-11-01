@@ -29,6 +29,7 @@ const uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 function safeUrl(payload){
   if(payload?.kind==='dm'&&uuid.test(String(payload.conversationId||'')))return '/?conversation='+encodeURIComponent(payload.conversationId);
   if(payload?.kind==='community'&&uuid.test(String(payload.communityId||'')))return '/?community='+encodeURIComponent(payload.communityId);
+  if(payload?.kind==='activity'&&uuid.test(String(payload.notificationId||'')))return '/?notification='+encodeURIComponent(payload.notificationId);
   return '/';
 }
 async function account(){
@@ -59,7 +60,8 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
   const tag=payload.kind==='dm'&&uuid.test(String(payload.conversationId||''))
     ?'uorqui-dm-'+payload.conversationId
     :payload.kind==='community'&&uuid.test(String(payload.channelId||''))
-      ?'uorqui-community-'+payload.channelId:'uorqui-activity';
+      ?'uorqui-community-'+payload.channelId:payload.kind==='activity'&&uuid.test(String(payload.notificationId||''))
+        ?'uorqui-activity-'+payload.notificationId:'uorqui-activity';
   const url=safeUrl(payload);
   try{
     // Confirm receipt only after the browser accepts the visible notification.
@@ -68,6 +70,10 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
       data:{url,kind:payload.kind,conversationId:payload.conversationId||'',messageId:payload.messageId||''}
     });
     await acknowledge(payload);
+    if(payload.kind==='activity'){
+      const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+      pages.forEach(client=>client.postMessage({type:'uorqui:activity-update'}));
+    }
   }catch{/* Unsupported browser notifications cannot claim delivery. */}
 })());});
 self.addEventListener('notificationclick',event=>{

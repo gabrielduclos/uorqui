@@ -70,7 +70,12 @@ export function useUnreadDirectMessages() {
     function connect() {
       if (document.visibilityState !== 'visible' || source) return;
       source = new EventSource('/api/v1/dm/events', { withCredentials: true });
-      source.addEventListener('dm-update', onFocus);
+      source.addEventListener('dm-update', event=>{
+        onFocus();
+        try{const update=JSON.parse((event as MessageEvent<string>).data) as {kind?:string};
+          if(update.kind==='notification')window.dispatchEvent(new Event('uorqui:activity-update'));
+        }catch{/* Unrecognized event. */}
+      });
       source.addEventListener('ready', onFocus);
     }
     function visibility() {

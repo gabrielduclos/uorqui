@@ -25,17 +25,20 @@ import {useCommunityUnread} from './useCommunityUnread';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
 import {PushPreferences} from './PushPreferences';
+import {ActivityNotifications} from './ActivityNotifications';
+import {useActivityNotifications,type ActivityNotification} from './useActivityNotifications';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: UserProfileData | null;
 };
-type Area = 'feed' | 'conversations' | 'communities' | 'profile' | 'moderation';
+type Area = 'feed' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
 
 const navigation = [
   { id: 'feed', label: 'Início', icon: Home },
   { id: 'conversations', label: 'Conversas', icon: MessageCircle },
   { id: 'communities', label: 'Comunidades', icon: Users },
+  { id: 'notifications', label: 'Notificações', icon: Bell },
 ] as const;
 
 function ProfileAvatar({ name, image, className }: { name: string; image?: string | null; className?: string }) {
@@ -67,6 +70,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
   const unreadMessageCount = useUnreadDirectMessages();
   const communityUnread = useCommunityUnread();
+  const activity = useActivityNotifications(account.user.id);
   const communityUnreadLabel=communityUnread.total>99?'99+':String(communityUnread.total);
   // Joining through an invite takes priority; present the tour on a later normal visit.
   const [tourVisible,setTourVisible]=useState(()=>{
@@ -117,20 +121,34 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       if(url.origin!==window.location.origin)return;
       const id=url.searchParams.get('conversation');
       const community=url.searchParams.get('community');
+      const notification=url.searchParams.get('notification');
       if(id&&/^[0-9a-f-]{36}$/i.test(id)){setRequestedConversationId(id);move('conversations');}
       else if(community&&/^[0-9a-f-]{36}$/i.test(community))move('communities');
+      else if(notification&&/^[0-9a-f-]{36}$/i.test(notification))move('notifications');
     };
     const onMessage=(event:MessageEvent)=>{
       if(event.data?.type==='uorqui:push-open'&&typeof event.data.url==='string')open(event.data.url);
+      if(event.data?.type==='uorqui:activity-update')window.dispatchEvent(new Event('uorqui:activity-update'));
     };
     navigator.serviceWorker?.addEventListener('message',onMessage);
     const current=new URL(window.location.href);
-    if(current.searchParams.has('conversation')||current.searchParams.has('community')){
-      open(current.toString());current.searchParams.delete('conversation');current.searchParams.delete('community');
+    if(current.searchParams.has('conversation')||current.searchParams.has('community')||current.searchParams.has('notification')){
+      open(current.toString());current.searchParams.delete('conversation');current.searchParams.delete('community');current.searchParams.delete('notification');
       window.history.replaceState({},'',current.pathname+current.search);
     }
     return()=>navigator.serviceWorker?.removeEventListener('message',onMessage);
   },[move]);
+
+  function openActivity(item:ActivityNotification){
+    void activity.markRead(item.id);
+    if((item.kind==='post_like'||item.kind==='post_comment')&&/^[0-9a-f-]{36}$/i.test(item.targetId)){
+      move('feed');
+      window.dispatchEvent(new CustomEvent('uorqui:open-feed-post',{detail:item.targetId}));
+    }else if(/^[a-z][a-z0-9_]{2,31}$/.test(item.actorHandle)){
+      window.history.pushState({uorquiInternalProfile:true},'','/@'+item.actorHandle);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  }
 
   async function logout() {
     if (loggingOut) return;
@@ -140,7 +158,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 
-  const title = area === 'moderation' ? (locale==='pt-BR'?'Moderação':'Moderation') : area === 'profile' ? t('Perfil') : t(navigation.find(item => item.id === area)?.label ?? 'Uorqui');
+  const title = area === 'notifications' ? (locale==='pt-BR'?'Notificações':'Notifications') : area === 'moderation' ? (locale==='pt-BR'?'Moderação':'Moderation') : area === 'profile' ? t('Perfil') : t(navigation.find(item => item.id === area)?.label ?? 'Uorqui');
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
@@ -160,6 +178,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unreadLabel}</span>}
               {item.id === 'communities' && communityUnread.total>0 && <span aria-hidden="true"
                 className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{communityUnreadLabel}</span>}
+              {item.id==='notifications'&&activity.unread>0&&<span aria-hidden="true" className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{activity.unread>99?'99+':activity.unread}</span>}
             </Button>;
           })}
           {platformModerator&&<Button type="button" variant={area==='moderation'?'secondary':'ghost'}
@@ -190,7 +209,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           </div>
           <div className="flex items-center gap-2">
              <PreferencesControls />
-            <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label={t("Notificações indisponíveis")} title={t("Notificações chegam em uma próxima etapa")} disabled><Bell className="size-4" /></Button>
+            <Button variant="ghost" size="icon" className="relative" aria-label={locale==='pt-BR'?'Abrir notificações':'Open notifications'} onClick={()=>move('notifications')}>
+              <Bell className="size-5"/>
+              {activity.unread>0&&<span aria-hidden="true" className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold text-white">{activity.unread>99?'99+':activity.unread}</span>}
+            </Button>
             <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} className="size-8" />
             </button>
@@ -222,6 +244,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
 
+            {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
+              items={activity.items} unread={activity.unread} loading={activity.loading}
+              error={activity.error} onRefresh={()=>void activity.refresh()}
+              onReadAll={activity.markAllRead} onOpen={openActivity}/>}
             {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
@@ -276,6 +302,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                   className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{unreadLabel}</span>}
                 {item.id === 'communities' && communityUnread.total>0 && <span aria-hidden="true"
                   className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{communityUnreadLabel}</span>}
+                {item.id==='notifications'&&activity.unread>0&&<span aria-hidden="true" className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{activity.unread>99?'99+':activity.unread}</span>}
               </span>{t(item.label)}
             </Button>;
           })}
