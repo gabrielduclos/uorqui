@@ -46,6 +46,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [speaking,setSpeaking]=useState<Set<string>>(()=>new Set());
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
+  const [micInterrupted,setMicInterrupted]=useState(false);
   const [screenBusy,setScreenBusy]=useState(false);
   const [sharing,setSharing]=useState(false);
   const [screens,setScreens]=useState<Record<string,MediaStream>>({});
@@ -71,9 +72,14 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const deafenedRef=useRef(false);
   const priorMuteRef=useRef(false);
   const ownJoinedAt=useRef('');
+  const recoveringMic=useRef(false);
+  const foregroundTimer=useRef<number|null>(null);
   const base='/api/v1/communities/'+communityId+'/channels/'+channelId+'/voice';
 
   const stop=useCallback((notify=true)=>{
+    if(foregroundTimer.current!==null)window.clearTimeout(foregroundTimer.current);
+    foregroundTimer.current=null;
+    setMicInterrupted(false);
     running.current=false;
     const sessionId=selfSession.current;selfSession.current=null;
     for(const timer of timers.current)window.clearInterval(timer);
@@ -84,13 +90,46 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     pcMap.current.clear();candidateQueue.current.clear();knownPeers.current.clear();
     voiceMonitor.current?.dispose();voiceMonitor.current=null;recentPeers.current=[];setSpeaking(new Set());
     for(const el of audioMap.current.values()){el.pause();el.srcObject=null;el.remove();}
-    audioMap.current.clear();local.current?.getTracks().forEach(track=>track.stop());local.current=null;
+    audioMap.current.clear();local.current?.getTracks().forEach(track=>{track.onmute=null;track.onunmute=null;track.onended=null;track.stop();});local.current=null;
     cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;deafenedRef.current=false;priorMuteRef.current=false;
     setPhase('idle');setMuted(false);setDeafened(false);setPeers([]);setConnections({});setAudioBlocked(false);
     if(sessionId&&notify){
       void fetch(base+'/sessions/'+sessionId,{method:'DELETE',credentials:'same-origin',cache:'no-store',keepalive:true}).catch(()=>{});
     }
   },[base]);
+
+  const watchMic=useCallback((track:MediaStreamTrack)=>{
+    track.onmute=()=>{if(running.current&&!mutedRef.current)setMicInterrupted(true);};
+    track.onunmute=()=>{if(running.current)setMicInterrupted(false);};
+    track.onended=()=>{if(running.current)setMicInterrupted(true);};
+  },[]);
+  const restoreMic=useCallback(async()=>{
+    if(!running.current||!selfSession.current||recoveringMic.current)return;
+    const track=local.current?.getAudioTracks()[0];
+    if(track?.readyState==='live'&&!track.muted){setMicInterrupted(false);return;}
+    recoveringMic.current=true;
+    let stream:MediaStream|null=null;
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+      if(!running.current||!selfSession.current){stream.getTracks().forEach(t=>t.stop());return;}
+      const replacement=stream.getAudioTracks()[0];
+      if(!replacement)throw Error('NO_AUDIO_TRACK');
+      replacement.enabled=!mutedRef.current;
+      await Promise.all([...pcMap.current.values()].flatMap(pc=>
+        pc.getSenders().filter(sender=>sender.track?.kind==='audio')
+          .map(sender=>sender.replaceTrack(replacement).catch(()=>{}))));
+      const previous=local.current;
+      local.current=stream;
+      watchMic(replacement);
+      voiceMonitor.current?.remove(selfSession.current);
+      voiceMonitor.current?.add(selfSession.current,stream);
+      previous?.getTracks().forEach(t=>{t.onmute=null;t.onunmute=null;t.onended=null;t.stop();});
+      setMicInterrupted(false);
+    }catch{
+      stream?.getTracks().forEach(t=>t.stop());
+      setMicInterrupted(true);
+    }finally{recoveringMic.current=false;}
+  },[watchMic]);
 
   const sendSignal=useCallback(async(to:string,kind:VoiceSignal['kind'],payload:VoiceSignal['payload'])=>{
     if(!running.current||!selfSession.current)return;
@@ -301,6 +340,10 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(joining.current||running.current)return;
     // Unlock during the actual click, before awaiting getUserMedia and the API.
     unlockVoiceRoomAudio();
+    try{
+      const session=(navigator as Navigator & {audioSession?:{type:string}}).audioSession;
+      if(session)session.type='play-and-record';
+    }catch{/* Optional browser API. */}
     joining.current=true;setPhase('joining');setError('');
     let stream:MediaStream|null=null;
     try{
@@ -320,7 +363,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       voiceMonitor.current=new VoiceActivityMonitor();voiceMonitor.current.add(sessionId,stream);
       config.current=result.rtc.iceServers;
       ownJoinedAt.current=result.peers.find(peer=>peer.sessionId===sessionId)?.joinedAt??new Date().toISOString();
-      running.current=true;cursor.current='0';knownPeers.current=new Set(result.peers.map(peer=>peer.sessionId));
+      running.current=true;watchMic(stream.getAudioTracks()[0]);setMicInterrupted(false);
+      cursor.current='0';knownPeers.current=new Set(result.peers.map(peer=>peer.sessionId));
       setPeers(result.peers);recentPeers.current=result.peers;setPhase('joined');
       playVoiceRoomCue('join');
       for(const peer of result.peers)if(!peer.isSelf)void connect(peer.sessionId,true);
@@ -365,6 +409,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(deafenedRef.current)return;
     const next=!mutedRef.current;mutedRef.current=next;setMuted(next);
     local.current?.getAudioTracks().forEach(track=>{track.enabled=!next;});
+    if(!next&&micInterrupted)void restoreMic();
     if(selfSession.current)void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:next,deafened:false})).catch(()=>{});
   }
   function toggleDeafen(){
@@ -398,22 +443,44 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       void req(base+'/heartbeat',json({sessionId:selfSession.current,muted:mutedRef.current,deafened:deafenedRef.current}))
         .catch(()=>{if(running.current)setError('VOICE_NETWORK_RETRY');});
       void sync();
+      if(foregroundTimer.current!==null)window.clearTimeout(foregroundTimer.current);
+      foregroundTimer.current=window.setTimeout(()=>{
+        foregroundTimer.current=null;
+        if(!running.current||document.visibilityState!=='visible')return;
+        const track=local.current?.getAudioTracks()[0];
+        if(!track||track.readyState!=='live'||track.muted)void restoreMic();
+        else setMicInterrupted(false);
+        for(const [id,pc] of pcMap.current){
+          if(pc.connectionState==='failed'){
+            try{pc.restartIce();void renegotiate(id);}catch{/* Retry on next state sync. */}
+          }
+        }
+        if(!deafenedRef.current)for(const player of audioMap.current.values()){
+          void player.play().catch(()=>setAudioBlocked(true));
+        }
+      },750);
     };
     document.addEventListener('visibilitychange',resume);
     window.addEventListener('focus',resume);
-    return ()=>{document.removeEventListener('visibilitychange',resume);window.removeEventListener('focus',resume);};
-  },[base,sync]);
+    window.addEventListener('online',resume);
+    return ()=>{
+      document.removeEventListener('visibilitychange',resume);
+      window.removeEventListener('focus',resume);
+      window.removeEventListener('online',resume);
+      if(foregroundTimer.current!==null)window.clearTimeout(foregroundTimer.current);
+    };
+  },[base,sync,restoreMic,renegotiate]);
   useEffect(()=>{onPhaseChange?.(phase);},[onPhaseChange,phase]);
 
   // Send real presence to the channel list; do not invent participants.
   const visiblePeers=peers.map(peer=>({
     ...peer,deafened:peer.isSelf?deafened:peer.deafened,
-    muted:peer.isSelf?muted:peer.muted,
+    muted:peer.isSelf?(muted||micInterrupted):peer.muted,
     speaking:!((peer.isSelf?muted:peer.muted))&&speaking.has(peer.sessionId),
   }));
   useEffect(()=>{onParticipantsChange?.(phase==='joined'?visiblePeers:[]);},
     // The parent receives a new list only as real presence, mute or activity changes.
-    [onParticipantsChange,phase,peers,muted,deafened,speaking]);
+    [onParticipantsChange,phase,peers,muted,deafened,speaking,micInterrupted]);
   useEffect(()=>()=>onParticipantsChange?.([]),[onParticipantsChange]);
 
   const count=phase==='joined'?peers.length:0;
@@ -471,6 +538,10 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       </div>
       {error&&<div role="alert" className="mx-auto mt-4 max-w-5xl rounded-xl border border-destructive/35 bg-destructive/5 p-3 text-xs text-destructive">
         {error==='VOICE_NETWORK_RETRY'?(pt?'Reconectando…':'Reconnecting…'):error}</div>}
+      {phase==='joined'&&micInterrupted&&<div role="status" className="mx-auto mt-3 flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs">
+        <span>{pt?'O sistema interrompeu o microfone, mas a sala permanece aberta.':'System microphone capture was interrupted; the room remains open.'}</span>
+        <Button size="sm" variant="outline" onClick={()=>void restoreMic()}><Mic className="size-4"/>{pt?'Reativar microfone':'Restore microphone'}</Button>
+      </div>}
       {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-5 grid w-full max-w-5xl grid-cols-1 gap-3 lg:grid-cols-2">
         {Object.entries(screens).map(([id,stream])=><ScreenTile key={id} stream={stream} label={id===selfSession.current?
           (pt?'Sua tela':'Your screen'):
