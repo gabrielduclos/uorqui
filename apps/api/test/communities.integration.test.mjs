@@ -22,7 +22,7 @@ after(async()=>{if(server&&server.exitCode===null){server.kill('SIGTERM');await 
 
 function visitor(){
   let cookie='';
-  return async(path,method='GET',payload,withOrigin=true,extraHeaders={})=>{
+  const send=async(path,method='GET',payload,withOrigin=true,extraHeaders={})=>{
     const response=await fetch(base+path,{
       method,headers:{...(withOrigin?{origin}:{}),...(payload?{'Content-Type':'application/json'}:{}),...(cookie?{cookie}:{}),...extraHeaders},
       ...(payload?{body:JSON.stringify(payload)}:{})
@@ -33,6 +33,8 @@ function visitor(){
     }
     return {status:response.status,data:await response.json().catch(()=>null)};
   };
+  send.cookie=()=>cookie;
+  return send;
 }
 const owner=visitor(),member=visitor(),outsider=visitor(),anonymous=visitor();
 async function signUp(user,handle){
@@ -73,9 +75,32 @@ test('persistent communities: discover, create, join, channels and real messages
   assert.equal(add.status,201);
   assert.equal((await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'text'})).status,409);
   const path='/api/v1/communities/'+id+'/channels/'+text.id+'/messages';
+  assert.equal((await anonymous('/api/v1/communities/events')).status,401);
+  assert.equal((await owner('/api/v1/communities/events')).status,406);
+  const streamController=new AbortController();
+  const streamTimeout=setTimeout(()=>streamController.abort(),10000);
+  const stream=await fetch(base+'/api/v1/communities/events',{
+    headers:{cookie:owner.cookie(),accept:'text/event-stream'},
+    signal:streamController.signal,
+  });
+  assert.equal(stream.status,200);
+  const reader=stream.body.getReader(), decoder=new TextDecoder();
+  let streamed='';
+  async function receive(fragment){
+    while(!streamed.includes(fragment)){
+      const chunk=await reader.read();
+      if(chunk.done)throw Error('Community stream ended before '+fragment);
+      streamed+=decoder.decode(chunk.value,{stream:true});
+    }
+  }
+  await receive('event: ready');
   const clientId=crypto.randomUUID();
   const sent=await member(path,'POST',{clientId,body:'Hello community'});
   assert.equal(sent.status,201,JSON.stringify(sent.data));
+  await receive('"channelId":"'+text.id+'"');
+  assert.match(streamed,/event: community-update/);
+  assert.match(streamed,/"kind":"message"/);
+  streamController.abort();clearTimeout(streamTimeout);
   const duplicate=await member(path,'POST',{clientId,body:'Hello community'});
   assert.equal(duplicate.status,200);
   assert.equal(duplicate.data.id,sent.data.id);
