@@ -23,6 +23,8 @@ export default function EmailVerificationResult() {
   const pt = locale === 'pt-BR';
   const result = getResult();
   const success = result === 'success';
+  const token=new URLSearchParams(window.location.search).get('invite');
+  const invitation=token&&/^[0-9a-f-]{36}$/i.test(token)?'/invite/'+token:null;
   const title = success
     ? (pt ? 'E-mail confirmado!' : 'Email verified!')
     : result === 'expired'
@@ -57,7 +59,7 @@ export default function EmailVerificationResult() {
         <h1 className="text-2xl font-semibold">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
         <div className="mt-7 flex flex-col gap-3">
-          <a href={success ? '/?login=1' : '/?verify=1'}
+          <a href={invitation?(invitation+(success?'?login=1':'?verify=1')):(success?'/?login=1':'/?verify=1')}
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90">
             {success ? <CheckCircle2 className="size-4" aria-hidden="true"/> : <MailCheck className="size-4" aria-hidden="true"/>}
             {success ? (pt ? 'Entrar na minha conta' : 'Sign in to my account') : (pt ? 'Solicitar novo link' : 'Request another link')}

@@ -197,3 +197,66 @@ test('community moderation: hierarchical roles, persistent bans, channels and me
   assert.equal((await outsider(msgPath)).status,403,'kicked participant cannot read messages');
   assert.equal((await outsider(root+'/moderation')).status,403);
 });
+
+test('community share link: onboarding redemption, role gates, rotation, bans and expiry',async()=>{
+  const newAccount=visitor(),secondAccount=member;
+  const created=await owner('/api/v1/communities','POST',
+    {name:'Shared Private Room',slug:'shared-private-room-test',visibility:'private',description:'Invite-only area'});
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const id=created.data.id,path='/api/v1/communities/'+id;
+  assert.equal((await anonymous(path+'/share')).status,401);
+  assert.equal((await outsider(path+'/share')).status,403);
+  assert.equal((await member(path+'/share','POST',{})).status,403);
+  const share=await owner(path+'/share','POST',{},false);
+  assert.equal(share.status,403,'same-origin required');
+  const made=await owner(path+'/share','POST',{});
+  assert.equal(made.status,201,JSON.stringify(made.data));
+  const token=made.data.link.id;
+  assert.match(token,/^[0-9a-f-]{36}$/);
+  const preview=await anonymous('/api/v1/community-invites/'+token);
+  assert.equal(preview.status,200);
+  assert.equal(preview.data.community.name,'Shared Private Room');
+  assert.equal(preview.data.community.communityId,id);
+  assert.equal((await anonymous('/api/v1/community-invites/'+token+'/redeem','POST',{})).status,401);
+  assert.equal((await outsider('/api/v1/community-invites/'+token+'/redeem','POST',{},false)).status,403);
+  assert.equal((await newAccount('/api/v1/community-invites/'+token+'/redeem','POST',{})).status,401);
+  await signUp(newAccount,'comm_new_shared');
+  assert.equal((await newAccount(path)).status,404,'private group hidden before invitation redemption');
+  const redeemed=await newAccount('/api/v1/community-invites/'+token+'/redeem','POST',{});
+  assert.equal(redeemed.status,200,JSON.stringify(redeemed.data));
+  assert.equal(redeemed.data.communityId,id);
+  assert.equal((await newAccount(path)).data.community.myRole,'member','new user enters directly after onboarding');
+  assert.equal((await newAccount('/api/v1/community-invites/'+token+'/redeem','POST',{})).status,200,
+    'same link can be safely redeemed again');
+  assert.equal((await newAccount(path+'/share')).data.link.id,token,
+    'members can copy active link, but cannot rotate it');
+  assert.equal((await newAccount(path+'/share','POST',{})).status,403);
+
+  const invalid=await owner(path,'PATCH',{name:'Updated shared room',description:'New description'});
+  assert.equal(invalid.status,200);
+  assert.equal(invalid.data.community.name,'Updated shared room');
+  assert.equal((await newAccount(path,'PATCH',{name:'Hijack'})).status,403);
+  const avatar='/media/community/'+id+'/'+crypto.randomUUID()+'.png';
+  assert.equal((await owner(path,'PATCH',{avatarUrl:avatar})).status,200);
+  assert.equal((await newAccount(path)).data.community.avatarUrl,avatar);
+  assert.equal((await outsider(path+'/media/upload-access')).status,403);
+  assert.equal((await owner(path+'/media/upload-access')).status,200);
+  const asset=avatar.split('/').at(-1);
+  assert.equal((await owner(path+'/media/'+asset+'/access')).status,200);
+  assert.equal((await outsider(path+'/media/'+asset+'/access')).status,404);
+  assert.equal((await owner(path,'PATCH',{avatarUrl:'/media/community/'+crypto.randomUUID()+'/wrong.png'})).status,400);
+  const rotated=await owner(path+'/share','POST',{});
+  assert.equal(rotated.status,201);
+  assert.notEqual(rotated.data.link.id,token);
+  assert.equal((await anonymous('/api/v1/community-invites/'+token)).status,404);
+  assert.equal((await secondAccount('/api/v1/community-invites/'+token+'/redeem','POST',{})).status,410);
+  assert.equal((await secondAccount('/api/v1/community-invites/'+rotated.data.link.id+'/redeem','POST',{})).status,200);
+  assert.equal((await owner(path+'/bans','POST',{handle:'comm_member'})).status,200);
+  assert.equal((await secondAccount('/api/v1/community-invites/'+rotated.data.link.id+'/redeem','POST',{})).status,403,
+    'ban cannot be circumvented using a fresh link');
+  assert.equal((await owner(path+'/share','DELETE')).status,200);
+  assert.equal((await anonymous('/api/v1/community-invites/'+rotated.data.link.id)).status,404);
+  assert.equal((await newAccount(path,'DELETE')).status,403,'members cannot delete group');
+  assert.equal((await owner(path,'DELETE')).status,200,'owner may permanently delete community');
+  assert.equal((await anonymous('/api/v1/community-invites/'+rotated.data.link.id)).status,404);
+});

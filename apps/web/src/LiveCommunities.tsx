@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import { ArrowLeft, Check, Compass, Hash, Headphones, LockKeyhole, MicOff, Plus, Search, Send, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -10,13 +12,15 @@ import CommunityModerationPanel from './CommunityModerationPanel';
 
 type Visibility='public'|'approval'|'private';
 type Community={
-  id:string;name:string;slug:string;description:string|null;visibility:Visibility;
+  id:string;name:string;slug:string;description:string|null;avatarUrl:string|null;visibility:Visibility;
   memberCount:number;myRole:string|null;requestKind:string|null;requestStatus:string|null;
 };
 type Channel={id:string;name:string;kind:'text'|'voice';createdAt:string};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean};
+type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
+function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
 const allowedSlug=/^[a-z][a-z0-9-]{2,63}$/;
 
@@ -35,10 +39,10 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;onMobileOpenChange?:(value:boolean)=>void}){
+export default function LiveCommunities({myId,onMobileOpenChange,initialCommunityId}:{myId:string;onMobileOpenChange?:(value:boolean)=>void;initialCommunityId?:string|null}){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [list,setList]=useState<Community[]>([]);
-  const [selectedId,setSelectedId]=useState<string|null>(null);
+  const [selectedId,setSelectedId]=useState<string|null>(initialCommunityId??null);
   const [detail,setDetail]=useState<Detail|null>(null);
   const [channelId,setChannelId]=useState<string|null>(null);
   const [channelOpen,setChannelOpen]=useState(false);
@@ -51,23 +55,32 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const [slugTouched,setSlugTouched]=useState(false);
   const [createDescription,setCreateDescription]=useState('');
   const [createVisibility,setCreateVisibility]=useState<Visibility>('public');
+  const [inviteLink,setInviteLink]=useState<{id:string;expiresAt:string}|null>(null);
+  const [shareBusy,setShareBusy]=useState(false);
+  const [shareNotice,setShareNotice]=useState('');
+  const [shareOpen,setShareOpen]=useState(false);
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'>('text');
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
+  const [pendingMessages,setPendingMessages]=useState<PendingMessage[]>([]);
+  const [messagesLoading,setMessagesLoading]=useState(false);
+  const [detailLoading,setDetailLoading]=useState(false);
   const [draft,setDraft]=useState('');
   const [editingId,setEditingId]=useState<string|null>(null);
   const [editingBody,setEditingBody]=useState('');
   const [deletingId,setDeletingId]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
+  const [busyAction,setBusyAction]=useState<string|null>(null);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const scrollRef=useRef<HTMLDivElement>(null);
   const previousLastMessage=useRef<string|null>(null);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
   const community=detail?.community??null;
+  const renderedMessages=[...messages,...pendingMessages.filter(p=>p.channelId===channelId&&!messages.some(m=>m.clientId===p.clientId))];
 
   const loadList=useCallback(async()=>{
     const data=await api<{communities:Community[]}>('/api/v1/communities');
@@ -86,29 +99,50 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
       if(!active)return;
       if(!groups.some(group=>group.myRole))setDiscovery(true);
       const first=groups.find(group=>group.myRole);
-      if(first)setSelectedId(first.id);
+      if(initialCommunityId&&groups.some(g=>g.id===initialCommunityId&&g.myRole))setSelectedId(initialCommunityId);
+      else if(first)setSelectedId(first.id);
     }).catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar as comunidades.':'Could not load communities.');}});
     return ()=>{active=false;};
   },[loadList,pt]);
   useEffect(()=>{
     if(!selectedId){setDetail(null);setChannelId(null);return;}
-    let active=true;setDetail(null);
-    void loadDetail(selectedId).catch(()=>{if(active)setError(pt?'Não foi possível abrir a comunidade.':'Could not open community.');});
+    let active=true;setDetail(null);setDetailLoading(true);
+    void loadDetail(selectedId).catch(()=>{if(active)setError(pt?'Não foi possível abrir a comunidade.':'Could not open community.');}).finally(()=>{if(active)setDetailLoading(false);});
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
+  useEffect(()=>{if(initialCommunityId){setSelectedId(initialCommunityId);setDiscovery(false);void loadList();}},[initialCommunityId,loadList]);
+  async function shareCommunity(){
+    if(!selectedId)return;
+    setShareBusy(true);setShareNotice('');
+    try{
+      const existing=await api<{link:{id:string;expiresAt:string}|null}>('/api/v1/communities/'+selectedId+'/share');
+      if(!existing.link&&manage(community!)){
+        const made=await api<{link:{id:string;expiresAt:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
+        setInviteLink(made.link);
+      }else setInviteLink(existing.link);
+      setShareOpen(true);
+    }catch{setShareNotice(pt?'Não foi possível carregar o convite.':'Could not load invitation.');}
+    finally{setShareBusy(false);}
+  }
+  async function copyInvite(){
+    if(!inviteLink)return;
+    try{await navigator.clipboard.writeText(window.location.origin+'/invite/'+inviteLink.id);
+      setShareNotice(pt?'Link copiado!':'Link copied!');}
+    catch{setShareNotice(window.location.origin+'/invite/'+inviteLink.id);}
+  }
   const closeChannel=()=>{setChannelOpen(false);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||activeChannel?.kind!=='text'||!community?.myRole){setMessages([]);return;}
     let active=true;
     previousLastMessage.current=null;
-    setMessages([]);
+    setMessages([]);setMessagesLoading(true);
     const poll=async()=>{
       try{
         const result=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
-        if(active)setMessages(result.messages);
-      }catch{if(active)setError(pt?'Não foi possível atualizar as mensagens.':'Could not refresh messages.');}
+        if(active){setMessages(result.messages);setPendingMessages(old=>old.filter(p=>p.channelId!==channelId||!result.messages.some(m=>m.clientId===p.clientId)));setMessagesLoading(false);}
+      }catch{if(active){setMessagesLoading(false);setError(pt?'Não foi possível atualizar as mensagens.':'Could not refresh messages.');}}
     };
     void poll();
     const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void poll();},5000);
@@ -128,9 +162,9 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     await loadList();
     if(id)await loadDetail(id);
   }
-  async function act(run:()=>Promise<unknown>,success:string,id=selectedId){
+  async function act(run:()=>Promise<unknown>,success:string,id=selectedId,key='action'){
     if(busy)return;
-    setBusy(true);setError('');setNotice('');
+    setBusy(true);setBusyAction(key);setError('');setNotice('');
     try{await run();await refresh(id);setNotice(success);}
     catch(reason){
       const err=reason instanceof Error?reason.message:'';
@@ -140,7 +174,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
         :err==='COMMUNITY_LIMIT'?(pt?'Limite de comunidades criadas atingido.':'Community creation limit reached.')
         :err==='OWNER_CANNOT_LEAVE'?(pt?'O proprietário não pode sair sem transferir a comunidade.':'Owners cannot leave without transferring ownership.')
         :(pt?'Não foi possível concluir a operação.':'Could not complete this operation.'));
-    }finally{setBusy(false);}
+    }finally{setBusy(false);setBusyAction(null);}
   }
 
   function selectCommunity(id:string){
@@ -151,7 +185,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     event.preventDefault();
     if(!allowedSlug.test(createSlug)) {setError(pt?'Use um endereço com letras minúsculas, números ou hífens (3–64).':'Use a lowercase slug, numbers or hyphens (3–64).');return;}
     if(busy)return;
-    setBusy(true);setError('');
+    setBusy(true);setBusyAction('create');setError('');
     try{
       const result=await api<{id:string}>('/api/v1/communities',body({
         name:createName.trim(),slug:createSlug.trim(),description:createDescription.trim(),visibility:createVisibility
@@ -162,13 +196,13 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     }catch(reason){setError(reason instanceof Error&&reason.message==='SLUG_TAKEN'
       ?(pt?'Este endereço já pertence a uma comunidade.':'This slug already exists.')
       :(pt?'Falha ao criar comunidade.':'Could not create community.'));}
-    finally{setBusy(false);}
+    finally{setBusy(false);setBusyAction(null);}
   }
   async function createChannel(event:FormEvent){
     event.preventDefault();
     if(!selectedId||!newChannelName.trim())return;
     await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind})),
-      pt?'Canal criado.':'Channel created.');
+      pt?'Canal criado.':'Channel created.',selectedId,'createChannel');
     setNewChannelOpen(false);setNewChannelName('');
   }
   async function invite(event:FormEvent){
@@ -177,47 +211,66 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
     const handle=inviteHandle.trim().replace(/^@/,'').toLowerCase();
     if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)){setError(pt?'Digite um @usuário válido.':'Enter a valid @username.');return;}
     await act(()=>api('/api/v1/communities/'+selectedId+'/invite',body({handle})),
-      pt?'Convite enviado.':'Invitation sent.');
+      pt?'Convite enviado.':'Invitation sent.',selectedId,'inviteUser');
     setInviteHandle('');
   }
-  async function send(event?:FormEvent){
-    event?.preventDefault();
-    const text=draft.trim();
-    if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!text||busy)return;
-    setBusy(true);setError('');
-    const clientId=crypto.randomUUID();
+  async function submitPending(p:PendingMessage){
+    const currentCommunity=selectedId;
     try{
-      await api('/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/messages',body({clientId,body:text}));
-      setDraft('');
-      const updated=await api<{messages:Message[]}>('/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/messages');
-      setMessages(updated.messages);
-      window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
-    }catch{setError(pt?'Falha ao enviar mensagem. O texto foi mantido.':'Could not send; your text was preserved.');}
-    finally{setBusy(false);}
+      await api('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages',
+        body({clientId:p.clientId,body:p.body}));
+      // Only refresh the currently visible channel. Keep pending entry until the
+      // server's message list contains this clientId (prevents flashing/disappearing).
+      if(channelId===p.channelId&&currentCommunity){
+        const updated=await api<{messages:Message[]}>('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages');
+        setMessages(updated.messages);
+        setPendingMessages(old=>old.filter(msg=>msg.clientId!==p.clientId || !updated.messages.some(m=>m.clientId===msg.clientId)));
+      }
+    }catch{
+      setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'failed'}:x));
+    }
+  }
+  function send(event?:FormEvent){
+    event?.preventDefault();
+    const text=draft.trim(),selected=channelId;
+    if(!community?.myRole||!activeChannel||activeChannel.kind!=='text'||!selectedId||!selected||!text||text.length>4000)return;
+    const clientId=crypto.randomUUID(),now=new Date().toISOString();
+    const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text,createdAt:now,
+      authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,canEdit:false,canDelete:false,pending:'sending'};
+    setPendingMessages(old=>[...old,pending]);
+    setDraft('');setError('');
+    window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
+    void submitPending(pending);
+  }
+  function retryPending(p:PendingMessage){
+    setPendingMessages(old=>old.map(x=>x.clientId===p.clientId?{...x,pending:'sending'}:x));
+    void submitPending({...p,pending:'sending'});
   }
   async function updateMessage(event:FormEvent){
     event.preventDefault();
     if(!selectedId||!channelId||!editingId||!editingBody.trim()||busy)return;
     setBusy(true);setError('');
     try{
+      setBusyAction('editMessage');
       await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+editingId,{
         method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:editingBody.trim()})
       });
       const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
       setMessages(updated.messages);setEditingId(null);setEditingBody('');
     }catch{setError(pt?'Não foi possível editar a mensagem.':'Could not edit message.');}
-    finally{setBusy(false);}
+    finally{setBusy(false);setBusyAction(null);}
   }
   async function removeMessage(messageId:string){
     if(!selectedId||!channelId||busy)return;
     if(deletingId!==messageId){setDeletingId(messageId);return;}
     setBusy(true);setError('');
     try{
+      setBusyAction('deleteMessage:'+messageId);
       await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+messageId,{method:'DELETE'});
       const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
       setMessages(updated.messages);setDeletingId(null);
     }catch{setError(pt?'Não foi possível cancelar a mensagem.':'Could not remove message.');}
-    finally{setBusy(false);}
+    finally{setBusy(false);setBusyAction(null);}
   }
   function onComposerKeyDown(event:KeyboardEvent<HTMLTextAreaElement>){
     if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void send();}
@@ -228,6 +281,9 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
   const matches=available.filter(group=>(group.name+' '+group.slug).toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   const visibilityLabel=(v:Visibility)=>v==='public'?(pt?'Pública':'Public'):v==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Privada':'Private');
   const communityIcon=(group:Community)=>group.name.trim().charAt(0).toUpperCase()||'C';
+  const communityAvatar=(group:Community,classes:string)=>group.avatarUrl?
+    <img src={group.avatarUrl} alt="" className={classes+' object-cover'}/>:
+    <span aria-hidden="true">{communityIcon(group)}</span>;
 
   return <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
     <nav data-uorqui-community-rail aria-label={pt?'Minhas comunidades':'My communities'}
@@ -241,7 +297,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
       {owned.map(group=><button type="button" key={group.id} title={group.name}
         aria-label={group.name} aria-current={selectedId===group.id&&!discovery?'page':undefined}
         onClick={()=>selectCommunity(group.id)} className={cn('grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!discovery&&'ring-2 ring-primary')}>
-        {communityIcon(group)}
+        {communityAvatar(group,'size-full rounded-2xl')}
       </button>)}
       <button type="button" onClick={()=>{closeChannel();setDiscovery(true);setCreateOpen(true);}}
         aria-label={pt?'Criar comunidade':'Create community'} title={pt?'Criar comunidade':'Create community'}
@@ -277,15 +333,15 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                 <option value="approval">{pt?'Por aprovação':'Approval required'}</option>
                 <option value="private">{pt?'Privada (somente convite)':'Private (invitation only)'}</option>
               </select></label>
-            <Button type="submit" className="w-full" disabled={busy||createName.trim().length<2||!allowedSlug.test(createSlug)}>
+            <Button type="submit" className="w-full" loading={busyAction==='create'} disabled={busy||createName.trim().length<2||!allowedSlug.test(createSlug)}>
               <Plus className="size-4"/>{pt?'Criar comunidade':'Create community'}</Button>
           </form>:<div className="space-y-2">
             <div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground"/>
               <Input value={query} onChange={e=>setQuery(e.target.value)} className="h-10 pl-9 text-base" placeholder={pt?'Buscar comunidade':'Search communities'}/></div>
-            {loading&&<p role="status" className="p-4 text-xs text-muted-foreground">{pt?'Carregando…':'Loading…'}</p>}
+            {loading&&<SkeletonRows className="p-3" rows={5}/>}
             {matches.map(group=><button type="button" key={group.id} onClick={()=>selectCommunity(group.id)}
               className="flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-secondary">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/15 font-bold text-primary">{communityIcon(group)}</div>
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/15 font-bold text-primary">{communityAvatar(group,'size-full rounded-xl')}</div>
               <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{group.name}</strong>
                 <span className="block truncate text-xs text-muted-foreground">{visibilityLabel(group.visibility)} · {group.memberCount} {pt?'membros':'members'}</span>
                 {group.description&&<span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{group.description}</span>}</span>
@@ -295,7 +351,11 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
         </div>
       </div>:<>
         <div className="shrink-0 border-b border-border bg-card/95 p-4">
-          <div className="truncate text-base font-semibold">{community?.name??(pt?'Comunidade':'Community')}</div>
+          {detailLoading?<div className="space-y-2"><Skeleton className="h-5 w-3/4"/><Skeleton className="h-3 w-1/2"/></div>:
+          <div className="flex items-center gap-2">
+            {community?.avatarUrl&&<img src={community.avatarUrl} alt="" className="size-10 rounded-xl object-cover"/>}
+            <div className="min-w-0 flex-1 truncate text-base font-semibold">{community?.name??(pt?'Comunidade':'Community')}</div>
+          </div>}
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{community?.description|| (community?visibilityLabel(community.visibility):'…')}</p>
           <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
             <Users className="size-3.5"/>{community?.memberCount??'…'} {pt?'membros':'members'}
@@ -307,11 +367,11 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
             <p className="text-sm text-muted-foreground">{community.visibility==='private'?(pt?'Entrada apenas por convite.':'Invitation only.'):
               community.visibility==='approval'?(pt?'O responsável aprova a entrada.':'A manager approves requests.'):(pt?'Entre para acessar os canais.':'Join to access channels.')}</p>
             {community.requestKind==='invite'&&community.requestStatus==='pending'?<div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/accept',{method:'POST'}),pt?'Convite aceito.':'Invitation accepted.')}><Check className="size-4"/>{pt?'Aceitar convite':'Accept invite'}</Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/decline',{method:'POST'}),pt?'Convite recusado.':'Invitation declined.')}><X className="size-4"/>{pt?'Recusar':'Decline'}</Button>
+              <Button size="sm" loading={busyAction==='acceptInvite'} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/accept',{method:'POST'}),pt?'Convite aceito.':'Invitation accepted.',community.id,'acceptInvite')}><Check className="size-4"/>{pt?'Aceitar convite':'Accept invite'}</Button>
+              <Button size="sm" variant="outline" loading={busyAction==='declineInvite'} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/invite/decline',{method:'POST'}),pt?'Convite recusado.':'Invitation declined.',community.id,'declineInvite')}><X className="size-4"/>{pt?'Recusar':'Decline'}</Button>
             </div>:community.requestKind==='join'&&community.requestStatus==='pending'?
               <p className="text-xs font-medium text-primary">{pt?'Solicitação pendente':'Request pending'}</p>:
-              community.visibility!=='private'&&<Button size="sm" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/join',{method:'POST'}),pt?'Solicitação registrada ou entrada concluída.':'Joined or request submitted.')}>
+              community.visibility!=='private'&&<Button size="sm" loading={busyAction==='joinCommunity'} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/join',{method:'POST'}),pt?'Solicitação registrada ou entrada concluída.':'Joined or request submitted.',community.id,'joinCommunity')}>
                 <UserPlus className="size-4"/>{community.visibility==='approval'?(pt?'Solicitar entrada':'Request to join'):(pt?'Entrar':'Join')}</Button>}
           </div>}
           {community&&memberView(community)&&<>
@@ -352,29 +412,55 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                   className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
                   <option value="text">{pt?'Texto':'Text'}</option><option value="voice">{pt?'Voz':'Voice'}</option>
                 </select>
-                <Button size="sm" type="submit" disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
+                <Button size="sm" type="submit" loading={busyAction==='createChannel'} disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
               </form>}
               <form className="space-y-2 pt-2" onSubmit={event=>void invite(event)}>
                 <label className="text-xs font-semibold">{pt?'Convidar pelo @usuário':'Invite by @username'}</label>
                 <Input value={inviteHandle} onChange={e=>setInviteHandle(e.target.value)} maxLength={40} className="text-base" placeholder="@usuario"/>
-                <Button size="sm" variant="outline" type="submit" disabled={busy||!inviteHandle.trim()}><UserPlus className="size-4"/>{pt?'Convidar':'Invite'}</Button>
+                <Button size="sm" variant="outline" type="submit" loading={busyAction==='inviteUser'} disabled={busy||!inviteHandle.trim()}><UserPlus className="size-4"/>{pt?'Convidar':'Invite'}</Button>
               </form>
               {!!detail?.pendingRequests.length&&<div className="space-y-2 border-t border-border pt-3">
                 <p className="text-xs font-semibold">{pt?'Pedidos de entrada':'Join requests'}</p>
                 {detail.pendingRequests.map(person=><div key={person.handle} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-xs">{person.displayName} (@{person.handle})</span>
-                  <Button size="sm" variant="outline" disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/requests/'+person.handle+'/approve',{method:'POST'}),pt?'Membro aprovado.':'Member approved.')}>
+                  <Button size="sm" variant="outline" loading={busyAction==='approve:'+person.handle} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/requests/'+person.handle+'/approve',{method:'POST'}),pt?'Membro aprovado.':'Member approved.',community.id,'approve:'+person.handle)}>
                     <Check className="size-4"/></Button>
                 </div>)}
               </div>}
             </section>}
+            <div className="space-y-2 border-t border-border pt-3">
+              <Button variant="outline" size="sm" className="w-full" loading={shareBusy} onClick={()=>void shareCommunity()}>
+                {pt?'Compartilhar comunidade':'Share community'}</Button>
+              {shareOpen&&<div className="space-y-2 rounded-xl border border-border p-2">
+                {inviteLink?<><p className="break-all text-[11px] text-muted-foreground">{window.location.origin+'/invite/'+inviteLink.id}</p>
+                <Button type="button" size="sm" className="w-full" onClick={()=>void copyInvite()}>{pt?'Copiar link':'Copy link'}</Button>
+                {manage(community)&&<Button type="button" size="sm" variant="outline" disabled={shareBusy} onClick={()=>{
+                  if(!selectedId)return;setShareBusy(true);
+                  void api<{link:{id:string;expiresAt:string}}>('/api/v1/communities/'+selectedId+'/share',body({}))
+                    .then(data=>{setInviteLink(data.link);setShareNotice(pt?'Novo link criado; o anterior foi revogado.':'New link created; previous link revoked.');})
+                    .catch(()=>setShareNotice(pt?'Falha ao renovar.':'Could not rotate invitation.'))
+                    .finally(()=>setShareBusy(false));
+                }}>{pt?'Gerar novo link':'Rotate invitation link'}</Button>}
+                {manage(community)&&<Button type="button" size="sm" variant="ghost" className="w-full" disabled={shareBusy} onClick={()=>{
+                  if(!selectedId)return;setShareBusy(true);
+                  void api('/api/v1/communities/'+selectedId+'/share',{method:'DELETE'})
+                    .then(()=>{setInviteLink(null);setShareNotice(pt?'Link revogado.':'Invitation revoked.');})
+                    .catch(()=>setShareNotice(pt?'Falha ao revogar.':'Could not revoke link.'))
+                    .finally(()=>setShareBusy(false));
+                }}>{pt?'Revogar link':'Revoke link'}</Button>}</>:
+                  <p className="text-xs text-muted-foreground">{pt?'Peça a um administrador para gerar o link.':'Ask an administrator to create an invitation link.'}</p>}
+              </div>}
+              {shareNotice&&<p role="status" className="break-words text-xs text-muted-foreground">{shareNotice}</p>}
+            </div>
             {['owner','admin','moderator'].includes(community.myRole??'')&&
               <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
-                channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}/>}
+                name={community.name} description={community.description} avatarUrl={community.avatarUrl}
+                channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}
+                onDeleted={async()=>{closeChannel();setDetail(null);setSelectedId(null);setDiscovery(true);await loadList();}}/>}
             {community.myRole!=='owner'&&<Button variant="ghost" size="sm" className="w-full text-muted-foreground"
-              disabled={busy} onClick={()=>void act(async()=>{
+              loading={busyAction==='leaveCommunity'} disabled={busy} onClick={()=>void act(async()=>{
                 await api('/api/v1/communities/'+community.id+'/membership',{method:'DELETE'});closeChannel();setDiscovery(true);setSelectedId(null);setDetail(null);
-              },pt?'Você saiu da comunidade.':'You left the community.',null)}>{pt?'Sair da comunidade':'Leave community'}</Button>}
+              },pt?'Você saiu da comunidade.':'You left the community.',null,'leaveCommunity')}>{pt?'Sair da comunidade':'Leave community'}</Button>}
           </>}
         </div>
       </>}
@@ -402,7 +488,8 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{pt?'Mensagens salvas na comunidade, visíveis aos seus membros.':'Messages are saved to the community and visible to its members.'}</p>
             </div>}
-            <div className="space-y-4">{messages.map(message=><div key={message.id} className="flex min-w-0 gap-3">
+            {messagesLoading&&<SkeletonRows rows={4} className="mb-5"/>}
+            <div className="space-y-4">{renderedMessages.map(message=><div key={message.clientId} className="flex min-w-0 gap-3">
               <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-2"><strong className="text-sm">{message.authorName}</strong>
@@ -414,18 +501,24 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                       className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={pt?'Editar mensagem':'Edit message'}/>
                     <div className="flex gap-2">
-                      <Button type="submit" size="sm" disabled={busy||!editingBody.trim()}>{pt?'Salvar':'Save'}</Button>
+                      <Button type="submit" size="sm" loading={busyAction==='editMessage'} disabled={busy||!editingBody.trim()}>{pt?'Salvar':'Save'}</Button>
                       <Button type="button" size="sm" variant="outline" onClick={()=>{setEditingId(null);setEditingBody('');}}>
                         {pt?'Cancelar':'Cancel'}</Button>
                     </div>
                   </form>:<p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6">{message.body}</p>}
+                {isPendingMessage(message)&&<div role="status" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                  {message.pending==='sending'?<><Spinner className="size-3.5"/>{pt?'Enviando…':'Sending…'}</>:
+                    <><span className="text-destructive">{pt?'Falha no envio':'Send failed'}</span>
+                    <button type="button" className="text-primary underline" onClick={()=>retryPending(message)}>
+                      {pt?'Reenviar':'Retry'}</button></>}
+                </div>}
                 {!message.deletedAt&&message.editedAt&&<span className="mt-1 block text-[11px] text-muted-foreground">{pt?'Editada':'Edited'}</span>}
                 {!message.deletedAt&&(message.canEdit||message.canDelete)&&<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
                   {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
                     onClick={()=>{setEditingId(message.id);setEditingBody(message.body??'');setDeletingId(null);}}>
                     {pt?'Editar':'Edit'}</button>}
-                  {message.canDelete&&<button type="button" className="hover:text-destructive" disabled={busy}
-                    onClick={()=>void removeMessage(message.id)}>{deletingId===message.id?
+                  {message.canDelete&&<button type="button" className="inline-flex items-center gap-1 hover:text-destructive" disabled={busy}
+                    onClick={()=>void removeMessage(message.id)}>{busyAction==='deleteMessage:'+message.id&&<Spinner className="size-3.5"/>}{deletingId===message.id?
                       (pt?'Confirmar cancelamento':'Confirm removal'):(pt?'Cancelar mensagem':'Remove message')}</button>}
                   {deletingId===message.id&&<button type="button" className="hover:text-foreground" onClick={()=>setDeletingId(null)}>
                     {pt?'Voltar':'Back'}</button>}
@@ -439,7 +532,7 @@ export default function LiveCommunities({myId,onMobileOpenChange}:{myId:string;o
                 onChange={event=>setDraft(event.target.value)} onKeyDown={onComposerKeyDown} maxLength={4000} rows={1}
                 placeholder={(pt?'Mensagem em #':'Message in #')+activeChannel.name}
                 className="max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none placeholder:text-muted-foreground"/>
-              <Button type="submit" size="icon" disabled={busy||!draft.trim()} aria-label={pt?'Enviar mensagem':'Send message'}>
+              <Button type="submit" size="icon" disabled={!draft.trim()} aria-label={pt?'Enviar mensagem':'Send message'}>
                 <Send className="size-4"/></Button>
             </div>
           </form>

@@ -54,7 +54,9 @@ function buildAuth() {
       updateAge: 60 * 60 * 24,
     },
     rateLimit: {
-      enabled: true,
+      // Integration tests exercise dozens of actions against one loopback IP.
+      // Production and development rate limiting remain enabled.
+      enabled: process.env.NODE_ENV !== 'test',
       storage: 'memory',
       window: 60,
       max: 60,

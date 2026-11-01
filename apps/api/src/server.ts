@@ -12,6 +12,7 @@ import { registerDirectMessageRoutes } from './direct-message-routes.js';
 import { registerFriendRoutes } from './friend-routes.js';
 import { registerBlockRoutes } from './block-routes.js';
 import { registerCommunityRoutes } from './community-routes.js';
+import { registerCommunityInviteLinks } from './community-invite-links.js';
 import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
 import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
 import { closeDmEvents } from './dm-events.js';
@@ -124,6 +125,15 @@ app.route({
         // still validates the original signed token and appends ?error= on failure.
         const frontend = new URL(process.env.WEB_ORIGIN ?? 'http://localhost:5173');
         const result = new URL('/auth/email-verification?result=success', frontend);
+        const original=url.searchParams.get('callbackURL');
+        if(original){
+          try{
+            const callback=new URL(original);
+            const token=callback.searchParams.get('invite');
+            if(callback.origin===frontend.origin&&callback.pathname==='/auth/email-verification'
+              &&token&&/^[0-9a-f-]{36}$/i.test(token))result.searchParams.set('invite',token);
+          }catch{/* Reject invalid callback destinations. */}
+        }
         url.searchParams.set('callbackURL', result.toString());
       }
       const headers = fromNodeHeaders(request.headers);
@@ -239,6 +249,7 @@ registerDirectMessageRoutes(app, async request => readSession(request));
 registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));
 registerCommunityRoutes(app, async request => readSession(request));
+registerCommunityInviteLinks(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
 registerCommunityModerationRoutes(app, async request => readSession(request));
 

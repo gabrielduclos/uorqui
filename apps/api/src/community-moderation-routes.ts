@@ -12,6 +12,14 @@ const roleBody={type:'object',required:['role'],additionalProperties:false,prope
 const banBody={type:'object',required:['handle'],additionalProperties:false,properties:{handle,reason:{type:'string',maxLength:300}}};
 const channelBody={type:'object',required:['name'],additionalProperties:false,properties:{name:{type:'string',minLength:2,maxLength:64}}};
 const editBody={type:'object',required:['body'],additionalProperties:false,properties:{body:{type:'string',minLength:1,maxLength:4000}}};
+const communitySettingsBody={type:'object',additionalProperties:false,minProperties:1,properties:{
+  name:{type:'string',minLength:2,maxLength:120},
+  description:{type:'string',maxLength:500},
+  avatarUrl:{anyOf:[{type:'string',pattern:'^/media/community/[0-9a-f-]{36}/[0-9a-f-]{36}\\.(webp|jpg|png)$'},{type:'null'}]}
+}};
+const communityMediaParams={type:'object',required:['id','asset'],additionalProperties:false,properties:{
+  id:uuid,asset:{type:'string',pattern:'^[0-9a-f-]{36}\\.(webp|jpg|png)$'}
+}};
 const ranks:Record<string,number>={owner:4,admin:3,moderator:2,member:1};
 const noCache='private, no-store';
 const origin=(req:FastifyRequest)=>req.headers.origin===(process.env.WEB_ORIGIN??'http://localhost:5173');
@@ -26,6 +34,70 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
     const r=await getPool().query('SELECT role FROM community_members WHERE community_id=$1 AND user_id=$2',[id,me]);
     return (r.rows[0]?.role as string|undefined)??null;
   }
+
+  // Metadata is controlled by owner/admin. The media Worker verifies an upload
+  // against this endpoint before writing to R2, and uses PATCH after the put.
+  app.get('/api/v1/communities/:id/media/upload-access',{schema:{params:idParams}},async(request,reply)=>{
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if((ranks[(await role(id,me))??'']??0)<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      const r=await getPool().query('SELECT avatar_url AS "avatarUrl" FROM communities WHERE id=$1',[id]);
+      if(!r.rowCount)return reply.code(404).send({error:'Community not found'});
+      return reply.header('Cache-Control',noCache).send({authorized:true,avatarUrl:r.rows[0].avatarUrl});
+    }catch(error){request.log.error({err:error},'Community media upload permission');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  app.get('/api/v1/communities/:id/media/:asset/access',{schema:{params:communityMediaParams}},async(request,reply)=>{
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,asset}=request.params as {id:string;asset:string};
+      const r=await getPool().query(
+        'SELECT 1 FROM communities c LEFT JOIN community_members m ON m.community_id=c.id AND m.user_id=$2 '+
+        'LEFT JOIN community_join_requests invite ON invite.community_id=c.id AND invite.user_id=$2 AND invite.kind=\'invite\' AND invite.status=\'pending\' '+
+        'WHERE c.id=$1 AND c.avatar_url=$3 AND NOT EXISTS '+
+        '(SELECT 1 FROM community_bans b WHERE b.community_id=c.id AND b.user_id=$2) '+
+        "AND (c.visibility<>'private' OR m.user_id IS NOT NULL OR invite.user_id IS NOT NULL)",
+        [id,me,'/media/community/'+id+'/'+asset]);
+      if(!r.rowCount)return reply.code(404).send({error:'Image unavailable'});
+      return reply.header('Cache-Control',noCache).send({authorized:true});
+    }catch(error){request.log.error({err:error},'Community avatar permission');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  app.patch('/api/v1/communities/:id',{schema:{params:idParams,body:communitySettingsBody}},async(request,reply)=>{
+    if(!origin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      const updates=request.body as {name?:string;description?:string;avatarUrl?:string|null};
+      const roleValue=await role(id,me);
+      if(!roleValue||ranks[roleValue]<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      const name=updates.name?.trim();
+      if(name!==undefined&&name.length<2)return reply.code(400).send({error:'Invalid community name'});
+      const url=updates.avatarUrl;
+      if(url!==undefined&&url!==null&&!url.startsWith('/media/community/'+id+'/'))
+        return reply.code(400).send({error:'Invalid community image'});
+      const r=await getPool().query(
+        'UPDATE communities SET name=COALESCE($3,name),description=CASE WHEN $4::boolean THEN $5 ELSE description END,'+
+        'avatar_url=CASE WHEN $6::boolean THEN $7 ELSE avatar_url END '+
+        'WHERE id=$1 AND EXISTS(SELECT 1 FROM community_members WHERE community_id=$1 AND user_id=$2 AND role IN (\'owner\',\'admin\')) '+
+        'RETURNING id,name,description,avatar_url AS "avatarUrl"',
+        [id,me,name??null,updates.description!==undefined,updates.description?.trim()??null,url!==undefined,url??null]);
+      if(!r.rowCount)return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      return reply.header('Cache-Control',noCache).send({community:r.rows[0]});
+    }catch(error){request.log.error({err:error},'Edit community');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  app.delete('/api/v1/communities/:id',{schema:{params:idParams}},async(request,reply)=>{
+    if(!origin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      const r=await getPool().query('DELETE FROM communities WHERE id=$1 AND owner_id=$2 RETURNING avatar_url AS "avatarUrl"',[id,me]);
+      if(!r.rowCount)return reply.code(403).send({error:'OWNER_REQUIRED'});
+      return reply.header('Cache-Control',noCache).send({deleted:true,avatarUrl:r.rows[0].avatarUrl});
+    }catch(error){request.log.error({err:error},'Delete community');return reply.code(503).send({error:'Unavailable'});}
+  });
 
   app.get('/api/v1/communities/:id/moderation',{schema:{params:idParams}},async(request,reply)=>{
     try{

@@ -46,6 +46,7 @@ export const communities = pgTable('communities', {
   ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   visibility: communityVisibility('visibility').notNull().default('public'),
   description: varchar('description', { length: 500 }),
+  avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -216,4 +217,16 @@ export const communityBans = pgTable('community_bans', {
 }, table => [
   primaryKey({ columns: [table.communityId, table.userId] }),
   index('community_bans_user_idx').on(table.userId),
+]);
+
+/** Shareable community invitations: random 128-bit UUID bearer tokens, revocable and expiring. */
+export const communityInviteLinks = pgTable('community_invite_links', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
+  createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+}, table => [
+  index('community_invite_links_community_idx').on(table.communityId),
 ]);

@@ -149,3 +149,17 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - Na grade e na lista lateral, exibir **microfone desligado** com `MicOff` vermelho e **áudio desativado (deafen)** com `VolumeX` vermelho. Deafen desativa reprodução e microfone; ao voltar, restaura o estado anterior do microfone.
 - `community_voice_sessions.deafened` sincroniza o estado do áudio em tempo real via heartbeat, ao lado de `muted`. O estado é somente da sessão atual, não configuração de perfil. Migração `0014_voice_deafen_status`.
 - Não tocar sons se o usuário está com deafen ativado. Sem autorização de autoplay, o navegador pode silenciar os efeitos; a chamada não deve falhar por isso.
+
+## Estados assíncronos obrigatórios
+
+- **Skeleton** para dados sendo carregados inicialmente ou ao trocar telas: lista de conversas, mensagens, membros, informações e canais. Skeleton ocupa a área real do componente, evitando movimento de layout. Atualizações em segundo plano não substituem conteúdo já visível.
+- **Spinner** para ações que aguardam o backend. O componente `Button` aceita `loading`: mostra indicador, marca `aria-busy` e desativa cliques duplicados. Em operações perigosas, mantenha também a confirmação explícita.
+- **Envio de mensagens:** inserir imediatamente a mensagem na conversa com spinner e status **Enviando**. Limpar e liberar o compositor no envio, sem esperar resposta. Ao confirmar, retirar spinner; se falhar, marcar falha com ação de reenviar sem perder o conteúdo.
+- Não usar um estado `busy` de toda a tela para o envio de cada mensagem. Operações independentes mantêm seus próprios estados; acessibilidade com `role=status` e rótulos traduzidos.
+
+## Comunidades, convites e compartilhamento
+
+- **Administrar comunidade:** editar foto (R2), nome e descrição; hierarquia de permissões para promover/rebaixar administradores; exclusão definitiva somente pelo proprietário após confirmar digitando o nome exato.
+- **Link para compartilhar:** membro pode copiar o link ativo; administrador gera, renova e revoga. O link é temporário (7 dias) e a renovação invalida o anterior. Usuários banidos não podem reingressar.
+- **Convite para novos usuários:** aceitar link em `/invite/<token>` antes de login; após cadastro, confirmação de e-mail e criação do perfil, a participação é efetivada automaticamente. A verificação por e-mail não deve ser pulada. Preservar o convite ao voltar da confirmação e ao usar o mesmo navegador.
+- **Compartilhamento de tela em voz:** botão de apresentar, solicitação explícita de permissão, prévia local, vídeos remotos e botão para parar. Finalizar todas as trilhas quando sair da sala, sem gravar vídeo. Ocultar/desabilitar o controle quando `getDisplayMedia` não existir no navegador.
