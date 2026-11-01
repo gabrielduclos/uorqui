@@ -443,14 +443,14 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
                 <div>
                   <Label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium" htmlFor="auth-password"><LockKeyhole className="size-4 text-muted-foreground"/>{t('Senha')}</Label>
                   <div className="relative">
-                    <Input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-12'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 12 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
+                    <Input id="auth-password" type={showPassword ? 'text' : 'password'} className={inputClass + ' pr-12'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={view === 'register' || view === 'reset' ? 8 : undefined} maxLength={128} autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'} />
                     <button type="button" aria-label={showPassword ? t("Ocultar senha") : t('Mostrar senha')} aria-pressed={showPassword}
                       onClick={() => setShowPassword(v => !v)}
                       className="absolute inset-y-1 right-1 grid min-w-11 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
                       {showPassword?<EyeOff className="size-5"/>:<Eye className="size-5"/>}
                     </button>
                   </div>
-                  {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-muted-foreground">{t("Use pelo menos 12 caracteres.")}</p>}
+                  {(view === 'register' || view === 'reset') && <p className="mt-1 text-xs text-muted-foreground">{t("Use pelo menos 8 caracteres.")}</p>}
                 </div>
               )}
               {view==='register'&&<fieldset className="space-y-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">

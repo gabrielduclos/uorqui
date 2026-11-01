@@ -152,7 +152,7 @@ const en: Record<string, string> = {
   'E-mail': 'Email', 'Senha': 'Password',
   'Ocultar senha': 'Hide password', 'Mostrar senha': 'Show password',
   'Ocultar': 'Hide', 'Mostrar': 'Show',
-  'Use pelo menos 12 caracteres.': 'Use at least 12 characters.',
+  'Use pelo menos 8 caracteres.': 'Use at least 8 characters.',
   'Cadastro em preparação: falta ativar a confirmação por e-mail e a proteção contra abuso. Os dados preenchidos serão mantidos.': 'Registration is being prepared: email confirmation and abuse protection must be enabled. Entered information will be preserved.',
   'Esqueci minha senha': 'Forgot password', 'Reenviar confirmação de e-mail': 'Resend email confirmation',
   'Voltar às boas-vindas': 'Back to welcome', 'Já tenho uma conta · Entrar': 'Already have an account · Sign in',
