@@ -61,7 +61,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
   const [voiceMinimized,setVoiceMinimized]=useState(false);
   const [voicePhase,setVoicePhase]=useState<VoicePhase>('idle');
   const voiceHostRef=useRef<HTMLDivElement|null>(null);
-  useEffect(()=>{if(!active)setVoiceMinimized(true);},[active]);
+  useEffect(()=>{if(!active){setVoiceMinimized(true);if(voicePhase==='idle')setActiveVoiceRoom(null);}},[active,voicePhase]);
   function openVoiceRoom(target:VoiceRoomTarget){
     if(activeVoiceRoom?.communityId===target.communityId&&activeVoiceRoom.channelId===target.channelId){
       setVoiceMinimized(false);return;
@@ -576,7 +576,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
                 aria-label={ch.name+(unreadChannels[ch.id]?' · '+unreadChannels[ch.id]+(pt?' não lidas':' unread'):'')}
-                onClick={()=>{setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
                 <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>
                 {!!unreadChannels[ch.id]&&<span aria-hidden="true"
