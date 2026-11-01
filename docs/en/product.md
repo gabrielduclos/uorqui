@@ -78,3 +78,11 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Drizzle migration `0019_hybrid_feed` creates `feed_posts`, `feed_media`, `feed_likes` and `feed_comments`. Production must be migrated before enabling feed endpoints; missing schema returns `FEED_NOT_READY`.
 - Migration `0020_feed_follows` adds independent directional follows. Private accounts may only be followed by accepted friends; account blocks override follows. Follow/Following controls appear on posts.
 - Future work: comment pagination, discovery ranking, video transcoding, reporting/moderation, previews, accessibility, and cleanup of orphaned uploads after interrupted sessions.
+
+### Feed cache, comments and following
+
+- The feed stays mounted when navigating to Chats, Communities, or Profile. Posts, scroll position, filter, pagination and draft remain in **per-account tab memory** and are dropped on sign-out. **Post contents are never persisted** to localStorage, IndexedDB, service workers, or persistent caches, protecting private content.
+- **For you** and **Following** maintain separate in-memory timelines. After 30 seconds, they revalidate against the API when the feed becomes active or the browser tab is foregrounded, avoiding a skeleton when cached posts are present. Private images keep their existing permission-checked R2 access.
+- Focusing a mobile comment field hides the bottom navigation and scrolls the field above the soft keyboard; fullscreen video comments follow the visible viewport. The send button displays only its spinner while busy.
+- Comment deletion requires confirmation. Post authors may moderate third-party comments; the API hides the deleted content and identity while preserving an **“A comment was deleted.”** placeholder. Apply additive migration `0021_feed_comment_moderation` on primary Neon before enabling moderation in production.
+- Public profiles offer **Follow/Following**, follower and following totals, and paginated relationship lists independent of friendship. Private profiles **show the real totals** but **never expose the lists**. Public lists do not expose private accounts and respect blocks.
