@@ -46,8 +46,8 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange,initialCommunityId,unreadChannels,unreadCommunities,active}:{
-  myId:string;onMobileOpenChange?:(value:boolean)=>void;initialCommunityId?:string|null;
+export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,unreadChannels,unreadCommunities,active}:{
+  myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
   unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
@@ -832,6 +832,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,initialCommunit
             else{setActiveVoiceRoom(null);setVoiceMinimized(true);}
           }}
           onRestore={()=>{
+            // Restore both the main navigation and the selected voice room.
+            // The community view stays mounted while the call floats over other tabs.
+            onRestoreNavigation?.();
             setSelectedId(activeVoiceRoom.communityId);setDiscovery(false);
             setChannelId(activeVoiceRoom.channelId);setChannelOpen(true);
             setVoiceMinimized(false);
