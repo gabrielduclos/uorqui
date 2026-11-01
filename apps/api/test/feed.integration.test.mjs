@@ -51,6 +51,7 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   await signup(friend,'feed_friend');
   await signup(stranger,'feed_stranger');
   assert.equal((await guest('/api/v1/feed/posts')).status,401);
+  assert.equal((await guest('/api/v1/feed/posts?author=feed_owner')).status,401);
   assert.equal((await owner('/api/v1/feed/posts','POST',{body:'x',mediaCount:0},false)).status,403);
   assert.equal((await owner('/api/v1/feed/posts','POST',{body:'  ',mediaCount:0})).status,400);
   const created=await owner('/api/v1/feed/posts','POST',{body:'Hello from the real feed',mediaCount:0});
@@ -59,6 +60,11 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   const listed=await stranger('/api/v1/feed/posts');
   assert.equal(listed.status,200,JSON.stringify(listed.data));
   assert.ok(listed.data.posts.some(p=>p.id===id));
+  const publicGrid=await stranger('/api/v1/feed/posts?author=feed_owner');
+  assert.equal(publicGrid.status,200);
+  assert.deepEqual(publicGrid.data.posts.map(p=>p.id),[id],'public profile grid only includes that author');
+  assert.equal((await stranger('/api/v1/feed/posts?author=feed_friend')).data.posts.length,0);
+  assert.equal((await stranger('/api/v1/feed/posts?author=invalid%2Fhandle')).status,400);
   const followedBefore=await stranger('/api/v1/feed/posts?filter=following');
   assert.ok(!followedBefore.data.posts.some(p=>p.id===id));
   assert.equal((await owner('/api/v1/feed/posts?cursor=garbage')).status,400);
@@ -131,6 +137,8 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   const privateProfile=await owner('/api/v1/me/profile','PATCH',{isPublic:false});
   assert.equal(privateProfile.status,200,JSON.stringify(privateProfile.data));
   const privateStats=await stranger('/api/v1/profiles/feed_owner');
+  assert.equal((await stranger('/api/v1/feed/posts?author=feed_owner')).data.posts.length,0,
+    'private accounts cannot expose posts in the public grid');
   assert.equal(privateStats.status,200);
   assert.equal(privateStats.data.profile.isPrivate,true);
   assert.equal(privateStats.data.profile.followersCount,1,'private profile still shows true follow totals');
