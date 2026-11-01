@@ -70,7 +70,8 @@ test('persistent communities: discover, create, join, channels and real messages
   const text=joined.data.channels.find(c=>c.kind==='text'),voice=joined.data.channels.find(c=>c.kind==='voice');
   assert.ok(text&&voice);
   assert.equal((await outsider('/api/v1/communities/'+id+'/channels/'+text.id+'/messages')).status,403);
-  assert.equal((await member('/api/v1/communities/'+id+'/channels/'+voice.id+'/messages')).status,404);
+  assert.equal((await member('/api/v1/communities/'+id+'/channels/'+voice.id+'/messages')).status,200,
+    'voice rooms also have a persistent text chat');
   const add=await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'text'});
   assert.equal(add.status,201);
   assert.equal((await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'text'})).status,409);

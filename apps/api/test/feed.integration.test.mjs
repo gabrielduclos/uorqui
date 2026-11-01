@@ -74,11 +74,27 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal((await stranger('/api/v1/feed/posts/'+id+'/like','PUT')).status,200);
   assert.equal((await stranger('/api/v1/feed/posts/'+id+'/like','PUT')).status,200,'idempotent like');
   assert.equal((await friend('/api/v1/feed/posts/'+id)).data.post.likeCount,1);
+  // Notifications are persisted, deduplicated and limited to the recipient.
+  assert.equal((await guest('/api/v1/notifications')).status,401);
+  const likeInbox=await owner('/api/v1/notifications');
+  assert.equal(likeInbox.status,200,JSON.stringify(likeInbox.data));
+  const liked=likeInbox.data.notifications.filter(n=>n.kind==='post_like'&&n.targetId===id);
+  assert.equal(liked.length,1,'idempotent likes must not double-notify');
+  assert.equal(likeInbox.data.unreadCount,1);
+  assert.equal((await stranger('/api/v1/notifications/'+liked[0].id+'/read','PATCH')).status,404);
+  assert.equal((await owner('/api/v1/notifications/'+liked[0].id+'/read','PATCH',null,false)).status,403);
+  assert.equal((await owner('/api/v1/notifications/'+liked[0].id+'/read','PATCH')).status,200);
+  assert.equal((await owner('/api/v1/notifications')).data.unreadCount,0);
   assert.equal((await stranger('/api/v1/feed/posts/'+id+'/like','DELETE')).status,200);
   assert.equal((await friend('/api/v1/feed/posts/'+id)).data.post.likeCount,0);
   assert.equal((await stranger('/api/v1/feed/posts/'+id+'/comments','POST',{body:'  '})).status,400);
   const reply=await friend('/api/v1/feed/posts/'+id+'/comments','POST',{body:'Nice post'});
   assert.equal(reply.status,201,JSON.stringify(reply.data));
+  const commentInbox=await owner('/api/v1/notifications');
+  assert.equal(commentInbox.data.unreadCount,1);
+  assert.ok(commentInbox.data.notifications.some(n=>n.kind==='post_comment'&&n.targetId===id));
+  assert.equal((await owner('/api/v1/notifications/read-all','POST')).status,200);
+  assert.equal((await owner('/api/v1/notifications')).data.unreadCount,0);
   const comments=await stranger('/api/v1/feed/posts/'+id+'/comments');
   assert.equal(comments.data.comments.length,1);
   assert.equal(comments.data.comments[0].body,'Nice post');
@@ -121,6 +137,8 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal((await friend('/api/v1/feed/follows/feed_friend','PUT')).status,404,'no self-following');
   assert.equal((await friend('/api/v1/feed/follows/feed_owner')).data.following,false);
   assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200);
+  const followed=await owner('/api/v1/notifications');
+  assert.ok(followed.data.notifications.some(n=>n.kind==='follow'&&n.actorHandle==='feed_friend'));
   assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200,'idempotent follow');
   assert.equal((await friend('/api/v1/feed/follows/feed_owner')).data.following,true);
   const stats=await stranger('/api/v1/profiles/feed_owner');
@@ -135,7 +153,11 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   assert.equal((await friend('/api/v1/feed/follows/feed_owner','PUT')).status,200);
   // Mutual friendship unlocks posts on private profiles without granting access to strangers.
   assert.equal((await friend('/api/v1/friends/requests','POST',{handle:'feed_owner'})).status,201);
+  const requests=await owner('/api/v1/notifications');
+  assert.ok(requests.data.notifications.some(n=>n.kind==='friend_request'&&n.actorHandle==='feed_friend'));
   assert.equal((await owner('/api/v1/friends/requests/feed_friend/accept','POST')).status,200);
+  const accepted=await friend('/api/v1/notifications');
+  assert.ok(accepted.data.notifications.some(n=>n.kind==='friend_accepted'&&n.actorHandle==='feed_owner'));
   const privateProfile=await owner('/api/v1/me/profile','PATCH',{isPublic:false});
   assert.equal(privateProfile.status,200,JSON.stringify(privateProfile.data));
   const privateStats=await stranger('/api/v1/profiles/feed_owner');
