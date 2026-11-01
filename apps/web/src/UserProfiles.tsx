@@ -12,6 +12,7 @@ import { ContactToggleButton } from './ContactToggleButton';
 import { AccountBlockButton } from './AccountBlockButton';
 import { navigateBackFromPublicProfile, navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
+import { PublicProfilePosts } from './PublicProfilePosts';
 
 export type UserProfileData = {
   handle: string;
@@ -395,7 +396,8 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
           {profile.createdAt&&<p className="flex items-center gap-2 text-xs text-muted-foreground"><UserRound className="size-4" />{pt ? 'Membro desde ' : 'Member since '}{new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' }).format(new Date(profile.createdAt))}</p>}
         </CardContent>
       </Card>}
-      {status === 'ready' && !profile?.isPrivate && <Card><CardHeader><CardTitle className="text-base">{pt ? 'Publicações' : 'Posts'}</CardTitle><CardDescription>{pt ? 'O feed público estará disponível em uma próxima etapa.' : 'Public posts will be available in a future release.'}</CardDescription></CardHeader></Card>}
+      {status === 'ready' && profile && !profile.isPrivate &&
+        <PublicProfilePosts handle={profile.handle} canView={!!onMessage || profile.mine} />}
     </div>
   </main>;
 }
