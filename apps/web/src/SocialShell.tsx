@@ -47,6 +47,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
   const [area, setArea] = useState<Area>(invitedCommunityId?'communities':'feed');
+  const [feedTyping,setFeedTyping]=useState(false);
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
   const unreadMessageCount = useUnreadDirectMessages();
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
@@ -68,6 +69,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   }, []);
 
   function move(next: Area) {
+    setFeedTyping(false);
     setArea(next);
     setConversationOpened(false);
     setChannelOpened(false);
@@ -130,9 +132,16 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         </header>
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <motion.div key={area} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }} className="h-full min-h-0 overflow-hidden">
-            {area === 'feed' && <LiveFeed ownName={account.profile?.displayName??account.user.name} ownAvatar={account.profile?.avatarUrl??null} />}
-
+          <div className="h-full min-h-0 overflow-hidden">
+            {/* Feed remains mounted so changing tabs never resets list, drafts, or scroll position. */}
+            <div hidden={area!=='feed'} className="h-full min-h-0">
+              <LiveFeed key={account.user.id} active={area==='feed'}
+                ownName={account.profile?.displayName??account.user.name}
+                ownAvatar={account.profile?.avatarUrl??null}
+                onCommentFocusChange={setFeedTyping}/>
+            </div>
+            {area!=='feed'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
+              transition={{duration:0.16}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle}
                 onMobileOpenChange={setConversationOpened}
@@ -146,12 +155,13 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })} />
               </ScrollArea>
             )}
-          </motion.div>
+            </motion.div>}
+          </div>
         </div>
 
         {logoutError && <div role="alert" className="border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-foreground">{logoutError}</div>}
 
-        {!showSubpage && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
+        {!showSubpage && !feedTyping && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
             const Icon = item.icon;
             return <Button key={item.id} variant="ghost" onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('flex h-16 min-w-0 flex-1 flex-col gap-1 rounded-none px-1 text-[11px] font-medium', area === item.id ? 'text-primary' : 'text-muted-foreground')}
