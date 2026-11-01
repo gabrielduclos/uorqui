@@ -313,3 +313,24 @@ export const communityInviteLinks = pgTable('community_invite_links', {
 }, table => [
   index('community_invite_links_community_idx').on(table.communityId),
 ]);
+
+/** Reports remain available for moderation when original content is removed. */
+export const contentReports = pgTable('content_reports', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reporterId: uuid('reporter_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  targetKind: varchar('target_kind', { length: 24 }).notNull(),
+  targetId: uuid('target_id').notNull(),
+  targetAuthorId: uuid('target_author_id').references(() => users.id, { onDelete: 'set null' }),
+  reason: varchar('reason', { length: 24 }).notNull(),
+  details: varchar('details', { length: 1000 }),
+  evidence: jsonb('evidence').notNull(),
+  status: varchar('status', { length: 16 }).notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  uniqueIndex('content_reports_reporter_target_idx').on(table.reporterId, table.targetKind, table.targetId),
+  index('content_reports_status_created_idx').on(table.status, table.createdAt),
+  index('content_reports_reporter_created_idx').on(table.reporterId, table.createdAt),
+  check('content_reports_target_kind', sql`${table.targetKind} IN ('post','direct_message','community_message')`),
+  check('content_reports_reason', sql`${table.reason} IN ('spam','harassment','hate','sexual','violence','scam','privacy','other')`),
+  check('content_reports_status', sql`${table.status} IN ('pending','reviewing','resolved','dismissed')`),
+]);
