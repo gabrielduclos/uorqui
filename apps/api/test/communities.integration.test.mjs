@@ -82,6 +82,27 @@ test('persistent communities: discover, create, join, channels and real messages
   const read=await owner(path);
   assert.equal(read.status,200);
   assert.equal(read.data.messages.find(m=>m.id===sent.data.id).body,'Hello community');
+  const unread='/api/v1/communities/unread';
+  assert.equal((await anonymous(unread)).status,401);
+  assert.equal((await outsider(unread)).data.total,0,'nonmembers have no channel badge');
+  const beforeRead=await owner(unread);
+  assert.equal(beforeRead.status,200,JSON.stringify(beforeRead.data));
+  assert.equal(beforeRead.data.channels[text.id],1,'a received message is unread until viewed');
+  assert.equal((await owner('/api/v1/communities/'+id+'/channels/'+voice.id+'/read','POST',{lastMessageId:sent.data.id})).status,404);
+  assert.equal((await outsider('/api/v1/communities/'+id+'/channels/'+text.id+'/read','POST',{lastMessageId:sent.data.id})).status,403);
+  assert.equal((await owner(path.replace('/messages','/read'),'POST',{lastMessageId:sent.data.id},false)).status,403,'origin must be verified');
+  assert.equal((await owner(path.replace('/messages','/read'),'POST',{lastMessageId:sent.data.id})).status,200);
+  assert.equal((await owner(unread)).data.channels[text.id]??0,0,'opening a channel clears its badge');
+  assert.equal((await member(unread)).data.channels[text.id]??0,0,'own message is not unread');
+  const nextMessage=await member(path,'POST',{clientId:crypto.randomUUID(),body:'New message after read'});
+  assert.equal(nextMessage.status,201);
+  assert.equal((await owner(unread)).data.channels[text.id],1,'new messages restore the badge');
+  // Re-reading an older message must never move the stored cursor backwards.
+  assert.equal((await owner(path.replace('/messages','/read'),'POST',{lastMessageId:sent.data.id})).status,200);
+  assert.equal((await owner(unread)).data.channels[text.id],1);
+  assert.equal((await owner(path.replace('/messages','/read'),'POST',{lastMessageId:nextMessage.data.id})).status,200);
+  assert.equal((await owner(unread)).data.channels[text.id]??0,0);
+
   assert.equal((await outsider(path,'POST',{clientId:crypto.randomUUID(),body:'outsider'})).status,403);
   assert.equal((await member(path,'POST',{clientId:crypto.randomUUID(),body:' '})).status,400);
   assert.equal((await owner('/api/v1/communities/'+id+'/membership','DELETE')).status,409);
