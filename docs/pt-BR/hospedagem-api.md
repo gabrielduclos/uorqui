@@ -1,6 +1,6 @@
 # Hospedagem da API Uorqui (Node.js + Fastify)
 
-A interface React é implantada pelo **Cloudflare Builds** no Worker `main`, em https://main.uorqui1.workers.dev. A API Fastify exige um runtime Node.js independente. **API publicada no Render:** https://uorqui-social-api.onrender.com. Deploy e verificações de saúde reais foram confirmados em 31/10/2026; valide novamente após cada alteração.
+A interface React é implantada pelo **Cloudflare Builds** no Worker `main`, com domínio oficial https://uorqui.app e endereço técnico https://main.uorqui1.workers.dev. A API Fastify exige um runtime Node.js independente. **API publicada no Render:** https://uorqui-social-api.onrender.com. Deploy e verificações de saúde reais foram confirmados em 31/10/2026; valide novamente após cada alteração.
 
 ## Blueprint ativo no Render
 
@@ -18,7 +18,7 @@ Após conectar o Render ao GitHub, importe o Blueprint para o repositório `gabr
 
 Configure `DATABASE_URL` **no painel privado do Render**, diretamente com a URI do projeto Neon `uorqui`. O Blueprint solicita o valor com `sync: false`, sem incluí-lo no GitHub. O Render pode gerar `AUTH_SECRET` aleatório no momento da criação, via `generateValue: true`. Nunca envie essas credenciais para commits, issues, logs ou chats.
 
-A origem canônica do frontend é configurada em `AUTH_BASE_URL` e `WEB_ORIGIN` no Render. Na migração, mantenha `WEB_EXTRA_ORIGINS=https://uorqui.app,https://main.uorqui1.workers.dev` como lista explícita; altere ambas as variáveis canônicas juntas somente ao confirmar o roteamento do domínio e reverta-as se houver falha. O provedor da API utiliza endereço HTTPS próprio.
+A origem canônica do frontend é configurada em `AUTH_BASE_URL` e `WEB_ORIGIN` no Render. A origem oficial atual é `https://uorqui.app`, confirmada no roteamento da Cloudflare. Manter `WEB_EXTRA_ORIGINS` como lista explícita de origens autorizadas quando necessário; mudanças em `AUTH_BASE_URL` e `WEB_ORIGIN` devem ser coordenadas e validadas juntas. O provedor da API utiliza endereço HTTPS próprio.
 
 O Worker `main` já utiliza **`API_ORIGIN=https://uorqui-social-api.onrender.com`** (URL pública, sem segredo). Após cada deploy, confirme `GET /health/ready` e teste o fluxo pelo Worker. O Worker encaminhará `/api/*` à API e manterá a sessão no mesmo domínio público do front-end.
 
@@ -30,7 +30,7 @@ O Worker do front-end e o backend são dois serviços distintos. A API não deve
 
 O formulário **Criar conta** é sempre navegável e a API recebeu autorização explícita de cadastro em produção em 31/10/2026; verificação humana e entrega de e-mail ainda precisam de teste real. A implementação de verificação de e-mail, recuperação de senha e desafio Turnstile já está versionada, porém exige validação dos fornecedores em produção. O Render faz auto deploy a partir da `main`, mas CI verde não substitui validação real.
 
-O destino previsto para a rede social é `uorqui.app`; siga o [procedimento de migração e rollback](migracao-dominio-uorqui-app.md) antes de alterar o roteamento e não reutilize bancos, segredos ou bindings do Worker empresarial `uorqui-chat`.
+O domínio oficial da rede social é `uorqui.app`, associado ao Worker `main` em 01/11/2026. Consulte o [histórico de migração e plano de contingência](migracao-dominio-uorqui-app.md); não reutilize bancos, segredos ou bindings do Worker empresarial `uorqui-chat`.
 
 ## Cadastro público habilitado — validação humana pendente
 
@@ -40,7 +40,7 @@ O destino previsto para a rede social é `uorqui.app`; siga o [procedimento de m
 4. **Aplicado em 31/10/2026:** `ENABLE_PUBLIC_SIGNUP=true` no Render, com `publicRegistration:true` confirmado pelo Worker. Falta validar o fluxo de uma pessoa real (Turnstile aprovado, e-mail entregue e confirmado).
 5. Para suspender novas contas, definir `ENABLE_PUBLIC_SIGNUP=false` e publicar novamente. Isso não remove contas existentes.
 
-O modo de desenvolvimento (`ENABLE_DEV_SIGNUP=true`) continua restrito a `NODE_ENV=development|test`; não libera produção. As senhas exigem **mínimo de 8 caracteres**, conforme a regra do Better Auth e os formulários de cadastro/recuperação (PR #52). A interface segue as regras globais relevantes: criação primeiro, login alternativo, inputs de 16px, senha visível sob demanda, spinner em ações e formulário preservado em erro. A troca de domínio ocorre em etapa separada; o legado mantém bancos e configurações independentes.
+O modo de desenvolvimento (`ENABLE_DEV_SIGNUP=true`) continua restrito a `NODE_ENV=development|test`; não libera produção. As senhas exigem **mínimo de 8 caracteres**, conforme a regra do Better Auth e os formulários de cadastro/recuperação (PR #52). A interface segue as regras globais relevantes: criação primeiro, login alternativo, inputs de 16px, senha visível sob demanda, spinner em ações e formulário preservado em erro. A troca de domínio já foi realizada; o legado mantém bancos e configurações independentes.
 
 ### Evidência da preparação do beta (01/11/2026)
 

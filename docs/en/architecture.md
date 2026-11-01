@@ -17,13 +17,13 @@ Start with a **modular monolith**: one API deployment with clear bounded modules
 | Database | **PostgreSQL hosted on Neon** | Relational storage for users, posts, communities, conversations and permissions |
 | Database access | **Drizzle ORM + Drizzle Kit** | Type-safe SQL queries, schema and versioned migrations |
 
-These technologies are **implemented in the current technical beta**. The custom-domain cutover is managed separately and must be verified before announcing `uorqui.app` as live.
+These technologies are **implemented in the current technical beta**. Cloudflare confirmed `uorqui.app` is attached to the new Worker `main` on November 1, 2026. Installed-PWA and email validation are still separate outstanding checks.
 
 ## Web hosting and proxy boundary
 
 The **React SPA is configured for Cloudflare Workers Static Assets** (`apps/web/wrangler.jsonc`) with SPA fallback and a small Worker proxy for `/api/*` and `/health*`. API calls use the same web origin, allowing normal first-party session cookies. The Node.js/Fastify backend stays a separate service and still connects to Neon; the Worker does not run the Fastify server or use Neon credentials.
 
-The Worker requires `API_ORIGIN` before it can forward requests. Without it, API paths return 503 rather than serving an incorrect HTML page. Authentication `AUTH_BASE_URL` and `WEB_ORIGIN` must be configured to the actual public Worker origin before real sign-in. **Cloudflare Worker `main` deploys via Cloudflare Builds; Fastify runs on Render (`uorqui-social-api`).** Domain routing is managed separately with a reversible cutover plan; the legacy databases remain isolated. [Workers deployment guide](cloudflare-workers.md).
+The Worker requires `API_ORIGIN` before it can forward requests. Without it, API paths return 503 rather than serving an incorrect HTML page. Authentication `AUTH_BASE_URL` and `WEB_ORIGIN` must be configured to the actual public Worker origin before real sign-in. **Cloudflare Worker `main` deploys via Cloudflare Builds; Fastify runs on Render (`uorqui-social-api`).** The official domain now serves Worker `main`; the legacy databases remain isolated and an incident playbook is documented. [Workers deployment guide](cloudflare-workers.md).
 
 ## Authentication decisions
 
@@ -43,7 +43,7 @@ The Worker requires `API_ORIGIN` before it can forward requests. Without it, API
 | Voice rooms | **WebRTC peer-to-peer (mesh)** | Implemented for small rooms; TURN and background support need real-device tests |
 | Media/video | **Cloudflare R2** | Implemented for protected uploads; transcoding, quotas and cost controls need further validation |
 | Presence and distributed fan-out | Redis | Optional, only when justified |
-| Web deployment | **Cloudflare Worker `main` (deployed)** | New beta at `main.uorqui1.workers.dev`; custom-domain cutover separately verified |
+| Web deployment | **Cloudflare Worker `main` (deployed)** | Official beta at `uorqui.app`; `main.uorqui1.workers.dev` remains a technical URL |
 | Fastify API deployment | **Render `uorqui-social-api` (deployed)** | Independent Node.js runtime, accessed through Worker proxy |
 
 PostgreSQL and Drizzle manage **structured data**, not original video/image files. Store media separately, with references and permissions in PostgreSQL. The hosted database has service quotas and possible costs that should be monitored as the project grows.
@@ -85,4 +85,4 @@ Versioned schema migrations; automated linting, unit/integration/E2E tests; CI o
 
 ## Isolation from the old product
 
-The earlier enterprise messenger remains separate. The migration of `uorqui.app` to the new Worker is a **separately authorized, reversible change**; never reuse the legacy messenger's databases, credentials, push keys or other Worker bindings.
+The earlier enterprise messenger remains separate. `uorqui.app` is now attached to the new Worker `main`, but the prior enterprise messenger remains separate. Never reuse its databases, credentials, push keys or Worker bindings.

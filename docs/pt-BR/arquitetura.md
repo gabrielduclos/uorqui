@@ -17,13 +17,13 @@ Começar com um **monólito modular**: uma API implantada com módulos e limites
 | Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de usuários, publicações, comunidades, conversas e permissões |
 | Acesso ao banco | **Drizzle ORM + Drizzle Kit** | Consultas SQL tipadas, schema e migrações versionadas |
 
-Essas tecnologias estão **implementadas no beta técnico atual**. A troca do domínio oficial é uma operação separada, que deve ser confirmada antes de anunciar `uorqui.app` como migrado.
+Essas tecnologias estão **implementadas no beta técnico atual**. A associação de `uorqui.app` ao Worker `main` foi confirmada na Cloudflare em 01/11/2026. A validação de PWA instalado e e-mails continua separada.
 
 ## Hospedagem web e fronteira com a API
 
 O **React está configurado para Cloudflare Workers Static Assets** (`apps/web/wrangler.jsonc`), com fallback SPA e um pequeno Worker que encaminha `/api/*` e `/health*` à API Fastify. As chamadas continuam no mesmo domínio do front-end, facilitando cookies de sessão de primeira parte. A API Node.js/Fastify permanece separada, com conexão PostgreSQL Neon; o Worker não executa o servidor Fastify nem contém credenciais do banco.
 
-O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de API retornam 503, não o HTML da SPA. Para login real, `AUTH_BASE_URL` e `WEB_ORIGIN` devem coincidir com a origem pública do novo Worker. **O Worker `main` é publicado pelo Cloudflare Builds e a API Fastify está no Render (`uorqui-social-api`).** O domínio será migrado por procedimento reversível, mantendo os bancos antigos isolados. [Guia Workers](cloudflare-workers.md).
+O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de API retornam 503, não o HTML da SPA. Para login real, `AUTH_BASE_URL` e `WEB_ORIGIN` devem coincidir com a origem pública do novo Worker. **O Worker `main` é publicado pelo Cloudflare Builds e a API Fastify está no Render (`uorqui-social-api`).** O domínio oficial já foi transferido para `main`, mantendo os bancos antigos isolados. Há um procedimento documentado para incidentes. [Guia Workers](cloudflare-workers.md).
 
 ## Decisões de autenticação
 
@@ -43,7 +43,7 @@ O proxy exige `API_ORIGIN` antes de encaminhar chamadas. Sem ela, as rotas de AP
 | Salas de voz | **WebRTC P2P (malha)** | Implementado para salas pequenas; TURN e segundo plano precisam de testes reais |
 | Mídias/vídeos | **Cloudflare R2** | Uploads protegidos implementados; validar transcodificação, cotas e custos |
 | Presença e distribuição de eventos | Redis | Opcional, quando houver necessidade |
-| Hospedagem do front-end | **Cloudflare Worker `main` (publicado)** | Beta em `main.uorqui1.workers.dev`, migração de domínio verificada em separado |
+| Hospedagem do front-end | **Cloudflare Worker `main` (publicado)** | Beta oficial em `uorqui.app`; `main.uorqui1.workers.dev` é endereço técnico |
 | Hospedagem da API Fastify | **Render `uorqui-social-api` (publicado)** | Runtime Node.js separado, acessado pelo proxy do Worker |
 
 PostgreSQL e Drizzle armazenam **dados estruturados**, não os arquivos originais de fotos/vídeos. Mídias terão armazenamento próprio, com referências e permissões no PostgreSQL. As cotas e possíveis cobranças da hospedagem devem ser acompanhadas durante a evolução do projeto.
@@ -85,4 +85,4 @@ Migrações versionadas; lint e testes unitários, de integração e E2E; CI em 
 
 ## Separação do legado
 
-O mensageiro empresarial anterior funciona separadamente. **Não conectar** este projeto a bases, credenciais, Workers ou domínio da aplicação antiga sem migração futura explicitamente aprovada.
+O mensageiro empresarial anterior continua separado. `uorqui.app` agora atende ao novo Worker `main`; **não reutilizar** bancos, credenciais nem bindings do Worker legado `uorqui-chat`.

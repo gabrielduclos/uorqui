@@ -4,9 +4,9 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.1` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, email verification and domain cutover are still being completed.
+> **Version: `0.1.0-beta.1` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
-**Try the current build:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
+**Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
 ## Product
 
@@ -27,11 +27,11 @@ The initial audience includes gaming communities, but Uorqui is designed for gen
 | Feed | Hybrid social posts and media, backed by the API and database |
 | Communities | Membership, invitations, roles, text channels, voice presence and WebRTC |
 | Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
-| Public launch | **Not yet approved:** real-device tests, push, TURN/network coverage, operational monitoring and final custom-domain checks |
+| Public launch | **Not yet approved:** real-device tests, push, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
 
 The project has automated CI for the API, UI and integration flows. Passing CI does **not** mean the iOS/Android installed-PWA experience has been fully certified.
 
-**Domain transition:** `uorqui.app` is being migrated separately. Until a verified cutover, use the preview URL above. Do not assume the domain already points here. The legacy business messenger has its **own** Worker and databases; its accounts and messages are not automatically imported.
+**Domain status (verified November 1, 2026):** Cloudflare associates `uorqui.app` with the new Worker `main`. Successful login with an account from the new Uorqui has been reported. Installed-PWA updates and device-level verification remain outstanding. The legacy business messenger has its **own** Worker and databases; its accounts and messages are not automatically imported.
 
 ## Architecture
 

@@ -4,9 +4,9 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.1` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, dispositivos reais e a migração do domínio.
+> **Versão: `0.1.0-beta.1` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
-**Acesse a versão atual:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
+**Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
 ## O produto
 
@@ -27,11 +27,11 @@ O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 | Feed | Publicações híbridas, mídias, API e banco de dados integrados |
 | Comunidades | Membros, convites, cargos, canais de texto, presença e voz WebRTC |
 | Infraestrutura | PWA React no Worker `main` da Cloudflare, API Fastify no Render e PostgreSQL na Neon |
-| Lançamento amplo | **Ainda pendente:** testes reais no iOS/Android, push, TURN/redes diferentes, monitoramento e domínio |
+| Lançamento amplo | **Ainda pendente:** testes reais no iOS/Android, push, TURN/redes diferentes, monitoramento e testes de PWA instalado após a troca do domínio |
 
 Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes aprovados não substituem validação do PWA instalado em celulares.**
 
-**Mudança de domínio:** `uorqui.app` está em processo de migração separado. Até a virada ser confirmada, use o endereço de testes acima. O mensageiro empresarial antigo continua em infraestrutura separada; **contas e mensagens anteriores não são importadas automaticamente**.
+**Situação do domínio (confirmada em 01/11/2026):** a Cloudflare associa `uorqui.app` ao novo Worker `main`. O login de uma conta criada no novo Uorqui foi confirmado pelo usuário; atualização de PWAs já instalados e validação em aparelhos ainda estão pendentes. O mensageiro empresarial antigo permanece separado; **contas e mensagens anteriores não são importadas automaticamente**.
 
 ## Arquitetura
 

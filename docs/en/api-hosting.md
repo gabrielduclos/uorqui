@@ -1,6 +1,6 @@
 # Hosting the Uorqui Fastify API
 
-The React UI is deployed by **Cloudflare Builds** to Worker `main` at https://main.uorqui1.workers.dev. The Fastify API requires a **separate Node.js runtime** and is deployed at **https://uorqui-social-api.onrender.com**. Live deployment and database/auth readiness were checked on Oct 31, 2026; repeat checks after each deploy.
+The React UI is deployed by **Cloudflare Builds** to Worker `main` at the official domain https://uorqui.app (technical URL: https://main.uorqui1.workers.dev). The Fastify API requires a **separate Node.js runtime** and is deployed at **https://uorqui-social-api.onrender.com**. Live deployment and database/auth readiness were checked on Oct 31, 2026; repeat checks after each deploy.
 
 ## Render Blueprint in use
 
@@ -11,7 +11,7 @@ Root-level `render.yaml` configures a **separate** `uorqui-social-api` Node serv
 - Health check: `/health/ready`; validates Better Auth configuration, Neon access and both Drizzle migrations. `/health/db` checks only the database.
 - Node 22, `NODE_ENV=production`, `ENABLE_DEV_SIGNUP=false`.
 
-The Render dashboard supplies `DATABASE_URL` privately (`sync: false`); `AUTH_SECRET` can be generated as an environment secret (`generateValue: true`). Never commit database credentials. The canonical frontend origin is configured using `AUTH_BASE_URL` and `WEB_ORIGIN`. During the cutover use `WEB_EXTRA_ORIGINS=https://uorqui.app,https://main.uorqui1.workers.dev` as an explicit allowlist. Change the canonical variables together only after confirming domain routing; revert them if the cutover fails.
+The Render dashboard supplies `DATABASE_URL` privately (`sync: false`); `AUTH_SECRET` can be generated as an environment secret (`generateValue: true`). Never commit database credentials. The canonical frontend origin is configured using `AUTH_BASE_URL` and `WEB_ORIGIN`. Cloudflare confirmed the current canonical domain `https://uorqui.app` points to Worker `main` on November 1, 2026. Keep `WEB_EXTRA_ORIGINS` restricted to explicitly approved origins as needed. Coordinate and verify any changes to `AUTH_BASE_URL` and `WEB_ORIGIN` together.
 
 The public Cloudflare Worker has **`API_ORIGIN=https://uorqui-social-api.onrender.com`** set. Verify `GET /health/ready` after deployments. The frontend Worker then proxies `/api/*` through the separate backend while preserving first-party session cookies.
 
@@ -19,7 +19,7 @@ GitHub Actions also runs a full Cloudflare Worker → Fastify → temporary Post
 
 Fastify binds to `0.0.0.0` when `NODE_ENV=production` (and loopback locally); `HOST` can override this if needed.
 
-Public registrations were explicitly enabled on Oct 31, 2026: the sign-up UI is navigable, but server-side access is gated on verified email delivery, password recovery, and server-side Turnstile challenges. These flows are implemented; a human Turnstile completion and real Resend delivery are not yet validated end-to-end. `uorqui.app` is the intended new social domain. Follow the [safe migration runbook](../pt-BR/migracao-dominio-uorqui-app.md) and confirm actual Cloudflare routing before declaring the cutover complete. Never reuse the legacy `uorqui-chat` databases, secrets or Worker bindings.
+Public registrations were explicitly enabled on Oct 31, 2026: the sign-up UI is navigable, but server-side access is gated on verified email delivery, password recovery, and server-side Turnstile challenges. These flows are implemented; a human Turnstile completion and real Resend delivery are not yet validated end-to-end. `uorqui.app` is the official new social domain, verified as attached to Worker `main` in Cloudflare. See the [migration history and contingency playbook](../pt-BR/migracao-dominio-uorqui-app.md) for operational checks and recovery. Never reuse the legacy `uorqui-chat` databases, secrets or Worker bindings.
 
 ## Production registration enabled — human E2E still pending
 
