@@ -62,6 +62,25 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   const listed=await stranger('/api/v1/feed/posts');
   assert.equal(listed.status,200,JSON.stringify(listed.data));
   assert.ok(listed.data.posts.some(p=>p.id===id));
+  // Per-user preferences cannot be changed by other accounts; disabled push does not hide inbox events.
+  assert.equal((await guest('/api/v1/notifications/preferences')).status,401);
+  assert.equal((await guest('/api/v1/notifications/preferences','PUT',{})).status,403);
+  const defaultSettings=await owner('/api/v1/notifications/preferences');
+  assert.equal(defaultSettings.status,200);
+  assert.ok(Object.values(defaultSettings.data.preferences).every(Boolean));
+  assert.equal(Object.keys(defaultSettings.data.preferences).length,7);
+  assert.equal((await owner('/api/v1/notifications/preferences','PUT',defaultSettings.data.preferences,false)).status,403);
+  assert.equal((await owner('/api/v1/notifications/preferences','PUT',{direct_message:false})).status,400);
+  const disabledSettings=Object.fromEntries(Object.keys(defaultSettings.data.preferences).map(key=>[key,false]));
+  assert.equal((await owner('/api/v1/notifications/preferences','PUT',disabledSettings)).status,200);
+  assert.deepEqual((await owner('/api/v1/notifications/preferences')).data.preferences,disabledSettings);
+  assert.equal((await friend('/api/v1/notifications/preferences')).data.preferences.post_like,true,
+    'another account must not inherit preferences');
+  const customSettings={...disabledSettings,post_comment:true,friend_request:true};
+  assert.equal((await owner('/api/v1/notifications/preferences','PUT',customSettings)).status,200);
+  assert.deepEqual((await owner('/api/v1/notifications/preferences')).data.preferences,customSettings);
+  const restoredSettings=Object.fromEntries(Object.keys(defaultSettings.data.preferences).map(key=>[key,true]));
+  assert.equal((await owner('/api/v1/notifications/preferences','PUT',restoredSettings)).status,200);
   const publicGrid=await stranger('/api/v1/feed/posts?author=feed_owner');
   assert.equal(publicGrid.status,200);
   assert.deepEqual(publicGrid.data.posts.map(p=>p.id),[id],'public profile grid only includes that author');

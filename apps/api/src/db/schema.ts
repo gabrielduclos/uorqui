@@ -400,3 +400,15 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('push_subscriptions_account_idx').on(t.userId,t.updatedAt)]);
+
+/** Per-account Web Push categories; the activity inbox remains independent. */
+export const notificationPreferences = pgTable('notification_preferences', {
+  userId: uuid('user_id').primaryKey().notNull().references(() => users.id, { onDelete: 'cascade' }),
+  directMessage: boolean('direct_message').notNull().default(true),
+  communityMessage: boolean('community_message').notNull().default(true),
+  postLike: boolean('post_like').notNull().default(true),
+  postComment: boolean('post_comment').notNull().default(true),
+  friendRequest: boolean('friend_request').notNull().default(true),
+  friendAccepted: boolean('friend_accepted').notNull().default(true),
+  follow: boolean('follow').notNull().default(true),
+});

@@ -136,7 +136,9 @@ export async function pushDirectMessage(messageId:string){
   if(!row.rowCount)return;
   const m=row.rows[0];
   const subscriptions=await getPool().query<Subscription>(
-    'SELECT endpoint,p256dh,auth,user_id FROM push_subscriptions WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 10',
+    'SELECT s.endpoint,s.p256dh,s.auth,s.user_id FROM push_subscriptions s '+
+    'LEFT JOIN notification_preferences np ON np.user_id=s.user_id '+
+    'WHERE s.user_id=$1 AND COALESCE(np.direct_message,true)=true ORDER BY s.updated_at DESC LIMIT 10',
     [m.recipient]);
   await Promise.allSettled(subscriptions.rows.map(async sub=>{
     const proof=signPushDelivery(m.recipient,m.conversation_id,m.id,new Date(m.revision).toISOString());
@@ -160,7 +162,8 @@ export async function pushCommunityMessage(messageId:string){
   const recipients=await getPool().query<Subscription>(
     'SELECT DISTINCT ON (s.endpoint) s.endpoint,s.p256dh,s.auth,s.user_id '+
     'FROM push_subscriptions s JOIN community_members cm ON cm.user_id=s.user_id AND cm.community_id=$1 '+
-    'WHERE s.user_id<>$2 AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=s.user_id) '+
+    'LEFT JOIN notification_preferences np ON np.user_id=s.user_id '+
+    'WHERE s.user_id<>$2 AND COALESCE(np.community_message,true)=true AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=s.user_id) '+
     'ORDER BY s.endpoint LIMIT 200',[m.community_id,m.author_id]);
   await Promise.allSettled(recipients.rows.map(async sub=>{
     try{
@@ -177,7 +180,13 @@ export async function pushActivityNotification(notificationId:string){
     'SELECT n.id,n.kind,n.recipient_id,n.actor_id,u.handle,'+
     'COALESCE(p.display_name,u.handle) AS actor_name '+
     'FROM activity_notifications n JOIN users u ON u.id=n.actor_id '+
-    'LEFT JOIN profiles p ON p.user_id=n.actor_id WHERE n.id=$1 AND n.read_at IS NULL '+
+    'LEFT JOIN profiles p ON p.user_id=n.actor_id '+
+    'LEFT JOIN notification_preferences np ON np.user_id=n.recipient_id '+
+    'WHERE n.id=$1 AND n.read_at IS NULL '+
+    'AND COALESCE(CASE n.kind '+
+    "WHEN 'post_like' THEN np.post_like WHEN 'post_comment' THEN np.post_comment "+
+    "WHEN 'friend_request' THEN np.friend_request WHEN 'friend_accepted' THEN np.friend_accepted "+
+    "WHEN 'follow' THEN np.follow ELSE false END,true)=true "+
     'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE '+
     '(b.blocker_id=n.recipient_id AND b.blocked_id=n.actor_id) OR '+
     '(b.blocked_id=n.recipient_id AND b.blocker_id=n.actor_id))',[notificationId]);

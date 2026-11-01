@@ -24,7 +24,6 @@ import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 import {useCommunityUnread} from './useCommunityUnread';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
-import {PushPreferences} from './PushPreferences';
 import {ActivityNotifications} from './ActivityNotifications';
 import {useActivityNotifications,type ActivityNotification} from './useActivityNotifications';
 
@@ -209,10 +208,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           </div>
           <div className="flex items-center gap-2">
              <PreferencesControls />
-            <Button variant="ghost" size="icon" className="relative" aria-label={locale==='pt-BR'?'Abrir notificações':'Open notifications'} onClick={()=>move('notifications')}>
-              <Bell className="size-5"/>
-              {activity.unread>0&&<span aria-hidden="true" className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold text-white">{activity.unread>99?'99+':activity.unread}</span>}
-            </Button>
             <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} className="size-8" />
             </button>
@@ -261,7 +256,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                   </Button>
                 </div>
                 <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })} />
-                <PushPreferences accountId={account.user.id}/>
                 <nav className="mx-auto mb-10 flex max-w-3xl flex-wrap justify-center gap-4 border-t border-border px-4 pt-5 text-xs text-primary sm:gap-6"
                   aria-label={locale==='pt-BR'?'Documentos legais':'Legal documents'}>
                   <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{locale==='pt-BR'?'Termos de Uso':'Terms of Use'}</a>

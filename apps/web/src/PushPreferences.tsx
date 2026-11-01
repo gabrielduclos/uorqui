@@ -6,7 +6,7 @@ import {useSocialPush} from './useSocialPush';
 export function PushPreferences({accountId}:{accountId:string}){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const push=useSocialPush(accountId);
-  return <section className="mx-auto my-5 flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 sm:mx-7">
+  return <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
     <div className="flex min-w-0 items-start gap-3">
       <Bell className="mt-1 size-5 shrink-0 text-primary"/>
       <div>
@@ -16,7 +16,7 @@ export function PushPreferences({accountId}:{accountId:string}){
             ?(pt?'Instale o PWA para usar push no iPhone.':'Install the PWA to use push on iPhone.')
             :push.status==='ready'
               ?(pt?'Ativadas neste dispositivo.':'Enabled on this device.')
-              :(pt?'Receba mensagens privadas e novidades das comunidades.':'Receive direct messages and community alerts.')}
+              :(pt?'Permita que este dispositivo receba os avisos escolhidos acima.':'Allow this device to receive the alerts selected above.')}
         </p>
         {push.error&&<p role="alert" className="mt-2 text-xs text-destructive">{push.error}</p>}
       </div>

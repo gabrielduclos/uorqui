@@ -1,10 +1,10 @@
 
 import {useState} from 'react';
-import {Bell,CheckCheck,Heart,MessageCircle,UserPlus,UserRoundCheck,UserRoundPlus} from 'lucide-react';
+import {Bell,CheckCheck,Heart,MessageCircle,Settings,UserPlus,UserRoundCheck,UserRoundPlus} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar} from './UserProfiles';
-import {PushPreferences} from './PushPreferences';
+import {NotificationSettings} from './NotificationSettings';
 import {useUorquiPreferences} from './UorquiPreferences';
 import type {ActivityNotification} from './useActivityNotifications';
 
@@ -12,6 +12,7 @@ type Props={items:ActivityNotification[];unread:number;loading:boolean;error:boo
   onRefresh:()=>void;onReadAll:()=>Promise<void>;onOpen:(item:ActivityNotification)=>void};
 export function ActivityNotifications({items,unread,loading,error,accountId,onRefresh,onReadAll,onOpen}:Props){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
+  const [settingsOpen,setSettingsOpen]=useState(false);
   const [busy,setBusy]=useState(false);
   const [actionError,setActionError]=useState(false);
   const verbs={
@@ -25,6 +26,7 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
     friend_accepted:UserRoundCheck,follow:UserRoundPlus};
   const all=async()=>{setBusy(true);setActionError(false);
     try{await onReadAll();}catch{setActionError(true);}finally{setBusy(false);}};
+  if(settingsOpen)return <NotificationSettings accountId={accountId} onBack={()=>setSettingsOpen(false)}/>;
   return <div className="h-full min-h-0 overflow-y-auto overscroll-contain bg-background">
     <div className="mx-auto max-w-2xl px-4 py-5 sm:px-6">
       <div className="mb-5 flex items-center justify-between gap-2">
@@ -32,10 +34,12 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
           <p className="text-xs text-muted-foreground">{unread>0?
             (pt?unread+' não lida'+(unread===1?'':'s'):unread+' unread'):
             (pt?'Tudo em dia':'All caught up')}</p></div>
-        {unread>0&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>void all()}>
-          {busy?<Spinner className="size-4"/>:<CheckCheck className="size-4"/>}
-          {pt?'Marcar todas como lidas':'Mark all read'}</Button>}
+        <Button type="button" size="sm" variant="outline" onClick={()=>setSettingsOpen(true)} className="gap-2">
+          <Settings className="size-4"/>{pt?'Ajustes':'Settings'}</Button>
       </div>
+      {unread>0&&<div className="mb-4 flex justify-end"><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void all()}>
+        {busy?<Spinner className="size-4"/>:<CheckCheck className="size-4"/>}
+        {pt?'Marcar todas como lidas':'Mark all read'}</Button></div>}
       {actionError&&<p role="alert" className="mb-3 text-sm text-destructive">
         {pt?'Não foi possível atualizar as notificações.':'Could not update notifications.'}</p>}
       {error&&<div className="mb-4 rounded-xl border border-border p-3 text-sm">
@@ -59,7 +63,6 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
             {!item.readAt&&<span aria-hidden="true" className="size-2 rounded-full bg-primary"/>}</span>
         </button>;
       })}</div>}
-      <div className="mt-6 border-t border-border pt-2"><PushPreferences accountId={accountId}/></div>
     </div>
   </div>;
 }
