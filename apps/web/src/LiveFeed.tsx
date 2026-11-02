@@ -253,10 +253,14 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const [zoom,setZoom]=useState<string|null>(null);
   const [videoOpen,setVideoOpen]=useState(false);
   const [videoCommentsOpen,setVideoCommentsOpen]=useState(false);
+  const videoCommentsOpenRef=useRef(videoCommentsOpen);
+  videoCommentsOpenRef.current=videoCommentsOpen;
   const [videos,setVideos]=useState<Post[]>([]);
   const [shareSource,setShareSource]=useState<InternalShareSource|null>(null);
   const requestedPost=useRef<string|null>(null);
   const [videoIndex,setVideoIndex]=useState(0);
+  const videoIndexRef=useRef(videoIndex);
+  videoIndexRef.current=videoIndex;
   const [videoDirection,setVideoDirection]=useState<1|-1>(1);
   const [videoCursor,setVideoCursor]=useState<string|null>(null);
   const [videoLoading,setVideoLoading]=useState(false);
@@ -409,7 +413,8 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         setPosts(old=>old.map(post=>post.id===id?result.post:post));
         setVideos(old=>old.map(post=>post.id===id?result.post:post));
         setPendingPosts(old=>old.map(post=>post.id===id?result.post:post));
-        if(kind==='comment'&&openCommentsRef.current===id){
+        if(kind==='comment'&&(openCommentsRef.current===id ||
+          (videoCommentsOpenRef.current && videosRef.current[videoIndexRef.current]?.id===id))){
           const comments=await api<{comments:Comment[]}>('/api/v1/feed/posts/'+id+'/comments');
           if(!disposed)setComments(old=>({...old,[id]:comments.comments}));
         }
@@ -430,7 +435,9 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
           if(newPostTimer!==undefined)window.clearTimeout(newPostTimer);
           newPostTimer=window.setTimeout(()=>void fetchNew(),350);
         }else if(data.kind==='edit'||data.kind==='delete'||data.kind==='like'||data.kind==='comment'){
-          changed.set(data.postId,data.kind);
+          const previous=changed.get(data.postId);
+          changed.set(data.postId,data.kind==='delete'||previous==='delete'?'delete':
+            data.kind==='comment'||previous==='comment'?'comment':data.kind);
           if(changedTimer!==undefined)window.clearTimeout(changedTimer);
           changedTimer=window.setTimeout(()=>{
             const updates=Array.from(changed);changed.clear();
