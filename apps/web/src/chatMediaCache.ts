@@ -1,14 +1,12 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
 /**
- * Private message and feed media: bounded tab-memory cache only. No Cache Storage, SW,
+ * Private conversation and community media: bounded tab-memory cache only. No Cache Storage, SW,
  * IndexedDB, localStorage, public CDN, or persistent authorization bypass.
  * The first fetch always passes the Worker's per-message membership check.
  */
-const PRIVATE_MEDIA_URL = /^(?:\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}|\/media\/feed\/[0-9a-f-]{36}|\/media\/community-attachment\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36})$/i;
+const PRIVATE_MEDIA_URL = /^(?:\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}|\/media\/community-attachment\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36})$/i;
 const LIMIT_BYTES = 90 * 1024 * 1024;
-// Allow at most three uploaded 50 MB videos in memory during immersive browsing.
-const VIDEO_MODE_LIMIT_BYTES = 160 * 1024 * 1024;
 const MAX_ITEM_BYTES = 50 * 1024 * 1024;
 const MAX_ITEMS = 36;
 const MAX_AGE_MS = 10 * 60 * 1000;
@@ -25,7 +23,6 @@ type Item = {
 };
 const entries = new Map<string, Item>();
 const listeners = new Set<() => void>();
-let videoWindow: string[] = [];
 const notify = () => { for (const fn of listeners) fn(); };
 const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
 const snapshot = (src: string | null | undefined) => src && PRIVATE_MEDIA_URL.test(src) ? entries.get(src)?.blobUrl ?? null : src ?? null;
@@ -38,7 +35,6 @@ function remove(url: string) {
   if(item.blobUrl)URL.revokeObjectURL(item.blobUrl);
 }
 export function clearChatMediaCache() {
-  videoWindow=[];
   for(const key of [...entries.keys()])remove(key);
   notify();
 }
@@ -48,24 +44,15 @@ export function invalidateChatMedia(url: string | null | undefined) {
 function prune() {
   const now=Date.now();
   for(const [url,item] of entries){
-    if(!item.pending && !videoWindow.includes(url) && (item.failedAt && now-item.failedAt>RETRY_MS*3 ||
+    if(!item.pending && (item.failedAt && now-item.failedAt>RETRY_MS*3 ||
       item.checkedAt && now-item.checkedAt>MAX_AGE_MS))remove(url);
   }
   let total=[...entries.values()].reduce((s,v)=>s+v.size,0);
-  const limit=videoWindow.length?VIDEO_MODE_LIMIT_BYTES:LIMIT_BYTES;
-  // Keep currently playing, upcoming and previously played clips in this order.
-  // Drop unrelated cached media first to bound memory use on mobile devices.
   const lru=[...entries.entries()].filter(([,v])=>!v.pending)
-    .sort((a,b)=>{
-      const priority=(url:string)=>{
-        const index=videoWindow.indexOf(url);
-        return index<0?0:4-index;
-      };
-      return priority(a[0])-priority(b[0]) || a[1].accessedAt-b[1].accessedAt;
-    });
+    .sort((a,b)=>a[1].accessedAt-b[1].accessedAt);
   let changed=false;
   for(const [url,item] of lru){
-    if(total<=limit && entries.size<=MAX_ITEMS)break;
+    if(total<=LIMIT_BYTES && entries.size<=MAX_ITEMS)break;
     total-=item.size;
     remove(url);
     changed=true;
@@ -73,11 +60,6 @@ function prune() {
   if(changed)notify();
 }
 
-/** Call when entering and navigating the full-screen Videos feed. */
-export function setFeedVideoCacheWindow(urls: string[]) {
-  videoWindow=urls.filter(url=>PRIVATE_MEDIA_URL.test(url)).slice(0,3);
-  prune();
-}
 export async function ensureChatMediaCached(url: string): Promise<string | null> {
   if(!PRIVATE_MEDIA_URL.test(url))return url;
   if(typeof document!=='undefined' && document.visibilityState==='hidden')return null;
@@ -130,27 +112,3 @@ export function useCachedChatMedia(src: string | null | undefined, eager = true)
   return cached;
 }
 
-/**
- * Video players share the same authorized blob URL. Unlike the image viewer,
- * wait for the initial download before assigning a media src, so the feed and
- * fullscreen player never start two overlapping network downloads.
- * On a failed cache download, fall back to the Worker's authenticated URL.
- */
-export function useCachedFeedVideo(url: string | null | undefined, eager = true) {
-  const source=useSyncExternalStore(subscribe,()=>{
-    if(!url)return '';
-    if(!PRIVATE_MEDIA_URL.test(url))return url;
-    const item=entries.get(url);
-    if(item?.blobUrl)return item.blobUrl;
-    if(item?.failedAt)return url; // Preserve playback when caching fails.
-    return '';
-  },()=> '');
-  useEffect(()=>{
-    if(!eager||!url||!PRIVATE_MEDIA_URL.test(url))return;
-    const load=()=>{if(document.visibilityState==='visible')void ensureChatMediaCached(url);};
-    load();
-    document.addEventListener('visibilitychange',load);
-    return ()=>document.removeEventListener('visibilitychange',load);
-  },[url,eager]);
-  return {src:source||null,loading:!!url&&!source};
-}
