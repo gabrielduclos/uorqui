@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
-import { Camera, FileText, Images, MapPin, Mic, Pause, Pencil, Play, Plus, Send, Smile, Square, Video, X } from 'lucide-react';
+import { Camera, FileText, Images, MapPin, Link2, Mic, Pause, Pencil, Play, Plus, Send, Smile, Square, Video, X } from 'lucide-react';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { createPortal } from 'react-dom';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
@@ -28,6 +28,9 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
 }) {
   const pt = locale === 'pt-BR';
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState('');
+  const [linkError, setLinkError] = useState('');
   const [emojiOpen, setEmojiOpen] = useState(false);
   const controls = useRef<HTMLFormElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -133,6 +136,20 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     if(pending){const file=pending;const caption=value.trim();clearPending();onChange('');onAttach(file,caption);}
     else if(pendingLocation){const {latitude,longitude}=pendingLocation;setPendingLocation(null);const caption=value.trim();onChange('');onShareLocation(latitude,longitude,caption);}
     else onSubmit();
+  }
+  function insertLink(){
+    const raw=linkValue.trim();
+    try{
+      if(!raw || (/^[a-z][a-z0-9+.-]*:/i.test(raw) && !/^https?:\/\//i.test(raw)))throw Error('INVALID_LINK');
+      const url=new URL(/^https?:\/\//i.test(raw)?raw:'https://'+raw);
+      if(!['https:','http:'].includes(url.protocol)||!url.hostname||url.username||url.password)throw Error('INVALID_LINK');
+      const next=(value.trimEnd()?value.trimEnd()+'\n':'')+url.href;
+      if(next.length>4000)throw Error('TOO_LONG');
+      onChange(next);setLinkOpen(false);setAttachmentsOpen(false);setLinkValue('');setLinkError('');
+      requestAnimationFrame(()=>textareaRef.current?.focus({preventScroll:true}));
+    }catch{
+      setLinkError(pt?'Informe um link válido (https:// ou www.).':'Enter a valid link (https:// or www.).');
+    }
   }
   function chooseLocation(){
     setAttachmentsOpen(false);
@@ -251,7 +268,20 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
           <button type="button" onClick={()=>{cameraKindRef.current='video';cameraRef.current?.setAttribute('accept','video/*');cameraRef.current?.click();setCameraOptions(false);setAttachmentsOpen(false);}}
             className="flex min-h-16 flex-col items-center justify-center border border-border p-2 text-xs hover:bg-accent"><Video className="size-5"/>{pt?'Gravar vídeo':'Record video'}</button>
           <button type="button" onClick={()=>setCameraOptions(false)} className="col-span-2 text-xs hover:bg-accent">{pt?'Voltar':'Back'}</button>
-        </div> : <div className="grid grid-cols-4 gap-1">
+        </div> : linkOpen ? <div className="space-y-2 px-1 py-2">
+          <label htmlFor="uorqui-link-input" className="block text-xs font-medium">{pt?'Endereço do link':'Link address'}</label>
+          <input id="uorqui-link-input" type="text" inputMode="url" autoComplete="url" autoCapitalize="none"
+            value={linkValue} onChange={event=>{setLinkValue(event.target.value);setLinkError('');}}
+            onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();insertLink();}}}
+            maxLength={2048} placeholder="https://exemplo.com"
+            className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+          {linkError&&<p role="alert" className="text-xs text-destructive">{linkError}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={()=>{setLinkOpen(false);setLinkError('');}} className="min-h-10 rounded-lg border border-border px-3 text-xs hover:bg-accent">{pt?'Voltar':'Back'}</button>
+            <button type="button" onClick={insertLink} className="min-h-10 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground">{pt?'Inserir link':'Insert link'}</button>
+          </div>
+        </div> : <div>
+          <div className="grid grid-cols-4 gap-1">
           {ATTACHMENTS.map(({icon: Icon,pt:labelPt,en},index) => <button key={en} type="button"
             disabled={sending || editing || recording!=='idle'}
             onClick={() => {
@@ -265,6 +295,12 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
             aria-label={pt ? labelPt : en}>
             <Icon className="size-5 text-primary"/><span className="truncate">{pt ? labelPt : en}</span>
           </button>)}
+          </div>
+          <button type="button" disabled={sending || editing || recording!=='idle'}
+            onClick={()=>{setLinkOpen(true);setLinkValue('');setLinkError('');}}
+            className="mt-1 flex min-h-11 w-full items-center gap-2 border border-border/70 px-3 text-xs hover:bg-accent disabled:opacity-40">
+            <Link2 className="size-4 text-primary"/>{pt?'Adicionar link':'Add a link'}
+          </button>
         </div>}
         <p className="px-2 pt-2 text-[11px] text-muted-foreground">
           {pt ? 'Anexos até 50 MB. Você pode conferir e editar antes de enviar.' : 'Attachments up to 50 MB. Preview and edit before sending.'}
