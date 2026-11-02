@@ -23,6 +23,7 @@ import { registerContentReportRoutes } from './content-report-routes.js';
 import { registerPlatformModerationRoutes } from './platform-moderation-routes.js';
 import { TERMS_VERSION, PRIVACY_NOTICE_VERSION, validSignupAgreement } from './legal-policy.js';
 import { closeDmEvents } from './dm-events.js';
+import { closeFeedEvents } from './feed-events.js';
 import {closeCommunityEvents} from './community-events.js';
 
 const app = Fastify({
@@ -307,6 +308,6 @@ try {
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    void app.close().then(closeDmEvents).then(closeCommunityEvents).then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
+    void app.close().then(closeDmEvents).then(closeCommunityEvents).then(closeFeedEvents).then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
   });
 }
