@@ -175,7 +175,7 @@ test('meeting: direct entry, approval gates, invitations and community request n
   assert.deepEqual(requests.map(r=>r.handle),['voice_friend']);
   const inbox=(await owner('/api/v1/notifications')).data.notifications;
   assert.ok(inbox.some(n=>n.kind==='meeting_join_request'&&n.targetId===channelId&&n.communityId===group.id),
-    'admins should see meeting requests with the meeting deep link');
+    'admins should see meeting requests with the meeting deep link: '+JSON.stringify(inbox));
   assert.equal((await friend(meeting+'/requests/voice_friend/approve','POST')).status,403);
   assert.equal((await owner(meeting+'/requests/voice_friend/approve','POST')).status,200);
   const approved=crypto.randomUUID();
