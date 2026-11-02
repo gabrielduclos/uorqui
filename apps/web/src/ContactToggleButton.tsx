@@ -47,6 +47,20 @@ export function ContactToggleButton({ handle }: { handle: string }) {
     }finally{setBusy(false);}
   }
 
+  async function decline() {
+    if(status!=='received'||busy)return;
+    setBusy(true);setError('');
+    try{
+      const response=await fetch('/api/v1/friends/requests/'+encodeURIComponent(handle)+'/decline',{
+        method:'POST',credentials:'same-origin',cache:'no-store'
+      });
+      if(!response.ok)throw Error('FAILED');
+      await refresh();
+      window.dispatchEvent(new Event('uorqui:friends-updated'));
+    }catch{setError(pt?'Não foi possível recusar a solicitação.':'Could not decline the request.');}
+    finally{setBusy(false);}
+  }
+
   const label=status==='none'?(pt?'Adicionar amigo':'Add friend')
     :status==='sent'?(pt?'Cancelar pedido':'Cancel request')
     :status==='received'?(pt?'Aceitar pedido':'Accept request')
@@ -55,9 +69,15 @@ export function ContactToggleButton({ handle }: { handle: string }) {
   const Icon=status==='friends'?UserMinus:status==='sent'?X:status==='received'?Check:status===null?Clock:UserPlus;
 
   return <div className="flex flex-col gap-1">
-    <Button type="button" variant="outline" disabled={status===null||status==='blocked'||busy} onClick={()=>void action()}>
-      <Icon className="size-4"/>{label}
-    </Button>
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" variant="outline" disabled={status===null||status==='blocked'||busy} onClick={()=>void action()}>
+        <Icon className="size-4"/>{label}
+      </Button>
+      {status==='received'&&<Button type="button" variant="outline" disabled={busy} onClick={()=>void decline()}
+        aria-label={pt?'Recusar solicitação de amizade':'Decline friend request'}>
+        <X className="size-4"/>{pt?'Recusar':'Decline'}
+      </Button>}
+    </div>
     {error&&<span role="alert" className="max-w-52 text-xs text-destructive">{error}</span>}
   </div>;
 }
