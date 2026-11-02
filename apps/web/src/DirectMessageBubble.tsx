@@ -3,6 +3,7 @@ import { motion, useDragControls, useMotionValue, useTransform } from 'motion/re
 import { createPortal } from 'react-dom';
 import { Copy, Download, FileText, Flag, Forward, LoaderCircle, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
+import { MessageText } from './MessageText';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { useCachedChatMedia } from './chatMediaCache';
 import { cn } from '@/lib/utils';
@@ -220,7 +221,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         <p className="whitespace-pre-wrap break-words">
           {message.deletedAt
             ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
-            : (locationMessage ? (locationMessage[5]??'') : quote && !message.replyToId ? quote[2] : message.body)}
+            : <MessageText text={locationMessage ? (locationMessage[5]??'') : quote && !message.replyToId ? quote[2] : message.body}/>}
           {' '}
           <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap align-baseline text-[10px] opacity-80', mine ? 'text-primary-foreground' : 'text-muted-foreground')}>
             {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
