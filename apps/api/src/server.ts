@@ -288,7 +288,8 @@ registerCommunityRoutes(app, async request => readSession(request));
 registerCommunityInviteLinks(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
 
-registerCommunityMeetingRoutes(app, async request => readSession(request));registerCommunityModerationRoutes(app, async request => readSession(request));
+registerCommunityMeetingRoutes(app, async request => readSession(request));
+registerCommunityModerationRoutes(app, async request => readSession(request));
 registerContentReportRoutes(app, async request => readSession(request));
 registerPlatformModerationRoutes(app, async request => readSession(request));
 
