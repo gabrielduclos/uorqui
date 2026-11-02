@@ -185,6 +185,7 @@ export async function pushActivityNotification(notificationId:string){
     'WHERE n.id=$1 AND n.read_at IS NULL '+
     'AND COALESCE(CASE n.kind '+
     "WHEN 'friend_request' THEN np.friend_request WHEN 'friend_accepted' THEN np.friend_accepted "+
+    "WHEN 'community_join_request' THEN np.community_request WHEN 'meeting_join_request' THEN np.community_request "+
     'ELSE false END,true)=true '+
     'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE '+
     '(b.blocker_id=n.recipient_id AND b.blocked_id=n.actor_id) OR '+
@@ -193,7 +194,9 @@ export async function pushActivityNotification(notificationId:string){
   const n=row.rows[0];
   const verb:Record<string,string>={
     friend_request:'enviou uma solicitação de amizade',
-    friend_accepted:'aceitou sua solicitação de amizade'
+    friend_accepted:'aceitou sua solicitação de amizade',
+    community_join_request:'solicitou entrada na comunidade',
+    meeting_join_request:'solicitou participar de uma reunião'
   };
   const subs=await getPool().query<Subscription>(
     'SELECT endpoint,p256dh,auth,user_id FROM push_subscriptions WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 10',

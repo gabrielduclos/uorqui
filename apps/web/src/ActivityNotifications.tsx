@@ -46,9 +46,11 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
   }
   const verbs={
     friend_request:pt?'enviou uma solicitação de amizade':'sent you a friend request',
-    friend_accepted:pt?'aceitou sua solicitação de amizade':'accepted your friend request'
+    friend_accepted:pt?'aceitou sua solicitação de amizade':'accepted your friend request',
+    community_join_request:pt?'solicitou entrada em uma comunidade':'requested to join a community',
+    meeting_join_request:pt?'solicitou participar de uma reunião':'requested to join a meeting'
   };
-  const icons={friend_request:UserPlus,friend_accepted:UserRoundCheck};
+  const icons={friend_request:UserPlus,friend_accepted:UserRoundCheck,community_join_request:UserPlus,meeting_join_request:Users};
   const all=async()=>{setBusy(true);setActionError(false);
     try{await onReadAll();}catch{setActionError(true);}finally{setBusy(false);}};
   if(settingsOpen)return <NotificationSettings accountId={accountId} onBack={()=>setSettingsOpen(false)}/>;

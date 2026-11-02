@@ -127,6 +127,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
   function openActivity(item:ActivityNotification){
     void activity.markRead(item.id);
+    if(item.kind==='community_join_request'||item.kind==='meeting_join_request'){
+      const communityId=item.communityId??(item.kind==='community_join_request'?item.targetId:null);
+      if(communityId){openDiscoveryCommunity(communityId,item.kind==='meeting_join_request'?item.targetId:undefined);return;}
+    }
     if(/^[a-z][a-z0-9_]{2,31}$/.test(item.actorHandle)){
       window.history.pushState({uorquiInternalProfile:true},'','/@'+item.actorHandle);
       window.dispatchEvent(new PopStateEvent('popstate'));
