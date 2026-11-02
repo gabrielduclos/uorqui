@@ -164,7 +164,7 @@ export async function pushCommunityMessage(messageId:string){
     'FROM push_subscriptions s JOIN community_members cm ON cm.user_id=s.user_id AND cm.community_id=$1 '+
     'LEFT JOIN notification_preferences np ON np.user_id=s.user_id '+
     'LEFT JOIN community_channel_password_access grant_access ON grant_access.channel_id=$3 AND grant_access.user_id=s.user_id '+
-    "WHERE (NOT $4::boolean OR cm.role IN ('owner','admin') OR grant_access.user_id IS NOT NULL) AND s.user_id<>$2 AND COALESCE(np.community_message,true)=true AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=s.user_id) '+
+    "WHERE (NOT $4::boolean OR cm.role IN ('owner','admin') OR grant_access.user_id IS NOT NULL) AND s.user_id<>$2 AND COALESCE(np.community_message,true)=true AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=s.user_id) "+
     'ORDER BY s.endpoint LIMIT 200',[m.community_id,m.author_id,m.channel_id,m.protected]);
   await Promise.allSettled(recipients.rows.map(async sub=>{
     try{
