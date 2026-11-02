@@ -143,6 +143,17 @@ const en: Record<string, string> = {
   'Verificando sessão': 'Checking session', 'Verificando sessão…': 'Checking session…',
   'Escolha um nome de usuário para concluir seu perfil.': 'Choose a username to complete your profile.',
   'Nome de usuário': 'Username', 'Nome exibido': 'Display name',
+  '@usuário (username)': '@username',
+  'Seu @usuário (username) é único. É como outras pessoas vão encontrar seu perfil no Uorqui.':
+    'Your @username is unique. It is how people find your Uorqui profile.',
+  'Use de 3 a 32 caracteres. Comece com uma letra e use apenas letras sem acentos, números ou _. As maiúsculas viram minúsculas automaticamente.':
+    'Use 3 to 32 characters. Start with a letter and use only unaccented letters, numbers or _. Uppercase letters are automatically converted to lowercase.',
+  'Seu perfil será:': 'Your profile will be:',
+  'Confira as regras do @usuário acima.': 'Check the @username rules above.',
+  'Nome exibido (pode ter espaços)': 'Display name (spaces allowed)',
+  'Seu nome (nome exibido)': 'Your name (display name)',
+  'Depois de criar sua conta, você poderá escolher seu @usuário (username), que é diferente do nome exibido.':
+    'After creating your account, you can choose your @username, which is different from your display name.',
   'Criar meu perfil': 'Create my profile', 'Criar conta': 'Create account',
   'Entrar com uma conta existente': 'Sign in with an existing account',
   'O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.': 'The server is temporarily unavailable. You can still explore the forms.',
