@@ -2,7 +2,7 @@
 
 [Português](descobrir.md) · [English](../en/discover.md)
 
-**Decisão:** 2 de novembro de 2026. **Estado:** direção de produto aprovada para implementação; **não** significa que a interface atual ou as APIs já foram migradas.
+**Decisão:** 2 de novembro de 2026. **Estado:** primeira implementação no código da branch `main`: Descobrir, recomendações, atividade autenticada, navegação e onboarding. **Publicação em produção e testes em aparelhos ainda não confirmados.** Feed e dados antigos foram preservados para compatibilidade.
 
 ## Proposta de valor
 
@@ -36,4 +36,4 @@ O beta atual possui implementação de feed, posts, perfis com publicações, v�
 4. Avaliar armazenamento, retenção e possível exportação de posts antigos; **não excluir tabelas, arquivos R2 nem dados de usuários automaticamente**. Toda remoção de schema exige migração versionada, revisão de privacidade e plano de rollback.
 5. Validar a mudança com usuários e testes reais em desktop, Android e iOS/PWA. Atualizar documentação histórica e changelog quando o código for efetivamente publicado.
 
-**Fora do escopo desta decisão:** implementar a interface ou remover funcionalidades/banco nesta alteração documental.
+**Implementado no código:** tela `DiscoverHome`, endpoint `GET /api/v1/communities/discover/activity`, navegação a comunidades/canais, novo onboarding e retirada da galeria pública de posts e controles de seguir do perfil. **Pendente:** validação de produção, migração completa de notificações/links antigos, revisão de retenção e descontinuação técnica dos endpoints e dados de posts.
