@@ -75,6 +75,31 @@ test('persistent communities: discover, create, join, channels and real messages
   const add=await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'text'});
   assert.equal(add.status,201);
   assert.equal((await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'text'})).status,409);
+  // Password-protected channels require a per-account server-side grant.
+  const lockedChannel=add.data.channel.id;
+  const protectedPath='/api/v1/communities/'+id+'/channels/'+lockedChannel;
+  assert.equal((await member(protectedPath+'/password','PUT',{password:'password-1234'})).status,403,
+    'ordinary members cannot protect channels');
+  assert.equal((await owner(protectedPath+'/password','PUT',{password:'short'})).status,400);
+  assert.equal((await owner(protectedPath+'/password','PUT',{password:'safe-secret-1234'})).status,200);
+  const lockedSummary=await member('/api/v1/communities/'+id);
+  const locked=lockedSummary.data.channels.find(channel=>channel.id===lockedChannel);
+  assert.equal(locked.hasPassword,true);
+  assert.equal(locked.unlocked,false);
+  assert.equal((await member(protectedPath+'/messages')).status,403);
+  assert.equal((await member(protectedPath+'/messages','POST',{clientId:crypto.randomUUID(),body:'blocked'})).status,403);
+  assert.equal((await member(protectedPath+'/attachments/allowed')).status,403);
+  assert.equal((await member(protectedPath+'/unlock','POST',{password:'wrong-password'})).status,403);
+  assert.equal((await member(protectedPath+'/unlock','POST',{password:'safe-secret-1234'})).status,200);
+  assert.equal((await member(protectedPath+'/messages')).status,200);
+  assert.equal((await member('/api/v1/communities/'+id)).data.channels.find(channel=>channel.id===lockedChannel).unlocked,true);
+  assert.equal((await owner(protectedPath+'/password','PUT',{password:'new-secret-5678'})).status,200);
+  assert.equal((await member(protectedPath+'/messages')).status,403,'rotating the password revokes prior access');
+  assert.equal((await member(protectedPath+'/unlock','POST',{password:'safe-secret-1234'})).status,403);
+  assert.equal((await member(protectedPath+'/unlock','POST',{password:'new-secret-5678'})).status,200);
+  assert.equal((await owner(protectedPath+'/password','PUT',{password:null})).status,200);
+  assert.equal((await member(protectedPath+'/messages')).status,200);
+  assert.equal((await member('/api/v1/communities/'+id)).data.channels.find(channel=>channel.id===lockedChannel).hasPassword,false);
   const path='/api/v1/communities/'+id+'/channels/'+text.id+'/messages';
   assert.equal((await anonymous('/api/v1/communities/events')).status,401);
   assert.equal((await owner('/api/v1/communities/events')).status,406);
