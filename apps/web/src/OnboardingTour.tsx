@@ -1,6 +1,6 @@
 import {useEffect,useState,type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
-import {Camera,CheckCircle2,ChevronRight,Home,MessageCircle,SkipForward,Users} from 'lucide-react';
+import {Camera,CheckCircle2,ChevronRight,Compass,MessageCircle,SkipForward,Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar,type UserProfileData} from './UserProfiles';
@@ -10,7 +10,7 @@ import {useUorquiPreferences} from './UorquiPreferences';
 
 // Version 2 presents the product in context instead of interrupting it with a dialog.
 export const onboardingStorageKey=(userId:string)=>'uorqui:tour:v2:'+userId;
-type Tab='feed'|'conversations'|'communities';
+type Tab='discover'|'conversations'|'communities';
 type Highlight={top:number;left:number;width:number;height:number};
 
 export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinish}:{
@@ -25,8 +25,8 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
   const [error,setError]=useState('');
   const [photoSaved,setPhotoSaved]=useState(false);
   const screens=[
-    {icon:Home,tab:'feed' as Tab,title:pt?'Feed':'Feed',
-      description:pt?'Aqui você acompanha publicações, fotos e vídeos.':'See posts, photos and videos here.'},
+    {icon:Compass,tab:'discover' as Tab,title:pt?'Descobrir':'Discover',
+      description:pt?'Encontre comunidades e veja o que acontece nas suas.':'Find communities and see what is happening in yours.'},
     {icon:MessageCircle,tab:'conversations' as Tab,title:pt?'Mensagens':'Messages',
       description:pt?'Aqui ficam suas conversas privadas.':'Find your private conversations here.'},
     {icon:Users,tab:'communities' as Tab,title:pt?'Comunidades':'Communities',
