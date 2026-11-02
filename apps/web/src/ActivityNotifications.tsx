@@ -1,6 +1,6 @@
 
 import {useEffect,useState} from 'react';
-import {Bell,Check,CheckCheck,Settings,UserPlus,UserRoundCheck,X} from 'lucide-react';
+import {Bell,Check,CheckCheck,Settings,UserPlus,UserRoundCheck,Users,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar} from './UserProfiles';
