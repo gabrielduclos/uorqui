@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy } from 'lucide-react';
+import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -57,6 +57,9 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [inviteHandle,setInviteHandle]=useState('');
   const [inviteBusy,setInviteBusy]=useState(false);
   const [inviteFeedback,setInviteFeedback]=useState('');
+  const [meetingInfo,setMeetingInfo]=useState<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}|null>(null);
+  const [meetingAction,setMeetingAction]=useState('');
+  const [meetingNotice,setMeetingNotice]=useState('');
   const meeting=kind==='meeting';
   const running=useRef(false);
   const disposed=useRef(false);
@@ -83,6 +86,24 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const recoveringMic=useRef(false);
   const foregroundTimer=useRef<number|null>(null);
   const base='/api/v1/communities/'+communityId+'/channels/'+channelId+'/voice';
+  const meetingBase='/api/v1/communities/'+communityId+'/channels/'+channelId+'/meeting';
+  const fetchMeetingInfo=useCallback(async()=>{
+    if(!meeting)return;
+    try{const data=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}>(meetingBase);
+      if(!disposed.current)setMeetingInfo(data);
+    }catch{if(!disposed.current)setMeetingNotice(pt?'Não foi possível atualizar as permissões.':'Could not update meeting permissions.');}
+  },[meeting,meetingBase,pt]);
+  useEffect(()=>{
+    if(!meeting)return;
+    void fetchMeetingInfo();
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void fetchMeetingInfo();},8000);
+    const update=(event:Event)=>{
+      const info=(event as CustomEvent<{communityId?:string;channelId?:string;kind?:string}>).detail;
+      if(info?.kind==='voice'&&info.channelId===channelId)void fetchMeetingInfo();
+    };
+    window.addEventListener('uorqui:community-event',update);
+    return()=>{window.clearInterval(timer);window.removeEventListener('uorqui:community-event',update);};
+  },[meeting,channelId,fetchMeetingInfo]);
 
   const stop=useCallback((notify=true)=>{
     if(foregroundTimer.current!==null)window.clearTimeout(foregroundTimer.current);
@@ -410,6 +431,11 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       stream?.getTracks().forEach(track=>track.stop());
       stop(false);
       const code=e instanceof Error?e.message:'';
+      if(meeting&&code==='MEETING_APPROVAL_REQUIRED'){
+        try{await req(meetingBase+'/requests',json({}));setMeetingNotice(pt?'Solicitação enviada. Aguarde a aprovação do administrador.':'Request sent. Waiting for an administrator.');await fetchMeetingInfo();}
+        catch(requestError){setMeetingNotice(requestError instanceof Error&&requestError.message==='REQUEST_COOLDOWN'?(pt?'Solicitação recusada. Tente novamente mais tarde.':'Request declined. Try again later.'):(pt?'Não foi possível solicitar aprovação.':'Could not request admission.'));}
+        return;
+      }
       setError(code==='VOICE_ROOM_FULL'?(pt?'Sala cheia (limite de 6 pessoas).':'Room is full (6 participants).'):
         code==='UNSUPPORTED'?(pt?'Este navegador não suporta áudio WebRTC.':'This browser does not support WebRTC audio.'):
         code==='NotAllowedError'?(pt?'Autorize o microfone nas configurações do navegador.':'Allow microphone access in browser settings.'):
@@ -421,6 +447,23 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(running.current&&!deafenedRef.current)playVoiceRoomCue('leave');
     stop();
     onLeave?.();
+  }
+  async function changeMeetingPolicy(policy:'open'|'approval'){
+    if(!meetingInfo?.manager||meetingAction)return;
+    setMeetingAction('policy');setMeetingNotice('');
+    try{await req(meetingBase+'/policy',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({policy})});
+      await fetchMeetingInfo();setMeetingNotice(pt?'Configuração atualizada.':'Meeting settings updated.');
+    }catch{setMeetingNotice(pt?'Não foi possível alterar a entrada na sala.':'Could not update meeting admission.');}
+    finally{setMeetingAction('');}
+  }
+  async function decideMeeting(handle:string,decision:'approve'|'decline'){
+    if(!meetingInfo?.manager||meetingAction)return;
+    setMeetingAction(handle);setMeetingNotice('');
+    try{await req(meetingBase+'/requests/'+encodeURIComponent(handle)+'/'+decision,json({}));
+      await fetchMeetingInfo();
+      setMeetingNotice(decision==='approve'?(pt?'Participação aprovada.':'Participant approved.'):(pt?'Solicitação recusada.':'Request declined.'));
+    }catch{setMeetingNotice(pt?'Não foi possível responder à solicitação.':'Could not process request.');}
+    finally{setMeetingAction('');}
   }
   async function toggleCamera(){
     if(!meeting||!running.current||!local.current||cameraBusy)return;
@@ -632,6 +675,29 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </Button>}
         </div>
       </div>
+      {meeting&&meetingInfo&&<div className="mx-auto mt-3 w-full max-w-5xl rounded-xl border border-border bg-card p-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-medium">{pt?'Entrada na reunião':'Meeting admission'}: {meetingInfo.policy==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Entrada direta':'Direct entry')}</span>
+          {meetingInfo.manager&&<select className="min-h-10 rounded-lg border border-input bg-background px-2 text-sm" aria-label={pt?'Permissão para entrar na reunião':'Meeting join policy'}
+            disabled={!!meetingAction} value={meetingInfo.policy} onChange={e=>void changeMeetingPolicy(e.target.value as 'open'|'approval')}>
+            <option value="open">{pt?'Entrada direta':'Direct entry'}</option>
+            <option value="approval">{pt?'Por aprovação':'Approval required'}</option>
+          </select>}
+        </div>
+        {!meetingInfo.manager&&meetingInfo.policy==='approval'&&meetingInfo.status==='pending'&&
+          <p role="status" className="mt-2 text-muted-foreground">{pt?'Sua solicitação está aguardando aprovação.':'Your request is awaiting approval.'}</p>}
+        {!meetingInfo.manager&&meetingInfo.policy==='approval'&&meetingInfo.status==='approved'&&phase!=='joined'&&
+          <p role="status" className="mt-2 text-primary">{pt?'Entrada aprovada. Você já pode se conectar.':'Approved. You can now join.'}</p>}
+        {meetingInfo.manager&&meetingInfo.pending.length>0&&<div className="mt-3 border-t border-border pt-2">
+          <h4 className="font-semibold">{pt?'Solicitações de entrada':'Join requests'} ({meetingInfo.pending.length})</h4>
+          {meetingInfo.pending.map(person=><div key={person.handle} className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+            <span className="min-w-0 flex-1 truncate">{person.displayName} (@{person.handle})</span>
+            <Button type="button" size="sm" disabled={!!meetingAction} onClick={()=>void decideMeeting(person.handle,'approve')}><Check className="size-4"/>{pt?'Aprovar':'Approve'}</Button>
+            <Button type="button" variant="outline" size="sm" disabled={!!meetingAction} onClick={()=>void decideMeeting(person.handle,'decline')}>{pt?'Recusar':'Decline'}</Button>
+          </div>)}
+        </div>}
+        {meetingNotice&&<p role="status" className="mt-2 text-muted-foreground">{meetingNotice}</p>}
+      </div>}
       {meeting&&inviteOpen&&<div className="mx-auto mt-3 w-full max-w-5xl rounded-xl border border-border bg-card p-3">
         <h4 className="text-sm font-semibold">{pt?'Convidar para esta reunião':'Invite to this meeting'}</h4>
         <p className="mt-1 text-xs text-muted-foreground">{pt?'O convidado precisa participar da comunidade. A aprovação da reunião, quando ativa, continua obrigatória.':'Invitees must belong to the community. Meeting approval still applies when enabled.'}</p>
