@@ -368,6 +368,36 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
 
   async function join(){
     if(joining.current||running.current)return;
+    // Meeting approval must not trigger camera or microphone permission prompts.
+    // Admission is independently enforced by the API on every actual join.
+    if(meeting){
+      let admission=meetingInfo;
+      if(!admission){
+        try{
+          admission=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}>(meetingBase);
+          setMeetingInfo(admission);
+        }catch{setMeetingNotice(pt?'Não foi possível verificar a entrada. Tente novamente.':'Could not check meeting admission. Try again.');return;}
+      }
+      if(admission.policy==='approval'&&!admission.manager&&admission.status!=='approved'){
+        if(admission.status==='pending'){
+          setMeetingNotice(pt?'Sua solicitação ainda aguarda aprovação.':'Your request is still awaiting approval.');
+          return;
+        }
+        joining.current=true;
+        setMeetingAction('request');setMeetingNotice('');
+        try{
+          const response=await req<{status:string}>(meetingBase+'/requests',json({}));
+          setMeetingNotice(response.status==='approved'?(pt?'Entrada aprovada. Você já pode se conectar.':'Approved. You can now join.'):
+            pt?'Solicitação enviada. Aguarde a aprovação do administrador.':'Request sent. Waiting for an administrator.');
+          await fetchMeetingInfo();
+        }catch(error){
+          setMeetingNotice(error instanceof Error&&error.message==='REQUEST_COOLDOWN'?
+            (pt?'Solicitação recusada. Tente novamente mais tarde.':'Request declined. Try again later.'):
+            (pt?'Não foi possível solicitar aprovação.':'Could not request admission.'));
+        }finally{joining.current=false;setMeetingAction('');}
+        return;
+      }
+    }
     // Unlock during the actual click, before awaiting getUserMedia and the API.
     unlockVoiceRoomAudio();
     try{
