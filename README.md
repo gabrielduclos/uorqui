@@ -13,12 +13,12 @@
 Uorqui brings together three connected experiences:
 
 - **Direct messages:** private 1:1 text conversations, replies, reactions, media attachments, message status, background push and SSE-driven updates. No conventional private group chats.
-- **Discover (new direction, not yet implemented):** a home screen without posts, featuring recommended public communities, search and activity from the communities a user has joined. The global feed and immersive video mode will be retired after a safe migration.
+- **Discover (initial implementation committed to `main`):** a home screen without posts, featuring recommended public communities, search and activity from the communities a user has joined. The global feed is removed from primary navigation; legacy code/data are retained to support old post links.
 - **Communities:** public/private membership, invitations, text channels, moderation and live WebRTC voice rooms, including a floating call control when navigating.
 
 The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
 
-> **Direction changed November 2, 2026:** the future product has no global feed; the current beta still contains its previously implemented feed. This is a **documentation-only change**, not a deployment or data deletion. Read the [Discover decision](docs/en/discover.md).
+> **Direction changed November 2, 2026:** the future product has no global feed; the current beta still contains its previously implemented feed. The initial implementation is committed to GitHub; deployment of the new build **has not been confirmed**, and no data has been deleted. Read the [Discover decision](docs/en/discover.md).
 
 ## Beta status
 
@@ -27,7 +27,7 @@ The initial audience includes gaming communities, but Uorqui is designed for gen
 | Login and profiles | Better Auth sessions, email verification/recovery flow, profile visibility and blocking implemented; real signup + email delivery need final validation |
 | Direct messages | Persisted 1:1 messages, media, reactions, read/delivery state, SSE updates and Web Push implementation |
 | Feed (legacy in current beta) | Hybrid posts/media backed by the API/database with persistent filters and a post composer; retirement planned, not executed |
-| Discover (planned) | Public community recommendations, search and authorized activity from joined communities; implementation pending |
+| Discover (code on `main`) | Public community recommendations, search and authorized joined-community activity; deployment/device testing pending |
 | Communities | Membership, invitations, roles, text channels, voice presence and WebRTC |
 | Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
 | Public launch | **Not yet approved:** real-device tests, push, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
