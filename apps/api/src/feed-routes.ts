@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getPool } from './db/client.js';
 import { recordActivity,recordPostActivity } from './activity-notifications.js';
+import { publishFeedEvent,subscribeFeedEvents } from './feed-events.js';
 
 type SessionReader=(request:FastifyRequest)=>Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -65,6 +66,43 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
     return result.rowCount===1;
   }
 
+  // Authenticated EventSource. One PostgreSQL listener per API process, and
+  // bounded stream lifetimes to refresh session permissions every five minutes.
+  app.get('/api/v1/feed/events',async(req,reply)=>{
+    try{
+      const me=await self(req);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      if(!(req.headers.accept??'').includes('text/event-stream'))
+        return reply.code(406).send({error:'Expected event stream'});
+      const response=reply.raw;
+      response.writeHead(200,{
+        'Content-Type':'text/event-stream; charset=utf-8',
+        'Cache-Control':'private, no-store, no-transform',
+        Connection:'keep-alive',
+        'X-Accel-Buffering':'no',
+        'X-Content-Type-Options':'nosniff',
+      });
+      reply.hijack();
+      let ended=false,unsubscribe=()=>{};
+      const write=(value:string)=>{
+        if(ended||response.destroyed||response.writableEnded)return;
+        try{response.write(value);}catch{finish();}
+      };
+      const heartbeat=setInterval(()=>write(': heartbeat\n\n'),15_000);
+      const expires=setTimeout(()=>finish(),5*60_000);
+      function finish(){
+        if(ended)return;
+        ended=true;clearInterval(heartbeat);clearTimeout(expires);
+        unsubscribe();if(!response.writableEnded)response.end();
+      }
+      response.once('close',finish);
+      unsubscribe=await subscribeFeedEvents(event=>
+        write('event: feed-update\ndata: '+JSON.stringify(event)+'\n\n'));
+      if(response.destroyed){finish();return;}
+      write('retry: 2000\n\n');
+      write('event: ready\ndata: {}\n\n');
+    }catch(error){req.log.error({err:error},'Feed events');if(!reply.sent)return reply.code(503).send({error:'Unavailable'});}
+  });
+
   app.get('/api/v1/feed/posts',{schema:{querystring:{
     type:'object',additionalProperties:false,properties:{
       filter:{type:'string',enum:['for-you','following','videos']},
@@ -121,6 +159,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
         'INSERT INTO feed_posts(author_id,body,media_count,published_at) VALUES ($1,$2,$3,'+
         'CASE WHEN $3=0 THEN now() ELSE NULL END) RETURNING id,published_at AS "publishedAt"',
         [me,clean,mediaCount]);
+      if(mediaCount===0)await publishFeedEvent('publish',r.rows[0].id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.code(201).header('Cache-Control',cache).send({post:r.rows[0]});
     }catch(err){return failed(req,reply,err,'Create feed post');}
   });
@@ -201,6 +240,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
         'AND (published_at IS NOT NULL OR (media_count>0 AND (SELECT count(*) FROM feed_media WHERE post_id=p.id)=p.media_count)) '+
         'RETURNING id,published_at AS "publishedAt"',[id,me]);
       if(!r.rowCount)return reply.code(409).send({error:'UPLOAD_INCOMPLETE'});
+      await publishFeedEvent('publish',id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.header('Cache-Control',cache).send({post:r.rows[0]});
     }catch(err){return failed(req,reply,err,'Publish feed post');}
   });
@@ -213,6 +253,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const r=await getPool().query('UPDATE feed_posts SET body=$3 WHERE id=$1 AND author_id=$2 AND deleted_at IS NULL '+
         'AND ($3<>\'\' OR media_count>0) RETURNING id',[id,me,clean]);
       if(!r.rowCount)return reply.code(404).send({error:'Post unavailable'});
+      await publishFeedEvent('edit',id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.header('Cache-Control',cache).send({updated:true});
     }catch(err){return failed(req,reply,err,'Edit feed post');}
   });
@@ -224,6 +265,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const {id}=req.params as {id:string};
       const r=await getPool().query('UPDATE feed_posts SET deleted_at=now() WHERE id=$1 AND author_id=$2 AND deleted_at IS NULL RETURNING id',[id,me]);
       if(!r.rowCount)return reply.code(404).send({error:'Post unavailable'});
+      await publishFeedEvent('delete',id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.header('Cache-Control',cache).send({deleted:true});
     }catch(err){return failed(req,reply,err,'Delete feed post');}
   });
@@ -303,6 +345,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       if(!await visible(id,me))return reply.code(404).send({error:'Post unavailable'});
       const inserted=await getPool().query('INSERT INTO feed_likes(post_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING post_id',[id,me]);
       if(inserted.rowCount)await recordPostActivity(id,me,'post_like','like:'+id+':'+me).catch(error=>req.log.warn({err:error},'Like notification'));
+      if(inserted.rowCount)await publishFeedEvent('like',id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.header('Cache-Control',cache).send({liked:true});
     }catch(err){return failed(req,reply,err,'Like post');}
   });
@@ -312,7 +355,8 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const me=await self(req);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=req.params as {id:string};
       if(!await visible(id,me))return reply.code(404).send({error:'Post unavailable'});
-      await getPool().query('DELETE FROM feed_likes WHERE post_id=$1 AND user_id=$2',[id,me]);
+      const removed=await getPool().query('DELETE FROM feed_likes WHERE post_id=$1 AND user_id=$2',[id,me]);
+      if(removed.rowCount)await publishFeedEvent('like',id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.header('Cache-Control',cache).send({liked:false});
     }catch(err){return failed(req,reply,err,'Unlike post');}
   });
@@ -349,6 +393,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       if(recent.rows[0].n>=20)return reply.code(429).send({error:'COMMENT_RATE_LIMIT'});
       const r=await getPool().query('INSERT INTO feed_comments(post_id,author_id,body) VALUES($1,$2,$3) RETURNING id',[id,me,clean]);
       await recordPostActivity(id,me,'post_comment','comment:'+r.rows[0].id).catch(error=>req.log.warn({err:error},'Comment notification'));
+      await publishFeedEvent('comment',id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.code(201).header('Cache-Control',cache).send({id:r.rows[0].id});
     }catch(err){return failed(req,reply,err,'Add feed comment');}
   });
@@ -361,7 +406,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
       const selfDeleted=await getPool().query(
         'DELETE FROM feed_comments WHERE id=$1 AND post_id=$2 AND author_id=$3 AND deleted_at IS NULL RETURNING id',
         [commentId,id,me]);
-      if(selfDeleted.rowCount)return reply.code(204).send();
+      if(selfDeleted.rowCount){await publishFeedEvent('comment',id).catch(err=>req.log.warn({err},'Feed event'));return reply.code(204).send();}
       // The post owner can moderate someone else's comment: preserve its position,
       // but erase the original text and author identity from the response.
       const moderated=await getPool().query(
