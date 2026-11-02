@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {publishCommunityEvent,subscribeCommunityEvents} from './community-events.js';
+import { channelGate, channelGateError, channelGateStatus, hashChannelPassword, verifyChannelPassword } from './channel-password.js';
 import {recordCommunityRequest} from './activity-notifications.js';
 import {pushCommunityMessage} from './push-routes.js';
 
@@ -138,6 +139,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         "LEFT(COALESCE(latest.body,''),180) AS preview "+
         'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
         'JOIN community_channels ch ON ch.community_id=c.id '+
+        "AND (ch.password_hash IS NULL OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
         'JOIN LATERAL (SELECT m.body,m.created_at FROM community_messages m '+
         'WHERE m.channel_id=ch.id AND m.deleted_at IS NULL '+
         "AND m.created_at>now()-interval '14 days' "+
@@ -154,6 +156,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'COUNT(DISTINCT voice.user_id)::int AS "participantCount" '+
         'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
         'JOIN community_channels ch ON ch.community_id=c.id AND ch.kind IN (\'voice\',\'meeting\') '+
+        "AND (ch.password_hash IS NULL OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
         'JOIN community_voice_sessions voice ON voice.channel_id=ch.id '+
         "AND voice.last_seen_at>now()-interval '180 seconds' "+
         'JOIN community_members participant ON participant.community_id=c.id AND participant.user_id=voice.user_id '+
@@ -211,6 +214,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'FROM community_channels ch JOIN communities c ON c.id=ch.community_id '+
         'JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$1 '+
         'LEFT JOIN community_channel_reads rd ON rd.channel_id=ch.id AND rd.user_id=$1 '+
+        "WHERE (ch.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
         'LEFT JOIN community_messages msg ON msg.channel_id=ch.id AND msg.author_id<>$1 '+
         'AND msg.deleted_at IS NULL AND msg.created_at>GREATEST(m.joined_at,COALESCE(rd.last_read_at,m.joined_at)) '+
         "GROUP BY ch.community_id,ch.id,c.name ORDER BY c.name,ch.name",[me]);
@@ -239,6 +243,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const {id,channelId}=request.params as {id:string;channelId:string};
       const {lastMessageId}=request.body as {lastMessageId:string};
       if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const gate=await channelGate(id,channelId,me);
+      if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
       const result=await getPool().query(
         'INSERT INTO community_channel_reads (channel_id,user_id,last_read_at) '+
         'SELECT ch.id,$3,m.created_at FROM community_channels ch '+
@@ -260,7 +266,9 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       let channels:unknown[]=[],pendingRequests:unknown[]=[];
       if(data.myRole){
         const result=await getPool().query(
-          'SELECT id,name,kind,created_at AS "createdAt" FROM community_channels WHERE community_id=$1 ORDER BY created_at,id',[id]);
+          'SELECT id,name,kind,created_at AS "createdAt",password_hash IS NOT NULL AS "hasPassword",'+
+          "(password_hash IS NULL OR $2::boolean OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) AS \"unlocked\" "+
+          'FROM community_channels WHERE community_id=$1 ORDER BY created_at,id',[id,manager(data.myRole),me]);
         channels=result.rows;
         if(manager(data.myRole)){
           const waiting=await getPool().query(
@@ -420,12 +428,76 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }
   });
 
+  /** Passwords are never returned to clients; only salted scrypt hashes live in PostgreSQL. */
+  app.put('/api/v1/communities/:id/channels/:channelId/password',{
+    schema:{params:channelParams,body:{type:'object',required:['password'],additionalProperties:false,
+      properties:{password:{anyOf:[{type:'string',minLength:8,maxLength:72},{type:'null'}]}}}}
+  },async(request,reply)=>{
+    if(!originValid(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,channelId}=request.params as {id:string;channelId:string};
+      if(!manager(await membership(id,me)))return reply.code(403).send({error:'Forbidden'});
+      const {password}=request.body as {password:string|null};
+      if(password!==null&&Buffer.byteLength(password,'utf8')>256)
+        return reply.code(400).send({error:'INVALID_PASSWORD'});
+      const hashed=password===null?null:hashChannelPassword(password);
+      const client=await getPool().connect();
+      try{
+        await client.query('BEGIN');
+        const changed=await client.query(
+          'UPDATE community_channels SET password_hash=$3 WHERE community_id=$1 AND id=$2 RETURNING id',
+          [id,channelId,hashed]);
+        if(!changed.rowCount){await client.query('ROLLBACK');return reply.code(404).send({error:'Channel unavailable'});}
+        await client.query('DELETE FROM community_channel_password_access WHERE channel_id=$1',[channelId]);
+        await client.query('DELETE FROM community_channel_password_attempts WHERE channel_id=$1',[channelId]);
+        await client.query('COMMIT');
+      }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+      void publishCommunityEvent(id,channelId,'channel').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({hasPassword:password!==null});
+    }catch(error){request.log.error({err:error},'Protect community channel');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.post('/api/v1/communities/:id/channels/:channelId/unlock',{
+    schema:{params:channelParams,body:{type:'object',required:['password'],additionalProperties:false,
+      properties:{password:{type:'string',minLength:1,maxLength:72}}}}
+  },async(request,reply)=>{
+    if(!originValid(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,channelId}=request.params as {id:string;channelId:string};
+      if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const {password}=request.body as {password:string};
+      if(Buffer.byteLength(password,'utf8')>256)return reply.code(400).send({error:'INVALID_PASSWORD'});
+      const row=await getPool().query('SELECT password_hash FROM community_channels WHERE community_id=$1 AND id=$2',[id,channelId]);
+      if(!row.rowCount)return reply.code(404).send({error:'Channel unavailable'});
+      if(!row.rows[0].password_hash)return reply.header('Cache-Control',noCache).send({unlocked:true});
+      const attempts=await getPool().query(
+        'SELECT failed_count,last_failed_at FROM community_channel_password_attempts WHERE channel_id=$1 AND user_id=$2',
+        [channelId,me]);
+      const last=attempts.rows[0];
+      if(last&&last.failed_count>=5&&Date.now()-new Date(last.last_failed_at).getTime()<15*60*1000)
+        return reply.code(429).send({error:'CHANNEL_PASSWORD_RATE_LIMIT'});
+      if(!verifyChannelPassword(password,row.rows[0].password_hash as string)){
+        await getPool().query(
+          'INSERT INTO community_channel_password_attempts(channel_id,user_id,failed_count,last_failed_at) VALUES($1,$2,1,now()) '+
+          "ON CONFLICT(channel_id,user_id) DO UPDATE SET failed_count=CASE WHEN community_channel_password_attempts.last_failed_at<now()-interval '15 minutes' THEN 1 ELSE community_channel_password_attempts.failed_count+1 END,last_failed_at=now()",
+          [channelId,me]);
+        return reply.code(403).send({error:'INVALID_CHANNEL_PASSWORD'});
+      }
+      await getPool().query('INSERT INTO community_channel_password_access(channel_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[channelId,me]);
+      await getPool().query('DELETE FROM community_channel_password_attempts WHERE channel_id=$1 AND user_id=$2',[channelId,me]);
+      return reply.header('Cache-Control',noCache).send({unlocked:true});
+    }catch(error){request.log.error({err:error},'Unlock community channel');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   app.get('/api/v1/communities/:id/channels/:channelId/messages',{schema:{params:channelParams}},async(request,reply)=>{
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
       const readerRole=await membership(id,me);
       if(!readerRole)return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const gate=await channelGate(id,channelId,me);
+      if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
       const check=await getPool().query('SELECT 1 FROM community_channels WHERE id=$1 AND community_id=$2',[channelId,id]);
       if(!check.rowCount)return reply.code(404).send({error:'Channel not found'});
       // An additive migration can deploy after the API; keep channel history readable
@@ -471,6 +543,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const clean=body.trim();
       if((!clean&&!attachment)||clean.length>4000)return reply.code(400).send({error:'Invalid message'});
       if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const gate=await channelGate(id,channelId,me);
+      if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
       if(attachment){
         if(!communityAttachmentTypes.has(attachment.type)||attachment.name!==attachment.name.trim()||
            /[\\/\r\n\u0000-\u001f]/.test(attachment.name)||!verifiedCommunityUpload(request,id,channelId,clientId,attachment))
@@ -508,6 +582,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
         const {id,channelId}=request.params as {id:string;channelId:string};
         if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+        const gate=await channelGate(id,channelId,me);
+        if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
         const ch=await getPool().query("SELECT 1 FROM community_channels WHERE id=$1 AND community_id=$2",[channelId,id]);
         if(!ch.rowCount)return reply.code(404).send({error:'Channel unavailable'});
         const ready=await getPool().query("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='community_messages' AND column_name='attachment_id') AS enabled");
@@ -521,6 +597,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
         const {id,channelId,attachmentId}=request.params as {id:string;channelId:string;attachmentId:string};
         if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+        const gate=await channelGate(id,channelId,me);
+        if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
         const r=await getPool().query(
           'SELECT m.attachment_name AS name,m.attachment_type AS type,m.attachment_size AS size '+
           'FROM community_messages m JOIN community_channels ch ON ch.id=m.channel_id '+
@@ -542,6 +620,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       if(!reactionEmojis.includes(emoji as typeof reactionEmojis[number]))
         return reply.code(400).send({error:'Invalid reaction'});
       if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const gate=await channelGate(id,channelId,me);
+      if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
       const ready=await getPool().query("SELECT to_regclass('public.community_message_reactions') IS NOT NULL AS enabled");
       if(!ready.rows[0]?.enabled)return reply.code(503).send({error:'REACTIONS_NOT_READY'});
       const allowed=await getPool().query(
