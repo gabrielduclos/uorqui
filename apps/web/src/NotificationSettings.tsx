@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {ArrowLeft,Bell,BellOff,Check,Heart,MessageCircle,Users,UserPlus,UserRoundCheck,UserRoundPlus} from 'lucide-react';
+import {ArrowLeft,Bell,BellOff,Check,MessageCircle,Users,UserPlus,UserRoundCheck} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {PushPreferences} from './PushPreferences';
@@ -12,11 +12,8 @@ const initial:PushSettings={direct_message:true,community_message:true,post_like
 const options=[
   {key:'direct_message',pt:'Mensagens privadas',en:'Direct messages',icon:MessageCircle},
   {key:'community_message',pt:'Mensagens em comunidades',en:'Community messages',icon:Users},
-  {key:'post_like',pt:'Curtidas nas publicações',en:'Post likes',icon:Heart},
-  {key:'post_comment',pt:'Comentários nas publicações',en:'Post comments',icon:MessageCircle},
   {key:'friend_request',pt:'Solicitações de amizade',en:'Friend requests',icon:UserPlus},
-  {key:'friend_accepted',pt:'Amizades aceitas',en:'Accepted friend requests',icon:UserRoundCheck},
-  {key:'follow',pt:'Novos seguidores',en:'New followers',icon:UserRoundPlus}
+  {key:'friend_accepted',pt:'Amizades aceitas',en:'Accepted friend requests',icon:UserRoundCheck}
 ] as const;
 
 export function NotificationSettings({accountId,onBack}:{accountId:string;onBack:()=>void}){
@@ -56,9 +53,9 @@ export function NotificationSettings({accountId,onBack}:{accountId:string;onBack
           <p className="text-xs text-muted-foreground">{pt?'Escolha quais avisos push deseja receber.':'Choose which push alerts you receive.'}</p></div>
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" disabled={loading||saving||allOn} onClick={()=>void save(Object.fromEntries(options.map(o=>[o.key,true])) as PushSettings)}>
+        <Button size="sm" variant="outline" disabled={loading||saving||allOn} onClick={()=>void save({...preferences,...Object.fromEntries(options.map(o=>[o.key,true]))})}>
           <Check className="size-4"/>{pt?'Ativar todas':'Enable all'}</Button>
-        <Button size="sm" variant="outline" disabled={loading||saving||allOff} onClick={()=>void save(Object.fromEntries(options.map(o=>[o.key,false])) as PushSettings)}>
+        <Button size="sm" variant="outline" disabled={loading||saving||allOff} onClick={()=>void save({...preferences,...Object.fromEntries(options.map(o=>[o.key,false]))})}>
           <BellOff className="size-4"/>{pt?'Desativar todas':'Disable all'}</Button>
         {saving&&<Spinner className="size-4"/>}
       </div>
