@@ -12,7 +12,6 @@ import { ContactToggleButton } from './ContactToggleButton';
 import { AccountBlockButton } from './AccountBlockButton';
 import { navigateBackFromPublicProfile, navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
-import { PublicProfilePosts } from './PublicProfilePosts';
 
 export type UserProfileData = {
   handle: string;
@@ -26,8 +25,6 @@ export type PublicProfileData = Omit<UserProfileData, 'isPublic'> & {
   id:string;createdAt:string|null;isPrivate:boolean;mine:boolean;following:boolean;
   followersCount:number;followingCount:number;
 };
-type FollowListKind='followers'|'following';
-type FollowPerson={handle:string;displayName:string;avatarUrl:string|null};
 type SearchResult = Pick<UserProfileData, 'handle' | 'displayName' | 'avatarUrl'>;
 
 export function UserAvatar({ name, image, size = 'md' }: { name: string; image?: string | null; size?: 'sm' | 'md' | 'lg' }) {
@@ -257,13 +254,6 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
   const pt = locale === 'pt-BR';
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
-  const [followBusy,setFollowBusy]=useState(false);
-  const [followError,setFollowError]=useState('');
-  const [listKind,setListKind]=useState<FollowListKind|null>(null);
-  const [people,setPeople]=useState<FollowPerson[]>([]);
-  const [listOffset,setListOffset]=useState<number|null>(0);
-  const [listBusy,setListBusy]=useState(false);
-  const [listError,setListError]=useState('');
   useEffect(()=>{const changed=()=>{clearProfileImageCache();setProfile(null);setStatus('missing');};
     window.addEventListener('uorqui:blocks-updated',changed);
     return ()=>window.removeEventListener('uorqui:blocks-updated',changed);
@@ -271,7 +261,7 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
 
   useEffect(() => {
     const controller = new AbortController();
-    setStatus('loading');setListKind(null);setPeople([]);setListOffset(0);setFollowError('');
+    setStatus('loading');
     void fetch('/api/v1/profiles/' + encodeURIComponent(handle), { credentials: 'same-origin', signal: controller.signal })
       .then(async response => {
         if (response.status === 404) { setStatus('missing'); return; }
@@ -281,43 +271,6 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
       }).catch(() => { if (!controller.signal.aborted) setStatus('error'); });
     return () => controller.abort();
   }, [handle]);
-
-  async function toggleFollow(){
-    if(!profile||!onMessage||profile.mine||followBusy)return;
-    const current=profile.following;
-    setFollowBusy(true);setFollowError('');
-    try{
-      const res=await fetch('/api/v1/feed/follows/'+encodeURIComponent(profile.handle),{
-        method:current?'DELETE':'PUT',credentials:'same-origin',cache:'no-store'
-      });
-      if(!res.ok)throw Error((await res.json().catch(()=>({error:'FOLLOW_FAILED'})) as {error:string}).error);
-      setProfile(p=>p?{...p,following:!current,followersCount:Math.max(0,p.followersCount+(current?-1:1))}:p);
-    }catch(e){
-      setFollowError(e instanceof Error&&e.message==='PRIVATE_PROFILE'
-        ?(pt?'Este perfil privado só pode ser seguido por amigos.':'Only friends can follow this private profile.')
-        :(pt?'Não foi possível atualizar o acompanhamento.':'Could not update follow status.'));
-    }finally{setFollowBusy(false);}
-  }
-  async function loadFollowList(kind:FollowListKind,offset:number){
-    if(!profile||profile.isPrivate)return;
-    setListBusy(true);setListError('');
-    try{
-      const r=await fetch('/api/v1/profiles/'+encodeURIComponent(profile.handle)+'/follows/'+kind+'?offset='+offset,{
-        credentials:'same-origin',cache:'no-store'
-      });
-      if(!r.ok)throw Error('FOLLOW_LIST_FAILED');
-      const data=await r.json() as {users:FollowPerson[];nextOffset:number|null};
-      setPeople(old=>offset===0?data.users:[...old,...data.users.filter(p=>!old.some(x=>x.handle===p.handle))]);
-      setListOffset(data.nextOffset);
-    }catch{setListError(pt?'Não foi possível carregar a lista.':'Could not load the list.');}
-    finally{setListBusy(false);}
-  }
-  function selectFollowList(kind:FollowListKind){
-    if(!profile||profile.isPrivate)return;
-    if(listKind===kind){setListKind(null);return;}
-    setListKind(kind);setPeople([]);setListOffset(0);
-    void loadFollowList(kind,0);
-  }
 
   return <main className="min-h-dvh bg-background text-foreground">
     <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
@@ -345,50 +298,10 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
             <div><h1 className="text-2xl font-bold">{profile.displayName}</h1><p className="mt-1 text-sm text-muted-foreground">@{profile.handle}</p></div>
             <div className="flex flex-wrap items-center gap-2">
               {onMessage && <ContactToggleButton handle={profile.handle} />}
-              {!profile.mine&&<Button type="button" size="sm" variant={profile.following?'secondary':'outline'}
-                disabled={!onMessage||followBusy} loading={followBusy}
-                onClick={()=>void toggleFollow()} aria-pressed={profile.following}
-                title={!onMessage?(pt?'Entre na sua conta para seguir.':'Sign in to follow.'):undefined}>
-                {profile.following?(pt?'Seguindo':'Following'):(pt?'Seguir':'Follow')}
-              </Button>}
               {onMessage && <AccountBlockButton handle={profile.handle} onChanged={()=>{setProfile(null);setStatus('missing');}} />}
               <Button disabled={!onMessage} onClick={() => onMessage?.(profile.handle)} title={!onMessage ? (pt ? 'Entre na sua conta para conversar.' : 'Sign in to send a message.') : undefined}><MessageCircle className="size-4" />{pt ? 'Conversar' : 'Message'}</Button>
             </div>
           </div>
-          {followError&&<p role="alert" className="text-sm text-destructive">{followError}</p>}
-          <div className="flex flex-wrap gap-5">
-            {(['followers','following'] as const).map(kind=><button key={kind} type="button"
-              disabled={profile.isPrivate} onClick={()=>selectFollowList(kind)}
-              aria-expanded={!profile.isPrivate&&listKind===kind}
-              title={profile.isPrivate?(pt?'Lista privada':'Private list'):undefined}
-              className="flex flex-col items-start gap-0.5 text-left text-sm enabled:hover:text-primary disabled:cursor-default">
-              <strong className="text-base tabular-nums">{kind==='followers'?profile.followersCount:profile.followingCount}</strong>
-              <span className="text-xs text-muted-foreground">{kind==='followers'?(pt?'Seguidores':'Followers'):(pt?'Seguindo':'Following')}</span>
-            </button>)}
-          </div>
-          {profile.isPrivate&&<p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <LockKeyhole className="size-4"/>{pt?'As listas de seguidores e seguindo deste perfil são privadas.':'This account keeps follower and following lists private.'}
-          </p>}
-          {!profile.isPrivate&&listKind&&<section aria-label={listKind==='followers'?(pt?'Lista de seguidores':'Followers list'):(pt?'Lista de seguindo':'Following list')}
-            className="space-y-3 rounded-xl border border-border p-3">
-            <div className="flex items-center justify-between gap-2">
-              <strong className="text-sm">{listKind==='followers'?(pt?'Seguidores':'Followers'):(pt?'Seguindo':'Following')}</strong>
-              <button type="button" onClick={()=>setListKind(null)} className="text-xs text-muted-foreground">{pt?'Fechar':'Close'}</button>
-            </div>
-            {people.map(person=><a key={person.handle} href={'/@'+person.handle}
-              onClick={event=>navigateToPublicProfile(event,person.handle)}
-              className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted">
-              <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
-              <span className="min-w-0"><strong className="block truncate text-sm">{person.displayName}</strong>
-                <span className="text-xs text-muted-foreground">@{person.handle}</span></span>
-            </a>)}
-            {listError&&<p role="alert" className="text-xs text-destructive">{listError}</p>}
-            {!listBusy&&!listError&&!people.length&&<p className="text-xs text-muted-foreground">{pt?'Nenhuma conta pública para mostrar.':'No public accounts to display.'}</p>}
-            {listOffset!==null&&<Button variant="outline" size="sm" disabled={listBusy}
-              loading={listBusy} onClick={()=>void loadFollowList(listKind,listOffset)}>
-              {pt?'Carregar mais':'Load more'}
-            </Button>}
-          </section>}
           <Separator />
           {profile.isPrivate&&!profile.bio?<p className="flex items-center gap-2 text-sm text-muted-foreground">
             <LockKeyhole className="size-4"/>{pt?'Perfil privado':'Private profile'}
@@ -396,8 +309,6 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
           {profile.createdAt&&<p className="flex items-center gap-2 text-xs text-muted-foreground"><UserRound className="size-4" />{pt ? 'Membro desde ' : 'Member since '}{new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' }).format(new Date(profile.createdAt))}</p>}
         </CardContent>
       </Card>}
-      {status === 'ready' && profile && !profile.isPrivate &&
-        <PublicProfilePosts handle={profile.handle} canView={!!onMessage || profile.mine} />}
     </div>
   </main>;
 }
