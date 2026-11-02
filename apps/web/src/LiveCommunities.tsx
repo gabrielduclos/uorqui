@@ -64,7 +64,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
   const [voiceMinimized,setVoiceMinimized]=useState(false);
-  const [voiceTextExpanded,setVoiceTextExpanded]=useState(false);
+  const [voiceTextExpanded,setVoiceTextExpanded]=useState(true);
   const [voicePhase,setVoicePhase]=useState<VoicePhase>('idle');
   const voiceHostRef=useRef<HTMLDivElement|null>(null);
   useEffect(()=>{if(!active){setVoiceMinimized(true);if(voicePhase==='idle')setActiveVoiceRoom(null);}},[active,voicePhase]);
@@ -78,8 +78,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         'You are already connected to another room. Disconnect before joining another.');
       return;
     }
-    // Keep voice chat text collapsed on entry; allow users to expand on demand.
-    setVoiceTextExpanded(false);
+    // Show voice and text together when opening a room.
+    setVoiceTextExpanded(true);
     setActiveVoiceRoom(target);setVoiceMinimized(false);
   }
   const [voiceRooms,setVoiceRooms]=useState<Record<string,CommunityVoiceParticipant[]>>({});
@@ -805,9 +805,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.name}</h2>
             <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
         </header>
+        <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+          activeChannel.kind==='voice'&&voiceTextExpanded&&'lg:flex-row')}>
         {activeChannel.kind==='voice'&&(
-          <div ref={voiceHostRef} className={cn('relative flex min-h-0 flex-col overflow-hidden border-b border-border',
-            voiceTextExpanded?'h-[42%] min-h-36 shrink-0 sm:h-[48%]':'flex-1')}>
+          <div ref={voiceHostRef} className={cn('relative flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-border',
+            voiceTextExpanded?'h-[43%] shrink-0 sm:h-[46%] lg:h-full lg:w-[52%] lg:border-b-0 lg:border-r':'flex-1')}>
             {!voiceInline&&<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground">
               <Headphones className="size-9 text-primary"/>
               <p>{pt?'Entre e converse sem sair da comunidade.':'Join the conversation right inside your community.'}</p>
@@ -817,6 +819,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </div>}
           </div>
         )}
+        <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden',
+          activeChannel.kind==='voice'&&!voiceTextExpanded?'shrink-0':'flex-1')}>
         {activeChannel.kind==='voice'&&<button type="button" onClick={()=>{setVoiceTextExpanded(v=>!v);setMediaPicker(null);}}
           aria-expanded={voiceTextExpanded} aria-controls={voiceTextExpanded?'uorqui-voice-text-panel':undefined}
           className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 text-sm font-medium hover:bg-secondary"
@@ -828,7 +832,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           {voiceTextExpanded?<ChevronDown className="size-4 shrink-0"/>:<ChevronUp className="size-4 shrink-0"/>}
         </button>}
         {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind==='voice'?'uorqui-voice-text-panel':undefined}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             {!messages.length&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
@@ -907,6 +911,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'}/>
           </div>
         </div>}
+        </div>
+        </div>
       </>:<div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-xs"><Users className="mx-auto size-11 text-primary"/>
           <h3 className="mt-4 font-semibold">{pt?'Suas comunidades':'Your communities'}</h3>
