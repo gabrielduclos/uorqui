@@ -100,6 +100,15 @@ test('meeting and password routes are deployed and refuse unauthenticated access
   }
 });
 
+test('official Uorqui custom domain has ready API and authenticated meetings', { timeout: 120_000 }, async () => {
+  const official='https://uorqui.app';
+  const state=await ready(official);
+  assert.equal(state.data.status,'ready');
+  const channel='/api/v1/communities/00000000-0000-4000-8000-000000000001/channels/00000000-0000-4000-8000-000000000002/meeting';
+  const response=await request(official,channel);
+  assert.equal(response.status,401,'Official domain must reject anonymous meeting access');
+});
+
 test('production signup configuration and anonymous profile', { timeout: 120_000 }, async () => {
   const r = await request(frontend, '/api/v1/status');
   assert.equal(r.status, 200);
