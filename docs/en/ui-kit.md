@@ -13,7 +13,7 @@ The shared visual foundation for Uorqui's **Discover, direct messaging and commu
 - Activity shortcuts open the exact channel/room, without auto-connecting the microphone or acknowledging unread messages.
 - Helpful empty states for new users; no invented membership, activity or messages.
 - Primary navigation: **Discover · Messages · Communities**; Profile, notifications and settings remain accessible.
-- This is a **pending implementation specification**. The beta feed is legacy, not the future interface. See the [decision](discover.md).
+- **Initial implementation committed to code** (Discover page and navigation), pending visual testing on devices and deployment verification. The beta feed is legacy. See the [decision](discover.md).
 
 ## Theme design
 
