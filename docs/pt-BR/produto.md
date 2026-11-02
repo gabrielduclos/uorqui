@@ -2,11 +2,17 @@
 
 [Português](produto.md) · [English](../en/product.md)
 
-**Status:** planejamento. Este documento descreve requisitos, não funcionalidades já implementadas.
+**Status:** direção de produto aprovada em 02/11/2026, **ainda não implementada** no beta. As seções históricas identificadas como legado descrevem código existente e não definem a experiência futura.
+
+## Decisão de produto
+
+A nova experiência é **centrada em comunidades**, sem feed público/global de posts nem modo imersivo de vídeos em sequência. A tela inicial será **Descobrir**, dedicada a recomendações de comunidades e atividades **das comunidades em que a pessoa já participa**. Texto, fotos, vídeos, áudio, arquivos e links continuam disponíveis em conversas e canais.
+
+Especificação de comportamento, privacidade, migração e métricas: [Descobrir substitui o feed](descobrir.md). Esta atualização **não removeu o feed do código nem os dados existentes**.
 
 ## Navegação
 
-Áreas principais: **Feed**, **Conversas**, **Comunidades** e **Perfil**. Busca, notificações e configurações são globais. Versões mobile e desktop usam os mesmos conceitos, com layouts adaptados.
+Áreas principais: **Descobrir**, **Mensagens**, **Comunidades**. Perfil, busca, notificações e configurações continuam acessíveis por navegação secundária, com layouts mobile e desktop adaptados.
 
 ## 1. Mensageiro individual
 
@@ -15,33 +21,25 @@
 - Segurança: bloqueio, denúncia, solicitação de conversa, limites por usuário e permissões verificadas no servidor.
 - Diferenciar enviado, entregue, lido e falhou; não prometer criptografia ponta a ponta sem implementação e revisão.
 
-## 2. Feed híbrido
+## 2. Descobrir — tela inicial
 
-- **Rolagem vertical contínua** de publicações com alturas variáveis: texto, fotos, carrosséis e vídeos verticais/horizontais.
-- Publicações públicas podem levar às comunidades públicas relacionadas; conteúdo restrito permanece restrito.
-- Vídeos podem iniciar automaticamente **sem som** quando visíveis, somente um ativo por vez; pré-carregamento econômico.
-- Preservar a posição do feed ao abrir publicação, perfil ou vídeo imersivo e retornar.
-- Descoberta inicial: filtros **Para você** e **Seguindo**; classificação compreensível e simples antes de IA complexa.
+- **Acontecendo agora:** exibir atividades reais dos canais de texto e salas de voz de comunidades **das quais o usuário é membro**, com comunidade/canal, mensagens não lidas, presença autorizada e atalhos para o contexto correto. Não entrar numa chamada automaticamente.
+- **Comunidades recomendadas:** listar apenas comunidades públicas descobríveis, com busca por nome/interesses, categorias, descrição, foto e contagens reais. Recomendações inicialmente baseadas em critérios simples e transparentes; sem feed, posts ou ranking de vídeos.
+- **Sem comunidades:** priorizar busca e recomendações públicas com estados vazios claros, sem informações inventadas.
+- **Privacidade:** aplicar no backend autorizações para todas as atividades, buscas, prévias e contagens; respeitar comunidades privadas, permissões de canal e bloqueios.
+- **Atualizações:** aproveitar SSE/tempo real onde existente, fallback controlado e skeleton/spinner; nunca tratar atividade em segundo plano como leitura de mensagens.
+- **Ações:** abrir canal/sala, visitar comunidade, entrar, solicitar acesso ou aceitar convite conforme a regra de participação.
 
-## 3. Modo imersivo Vídeos
-
-- Acesso **direto** por atalho/filtro do feed e **ao abrir um vídeo elegível**.
-- A abertura a partir do feed começa pelo **vídeo selecionado**.
-- Experiência em tela cheia, **exclusivamente de vídeos**, com navegação vertical de um vídeo por vez; só termina quando o usuário sair.
-- Controles de compartilhamento, comentários, reações, perfil e comunidade autorizada.
-- Ao sair, restaurar a posição original do feed; acesso direto tem retorno coerente próprio.
-- **Vídeos é nome provisório. Não adotar “Reels” como nome oficial.**
-
-## 4. Comunidades
+## 3. Comunidades
 
 - Pública/aberta, pública com aprovação ou privada por convite.
 - Diversos **canais de texto** e **salas de voz**, cargos, permissões, convites, moderação e denúncias.
 - Voz poderá continuar ao navegar conforme limitações de sistema/navegador. Outras mídias devem iniciar silenciadas durante a sessão.
 - Usuários sem autorização nunca acessam canais, mídias, notificações nem resultados privados na busca.
 
-## 5. Integração
+## 4. Integração
 
-Uma pessoa encontra uma publicação pública, conhece o autor/comunidade, entra num canal ou sala autorizada e depois pode conversar individualmente. Conteúdos podem ser compartilhados em conversas privadas ou canais permitidos.
+Uma pessoa encontra uma comunidade pública em Descobrir, consulta os canais e atividades disponíveis, ingressa conforme a autorização, participa de uma conversa de texto/voz e depois pode iniciar uma conversa individual. Compartilhamento de mídias e links continua nos canais e nas mensagens privadas.
 
 ## Aceite de segurança e qualidade
 
@@ -90,7 +88,9 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - O acesso à mídia exige participação ativa na comunidade e mensagem não cancelada. A API verifica uploads e downloads individualmente, e os uploads só são aceitos com assinatura HMAC produzida pelo Worker.
 - A migração Drizzle `0018_community_message_attachments` adiciona campos de anexo às mensagens comunitárias e permite corpo vazio quando houver anexo. Deve estar aplicada na Neon antes de habilitar uploads em produção; as mensagens de texto existentes são preservadas.
 
-### Implementação inicial do feed (persistente)
+### Histórico do beta: implementação do feed (legado, substituição planejada)
+
+> **Registro técnico do que foi implementado anteriormente.** Os itens abaixo não representam a experiência futura. Não apagar posts, mídias, tabelas, endpoints ou links existentes sem plano de migração, retenção e rollback. Ver [decisão Descobrir](descobrir.md).
 
 - A aba Início agora renderiza a linha do tempo real por paginação baseada em cursor: **Para você** mostra publicações autorizadas (públicas, de amigos e próprias); **Seguindo** mostra publicações de contas seguidas explicitamente e próprias; seguir é independente de amizade.
 - Criar publicações de texto, até **6 imagens** em carrossel ou **1 vídeo** (limite de 50 MB por mídia), curtir/descurtir, comentar, editar e apagar a própria publicação; perfis privados exigem amizade e bloqueios entre contas ocultam o conteúdo.
@@ -101,7 +101,7 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - A migração `0020_feed_follows` cria relações de seguir unidirecionais. Perfis privados só podem ser seguidos por amizades aceitas, sem revelar publicações a terceiros; bloqueios prevalecem sobre a relação de seguir. Botões Seguir/Seguindo permitem alternar em cada publicação.
 - Próximas etapas: paginação dos comentários, algoritmos de descoberta, transcodificação de vídeos, denúncias, prévias, acessibilidade e limpeza periódica de mídias órfãs de uploads interrompidos.
 
-### Cache do feed, comentários e seguidores
+### Histórico do beta: cache do feed, comentários e seguidores (legado)
 
 - O feed fica montado ao navegar para Conversas, Comunidades e Perfil. Publicações, posição de rolagem, filtro, paginação e rascunho permanecem em **memória da aba**, separadamente por conta autenticada; sair da conta descarta a tela. **Textos de publicações não são gravados** no localStorage, IndexedDB, Service Worker ou cache persistente, protegendo conteúdos privados.
 - **Para você** e **Seguindo** mantêm listas independentes em memória. Após 30 segundos, revalidam com a API quando a tela volta a ficar ativa ou o aplicativo retorna ao primeiro plano, sem skeleton quando já houver dados. O cache temporário de imagens continua com autorização por acesso no Worker R2.
@@ -131,7 +131,7 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 
 ### Apresentação inicial e badges de comunidades
 
-- Na primeira entrada autenticada por conta, um **onboarding de quatro etapas** mostra, com a área real correspondente ao fundo: **Feed** (publicações, fotos e vídeos), **Mensagens** (conversas individuais), **Comunidades** (canais de texto e áudio) e **Foto de perfil** (escolher, recortar e salvar ou concluir sem foto). É possível pular a apresentação; a conclusão é memorizada por conta no dispositivo.
+- Na primeira entrada autenticada por conta, um **onboarding de quatro etapas** mostra, com a área real correspondente ao fundo: **Feed** (publicações, fotos e vídeos, no beta anterior; será substituído por Descobrir), **Mensagens** (conversas individuais), **Comunidades** (canais de texto e áudio) e **Foto de perfil** (escolher, recortar e salvar ou concluir sem foto). É possível pular a apresentação; a conclusão é memorizada por conta no dispositivo.
 - A foto do onboarding reutiliza o editor de recorte e o endpoint de mídia privada do perfil; pode ser trocada novamente no editor de Perfil.
 - Comunidades exibem **badges numéricos** nos canais de texto, nos ícones individuais de comunidade e na navegação principal mobile/desktop. Mensagens próprias e excluídas não contam; a leitura só é confirmada quando um canal de texto está aberto com as mensagens efetivamente carregadas. Um cursor de leitura por usuário e canal é persistido em PostgreSQL, funcionando entre dispositivos. A API autentica as leituras, exige associação à comunidade, valida origem e nunca retrocede a leitura.
 - Login e criação de conta usam layout mobile mais próximo das bordas, com links de recuperação e verificação realmente estilizados como links, compatíveis com temas claro e escuro.
