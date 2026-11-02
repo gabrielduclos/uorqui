@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
+import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -7,7 +7,7 @@ import { VoiceActivityMonitor } from './VoiceActivityMonitor';
 import { playVoiceRoomCue, unlockVoiceRoomAudio } from './communityVoiceSounds';
 
 export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;deafened:boolean;isSelf:boolean;speaking?:boolean};
-export type VoiceRoomTarget={communityId:string;channelId:string;communityName:string;channelName:string};
+export type VoiceRoomTarget={communityId:string;channelId:string;communityName:string;channelName:string;kind:'voice'|'meeting'};
 export type VoicePhase='idle'|'joining'|'joined';
 type VoicePeer=CommunityVoiceParticipant & {joinedAt:string};
 type VoiceSignal={id:string;senderSessionId:string;kind:'offer'|'answer'|'candidate';payload:RTCSessionDescriptionInit|RTCIceCandidateInit};
@@ -31,8 +31,8 @@ function ScreenTile({stream,label}:{stream:MediaStream;label:string}){
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
-export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange}:{
-  communityId:string;channelId:string;communityName:string;channelName:string;
+export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,kind='voice',mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange}:{
+  communityId:string;channelId:string;communityName:string;channelName:string;kind?:'voice'|'meeting';
   mode?:'expanded'|'floating';onMinimize?:()=>void;onRestore?:()=>void;onLeave?:()=>void;
   onPhaseChange?:(phase:VoicePhase)=>void;
   onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void;
@@ -50,6 +50,14 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [screenBusy,setScreenBusy]=useState(false);
   const [sharing,setSharing]=useState(false);
   const [screens,setScreens]=useState<Record<string,MediaStream>>({});
+  const [cameras,setCameras]=useState<Record<string,MediaStream>>({});
+  const [cameraOn,setCameraOn]=useState(false);
+  const [cameraBusy,setCameraBusy]=useState(false);
+  const [inviteOpen,setInviteOpen]=useState(false);
+  const [inviteHandle,setInviteHandle]=useState('');
+  const [inviteBusy,setInviteBusy]=useState(false);
+  const [inviteFeedback,setInviteFeedback]=useState('');
+  const meeting=kind==='meeting';
   const running=useRef(false);
   const disposed=useRef(false);
   const joining=useRef(false);
@@ -84,7 +92,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     const sessionId=selfSession.current;selfSession.current=null;
     for(const timer of timers.current)window.clearInterval(timer);
     screenRef.current?.getTracks().forEach(t=>{t.onended=null;t.stop();});screenRef.current=null;
-    screenSenders.current.clear();negotiations.current.clear();setSharing(false);setScreens({});setScreenBusy(false);
+    screenSenders.current.clear();negotiations.current.clear();setSharing(false);setScreens({});setScreenBusy(false);setCameras({});setCameraOn(false);setCameraBusy(false);
     timers.current=[];
     for(const pc of pcMap.current.values())pc.close();
     pcMap.current.clear();candidateQueue.current.clear();knownPeers.current.clear();
@@ -143,6 +151,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(pc){pc.close();pcMap.current.delete(id);}
     screenSenders.current.delete(id);negotiations.current.delete(id);
     setScreens(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
+    setCameras(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
     const audio=audioMap.current.get(id);
     if(audio){audio.pause();audio.srcObject=null;audio.remove();audioMap.current.delete(id);}
     candidateQueue.current.delete(id);
@@ -170,8 +179,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       if(!running.current)return;
       if(event.track.kind==='video'){
         const media=event.streams[0]??new MediaStream([event.track]);
-        const display=()=>{if(running.current)setScreens(old=>({...old,[id]:media}));};
-        const hide=()=>setScreens(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
+        const display=()=>{if(running.current){if(meeting)setCameras(old=>({...old,[id]:media}));else setScreens(old=>({...old,[id]:media}));}};
+        const hide=()=>{const update=(old:Record<string,MediaStream>)=>{if(!(id in old))return old;const next={...old};delete next[id];return next;};if(meeting)setCameras(update);else setScreens(update);};
         event.track.onunmute=display;event.track.onmute=hide;event.track.onended=hide;
         display();return;
       }
@@ -188,7 +197,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       voiceMonitor.current?.add(id,media);
       void element.play().catch(()=>{if(running.current)setAudioBlocked(true);});
     };
-    local.current?.getAudioTracks().forEach(track=>pc.addTrack(track,local.current!));
+    local.current?.getTracks().forEach(track=>pc.addTrack(track,local.current!));
     const video=screenRef.current?.getVideoTracks()[0];
     if(video&&screenRef.current)screenSenders.current.set(id,pc.addTrack(video,screenRef.current));
     if(initiator){
@@ -203,7 +212,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       }
     }
     return pc;
-  },[sendSignal,closePeer,pt]);
+  },[sendSignal,closePeer,pt,meeting]);
 
   const handleSignal=useCallback(async(signal:VoiceSignal)=>{
     if(!running.current||signal.senderSessionId===selfSession.current)return;
@@ -348,9 +357,16 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     let stream:MediaStream|null=null;
     try{
       if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection)throw Error('UNSUPPORTED');
-      stream=await navigator.mediaDevices.getUserMedia({
-        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false
-      });
+      const audio={echoCancellation:true,noiseSuppression:true,autoGainControl:true};
+      if(meeting){
+        try{stream=await navigator.mediaDevices.getUserMedia({audio,video:{facingMode:'user',width:{ideal:640},height:{ideal:360},frameRate:{ideal:15,max:24}}});}
+        catch(e){
+          if(e instanceof Error&&['NotAllowedError','NotFoundError','OverconstrainedError'].includes(e.name)){
+            stream=await navigator.mediaDevices.getUserMedia({audio,video:false});
+            setError(pt?'Câmera indisponível. Você pode participar apenas com áudio.':'Camera unavailable. You can join with audio only.');
+          }else throw e;
+        }
+      }else stream=await navigator.mediaDevices.getUserMedia({audio,video:false});
       if(disposed.current){stream.getTracks().forEach(track=>track.stop());return;}
       const sessionId=crypto.randomUUID();
       const result=await req<VoiceJoin>(base+'/join',json({sessionId}));
@@ -360,6 +376,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         return;
       }
       local.current=stream;selfSession.current=sessionId;
+      if(meeting&&stream.getVideoTracks().length){setCameraOn(true);setCameras(old=>({...old,[sessionId]:stream!}));}
       voiceMonitor.current=new VoiceActivityMonitor();voiceMonitor.current.add(sessionId,stream);
       config.current=result.rtc.iceServers;
       ownJoinedAt.current=result.peers.find(peer=>peer.sessionId===sessionId)?.joinedAt??new Date().toISOString();
@@ -404,6 +421,43 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(running.current&&!deafenedRef.current)playVoiceRoomCue('leave');
     stop();
     onLeave?.();
+  }
+  async function toggleCamera(){
+    if(!meeting||!running.current||!local.current||cameraBusy)return;
+    const current=local.current.getVideoTracks()[0];
+    if(current&&current.readyState==='live'){
+      current.enabled=!current.enabled;setCameraOn(current.enabled);return;
+    }
+    setCameraBusy(true);
+    try{
+      const capture=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:360},frameRate:{ideal:15,max:24}},audio:false});
+      const track=capture.getVideoTracks()[0];
+      if(!track||!running.current||!local.current){capture.getTracks().forEach(t=>t.stop());return;}
+      local.current.addTrack(track);
+      if(selfSession.current)setCameras(old=>({...old,[selfSession.current!]:local.current!}));
+      for(const [id,pc] of pcMap.current){if(pc.signalingState!=='closed'){pc.addTrack(track,local.current);void renegotiate(id);}}
+      setCameraOn(true);setError('');
+    }catch{setError(pt?'Não foi possível ativar a câmera. Verifique a permissão.':'Could not enable camera. Check permissions.');}
+    finally{setCameraBusy(false);}
+  }
+  const meetingUrl=()=>new URL('/?community='+encodeURIComponent(communityId)+'&channel='+encodeURIComponent(channelId),window.location.origin).toString();
+  async function copyMeetingUrl(){
+    try{await navigator.clipboard.writeText(meetingUrl());setInviteFeedback(pt?'Link copiado.':'Link copied.');}
+    catch{setInviteFeedback(pt?'Copie o endereço: ':'Copy the address: ')+meetingUrl();}
+  }
+  async function sendMeetingInvite(){
+    const handle=inviteHandle.trim().replace(/^@/,'').toLowerCase();
+    if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)||inviteBusy)return;
+    setInviteBusy(true);setInviteFeedback('');
+    try{
+      const started=await req<{conversation:{id:string}}>('/api/v1/dm/conversations',json({handle}));
+      await req('/api/v1/dm/conversations/'+started.conversation.id+'/messages',json({
+        body:(pt?'Convite para reunião: ':'Meeting invitation: ')+channelName+'\n'+meetingUrl(),clientId:crypto.randomUUID()
+      }));
+      setInviteFeedback(pt?'Convite enviado pelo mensageiro do Uorqui.':'Invite sent in Uorqui Messenger.');
+      setInviteHandle('');
+    }catch{setInviteFeedback(pt?'Não foi possível enviar. Confira o @usuário e as permissões de mensagens.':'Could not send invite. Check the @handle and messaging permissions.');}
+    finally{setInviteBusy(false);}
   }
   function toggleMute(){
     if(deafenedRef.current)return;
