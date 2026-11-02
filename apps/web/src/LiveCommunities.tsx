@@ -59,6 +59,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [detail,setDetail]=useState<Detail|null>(null);
   const [channelId,setChannelId]=useState<string|null>(null);
   const requestedChannel=useRef<{communityId:string;channelId:string}|null>(null);
+  const externalSelection=useRef(false);
   const [channelOpen,setChannelOpen]=useState(false);
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
@@ -162,7 +163,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     let active=true;
     void loadList().then(groups=>{
       if(!active)return;
-      // Do not let a first-load response override an invite accepted during this load.
+      // Do not let a first-load response override a user navigation from Discover.
+      if(externalSelection.current)return;
       if(initialCommunityId&&groups.some(g=>g.id===initialCommunityId&&g.myRole)){
         setSelectedId(initialCommunityId);
         setDiscovery(false);
@@ -188,6 +190,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       if(!target||typeof target.communityId!=='string'||!/^[0-9a-f-]{36}$/i.test(target.communityId))return;
       const selectedChannel=typeof target.channelId==='string'&&/^[0-9a-f-]{36}$/i.test(target.channelId)
         ?target.channelId:null;
+      externalSelection.current=true;
       requestedChannel.current=selectedChannel?{communityId:target.communityId,channelId:selectedChannel}:null;
       setSelectedId(target.communityId);
       setDiscovery(false);setCreateOpen(false);setError('');setNotice('');
