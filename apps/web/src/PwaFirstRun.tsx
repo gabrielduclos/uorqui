@@ -33,14 +33,23 @@ export function PwaFirstRun({accountId}:{accountId:string}){
     return()=>window.clearTimeout(timer);
   },[accountId]);
   useEffect(()=>{
-    if(!accountId||installVisible||!push.supported||push.status==='ready'||
-      Notification.permission!=='default')return;
+    if(!accountId||installVisible||!push.supported||push.status==='ready'||push.status==='busy'){
+      setAskPush(false);return;
+    }
     const id='uorqui:social:push-ask:'+accountId;
-    try{if(localStorage.getItem(id)==='done')return;}catch{}
-    setAskPush(true);
+    try{if(localStorage.getItem(id)===today())return;}catch{}
+    // Ask at most once per local day, and only after the push state is checked.
+    const timer=window.setTimeout(()=>{
+      try{
+        if(localStorage.getItem(id)===today())return;
+        localStorage.setItem(id,today());
+      }catch{}
+      setAskPush(true);
+    },1600);
+    return()=>window.clearTimeout(timer);
   },[accountId,installVisible,push.status,push.supported]);
   function dismissPush(){
-    try{localStorage.setItem('uorqui:social:push-ask:'+accountId,'done');}catch{}
+    try{localStorage.setItem('uorqui:social:push-ask:'+accountId,today());}catch{}
     setAskPush(false);
   }
   async function install(){
@@ -54,7 +63,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
   }
   async function turnOn(){
     setBusy(true);
-    try{await push.enable();if(Notification.permission!=='default')dismissPush();}
+    try{await push.enable();if(Notification.permission==='granted')dismissPush();}
     finally{setBusy(false);}
   }
   const installing=installVisible&&!installedPwa();
@@ -70,7 +79,9 @@ export function PwaFirstRun({accountId}:{accountId:string}){
         <h2 className="text-sm font-semibold">{installing?(pt?'Instale o Uorqui':'Install Uorqui'):(pt?'Ative as notificações':'Enable notifications')}</h2>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">{installing
           ?pt?'Acesse o Uorqui direto da tela inicial, como um aplicativo.':'Add Uorqui to your home screen.'
-          :pt?'Receba avisos de novas mensagens mesmo com o aplicativo fechado.':'Get message alerts even when the app is closed.'}</p>
+          :Notification.permission==='denied'
+            ?(pt?'As notificações estão bloqueadas. Libere o Uorqui nas configurações do navegador ou dispositivo.':'Notifications are blocked. Allow Uorqui in browser or device settings.')
+            :(pt?'Receba avisos de mensagens, amizades e atividades mesmo com o aplicativo fechado.':'Get alerts for messages, friends and activity when the app is closed.')}</p>
       </div>
       <button type="button" onClick={installing?()=>setInstallVisible(false):dismissPush}
         className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-muted" aria-label={pt?'Agora não':'Not now'}><X className="size-4"/></button>
@@ -81,9 +92,11 @@ export function PwaFirstRun({accountId}:{accountId:string}){
       <p className="mt-3 text-xs text-muted-foreground">
         {iosBrowser()?(pt?'No iPhone, abra Compartilhar e escolha Adicionar à Tela de Início.':'On iPhone, choose Share, then Add to Home Screen.'):
           (pt?'Use a opção Instalar aplicativo no menu do navegador.':'Use Install app in your browser menu.')}
-      </p>):<Button type="button" disabled={busy||push.status==='busy'} onClick={()=>void turnOn()} className="mt-3 w-full gap-2">
+      </p>):Notification.permission==='denied'?null:<Button type="button" disabled={busy||push.status==='busy'} onClick={()=>void turnOn()} className="mt-3 w-full gap-2">
       {busy?<Spinner className="size-4"/>:<Bell className="size-4"/>}{pt?'Ativar notificações':'Enable notifications'}
     </Button>}
+    {permission&&Notification.permission==='denied'&&<p className="mt-3 text-xs text-muted-foreground">
+      {pt?'Após liberar a permissão, abra o Uorqui novamente para ativar o push.':'After allowing notifications, reopen Uorqui to enable push.'}</p>}
     {push.error&&<p role="alert" className="mt-2 text-xs text-destructive">{push.error}</p>}
   </section>;
 }
