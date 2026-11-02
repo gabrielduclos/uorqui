@@ -11,7 +11,6 @@ import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
 import { clearProfileImageCache } from './profileImageCache';
 import { clearChatMediaCache } from './chatMediaCache';
-import { clearFeedSessionCache } from './feedSessionCache';
 import { deactivatePush } from './useSocialPush';
 import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
@@ -108,12 +107,6 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
 
-  useEffect(()=>{
-    const onBlocksChanged=()=>clearFeedSessionCache();
-    window.addEventListener('uorqui:blocks-updated',onBlocksChanged);
-    return ()=>window.removeEventListener('uorqui:blocks-updated',onBlocksChanged);
-  },[]);
-
   useEffect(() => {
     const onNavigation = () => {
       setPublicHandle(publicProfileHandle(window.location.pathname));
@@ -178,7 +171,7 @@ function AppContent() {
     return ()=>{active=false;};
   },[account?.profile,inviteToken]);
   const onAuthenticated = useCallback((next: Account) => {
-    clearChatMediaCache();clearFeedSessionCache();setAccount(next);
+    clearChatMediaCache();setAccount(next);
   }, []);
   const signOut = useCallback(async () => {
     // Revoke the authenticated subscription before ending the session.
@@ -192,7 +185,6 @@ function AppContent() {
     if (!response.ok) throw new Error('Logout failed');
     clearProfileImageCache();
     clearChatMediaCache();
-    clearFeedSessionCache();
     setAccount(null);
     setInvitedCommunity(null);
   }, []);

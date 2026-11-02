@@ -17,7 +17,6 @@ import { ProfileEditor, type UserProfileData } from './UserProfiles';
 import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
 import LiveCommunities from './LiveCommunities';
-import LiveFeed from './LiveFeed';
 import DiscoverHome from './DiscoverHome';
 import ModerationPanel from './ModerationPanel';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
@@ -31,7 +30,7 @@ export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: UserProfileData | null;
 };
-type Area = 'discover' | 'feed' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
+type Area = 'discover' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
 
 const navigation = [
   { id: 'discover', label: 'Descobrir', icon: Compass },
@@ -65,7 +64,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       .catch(()=>{if(!controller.signal.aborted)setPlatformModerator(false);});
     return ()=>controller.abort();
   },[account.user.id]);
-  const [feedTyping,setFeedTyping]=useState(false);
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
   const unreadMessageCount = useUnreadDirectMessages();
   const communityUnread = useCommunityUnread();
@@ -96,19 +94,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     window.addEventListener('uorqui:open-dm', listener);
     return () => window.removeEventListener('uorqui:open-dm', listener);
   }, []);
-  useEffect(()=>{
-    const openSharedPost=(event:Event)=>{
-      const id=(event as CustomEvent<string>).detail;
-      if(typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id))return;
-      setFeedTyping(false);
-      setArea('feed');
-    };
-    window.addEventListener('uorqui:open-feed-post',openSharedPost);
-    return ()=>window.removeEventListener('uorqui:open-feed-post',openSharedPost);
-  },[]);
 
   const move=useCallback((next: Area) => {
-    setFeedTyping(false);
     setArea(next);
     setConversationOpened(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
@@ -140,10 +127,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
   function openActivity(item:ActivityNotification){
     void activity.markRead(item.id);
-    if((item.kind==='post_like'||item.kind==='post_comment')&&/^[0-9a-f-]{36}$/i.test(item.targetId)){
-      move('feed');
-      window.dispatchEvent(new CustomEvent('uorqui:open-feed-post',{detail:item.targetId}));
-    }else if(/^[a-z][a-z0-9_]{2,31}$/.test(item.actorHandle)){
+    if(/^[a-z][a-z0-9_]{2,31}$/.test(item.actorHandle)){
       window.history.pushState({uorquiInternalProfile:true},'','/@'+item.actorHandle);
       window.dispatchEvent(new PopStateEvent('popstate'));
     }
@@ -222,13 +206,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               <DiscoverHome active={area==='discover'} unreadLocations={communityUnread.locations}
                 onOpenCommunity={openDiscoveryCommunity}/>
             </div>
-            {/* Legacy posts remain reachable via existing deep links while the migration is audited. */}
-            <div hidden={area!=='feed'} className="h-full min-h-0">
-              <LiveFeed key={account.user.id} userId={account.user.id} active={area==='feed'}
-                ownName={account.profile?.displayName??account.user.name}
-                ownAvatar={account.profile?.avatarUrl??null}
-                onCommentFocusChange={setFeedTyping}/>
-            </div>
             {/* A persistent mount keeps the microphone, signaling and room state alive
                 when switching between Discover, Messages, Profile and Communities. */}
             <div hidden={area!=='communities'} className="h-full min-h-0">
@@ -238,7 +215,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
             </div>
-            {area!=='discover'&&area!=='feed'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
+            {area!=='discover'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
               transition={{duration:0.16}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
@@ -292,7 +269,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           </section>
         </div>}
 
-        {!showSubpage && !feedTyping && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
+        {!showSubpage && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
             const Icon = item.icon;
             return <Button data-uorqui-tour-target={item.id} key={item.id} variant="ghost" onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('flex h-16 min-w-0 flex-1 flex-col gap-1 rounded-none px-1 text-[11px] font-medium', area === item.id ? 'text-primary' : 'text-muted-foreground')}
