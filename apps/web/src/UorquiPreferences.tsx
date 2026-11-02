@@ -4,7 +4,7 @@ export type Locale = 'pt-BR' | 'en';
 export type Theme = 'dark' | 'light';
 
 const en: Record<string, string> = {
-  'Início': 'Home', 'Conversas': 'Messages', 'Comunidades': 'Communities', 'Perfil': 'Profile',
+  'Início': 'Home', 'Descobrir': 'Discover', 'Conversas': 'Messages', 'Comunidades': 'Communities', 'Perfil': 'Profile',
   'UI Kit': 'UI Kit', 'Sua conta': 'Your account', 'Acesso à conta': 'Account access',
   'Navegação principal': 'Main navigation', 'Abrir meu perfil': 'Open my profile',
   'Uorqui — ir para o início': 'Uorqui — go home', 'Uorqui — voltar ao início': 'Uorqui — back home',
