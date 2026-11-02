@@ -1,7 +1,9 @@
 import {useEffect,useState} from 'react';
 
-type Unread={total:number;channels:Record<string,number>;communities:Record<string,number>};
-const empty:Unread={total:0,channels:{},communities:{}};
+export type UnreadLocation={communityId:string;communityName:string;channelId:string;channelName:string;
+  channelKind:'text'|'voice';count:number};
+type Unread={total:number;channels:Record<string,number>;communities:Record<string,number>;locations:UnreadLocation[]};
+const empty:Unread={total:0,channels:{},communities:{},locations:[]};
 
 /** A single signed-in poller powers badges in the app navigation and channel lists. */
 export function useCommunityUnread(){
@@ -15,7 +17,8 @@ export function useCommunityUnread(){
         if(!res.ok)throw Error('UNREAD_UNAVAILABLE');
         const data=await res.json() as Unread;
         if(mounted&&id===requestId)setUnread({
-          total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{}
+          total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{},
+          locations:Array.isArray(data.locations)?data.locations:[]
         });
       }catch{/* Keep the last known badge if offline or if migration is pending. */}
     };
@@ -29,7 +32,8 @@ export function useCommunityUnread(){
         const channels={...old.channels},communities={...old.communities};
         delete channels[ids.channelId];
         communities[ids.communityId]=Math.max(0,(communities[ids.communityId]??0)-previous);
-        return {total:Math.max(0,old.total-previous),channels,communities};
+        return {total:Math.max(0,old.total-previous),channels,communities,
+          locations:old.locations.filter(location=>location.channelId!==ids.channelId)};
       });
       void refresh();
     };
