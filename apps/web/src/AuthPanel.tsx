@@ -376,6 +376,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     });
   }
 
+  const validHandle = /^[a-z][a-z0-9_]{2,31}$/.test(handle);
   const inputClass = 'min-h-12 w-full rounded-lg border border-input bg-background px-3.5 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40';
   const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
   const minorButton = 'w-full min-h-11 rounded-lg px-4 py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
@@ -425,10 +426,23 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
           </div>
           {!account.profile && (
             <form onSubmit={completeProfile} className="space-y-3">
-              <p className="text-sm text-muted-foreground">{t("Escolha um nome de usuário para concluir seu perfil.")}</p>
-              <Label className="block text-sm font-medium" htmlFor="handle">{t("Nome de usuário")}</Label>
-              <Input id="handle" className={inputClass} placeholder="seu_usuario" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[a-z][a-z0-9_]{2,31}" required minLength={3} maxLength={32} autoComplete="username" />
-              <Label className="block text-sm font-medium" htmlFor="displayName">{t('Nome exibido')}</Label>
+              <p className="text-sm text-muted-foreground">{t("Seu @usuário (username) é único. É como outras pessoas vão encontrar seu perfil no Uorqui.")}</p>
+              <Label className="block text-sm font-medium" htmlFor="handle">{t("@usuário (username)")}</Label>
+              <div className="relative">
+                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-base font-semibold text-muted-foreground">@</span>
+                <Input id="handle" className={inputClass + ' pl-9'} placeholder="seu_usuario" value={handle}
+                  onChange={(e) => setHandle(e.target.value.trimStart().replace(/^@+/, '').toLowerCase())}
+                  inputMode="text" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  pattern="[a-z][a-z0-9_]{2,31}" required minLength={3} maxLength={32} autoComplete="username"
+                  aria-describedby="handle-help" aria-invalid={handle.length>0&&!validHandle} />
+              </div>
+              <p id="handle-help" className="text-xs leading-5 text-muted-foreground">
+                {t("Use de 3 a 32 caracteres. Comece com uma letra e use apenas letras sem acentos, números ou _. As maiúsculas viram minúsculas automaticamente.")}
+              </p>
+              {handle.length>0&&<p role="status" className={validHandle?'text-xs text-primary':'text-xs text-destructive'}>
+                {validHandle?t("Seu perfil será:"):t("Confira as regras do @usuário acima.")} {validHandle&&<strong>@{handle}</strong>}
+              </p>}
+              <Label className="block text-sm font-medium" htmlFor="displayName">{t('Nome exibido (pode ter espaços)')}</Label>
               <Input id="displayName" className={inputClass} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} maxLength={120} />
               <Button type="submit" disabled={busy||(view==='register'&&(!termsAccepted||!privacyRead))} aria-busy={busy} className={buttonClass}>{busy ? <><Spinner /> {t('Salvando…')}</> : t("Criar meu perfil")}</Button>
             </form>
@@ -455,8 +469,9 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
             <form className="space-y-4" onSubmit={view === 'forgot' ? requestRecovery : view === 'reset' ? completePasswordReset : authenticate}>
               {view === 'register' && (
                 <div>
-                  <Label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium" htmlFor="auth-name"><UserRound className="size-4 text-muted-foreground"/>{t('Seu nome')}</Label>
+                  <Label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium" htmlFor="auth-name"><UserRound className="size-4 text-muted-foreground"/>{t('Seu nome (nome exibido)')}</Label>
                   <Input id="auth-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="name" placeholder={t('Como devemos chamar você?')} />
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('Depois de criar sua conta, você poderá escolher seu @usuário (username), que é diferente do nome exibido.')}</p>
                 </div>
               )}
               {view !== 'reset' && <div>
