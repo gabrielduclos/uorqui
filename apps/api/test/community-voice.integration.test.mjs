@@ -23,6 +23,7 @@ function visitor(){
   let cookie='';
   return async(path,method='GET',payload,withOrigin=true)=>{
     const response=await fetch(base+path,{
+      signal:AbortSignal.timeout(12000),
       method,headers:{...(withOrigin?{origin}:{}),...(payload?{'Content-Type':'application/json'}:{}),...(cookie?{cookie}:{})},
       ...(payload?{body:JSON.stringify(payload)}:{})
     });
