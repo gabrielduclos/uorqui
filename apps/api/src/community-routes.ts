@@ -214,9 +214,9 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'FROM community_channels ch JOIN communities c ON c.id=ch.community_id '+
         'JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$1 '+
         'LEFT JOIN community_channel_reads rd ON rd.channel_id=ch.id AND rd.user_id=$1 '+
-        "WHERE (ch.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
         'LEFT JOIN community_messages msg ON msg.channel_id=ch.id AND msg.author_id<>$1 '+
         'AND msg.deleted_at IS NULL AND msg.created_at>GREATEST(m.joined_at,COALESCE(rd.last_read_at,m.joined_at)) '+
+        "WHERE (ch.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
         "GROUP BY ch.community_id,ch.id,c.name ORDER BY c.name,ch.name",[me]);
       const channels:Record<string,number>={},communities:Record<string,number>={};
       const locations:Array<{communityId:string;communityName:string;channelId:string;channelName:string;channelKind:string;count:number}>=[];
