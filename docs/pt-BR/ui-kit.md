@@ -13,7 +13,7 @@ Definir a linguagem visual compartilhada do Uorqui para **Descobrir, mensagens i
 - Atalhos de atividade abrem o contexto exato, sem conectar o microfone automaticamente ou marcar mensagens como lidas.
 - Estados vazios úteis para novos usuários; nunca inventar membros, atividade ou conversas.
 - Navegação principal: **Descobrir · Mensagens · Comunidades**; Perfil, notificações e ajustes continuam acessíveis.
-- Esta é uma **especificação de implementação pendente**; o feed do beta é legado, não deve ser apresentado como interface futura. Ver [decisão](descobrir.md).
+- **Implementação inicial adicionada ao código** (tela Descobrir e navegação); validação visual em dispositivos e deploy ainda pendentes. O feed do beta é legado. Ver [decisão](descobrir.md).
 
 ## Identidade da marca
 
