@@ -147,12 +147,20 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       await Promise.all([...pcMap.current.values()].flatMap(pc=>
         pc.getSenders().filter(sender=>sender.track?.kind==='audio')
           .map(sender=>sender.replaceTrack(replacement).catch(()=>{}))));
-      const previous=local.current;
-      local.current=stream;
+      // Replace only the microphone. The video track stays live in the same
+      // MediaStream, even when iOS interrupts and restores microphone capture.
+      const current=local.current;
+      if(!running.current||!selfSession.current||!current){
+        replacement.stop();return;
+      }
+      for(const old of current.getAudioTracks()){
+        current.removeTrack(old);
+        old.onmute=null;old.onunmute=null;old.onended=null;old.stop();
+      }
+      current.addTrack(replacement);
       watchMic(replacement);
       voiceMonitor.current?.remove(selfSession.current);
-      voiceMonitor.current?.add(selfSession.current,stream);
-      previous?.getTracks().forEach(t=>{t.onmute=null;t.onunmute=null;t.onended=null;t.stop();});
+      voiceMonitor.current?.add(selfSession.current,current);
       setMicInterrupted(false);
     }catch{
       stream?.getTracks().forEach(t=>t.stop());
