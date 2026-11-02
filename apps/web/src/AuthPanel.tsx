@@ -439,7 +439,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         <div className="space-y-3">
           <Button type="button" onClick={() => navigate('register')} className={buttonClass}>{t('Criar conta')}</Button>
           <Button type="button" onClick={() => navigate('login')} variant="outline" className={minorButton}>{t("Entrar com uma conta existente")}</Button>
-          {apiChecked && !apiReady && <div role="status" className="space-y-2 text-sm text-amber-600 dark:text-amber-200"><p>{t("O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.")}</p><Button type="button" variant="outline" size="sm" onClick={() => void checkApi()}>{t("Tentar novamente")}</Button></div>}
+          {apiChecked && !apiReady && <div role="status" className="space-y-2 text-sm text-amber-600 dark:text-amber-200"><p>{t("O servidor está temporariamente indisponível. Você ainda pode conhecer os formulários.")}</p><Button type="button" variant="outline" size="sm" onClick={retryConnection}>{t("Tentar novamente")}</Button></div>}
         </div>
       ) : (
         <div className="space-y-4">
