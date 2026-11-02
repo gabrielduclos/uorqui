@@ -84,6 +84,8 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const [status, setStatus] = useState<ApiStatus>({});
   const [apiReady, setApiReady] = useState(false);
   const [apiChecked, setApiChecked] = useState(false);
+  // Render Free can take about a minute to wake after an idle period.
+  const [apiRetryStep, setApiRetryStep] = useState(0);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -137,18 +139,35 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       const available = statusResponse.response.ok && readiness.response.ok;
       setApiReady(available);
       setStatus(statusResponse.response.ok ? statusResponse.body as ApiStatus : {});
+      if (available) {
+        // Recover an already open login screen without requiring a reload.
+        setMessage(previous => previous === t("Não foi possível acessar a API. Tente novamente mais tarde.") ? '' : previous);
+        void refresh();
+      }
     } catch {
       setApiReady(false);
       setStatus({});
     } finally {
       setApiChecked(true);
     }
-  }, []);
+  }, [refresh, t]);
 
   useEffect(() => {
     void refresh();
     void checkApi();
   }, [refresh, checkApi]);
+
+  useEffect(() => {
+    // Short probes keep the form responsive. Rechecks run quietly after a
+    // cold start rather than permanently declaring the server unavailable.
+    if (!apiChecked || apiReady || apiRetryStep >= 5) return;
+    const delays = [3000, 6000, 12000, 20000, 30000];
+    const timer = window.setTimeout(() => {
+      setApiRetryStep(current => current + 1);
+      void checkApi();
+    }, delays[apiRetryStep]);
+    return () => window.clearTimeout(timer);
+  }, [apiChecked, apiReady, apiRetryStep, checkApi]);
 
   // Turnstile is rendered only for forms requiring a public anti-bot challenge.
   useEffect(() => {
@@ -383,7 +402,9 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       </div>}
 
       {apiChecked&&!apiReady&&!account&&!loading&&<div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/35 bg-amber-500/10 p-3 text-sm">
-        <span>{t('Servidor indisponível. Tente novamente.')}</span>
+        <span>{apiRetryStep < 5
+          ? t('Conectando ao servidor… A primeira conexão pode demorar um pouco.')
+          : t('Servidor indisponível. Tente novamente.')}</span>
         <Button type="button" variant="outline" size="sm" onClick={()=>void checkApi()}>{t('Tentar novamente')}</Button>
       </div>}
       {loading ? (
