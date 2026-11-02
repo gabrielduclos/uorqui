@@ -225,7 +225,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
                 initialCommunityId={invitedCommunityId}
-                unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}/>
+                unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
+                unreadLocations={communityUnread.locations}/>
             </div>
             {area!=='feed'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
               transition={{duration:0.16}} className="h-full min-h-0 overflow-hidden">
