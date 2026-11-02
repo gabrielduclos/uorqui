@@ -91,12 +91,22 @@ test('meeting and password routes are deployed and refuse unauthenticated access
     const meeting=await request(origin,base+'/meeting');
     assert.equal(meeting.status,401,
       'Meeting API not ready at '+origin+': '+meeting.status+' '+JSON.stringify(meeting.data));
-    const unlock=await request(origin,base+'/unlock',{
-      method:'POST',headers:{origin:frontend,'content-type':'application/json'},
-      body:JSON.stringify({password:'test-only-no-actual-member'})
-    });
-    assert.equal(unlock.status,401,
-      'Channel unlock API not ready at '+origin+': '+unlock.status+' '+JSON.stringify(unlock.data));
+    // The preview Worker and the custom domain may have different allowed
+    // browser origins. A 403 must be explicitly the server's origin guard,
+    // never an authentication bypass or a route-not-found response.
+    let originAccepted=false;
+    const observations=[];
+    for (const browserOrigin of [...new Set([frontend,'https://uorqui.app'])]) {
+      const unlock=await request(origin,base+'/unlock',{
+        method:'POST',headers:{origin:browserOrigin,'content-type':'application/json'},
+        body:JSON.stringify({password:'test-only-no-actual-member'})
+      });
+      observations.push({browserOrigin,status:unlock.status,error:unlock.data?.error});
+      if(unlock.status===401)originAccepted=true;
+      else assert.equal(unlock.status===403&&unlock.data?.error==='Invalid origin',true,
+        'Unexpected protected-channel response on '+origin+': '+JSON.stringify(observations));
+    }
+    assert.equal(originAccepted,true,'Neither known Uorqui origin is allowed to unlock a channel at '+origin+': '+JSON.stringify(observations));
   }
 });
 
