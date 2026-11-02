@@ -6,6 +6,7 @@ import { Copy, MapPin, MoreHorizontal, Pencil, Reply, Trash2 } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DemoAttachmentView, type DemoAttachment, type DemoLocation } from './DemoMessageComposer';
+import { MessageText } from './MessageText';
 
 /** Local preview data only. Production messaging will use its own API-backed message model. */
 export type DemoMessage = {
@@ -169,7 +170,7 @@ export function DemoChatBubble({ message, quoted, onReply, onEdit, onDelete, onL
           <span className="block font-semibold">{quoted ? quoted.mine ? t('Você') : t('Contato') : t('Mensagem anterior')}</span>
           <span className="mt-0.5 block max-w-full truncate opacity-80">{quoted ? messagePreview(quoted) : t("Mensagem indisponível")}</span>
         </button>}
-        {message.text && <p className="wrap-break-word whitespace-pre-wrap leading-6">{message.text}</p>}
+        {message.text && <p className="wrap-break-word whitespace-pre-wrap leading-6"><MessageText text={message.text}/></p>}
         {message.attachment && <DemoAttachmentView attachment={message.attachment} onOpenMedia={onOpenMedia} />}
         {message.location && <DemoLocationCard location={message.location} />}
         <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', message.mine ? 'text-white/75' : 'text-muted-foreground')}>
