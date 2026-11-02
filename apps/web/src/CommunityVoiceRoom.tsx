@@ -450,8 +450,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)||inviteBusy)return;
     setInviteBusy(true);setInviteFeedback('');
     try{
-      const started=await req<{conversation:{id:string}}>('/api/v1/dm/conversations',json({handle}));
-      await req('/api/v1/dm/conversations/'+started.conversation.id+'/messages',json({
+      const started=await req<{id:string}>('/api/v1/dm/conversations',json({handle}));
+      await req('/api/v1/dm/conversations/'+started.id+'/messages',json({
         body:(pt?'Convite para reunião: ':'Meeting invitation: ')+channelName+'\n'+meetingUrl(),clientId:crypto.randomUUID()
       }));
       setInviteFeedback(pt?'Convite enviado pelo mensageiro do Uorqui.':'Invite sent in Uorqui Messenger.');
