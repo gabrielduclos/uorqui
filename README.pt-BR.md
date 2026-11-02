@@ -14,7 +14,7 @@ O Uorqui reúne três experiências:
 
 - **Conversas individuais:** mensagens privadas 1:1, respostas, reações, anexos, estados de mensagens, push e atualização em tempo real via SSE. Não há grupos tradicionais no mensageiro.
 - **Descobrir:** tela inicial sem publicações globais, com recomendações de comunidades públicas, busca e atividades das comunidades das quais o usuário participa. O feed antigo foi retirado da interface, API e PostgreSQL em 02/11/2026.
-- **Comunidades:** participação pública/privada, convites, canais de texto, moderação e salas de voz via WebRTC, com chamada minimizável durante a navegação.
+- **Comunidades:** participação pública/privada, convites, canais de texto, moderação, salas de voz e **reuniões com áudio e vídeo** (até seis pessoas), convites por link ou mensagem do Uorqui, aprovação de entrada, notificações push de solicitações e canais protegidos por senha.
 
 O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 
@@ -28,9 +28,9 @@ O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 | Mensageiro | Conversas 1:1 persistidas, anexos, reações, estados de leitura/entrega, SSE e Web Push implementados |
 | Feed antigo | Removido do app, API e PostgreSQL; preservados snapshots de recuperação na Neon e quatro mídias no R2 |
 | Descobrir | Recomendações de comunidades públicas, busca e atividades autorizadas; API validada em produção, testes em aparelhos pendentes |
-| Comunidades | Membros, convites, cargos, canais de texto, presença e voz WebRTC |
+| Comunidades | Canais de texto, voz e reunião em vídeo; aprovação, convites, senhas por canal e solicitações push; API verificada em produção, mídia ainda pendente em dispositivos reais |
 | Infraestrutura | PWA React no Worker `main` da Cloudflare, API Fastify no Render e PostgreSQL na Neon |
-| Lançamento amplo | **Ainda pendente:** testes reais no iOS/Android, push, TURN/redes diferentes, monitoramento e testes de PWA instalado após a troca do domínio |
+| Lançamento amplo | **Ainda pendente:** testes de câmera/microfone no iOS/Android, entrega de push, TURN/redes diferentes, monitoramento e testes de PWA instalado após a troca do domínio |
 
 Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes aprovados não substituem validação do PWA instalado em celulares.**
 
