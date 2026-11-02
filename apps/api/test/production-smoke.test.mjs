@@ -53,6 +53,17 @@ test('live Cloudflare proxy, Render API and Neon are ready', { timeout: 120_000 
   assert.equal(db.data.schema, 'ready');
 });
 
+// Read-only regression check: an obsolete feed endpoint must not be reachable on
+// either the public Worker proxy or the Render backend before schema removal.
+test('retired global feed endpoints are unavailable on Cloudflare and Render', { timeout: 120_000 }, async () => {
+  await ready(backend);
+  for (const origin of [backend, frontend]) {
+    const response=await request(origin, '/api/v1/feed/posts');
+    assert.equal(response.status, 404,
+      'Old feed API still responds on '+origin+': '+response.status+' '+JSON.stringify(response.data));
+  }
+});
+
 test('production signup configuration and anonymous profile', { timeout: 120_000 }, async () => {
   const r = await request(frontend, '/api/v1/status');
   assert.equal(r.status, 200);
