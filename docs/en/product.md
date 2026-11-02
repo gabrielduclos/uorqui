@@ -2,11 +2,17 @@
 
 [English](product.md) · [Português](../pt-BR/produto.md)
 
-**Status:** planning. This is a requirements document, not a feature list of working software.
+**Status:** product direction approved November 2, 2026, **not yet implemented** in the beta. Sections identified as legacy preserve implementation history rather than future requirements.
+
+## Product decision
+
+The future Uorqui is **community-first**, without a public/global post feed or infinite immersive video mode. The home destination becomes **Discover**, featuring recommended communities and activities **from communities the person has joined**. Text, photos, video, audio, files and links remain available inside messages and channels.
+
+Details, authorization, migration and success metrics: [Discover replaces the feed](discover.md). This documentation update **has not removed the existing feed code or user data**.
 
 ## Navigation
 
-The main destinations are **Feed**, **Messages**, **Communities**, and **Profile**. Search, notifications, and settings are global. Desktop and mobile share the same domain concepts, with layouts adapted to each device.
+Primary destinations: **Discover**, **Messages**, **Communities**. Profile, search, notifications and settings stay accessible as secondary navigation on mobile and desktop.
 
 ## 1. One-to-one messaging
 
@@ -15,33 +21,25 @@ The main destinations are **Feed**, **Messages**, **Communities**, and **Profile
 - Safety: block, report, contact/message requests, per-user limits, and server-side authorization.
 - Distinguish sent, delivered, read, and failed states; do not promise end-to-end encryption until implemented and reviewed.
 
-## 2. Hybrid feed
+## 2. Discover — home screen
 
-- A **continuous vertical scroll** of variable-height posts: text, photos, carousels, portrait and landscape videos.
-- Public posts may lead to relevant public communities; restricted community posts must stay restricted.
-- Videos may autoplay **muted** when visible, with only one active at a time. Use conservative preloading and explicit data-saving controls.
-- Preserve the feed's scroll position when opening a post, profile, or immersive video and returning.
-- Initial discovery: **For you** and **Following** filters; ranking starts with understandable/simple rules, not assumed AI.
+- **Happening now:** real text-channel and voice-room activity **from communities the person belongs to**, including authorized community/channel names, unread counts, presence and contextual shortcuts. Never auto-join voice calls.
+- **Recommended communities:** list discoverable public communities only, with search by name/interest, category, description, photo and factual counts. Begin with understandable ranking, not post/video algorithms.
+- **No memberships yet:** show helpful search and public community suggestions without invented activity.
+- **Privacy:** enforce permission checks server-side for all activity, search, previews and counts; respect private communities, channel policies and blocks.
+- **Freshness:** reuse available realtime/SSE events and bounded fallback with loading states; background activity is never a read acknowledgement.
+- **Actions:** open channels/room details, view communities, join, request approval or accept invitations as permitted.
 
-## 3. Immersive Videos mode
-
-- Accessible **directly** through a feed shortcut/filter and **from any eligible video post**.
-- Opening from a post begins with that **specific video**.
-- Full-screen, video-only sequence. Vertical swipes move between videos, and the user stays in this mode until intentionally leaving it.
-- Offer share, comment, react, profile and eligible community entry actions.
-- Return to the previous feed position when entered from the mixed feed; direct entry has its own coherent back behavior.
-- **Videos is a working label. Do not call the feature “Reels.”**
-
-## 4. Communities
+## 3. Communities
 
 - Public/open, public/requires approval, or private/invite-only.
 - Multiple topic-based **text channels** and **voice rooms**, member roles, channel permissions, invitations, moderation, and reporting.
 - Voice may persist while navigating the app, subject to OS/browser constraints. Other media should start muted during a voice session.
 - Members must never gain visibility into private channels, media, notifications, or search results without authorization.
 
-## 5. Cross-pillar experience
+## 4. Cross-pillar experience
 
-A user can find a relevant public post, inspect its author/community, join an eligible channel or voice room, and later start a private conversation. Content may be shared into direct conversations or authorized community channels.
+A person discovers a public community on Discover, explores available channels and activities, joins under its access rules, participates in text/voice, and may later start a private one-to-one conversation. Media and links continue to be shared within messages and authorized channels.
 
 ## Quality and safety acceptance criteria
 
@@ -68,7 +66,9 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Uploads require Worker-issued HMAC proof. Media downloads require current membership and an active, non-canceled message.
 - Drizzle migration `0018_community_message_attachments` adds attachment metadata and allows empty text only with an attachment. Apply it to Neon before enabling the feature in production; existing text messages remain intact.
 
-### Initial persistent feed implementation
+### Beta history: persistent feed implementation (legacy; planned retirement)
+
+> **Technical record of previously implemented behavior.** These items do not define the future experience. Do not delete existing posts, media, database tables, endpoints or links without a retention, migration and rollback plan. See the [Discover decision](discover.md).
 
 - Home now shows a real cursor-paginated hybrid timeline: **For you** contains authorized posts (public, friends and own); **Following** contains explicitly followed accounts and own posts; following is independent of mutual friendship.
 - Publish text, up to **6 images** as a carousel or **1 video** (50 MB per media file), like/unlike, comment, edit and delete own posts. Private profiles require an accepted friendship; blocks hide posts.
@@ -79,7 +79,7 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Migration `0020_feed_follows` adds independent directional follows. Private accounts may only be followed by accepted friends; account blocks override follows. Follow/Following controls appear on posts.
 - Future work: comment pagination, discovery ranking, video transcoding, reporting/moderation, previews, accessibility, and cleanup of orphaned uploads after interrupted sessions.
 
-### Feed cache, comments and following
+### Beta history: feed cache, comments and following (legacy)
 
 - The feed stays mounted when navigating to Chats, Communities, or Profile. Posts, scroll position, filter, pagination and draft remain in **per-account tab memory** and are dropped on sign-out. **Post contents are never persisted** to localStorage, IndexedDB, service workers, or persistent caches, protecting private content.
 - **For you** and **Following** maintain separate in-memory timelines. After 30 seconds, they revalidate against the API when the feed becomes active or the browser tab is foregrounded, avoiding a skeleton when cached posts are present. Private images keep their existing permission-checked R2 access.
@@ -109,7 +109,7 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 
 ### First-run tour and community unread badges
 
-- On first authenticated entry per account, a **four-stage onboarding** introduces the actual **Feed** (posts/photos/videos), **Messages** (one-to-one chats), **Communities** (text/voice channels) and **Profile photo** (choose, crop and save or proceed with no photo). The tour can be skipped; completion is saved per account on the device.
+- On first authenticated entry per account, a **four-stage onboarding** introduces the actual **Feed** (posts/photos/videos in the previous beta; to be replaced by Discover), **Messages** (one-to-one chats), **Communities** (text/voice channels) and **Profile photo** (choose, crop and save or proceed with no photo). The tour can be skipped; completion is saved per account on the device.
 - Avatar onboarding reuses the private profile-media endpoint and photo cropper; the avatar can be replaced later in Profile.
 - **Numeric unread badges** are shown on text channels, individual community icons and the main mobile/desktop Communities navigation. Own/deleted messages are excluded; reading is acknowledged only when a text channel is open and its messages have loaded. Per-user/channel cursors persist in PostgreSQL across devices. The API checks session, membership, origin and enforces monotonic read progress.
 - Sign-in and account creation use edge-to-edge mobile card spacing and actual link styles for recovery and email verification in both light and dark modes.
