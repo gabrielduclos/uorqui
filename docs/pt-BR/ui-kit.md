@@ -4,7 +4,16 @@
 
 ## Objetivo
 
-Definir a linguagem visual compartilhada do Uorqui para mensagens individuais, feed híbrido e comunidades. O sistema precisa funcionar no desktop e no celular, com temas semânticos, acessibilidade e português/inglês.
+Definir a linguagem visual compartilhada do Uorqui para **Descobrir, mensagens individuais e comunidades**. O sistema precisa funcionar no desktop e no celular, com temas semânticos, acessibilidade e português/inglês.
+
+## Direção de UX — Descobrir
+
+- Tela inicial sem feed global: seções **Acontecendo agora** (atividade autorizada em canais e salas de voz das comunidades do usuário), **Comunidades recomendadas** e **Busca**.
+- Cartões de comunidade exibem nome, imagem, descrição/categoria, contagens verificadas e entrada/solicitação de participação.
+- Atalhos de atividade abrem o contexto exato, sem conectar o microfone automaticamente ou marcar mensagens como lidas.
+- Estados vazios úteis para novos usuários; nunca inventar membros, atividade ou conversas.
+- Navegação principal: **Descobrir · Mensagens · Comunidades**; Perfil, notificações e ajustes continuam acessíveis.
+- Esta é uma **especificação de implementação pendente**; o feed do beta é legado, não deve ser apresentado como interface futura. Ver [decisão](descobrir.md).
 
 ## Identidade da marca
 
