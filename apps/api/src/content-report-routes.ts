@@ -37,7 +37,7 @@ export function registerContentReportRoutes(app: FastifyInstance, readSession: S
       // Never trust a target ID submitted by the browser. Re-check the same
       // access rules used for reading each target, and forbid self-reporting.
       let evidence: Evidence | null = null;
-      if (targetKind === 'direct_message') {      } else if (targetKind === 'direct_message') {
+      if (targetKind === 'direct_message') {
         const found = await getPool().query(
           'SELECT m.author_id,m.body,m.attachment_id FROM direct_messages m ' +
           'JOIN direct_conversations c ON c.id=m.conversation_id ' +
