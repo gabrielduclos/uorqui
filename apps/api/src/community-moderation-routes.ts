@@ -192,6 +192,7 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
           await client.query('DELETE FROM community_join_requests WHERE community_id=$1 AND user_id=$2',[id,other]);
         }
         await client.query('DELETE FROM community_members WHERE community_id=$1 AND user_id=$2',[id,other]);
+        await client.query('DELETE FROM community_channel_password_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,other]);
         await client.query('DELETE FROM community_voice_sessions WHERE user_id=$2 AND channel_id IN (SELECT id FROM community_channels WHERE community_id=$1)',[id,other]);
         await client.query('COMMIT');
         return reply.header('Cache-Control',noCache).send({handle:h,status:ban?'banned':'removed'});
