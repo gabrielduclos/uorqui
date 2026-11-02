@@ -1,37 +1,41 @@
-# Uorqui frontend — implementation standard and initial release
+# Uorqui frontend — standards and navigation direction
+
+[English](frontend.md) · [Português](../pt-BR/frontend.md)
+
+## Document status
+
+The technical beta already includes **real direct messaging, real communities, a legacy hybrid post feed and voice rooms**. Early documentation about demo-only screens no longer reflects the current application. The direction approved **November 2, 2026**, detailed in [Discover](discover.md), **has not yet been implemented in the frontend**.
 
 ## Goal
 
-Simple, functional frontend with **Stoat-like community/channel organization** and **WeChat-like straightforward 1:1 messaging**. These are interaction references, not cloned branding or code.
+Build a mobile-first interface for **discovering communities, participating in text/voice rooms and having one-to-one conversations**. Familiar patterns can inform chat and channel organization, but Uorqui owns its design, implementation and language.
+
+## Future navigation
+
+- **Discover (home):** real channel and voice-room activity from joined communities, search and recommended public communities. No post feed, endless scrolling, “For you/Following” filter or vertical short-video mode.
+- **Messages:** private 1:1 chats, history, media, reactions, and delivery/read states.
+- **Communities:** joined spaces, text channels, voice rooms, administration and moderation.
+- **Profile, notifications and settings:** remain accessible without requiring dedicated primary tabs. Profile privacy remains independent from community membership.
+
+Discover shortcuts navigate to the correct community/channel without joining a voice call automatically or prematurely marking messages read. New users without memberships see search, public recommendations and honest empty states. The API grounds all counts and enforces access controls.
 
 ## UI system
 
-- Prefer **official shadcn/ui (New York / Radix)** components for every reusable primitive; create project-specific components only when the catalog has no matching ready-made element.
-- Use **Tailwind CSS v4** and existing semantic indigo theme tokens in `src/styles.css`. Keep theme compatible with future tweakcn adjustments.
-- Use **Motion** for short transitions, with reduced-motion support.
-- Components: `apps/web/src/components/ui/`; shadcn registry configuration: `apps/web/components.json`.
-- Sticky headers, mobile bottom navigation, iOS safe areas, accessible focus, minimum 16px input text, localized skeletons and per-action backend spinners.
+- Prefer reusable **shadcn/ui (New York/Radix)** components and semantic **Tailwind CSS v4** tokens in `apps/web/src/styles.css`.
+- Use **Motion** for brief transitions; respect `prefers-reduced-motion`.
+- Shared components are in `apps/web/src/components/ui/`; the [UI Kit](ui-kit.md) is **documentation only**.
+- Fixed headers, keyboard-safe mobile navigation and iOS safe areas, accessible focus/tap controls, PT/EN localization and Light/Dark themes.
+- Skeletons for initial loads and per-action spinners for backend work. Background refresh must preserve visible content.
+- Do not simulate presence, counts, badges or recommended communities as real data.
 
-## Implemented views
+## Migration of the existing frontend
 
-- Anonymous: signup-first welcome, login, verification/resend, password recovery and onboarding (existing Better Auth backend).
-- Signed in: responsive app navigation — Feed, Conversations, Communities and Profile.
-- Conversations: searchable **demo** DM list, WeChat-like individual bubbles and local-only message composer.
-- Communities: example server rail, Stoat-like text/voice channel navigation, example message threads. Communities are not group DMs.
-- Feed: truthful empty state until posts backend is ready.
-- Profile: real session data and authenticated logout.
+1. Build Discover and update navigation, internal links and onboarding to **Discover · Messages · Communities**.
+2. Reuse authenticated community/voice APIs and events for activity; design extra endpoints only when necessary and enforce server-side authorization.
+3. Audit feed dependencies in profiles, notifications, routing, sharing and old post deep links.
+4. Retire global post feed and immersive video access only after migration, **without deleting data** or breaking message/channel media sharing.
+5. Verify desktop, iPhone Safari/PWA, Android/PWA, Light/Dark and PT/EN.
 
-## Important limitations
+## Quality gates and isolation
 
-There are no real social APIs for direct messages, channels, posts or voice yet. All example chat data, communities and channels are explicitly labeled **preview/demo only** and are not persisted. Do not treat demo content as real user data. Only account auth, onboarding, profile and logout are connected to the backend.
-
-## Next milestones
-
-1. Backend contracts for secure and persistent 1:1 messages.
-2. Real communities, membership, roles, text/voice channels and server-side privacy/moderation.
-3. Hybrid feed plus separate immersive video mode.
-4. Real visual and interaction QA on mobile browsers/PWA and desktop.
-
-## Quality gates
-
-`.github/workflows/web-ui.yml` runs TypeScript, Vite build and Wrangler dry-run. Cloudflare Builds publishes Worker `main`; validate the deployed SHA and real devices separately. Never modify the legacy `uorqui.app` or `uorqui-chat` Worker.
+`.github/workflows/web-ui.yml` verifies TypeScript, Vite and Wrangler configuration; Cloudflare Builds owns deployment. Green CI does not prove a deployed build or real-device acceptance. Do not modify legacy `uorqui-chat` Worker or its databases.
