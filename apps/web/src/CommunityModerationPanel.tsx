@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Ban, Camera, Check, ChevronDown, ChevronUp, Pencil, Shield, Trash2, UserMinus, X } from 'lucide-react';
+import { Ban, Camera, Check, ChevronDown, ChevronUp, Pencil, Shield, Trash2, UserMinus, X, LockKeyhole, LockKeyholeOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SkeletonRows } from '@/components/ui/skeleton';
@@ -10,7 +10,7 @@ type Role='owner'|'admin'|'moderator'|'member';
 type Visibility='public'|'approval'|'private';
 type Member={handle:string;displayName:string;role:Role;joinedAt:string};
 type BanEntry={handle:string;reason:string|null;bannedAt:string};
-type Channel={id:string;name:string;kind:'text'|'voice'|'meeting'};
+type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';hasPassword?:boolean};
 type Data={members:Member[];bans:BanEntry[];myRole:Role};
 const weight:Record<Role,number>={owner:4,admin:3,moderator:2,member:1};
 const api=async(path:string,init?:RequestInit)=>{
@@ -35,6 +35,8 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   const [reason,setReason]=useState('');
   const [rename,setRename]=useState<string|null>(null);
   const [newName,setNewName]=useState('');
+  const [passwordFor,setPasswordFor]=useState<string|null>(null);
+  const [newPassword,setNewPassword]=useState('');
   const [groupName,setGroupName]=useState(name);
   const [groupDescription,setGroupDescription]=useState(description??'');
   const [groupVisibility,setGroupVisibility]=useState<Visibility>(visibility);
@@ -196,7 +198,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         {canAdmin&&<div className="space-y-2 border-t border-border pt-3">
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
           {channels.map(ch=><div key={ch.id} className="space-y-2 rounded-lg border border-border/70 p-2">
-            <p className="truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}</p>
+            <p className="flex items-center gap-1.5 truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}</p>
             {rename===ch.id?<form className="flex gap-1" onSubmit={event=>{
               event.preventDefault();
               void action('channel:name:'+ch.id,()=>api(base+'/channels/'+ch.id,{
@@ -214,6 +216,31 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
                 pt?'excluir canal '+ch.name:'delete channel '+ch.name)}>
                 <Trash2 className="size-3.5"/>{pt?'Excluir':'Delete'}</Button>
             </div>}
+            <div className="space-y-2 border-t border-border/70 pt-2">
+              <Button size="sm" type="button" variant="outline" className="h-9" onClick={()=>{setPasswordFor(passwordFor===ch.id?null:ch.id);setNewPassword('');}}>
+                <LockKeyhole className="size-3.5"/>{ch.hasPassword?(pt?'Alterar senha':'Change password'):(pt?'Proteger com senha':'Set password')}
+              </Button>
+              {passwordFor===ch.id&&<form className="flex flex-wrap items-center gap-2" onSubmit={event=>{
+                event.preventDefault();if(newPassword.length<8)return;
+                void action('channel:password:'+ch.id,()=>api(base+'/channels/'+ch.id+'/password',{
+                  method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:newPassword})
+                }),pt?'Senha do canal atualizada.':'Channel password updated.').then(()=>{setNewPassword('');setPasswordFor(null);});
+              }}>
+                <Input type="password" autoComplete="new-password" required minLength={8} maxLength={72} value={newPassword}
+                  onChange={e=>setNewPassword(e.target.value)} className="h-9 min-w-28 flex-1 text-base"
+                  placeholder={pt?'Senha (mínimo de 8 caracteres)':'Password (8+ characters)'}/>
+                <Button size="sm" type="submit" disabled={busy||newPassword.length<8} loading={busyKey==='channel:password:'+ch.id}>
+                  <Check className="size-3.5"/>{pt?'Salvar':'Save'}
+                </Button>
+              </form>}
+              {ch.hasPassword&&<Button size="sm" type="button" variant="ghost" className="h-9" disabled={busy}
+                loading={busyKey==='channel:password:remove:'+ch.id}
+                onClick={()=>request('channel:password:remove:'+ch.id,()=>api(base+'/channels/'+ch.id+'/password',{
+                  method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:null})
+                }),pt?'Senha removida.':'Password removed.',pt?'remover a senha do canal':'remove channel password')}>
+                <LockKeyholeOpen className="size-3.5"/>{pt?'Remover senha':'Remove password'}
+              </Button>}
+            </div>
           </div>)}
         </div>}
         {role==='owner'&&<div className="space-y-3 border-t border-destructive/30 pt-4">
