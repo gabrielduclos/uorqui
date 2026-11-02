@@ -17,6 +17,10 @@ O Uorqui oferece canais de **Reunião** nas comunidades, separados dos canais de
 - Os endpoints validam autenticação, papel do usuário, bloqueios/banimentos aplicáveis, política de entrada e acesso ao canal.
 
 ## Infraestrutura e validação
-A API Fastify reutiliza a sinalização e sessões WebRTC existentes (Neon PostgreSQL). As migrações versionadas `0030` e `0031` incluem tipo de canal, política de admissão, fila de aprovações e preferência push. Não aplicá-las em produção antes de validar CI, Render, Cloudflare e a migração em uma branch Neon isolada.
+A API Fastify reutiliza a sinalização e sessões WebRTC existentes (Neon PostgreSQL). **Publicado no beta técnico em 02/11/2026.** As migrações `0030`–`0032` cobrem reuniões, admissão, notificações e proteção por senha. As 33 migrações constam em produção; os testes de integração do GitHub e os cinco testes de verificação em produção passaram. Isso não substitui testes de áudio/vídeo em aparelhos reais.
 
 **Limitações:** WebRTC P2P depende da conectividade de rede; relay TURN e permissões de câmera precisam ser testados em aparelhos iOS/Android e em redes diferentes. O PWA instalado pode ter limitações de captura em segundo plano.
+
+## Canais protegidos por senha
+
+Proprietários e administradores podem definir, trocar ou remover a senha em **Moderação da comunidade > Gerenciar canais**, tanto para texto quanto para voz e reunião. A senha é armazenada como hash scrypt com salt; participantes desbloqueiam individualmente cada canal. A troca revoga liberações anteriores, e tentativas incorretas têm limite. Associação à comunidade e aprovação da reunião continuam obrigatórias independentemente da senha.
