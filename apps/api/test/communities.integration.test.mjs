@@ -114,6 +114,15 @@ test('persistent communities: discover, create, join, channels and real messages
   const beforeRead=await owner(unread);
   assert.equal(beforeRead.status,200,JSON.stringify(beforeRead.data));
   assert.equal(beforeRead.data.channels[text.id],1,'a received message is unread until viewed');
+  const destination=beforeRead.data.locations.find(item=>item.channelId===text.id);
+  assert.equal(destination.communityId,id,'unread shortcut identifies its community');
+  assert.equal(destination.communityName,'Live Community');
+  assert.equal(destination.channelName,text.name,'unread shortcut identifies its channel');
+  assert.equal(destination.channelKind,'text');
+  assert.equal(destination.count,1);
+  assert.equal((await anonymous('/api/v1/links/preview?url=https%3A%2F%2Fwww.example.com')).status,401);
+  assert.equal((await owner('/api/v1/links/preview?url=http%3A%2F%2Fpublic.example.com')).status,400,'plaintext link previews are disabled');
+  assert.equal((await owner('/api/v1/links/preview?url=https%3A%2F%2F127.0.0.1')).status,400,'IP addresses cannot be previewed');
   assert.equal((await owner('/api/v1/communities/'+id+'/channels/'+voice.id+'/read','POST',{lastMessageId:sent.data.id})).status,404);
   assert.equal((await outsider('/api/v1/communities/'+id+'/channels/'+text.id+'/read','POST',{lastMessageId:sent.data.id})).status,403);
   assert.equal((await owner(path.replace('/messages','/read'),'POST',{lastMessageId:sent.data.id},false)).status,403,'origin must be verified');
