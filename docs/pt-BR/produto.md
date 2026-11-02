@@ -2,7 +2,7 @@
 
 [Português](produto.md) · [English](../en/product.md)
 
-**Status:** direção de produto aprovada em 02/11/2026, **ainda não implementada** no beta. As seções históricas identificadas como legado descrevem código existente e não definem a experiência futura.
+**Status:** direção aprovada em 02/11/2026, com **primeira implementação no código da `main`** (Descobrir, atividades autorizadas, navegação e onboarding). Publicação em produção e testes reais ainda pendentes; as seções históricas de feed permanecem como registro legado.
 
 ## Decisão de produto
 
