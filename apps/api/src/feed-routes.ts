@@ -416,6 +416,7 @@ export function registerFeedRoutes(app:FastifyInstance,readSession:SessionReader
         'AND p.deleted_at IS NULL AND p.author_id=$3) RETURNING c.id',
         [commentId,id,me]);
       if(!moderated.rowCount)return reply.code(404).send({error:'Comment unavailable'});
+      await publishFeedEvent('comment',id).catch(err=>req.log.warn({err},'Feed event'));
       return reply.code(204).send();
     }catch(err){return failed(req,reply,err,'Delete feed comment');}
   });
