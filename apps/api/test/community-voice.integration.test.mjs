@@ -165,6 +165,7 @@ test('meeting: direct entry, approval gates, invitations and community request n
   // An authenticated community member must still unlock a password-protected
   // video room before joining or exchanging WebRTC signals.
   assert.equal((await owner(prefix+'/channels/'+channelId+'/password','PUT',{password:'meeting-safe-1234'})).status,200);
+  assert.equal((await friend(meeting)).status,404,'locked meeting policy and pending participants stay private');
   assert.equal((await friend(rtc+'/join','POST',{sessionId:crypto.randomUUID()})).status,403);
   assert.equal((await friend(prefix+'/channels/'+channelId+'/unlock','POST',{password:'meeting-safe-1234'})).status,200);
   const secureSession=crypto.randomUUID();
