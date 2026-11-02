@@ -81,6 +81,25 @@ test('live meeting routes are deployed and reject anonymous access', { timeout: 
   }
 });
 
+// Safe unauthenticated probes: 401 confirms the new meeting and password
+// endpoints are deployed while leaving production data untouched.
+test('meeting and password routes are deployed and refuse unauthenticated access', { timeout: 120_000 }, async () => {
+  await ready(backend);
+  const id='00000000-0000-0000-0000-000000000000';
+  const base='/api/v1/communities/'+id+'/channels/'+id;
+  for (const origin of [backend, frontend]) {
+    const meeting=await request(origin,base+'/meeting');
+    assert.equal(meeting.status,401,
+      'Meeting API not ready at '+origin+': '+meeting.status+' '+JSON.stringify(meeting.data));
+    const unlock=await request(origin,base+'/unlock',{
+      method:'POST',headers:{origin:frontend,'content-type':'application/json'},
+      body:JSON.stringify({password:'test-only-no-actual-member'})
+    });
+    assert.equal(unlock.status,401,
+      'Channel unlock API not ready at '+origin+': '+unlock.status+' '+JSON.stringify(unlock.data));
+  }
+});
+
 test('production signup configuration and anonymous profile', { timeout: 120_000 }, async () => {
   const r = await request(frontend, '/api/v1/status');
   assert.equal(r.status, 200);
