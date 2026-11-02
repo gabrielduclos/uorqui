@@ -483,10 +483,24 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     }catch{setError(pt?'Não foi possível ativar a câmera. Verifique a permissão.':'Could not enable camera. Check permissions.');}
     finally{setCameraBusy(false);}
   }
-  const meetingUrl=()=>new URL('/?community='+encodeURIComponent(communityId)+'&channel='+encodeURIComponent(channelId),window.location.origin).toString();
+  async function meetingUrl(){
+    // Reuse the community's existing bearer invite when available. Only managers
+    // may create a new invite: ordinary members can share the room URL with members.
+    try{
+      const existing=await req<{link:{id:string}|null}>('/api/v1/communities/'+communityId+'/share');
+      let token=existing.link?.id;
+      if(!token&&meetingInfo?.manager){
+        const created=await req<{link:{id:string}}>('/api/v1/communities/'+communityId+'/share',json({}));
+        token=created.link.id;
+      }
+      if(token)return new URL('/invite/'+encodeURIComponent(token)+'?channel='+encodeURIComponent(channelId),window.location.origin).toString();
+    }catch{/* Room URLs still work for people who already belong to the community. */}
+    return new URL('/?community='+encodeURIComponent(communityId)+'&channel='+encodeURIComponent(channelId),window.location.origin).toString();
+  }
   async function copyMeetingUrl(){
-    try{await navigator.clipboard.writeText(meetingUrl());setInviteFeedback(pt?'Link copiado.':'Link copied.');}
-    catch{setInviteFeedback(pt?'Copie o endereço: ':'Copy the address: ')+meetingUrl();}
+    const link=await meetingUrl();
+    try{await navigator.clipboard.writeText(link);setInviteFeedback(pt?'Link copiado.':'Link copied.');}
+    catch{setInviteFeedback((pt?'Copie o endereço: ':'Copy the address: ')+link);}
   }
   async function sendMeetingInvite(){
     const handle=inviteHandle.trim().replace(/^@/,'').toLowerCase();
@@ -495,7 +509,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     try{
       const started=await req<{id:string}>('/api/v1/dm/conversations',json({handle}));
       await req('/api/v1/dm/conversations/'+started.id+'/messages',json({
-        body:(pt?'Convite para reunião: ':'Meeting invitation: ')+channelName+'\n'+meetingUrl(),clientId:crypto.randomUUID()
+        body:(pt?'Convite para reunião: ':'Meeting invitation: ')+channelName+'\n'+await meetingUrl(),clientId:crypto.randomUUID()
       }));
       setInviteFeedback(pt?'Convite enviado pelo mensageiro do Uorqui.':'Invite sent in Uorqui Messenger.');
       setInviteHandle('');
