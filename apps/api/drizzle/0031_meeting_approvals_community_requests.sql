@@ -12,3 +12,7 @@ CREATE TABLE IF NOT EXISTS "meeting_access_requests" (
 );
 CREATE INDEX IF NOT EXISTS "meeting_access_requests_status_idx" ON "meeting_access_requests"("channel_id","status");
 ALTER TABLE "notification_preferences" ADD COLUMN IF NOT EXISTS "community_request" boolean NOT NULL DEFAULT true;
+-- Keep activity inbox constraints in step with community and meeting requests.
+ALTER TABLE "activity_notifications" DROP CONSTRAINT IF EXISTS "activity_notifications_kind";
+ALTER TABLE "activity_notifications" ADD CONSTRAINT "activity_notifications_kind"
+  CHECK ("kind" IN ('friend_request','friend_accepted','community_join_request','meeting_join_request'));
