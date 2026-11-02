@@ -161,21 +161,26 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const result=await getPool().query(
-        'SELECT ch.community_id AS "communityId",ch.id AS "channelId",'+
-        'COUNT(msg.id)::int AS "unreadCount" '+
-        'FROM community_channels ch '+
+        'SELECT ch.community_id AS "communityId",ch.id AS "channelId",ch.name AS "channelName",'+
+        'c.name AS "communityName",ch.kind AS "channelKind",COUNT(msg.id)::int AS "unreadCount" '+
+        'FROM community_channels ch JOIN communities c ON c.id=ch.community_id '+
         'JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$1 '+
         'LEFT JOIN community_channel_reads rd ON rd.channel_id=ch.id AND rd.user_id=$1 '+
         'LEFT JOIN community_messages msg ON msg.channel_id=ch.id AND msg.author_id<>$1 '+
         'AND msg.deleted_at IS NULL AND msg.created_at>GREATEST(m.joined_at,COALESCE(rd.last_read_at,m.joined_at)) '+
-        "GROUP BY ch.community_id,ch.id ORDER BY ch.community_id,ch.id",[me]);
+        "GROUP BY ch.community_id,ch.id,c.name ORDER BY c.name,ch.name",[me]);
       const channels:Record<string,number>={},communities:Record<string,number>={};
+      const locations:Array<{communityId:string;communityName:string;channelId:string;channelName:string;channelKind:string;count:number}>=[];
       let total=0;
       for(const item of result.rows){
         const count=Number(item.unreadCount)||0;
-        if(count>0){channels[item.channelId]=count;communities[item.communityId]=(communities[item.communityId]??0)+count;total+=count;}
+        if(count>0){
+          channels[item.channelId]=count;communities[item.communityId]=(communities[item.communityId]??0)+count;total+=count;
+          locations.push({communityId:item.communityId,communityName:item.communityName,
+            channelId:item.channelId,channelName:item.channelName,channelKind:item.channelKind,count});
+        }
       }
-      return reply.header('Cache-Control',noCache).send({total,channels,communities});
+      return reply.header('Cache-Control',noCache).send({total,channels,communities,locations});
     }catch(error){request.log.error({err:error},'Community unread counts');return reply.code(503).send({error:'Unavailable'});}
   });
 
