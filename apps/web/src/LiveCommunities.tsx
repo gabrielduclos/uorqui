@@ -15,6 +15,7 @@ import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker'
 import CommunityMessageReactions, { type CommunityReaction } from './CommunityMessageReactions';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import { MessageText } from './MessageText';
+import type {UnreadLocation} from './useCommunityUnread';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 import { ContentReportDialog } from './ContentReportDialog';
 
@@ -47,15 +48,16 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,unreadChannels,unreadCommunities,active}:{
+export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,unreadChannels,unreadCommunities,unreadLocations,active}:{
   myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
-  unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;active:boolean;
+  unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [list,setList]=useState<Community[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(initialCommunityId??null);
   const [detail,setDetail]=useState<Detail|null>(null);
   const [channelId,setChannelId]=useState<string|null>(null);
+  const requestedChannel=useRef<{communityId:string;channelId:string}|null>(null);
   const [channelOpen,setChannelOpen]=useState(false);
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
@@ -146,7 +148,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const loadDetail=useCallback(async(id:string)=>{
     const data=await api<Detail>('/api/v1/communities/'+encodeURIComponent(id));
     setDetail(data);
-    setChannelId(old=>old&&data.channels.some(channel=>channel.id===old)?old:data.channels[0]?.id??null);
+    const requested=requestedChannel.current;
+    setChannelId(old=>{
+      if(requested?.communityId===id&&data.channels.some(channel=>channel.id===requested.channelId)){
+        requestedChannel.current=null;return requested.channelId;
+      }
+      return old&&data.channels.some(channel=>channel.id===old)?old:data.channels[0]?.id??null;
+    });
     return data;
   },[]);
   useEffect(()=>{
@@ -339,8 +347,19 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   }
 
   function selectCommunity(id:string){
+    requestedChannel.current=null;
     closeChannel();setSelectedId(id);setDiscovery(false);setCreateOpen(false);
     setError('');setNotice('');
+  }
+  function openUnread(location:UnreadLocation){
+    requestedChannel.current={communityId:location.communityId,channelId:location.channelId};
+    setSelectedId(location.communityId);setDiscovery(false);setCreateOpen(false);
+    setChannelId(location.channelId);setChannelOpen(true);setVoiceMinimized(true);
+    setError('');setNotice('');
+    if(location.channelKind==='voice' && voicePhase==='idle'){
+      // Reading room text must not automatically join a voice call.
+      setActiveVoiceRoom(null);
+    }
   }
   async function create(event:FormEvent){
     event.preventDefault();
@@ -549,6 +568,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             {createOpen?(pt?'Fechar formulário':'Close form'):(pt?'Nova comunidade':'New community')}</Button>
         </div>
         <div className={hidden+' p-3'}>
+          {!!unreadLocations.length&&!createOpen&&<section className="mb-4 rounded-xl border border-border bg-card p-3" aria-label={pt?'Canais com mensagens novas':'Channels with new messages'}>
+            <p className="mb-2 text-xs font-semibold text-primary">{pt?'Mensagens não lidas':'Unread messages'}</p>
+            <div className="space-y-1">
+              {unreadLocations.map(item=><button key={item.channelId} type="button" onClick={()=>openUnread(item)}
+                className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-xs hover:bg-secondary">
+                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':'#'} {item.channelName}</span>
+                <span className="rounded-full bg-destructive px-1.5 py-0.5 font-bold text-white">{item.count>99?'99+':item.count}</span>
+              </button>)}
+            </div>
+          </section>}
           {createOpen?<form onSubmit={event=>void create(event)} className="space-y-3">
             <label className="block text-xs font-medium">{pt?'Nome':'Name'}
               <Input value={createName} onChange={e=>{setCreateName(e.target.value);if(!slugTouched)setCreateSlug(e.target.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9-]+/g,'-').replace(/^-+/,'').slice(0,64));}}
@@ -596,6 +625,15 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </div>
         </div>
         <div className={hidden+' space-y-4 p-3'}>
+          {unreadLocations.some(item=>item.communityId===selectedId)&&<section aria-label={pt?'Canais não lidos nesta comunidade':'Unread channels in this community'} className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <p className="mb-2 text-xs font-semibold">{pt?'Novas mensagens em':'New messages in'}</p>
+            <div className="flex flex-wrap gap-2">
+              {unreadLocations.filter(item=>item.communityId===selectedId).map(item=><button type="button" key={item.channelId}
+                onClick={()=>openUnread(item)} className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs hover:bg-secondary">
+                {item.channelKind==='voice'?'🔊':'#'} {item.channelName} <span className="font-bold text-destructive">{item.count}</span>
+              </button>)}
+            </div>
+          </section>}
           {community&&!memberView(community)&&<div className="space-y-3 rounded-xl border border-border bg-card p-3">
             <p className="text-sm text-muted-foreground">{community.visibility==='private'?(pt?'Entrada apenas por convite.':'Invitation only.'):
               community.visibility==='approval'?(pt?'O responsável aprova a entrada.':'A manager approves requests.'):(pt?'Entre para acessar os canais.':'Join to access channels.')}</p>
@@ -630,6 +668,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                     className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
                     <Volume2 className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>
                     <span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                    {!!unreadChannels[ch.id]&&<span aria-label={unreadChannels[ch.id]+(pt?' mensagens não lidas':' unread messages')}
+                      className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                      {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
                     {!!occupants.length&&<span aria-label={occupants.length+(pt?' na sala':' in room')}
                       className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{occupants.length}</span>}
                     {voicePresenceLoading&&!occupants.length&&<Spinner className="size-3.5 text-muted-foreground"/>}
