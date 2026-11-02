@@ -17,6 +17,10 @@ Uorqui adds **Meeting** channels beside existing text channels and voice rooms.
 - API authorization checks session identity, community membership, channel access, meeting approval and relevant blocks/bans.
 
 ## Technical notes
-The Fastify API reuses the existing WebRTC signaling and sessions in Neon Postgres. Versioned migrations `0030` and `0031` introduce the channel type, admission policy, approval table and push preference. Test database changes on an isolated Neon branch and validate CI and actual frontend/backend deployments before rollout.
+The Fastify API reuses WebRTC signaling and sessions in Neon PostgreSQL. **Released in the technical beta on November 2, 2026.** Migrations `0030`–`0032` cover meeting channels, admission, notifications and password protection. All 33 migrations are recorded in production, the code passed GitHub integration tests, and the read-only live smoke suite passed all five checks against Render and Cloudflare. This does not constitute a real-device WebRTC media test.
 
 **Limitations:** Six-person P2P scaling, TURN relay readiness, camera permissions and iOS/Android installed-PWA behavior require real-device and cross-network validation.
+
+## Password-protected channels
+
+Community owners and admins can set, change or remove a password from **Community moderation > Manage channels** for text, voice and meeting channels. Passwords are salted and scrypt-hashed; ordinary members unlock each channel on their own account. Changing the password revokes old grants. Failed attempts are rate-limited. Community membership and meeting approval still apply independently.
