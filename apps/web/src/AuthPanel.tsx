@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useUorquiPreferences } from './UorquiPreferences';
+import { StartupSplash } from './StartupSplash';
 import type { UserProfileData } from './UserProfiles';
 
 type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify' | 'reset';
@@ -102,6 +103,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
+  const connecting = !account && (loading || (!apiReady && (!apiChecked || apiRetryStep < 5)));
   const canRegister = apiReady && status.registrationAvailable === true;
   const requiresVerification = status.emailVerificationRequired === true;
   const siteKey = status.turnstileSiteKey ?? null;
@@ -377,9 +379,11 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const inputClass = 'min-h-12 w-full rounded-lg border border-input bg-background px-3.5 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40';
   const buttonClass = 'flex w-full min-h-12 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
   const minorButton = 'w-full min-h-11 rounded-lg px-4 py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const retryConnection = () => { setApiRetryStep(0); void checkApi(); };
   const submitLabel = busy ? <><Spinner /> {t('Aguarde…')}</> : view === 'register' ? t("Criar minha conta") : t("Entrar");
 
   return (
+    <>
     <section aria-label={t('Acesso à conta')} className="w-full min-w-0 rounded-none border-y border-border bg-card px-4 py-5 shadow-none sm:rounded-2xl sm:border sm:p-7 sm:shadow-sm">
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
@@ -405,7 +409,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         <span>{apiRetryStep < 5
           ? t('Conectando ao servidor… A primeira conexão pode demorar um pouco.')
           : t('Servidor indisponível. Tente novamente.')}</span>
-        <Button type="button" variant="outline" size="sm" onClick={()=>void checkApi()}>{t('Tentar novamente')}</Button>
+        <Button type="button" variant="outline" size="sm" onClick={retryConnection}>{t('Tentar novamente')}</Button>
       </div>}
       {loading ? (
         <div role="status" aria-label={t("Verificando sessão")} className="space-y-3">
@@ -507,5 +511,9 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       )}
       {message && <p role={view === 'verify' && message.startsWith('Conta criada') ? 'status' : 'alert'} className="mt-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-foreground">{message}</p>}
     </section>
+    {connecting && <div className="fixed inset-0 z-[120]">
+      <StartupSplash message={t('Conectando ao servidor…')}/>
+    </div>}
+    </>
   );
 }
