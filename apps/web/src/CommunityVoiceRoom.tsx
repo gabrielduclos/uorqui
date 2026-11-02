@@ -578,13 +578,13 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
 
   const count=phase==='joined'?peers.length:0;
   const activeSpeakers=phase==='joined'?visiblePeers.filter(peer=>peer.speaking):[];
-  if(mode==='floating')return <section role="region" aria-label={pt?'Chamada de voz em andamento':'Ongoing voice call'}
+  if(mode==='floating')return <section role="region" aria-label={meeting?(pt?'Reunião em andamento':'Ongoing meeting'):(pt?'Chamada de voz em andamento':'Ongoing voice call')}
     className="inline-flex max-w-full overflow-hidden rounded-xl border border-primary/30 bg-card shadow-2xl">
     <div className="flex min-w-0 items-center gap-1 p-1.5">
       <button type="button" className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-accent"
         onClick={onRestore} aria-label={pt?'Voltar para a sala de voz':'Return to voice room'}>
         <span className="relative grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-          <Headphones className="size-4"/>
+          {meeting?<Video className="size-4"/>:<Headphones className="size-4"/>}
           <span className={'absolute -right-0.5 -top-0.5 size-2 rounded-full bg-emerald-500 ring-2 ring-card '+(activeSpeakers.length?'animate-pulse':'')} aria-hidden="true"/>
         </span>
         <span className="min-w-0 max-w-24 sm:max-w-32">
@@ -611,9 +611,9 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 sm:px-5 sm:py-4">
       <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary sm:size-11"><Volume2 className="size-5"/></div>
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary sm:size-11">{meeting?<Video className="size-5"/>:<Volume2 className="size-5"/>}</div>
           <div className="min-w-0">
-            <h3 className="text-base font-semibold">{pt?'Conversa por voz':'Voice chat'}</h3>
+            <h3 className="text-base font-semibold">{meeting?(pt?'Sala de reunião':'Meeting room'):(pt?'Conversa por voz':'Voice chat')}</h3>
             <p className="text-xs text-muted-foreground">{phase==='joined'?(pt?count+' na sala':count+' in room'):
               phase==='joining'?(pt?'Entrando…':'Joining…'):(pt?'Conecte-se para conversar':'Connect to join the conversation')}</p>
           </div>
@@ -635,6 +635,9 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         <span>{pt?'O sistema interrompeu o microfone, mas a sala permanece aberta.':'System microphone capture was interrupted; the room remains open.'}</span>
         <Button size="sm" variant="outline" onClick={()=>void restoreMic()}><Mic className="size-4"/>{pt?'Reativar microfone':'Restore microphone'}</Button>
       </div>}
+      {meeting&&phase==='joined'&&Object.keys(cameras).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-2 gap-2 sm:grid-cols-3">
+        {Object.entries(cameras).filter(([id])=>id===selfSession.current?cameraOn:true).map(([id,stream])=><ScreenTile key={'camera:'+id} stream={stream} label={id===selfSession.current?(pt?'Sua câmera':'Your camera'):(peers.find(p=>p.sessionId===id)?.displayName??'')}/>)}
+      </div>}
       {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-1 gap-2 sm:grid-cols-2">
         {Object.entries(screens).map(([id,stream])=><ScreenTile key={id} stream={stream} label={id===selfSession.current?
           (pt?'Sua tela':'Your screen'):
@@ -643,11 +646,11 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       {phase!=='joined'?<div className="flex min-h-0 flex-col items-center justify-center gap-2 py-4 text-center sm:gap-3 sm:py-8">
         <div className="grid size-12 place-items-center rounded-xl border border-border bg-card shadow-sm sm:size-16"><Headphones className="size-6 text-primary sm:size-8"/></div>
         <div className="space-y-1">
-          <h4 className="text-base font-semibold">{pt?'Entre no canal de voz':'Join voice channel'}</h4>
-          <p className="max-w-sm text-sm text-muted-foreground">{pt?'Converse com os membros que estiverem conectados.':'Talk with other members in the room.'}</p>
+          <h4 className="text-base font-semibold">{meeting?(pt?'Entrar na reunião':'Join meeting'):(pt?'Entre no canal de voz':'Join voice channel')}</h4>
+          <p className="max-w-sm text-sm text-muted-foreground">{meeting?(pt?'Participe com áudio e vídeo. Câmera e microfone exigem permissão.':'Join with audio and video. Camera and microphone require permission.'):(pt?'Converse com os membros que estiverem conectados.':'Talk with other members in the room.')}</p>
         </div>
         <Button className="min-h-11 rounded-xl px-6" disabled={phase==='joining'} onClick={()=>void join()}>
-          <Headphones className="size-4"/>{phase==='joining'?(pt?'Conectando…':'Connecting…'):(pt?'Conectar':'Connect')}</Button>
+          {meeting?<Video className="size-4"/>:<Headphones className="size-4"/>}{phase==='joining'?(pt?'Conectando…':'Connecting…'):(pt?'Conectar':'Connect')}</Button>
       </div>:<div className="mx-auto mt-3 max-w-5xl">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <Users className="size-4"/><span>{pt?'Participantes':'Participants'} · {count}/6</span>
@@ -698,20 +701,25 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
             title={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}>
             {muted?<MicOff className="size-5"/>:<Mic className="size-5"/>}
           </button>
+          {meeting&&<button type="button" onClick={()=>void toggleCamera()} disabled={cameraBusy}
+             className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-50 '+(!cameraOn?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
+             aria-label={cameraOn?(pt?'Desativar câmera':'Turn camera off'):(pt?'Ativar câmera':'Turn camera on')} title={cameraOn?(pt?'Desativar câmera':'Turn camera off'):(pt?'Ativar câmera':'Turn camera on')}>
+             {cameraOn?<Video className="size-5"/>:<VideoOff className="size-5"/>}
+           </button>}
           <button type="button" onClick={toggleDeafen}
             className={'grid size-11 place-items-center rounded-xl border transition-colors '+(deafened?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}
             title={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}>
             {deafened?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
           </button>
-          <button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
+          {!meeting&&<button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
             className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-40 '+(sharing?'border-primary/60 bg-primary/15 text-primary':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={sharing?(pt?'Parar compartilhamento de tela':'Stop screen sharing'):(pt?'Compartilhar tela':'Share screen')}
             title={('getDisplayMedia' in (navigator.mediaDevices??{}))?(sharing?(pt?'Parar apresentação':'Stop presenting'):(pt?'Compartilhar tela':'Share screen')):
               (pt?'Não disponível neste navegador':'Unavailable in this browser')}>
             {screenBusy?<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"/>:
               sharing?<MonitorOff className="size-5"/>:<MonitorUp className="size-5"/>}
-          </button>
+          </button>}
           {audioBlocked&&!deafened&&<Button variant="outline" className="min-h-11 rounded-xl" onClick={enableAudio}>
             <Volume2 className="size-4"/>{pt?'Ativar som':'Enable sound'}</Button>}
           <button type="button" onClick={leaveRoom}
