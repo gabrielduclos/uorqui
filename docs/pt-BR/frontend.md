@@ -26,7 +26,7 @@ Em Descobrir, atalhos levam à comunidade e ao canal exato, sem ingressar automa
 - Componentes em `apps/web/src/components/ui/`. O [UI Kit](ui-kit.md) é **somente documentação**.
 - Cabeçalhos fixos; navegação mobile adaptada ao teclado e safe areas; controle de foco e toque confortável; tradução PT/EN e temas Light/Dark.
 - Skeleton nos carregamentos iniciais e spinners em ações dependentes da API. Atualizações em segundo plano não apagam dados já exibidos.
-- Atividades, presenças, badgets e recomendações não devem ser simulados como reais.
+- Atividades, presenças, badges e recomendações não devem ser simulados como reais.
 
 ## Migração da interface atual
 
