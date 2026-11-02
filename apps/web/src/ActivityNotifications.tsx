@@ -1,6 +1,6 @@
 
 import {useState} from 'react';
-import {Bell,CheckCheck,Heart,MessageCircle,Settings,UserPlus,UserRoundCheck,UserRoundPlus} from 'lucide-react';
+import {Bell,Check,CheckCheck,Heart,MessageCircle,Settings,UserPlus,UserRoundCheck,UserRoundPlus,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar} from './UserProfiles';
@@ -15,6 +15,23 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [busy,setBusy]=useState(false);
   const [actionError,setActionError]=useState(false);
+  const [friendBusy,setFriendBusy]=useState<string|null>(null);
+  const [friendDone,setFriendDone]=useState<Record<string,'accept'|'decline'>>({});
+  const [friendError,setFriendError]=useState<string|null>(null);
+  async function respondToFriend(item:ActivityNotification,action:'accept'|'decline'){
+    if(friendBusy||!/^[a-z][a-z0-9_]{2,31}$/.test(item.actorHandle))return;
+    setFriendBusy(item.id);setFriendError(null);
+    try{
+      const response=await fetch('/api/v1/friends/requests/'+encodeURIComponent(item.actorHandle)+'/'+action,{
+        method:'POST',credentials:'same-origin',cache:'no-store'
+      });
+      if(!response.ok)throw Error('FAILED');
+      setFriendDone(previous=>({...previous,[item.id]:action}));
+      window.dispatchEvent(new Event('uorqui:friends-updated'));
+      onRefresh();
+    }catch{setFriendError(item.id);}
+    finally{setFriendBusy(null);}
+  }
   const verbs={
     post_like:pt?'curtiu sua publicação':'liked your post',
     post_comment:pt?'comentou na sua publicação':'commented on your post',
@@ -51,17 +68,34 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
         <Bell className="size-9"/><p className="text-sm">{pt?'Ainda não há notificações.':'No notifications yet.'}</p></div>:
       <div className="space-y-1">{items.map(item=>{
         const Icon=icons[item.kind]??Bell;
-        return <button type="button" key={item.id} onClick={()=>onOpen(item)}
-          className={'flex min-h-18 w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors hover:bg-secondary/70 '+(item.readAt?'border-transparent':'border-primary/20 bg-primary/5')}
-          aria-label={item.actorName+' '+verbs[item.kind]+(!item.readAt?(pt?', não lida':', unread'):'')}>
-          <UserAvatar name={item.actorName} image={item.actorAvatar} size="sm"/>
-          <span className="min-w-0 flex-1"><span className="block text-sm"><strong>{item.actorName}</strong> {verbs[item.kind]}</span>
-          <span className="mt-1 block text-xs text-muted-foreground">
-            {new Intl.DateTimeFormat(locale,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(item.createdAt))}
-          </span></span>
-          <span className="flex shrink-0 items-center gap-2"><Icon aria-hidden="true" className="size-4 text-primary"/>
-            {!item.readAt&&<span aria-hidden="true" className="size-2 rounded-full bg-primary"/>}</span>
-        </button>;
+        return <div key={item.id} className={'flex min-h-18 flex-wrap items-center gap-2 rounded-xl border px-3 py-3 transition-colors hover:bg-secondary/70 '+(item.readAt?'border-transparent':'border-primary/20 bg-primary/5')}>
+          <button type="button" onClick={()=>onOpen(item)}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            aria-label={item.actorName+' '+verbs[item.kind]+(!item.readAt?(pt?', não lida':', unread'):'')}>
+            <UserAvatar name={item.actorName} image={item.actorAvatar} size="sm"/>
+            <span className="min-w-0 flex-1"><span className="block text-sm"><strong>{item.actorName}</strong> {verbs[item.kind]}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {new Intl.DateTimeFormat(locale,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(item.createdAt))}
+              </span></span>
+            <span className="flex shrink-0 items-center gap-2"><Icon aria-hidden="true" className="size-4 text-primary"/>
+              {!item.readAt&&<span aria-hidden="true" className="size-2 rounded-full bg-primary"/>}</span>
+          </button>
+          {item.kind==='friend_request'&&<div className="flex w-full items-center justify-end gap-2 pl-12">
+            {friendDone[item.id]?<span role="status" className="text-xs text-muted-foreground">
+              {friendDone[item.id]==='accept'?(pt?'Amizade aceita':'Friend request accepted'):(pt?'Solicitação recusada':'Request declined')}
+            </span>:<>
+              <Button type="button" size="sm" disabled={!!friendBusy} onClick={()=>void respondToFriend(item,'accept')}
+                aria-label={pt?'Aceitar amizade de '+item.actorName:'Accept friend request from '+item.actorName}>
+                {friendBusy===item.id?<Spinner className="size-3.5"/>:<Check className="size-3.5"/>}{pt?'Aceitar':'Accept'}
+              </Button>
+              <Button type="button" size="sm" variant="outline" disabled={!!friendBusy} onClick={()=>void respondToFriend(item,'decline')}
+                aria-label={pt?'Recusar amizade de '+item.actorName:'Decline friend request from '+item.actorName}>
+                <X className="size-3.5"/>{pt?'Recusar':'Decline'}
+              </Button>
+            </>}
+            {friendError===item.id&&<span role="alert" className="text-xs text-destructive">{pt?'Pedido indisponível':'Request unavailable'}</span>}
+          </div>}
+        </div>;
       })}</div>}
     </div>
   </div>;
