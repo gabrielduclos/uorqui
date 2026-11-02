@@ -626,12 +626,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </div>
         </div>
         <div className={hidden+' space-y-4 p-3'}>
-          {unreadLocations.some(item=>item.communityId===selectedId)&&<section aria-label={pt?'Canais não lidos nesta comunidade':'Unread channels in this community'} className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-            <p className="mb-2 text-xs font-semibold">{pt?'Novas mensagens em':'New messages in'}</p>
-            <div className="flex flex-wrap gap-2">
-              {unreadLocations.filter(item=>item.communityId===selectedId).map(item=><button type="button" key={item.channelId}
-                onClick={()=>openUnread(item)} className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs hover:bg-secondary">
-                {item.channelKind==='voice'?'🔊':'#'} {item.channelName} <span className="font-bold text-destructive">{item.count}</span>
+          {!!unreadLocations.length&&<section aria-label={pt?'Comunidades e canais com mensagens não lidas':'Communities and channels with unread messages'} className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <p className="mb-2 text-xs font-semibold">{pt?'Mensagens não lidas':'Unread messages'}</p>
+            <div className="space-y-1">
+              {unreadLocations.map(item=><button type="button" key={item.channelId}
+                onClick={()=>openUnread(item)} className="flex min-h-9 w-full items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 text-left text-xs hover:bg-secondary">
+                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':'#'} {item.channelName}</span>
+                <span className="rounded-full bg-destructive px-1.5 py-0.5 font-bold text-white">{item.count>99?'99+':item.count}</span>
               </button>)}
             </div>
           </section>}
