@@ -21,7 +21,10 @@ export function registerCommunityMeetingRoutes(app:FastifyInstance,session:Sessi
     const r=await getPool().query(
       'SELECT ch.id,ch.meeting_join_policy AS "policy",m.role '+
       'FROM community_channels ch JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$3 '+
-      "WHERE ch.id=$2 AND ch.community_id=$1 AND ch.kind='meeting' AND NOT EXISTS "+
+      "WHERE ch.id=$2 AND ch.community_id=$1 AND ch.kind='meeting' "+
+      "AND (ch.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS "+
+      "(SELECT 1 FROM community_channel_password_access access WHERE access.channel_id=ch.id AND access.user_id=$3)) "+
+      "AND NOT EXISTS "+
       '(SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=$3)',
       [id,channelId,userId]);
     return r.rows[0] as {id:string;policy:'open'|'approval';role:'owner'|'admin'|'moderator'|'member'}|undefined;
