@@ -25,7 +25,7 @@ before(async()=>{
 after(async()=>{if(server?.exitCode===null){server.kill('SIGTERM');await delay(300);if(server.exitCode===null)server.kill('SIGKILL');}});
 function visitor(){
   let cookie='';
-  return async(path,method='GET',payload,withOrigin=true,extraHeaders={})=>{
+  const request=async(path,method='GET',payload,withOrigin=true,extraHeaders={})=>{
     const r=await fetch(base+path,{
       method,headers:{...(withOrigin?{origin}:{}),...(payload?{'Content-Type':'application/json'}:{}),
         ...(cookie?{cookie}:{}),...extraHeaders},
@@ -37,6 +37,10 @@ function visitor(){
     }
     return {status:r.status,data:await r.json().catch(()=>null)};
   };
+  request.events=(signal)=>fetch(base+'/api/v1/feed/events',{
+    headers:{accept:'text/event-stream',cookie},signal,
+  });
+  return request;
 }
 const owner=visitor(),friend=visitor(),stranger=visitor(),guest=visitor();
 async function signup(user,handle){
@@ -52,6 +56,33 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   await signup(owner,'feed_owner');
   await signup(friend,'feed_friend');
   await signup(stranger,'feed_stranger');
+  // The feed SSE stream requires a logged-in user and an EventSource Accept header.
+  assert.equal((await guest('/api/v1/feed/events')).status,401);
+  assert.equal((await owner('/api/v1/feed/events')).status,406);
+  const streamController=new AbortController();
+  const stream=await owner.events(streamController.signal);
+  assert.equal(stream.status,200,'authenticated feed stream must connect');
+  assert.match(stream.headers.get('content-type')??'',/text\/event-stream/);
+  const reader=stream.body.getReader();
+  let buffered='';
+  const receive=async(marker)=>{
+    const deadline=Date.now()+8000;
+    while(!buffered.includes(marker)){
+      const remaining=deadline-Date.now();
+      if(remaining<=0)throw Error('Feed SSE did not receive '+marker);
+      const part=await Promise.race([
+        reader.read(),
+        delay(remaining).then(()=>{throw Error('Feed SSE timed out waiting for '+marker);}),
+      ]);
+      if(part.done)throw Error('Feed SSE closed early');
+      buffered+=new TextDecoder().decode(part.value);
+    }
+    const found=buffered;
+    buffered='';
+    return found;
+  };
+  try{await receive('event: ready');}
+  catch(error){streamController.abort();throw error;}
   assert.equal((await guest('/api/v1/feed/posts')).status,401);
   assert.equal((await guest('/api/v1/feed/posts?author=feed_owner')).status,401);
   assert.equal((await owner('/api/v1/feed/posts','POST',{body:'x',mediaCount:0},false)).status,403);
@@ -59,6 +90,10 @@ test('feed: authenticated publication, scrolling, likes, comments, deletion and 
   const created=await owner('/api/v1/feed/posts','POST',{body:'Hello from the real feed',mediaCount:0});
   assert.equal(created.status,201,JSON.stringify(created.data));
   const id=created.data.post.id;
+  try{
+    const event=await receive('event: feed-update');
+    assert.ok(event.includes(id)&&event.includes('"publish"'),'new post event must be delivered');
+  }finally{streamController.abort();}
   const listed=await stranger('/api/v1/feed/posts');
   assert.equal(listed.status,200,JSON.stringify(listed.data));
   assert.ok(listed.data.posts.some(p=>p.id===id));
