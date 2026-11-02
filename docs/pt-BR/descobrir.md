@@ -37,3 +37,9 @@ O beta atual possui implementação de feed, posts, perfis com publicações, v�
 5. Validar a mudança com usuários e testes reais em desktop, Android e iOS/PWA. Atualizar documentação histórica e changelog quando o código for efetivamente publicado.
 
 **Implementado no código:** tela `DiscoverHome`, endpoint `GET /api/v1/communities/discover/activity`, navegação a comunidades/canais, novo onboarding e retirada da galeria pública de posts e controles de seguir do perfil. **Pendente:** validação de produção, migração completa de notificações/links antigos, revisão de retenção e descontinuação técnica dos endpoints e dados de posts.
+
+## Limpeza técnica (2 de novembro de 2026)
+
+Foram removidos os componentes de chat de demonstração não importados (`DemoChatBubble`, `DemoChatMedia`, `DemoImageEditor`, `DemoMessageComposer`) e a galeria antiga não utilizada (`PublicProfilePosts`). A página pública inicial agora apresenta **Descobrir**, não Feed. A tela Descobrir recebeu contenção de largura e cards responsivos para mobile.
+
+**Banco principal Neon — levantamento sem exclusão:** `feed_posts` (5 registros), `feed_media` (4), `feed_comments` (2), `feed_likes` (8), `feed_follows` (2); há também 8 notificações legadas de post/seguidor e nenhuma denúncia de publicação. Esses dados não foram apagados. A implementação de feed permanece acessível por links antigos e precisa de retirada coordenada de rotas, mídia R2, notificações, testes e schema antes de qualquer migração destrutiva. Fazer backup/exportação e testar em uma branch isolada do Neon antes de aprovar a remoção em produção.

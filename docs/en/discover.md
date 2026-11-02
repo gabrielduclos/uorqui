@@ -37,3 +37,9 @@ The present beta includes implemented feed posts, post grids on profiles, short-
 5. Validate with pilot users and real desktop/Android/iOS PWA tests. Update historical documentation/changelog when the actual application changes.
 
 **Implemented in code:** `DiscoverHome`, authenticated `GET /api/v1/communities/discover/activity`, community/channel navigation, updated onboarding, removal of public-profile post galleries and follow controls. **Still pending:** deployment verification, full migration of legacy post links/notifications, retention review and technical retirement of post endpoints/data.
+
+## Technical cleanup (November 2, 2026)
+
+Unused demonstration chat components (`DemoChatBubble`, `DemoChatMedia`, `DemoImageEditor`, `DemoMessageComposer`) and the unused former profile gallery (`PublicProfilePosts`) have been removed. The public landing page now describes **Discover** instead of Feed. Discover received mobile-width containment for cards and search.
+
+**Production Neon database — read-only inventory:** `feed_posts` (5 rows), `feed_media` (4), `feed_comments` (2), `feed_likes` (8), `feed_follows` (2), plus 8 legacy post/follow notifications and no post reports. No user data was deleted. Legacy feed deep links still exist; decommissioning must coordinate API, R2 media, notifications, tests and schema. Export/backup retained content, then validate a migration on an isolated Neon branch before approving any production deletion.

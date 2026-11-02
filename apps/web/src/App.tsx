@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MotionConfig } from 'motion/react';
-import { Github, MessageCircle, Users, Newspaper, X } from 'lucide-react';
+import { Github, MessageCircle, Users, Compass, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import AuthPanel, { type Account } from './AuthPanel';
@@ -23,7 +23,7 @@ import { CookieNotice } from './CookieNotice';
 
 const areas = [
   { title: 'Conversas', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
-  { title: 'Feed', icon: Newspaper, description: 'Um espaço contínuo para textos, fotos e vídeos da sua rede.' },
+  { title: 'Descobrir', icon: Compass, description: 'Encontre comunidades recomendadas e acompanhe a atividade dos seus canais.' },
   { title: 'Comunidades', icon: Users, description: 'Grupos com canais de texto e salas de voz organizados por assunto.' },
 ] as const;
 

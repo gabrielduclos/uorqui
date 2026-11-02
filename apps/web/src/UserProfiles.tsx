@@ -22,8 +22,7 @@ export type UserProfileData = {
   isPublic: boolean;
 };
 export type PublicProfileData = Omit<UserProfileData, 'isPublic'> & {
-  id:string;createdAt:string|null;isPrivate:boolean;mine:boolean;following:boolean;
-  followersCount:number;followingCount:number;
+  id:string;createdAt:string|null;isPrivate:boolean;mine:boolean;
 };
 type SearchResult = Pick<UserProfileData, 'handle' | 'displayName' | 'avatarUrl'>;
 
