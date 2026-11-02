@@ -1,5 +1,5 @@
 
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {Bell,Check,CheckCheck,Heart,MessageCircle,Settings,UserPlus,UserRoundCheck,UserRoundPlus,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
@@ -18,6 +18,17 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
   const [friendBusy,setFriendBusy]=useState<string|null>(null);
   const [friendDone,setFriendDone]=useState<Record<string,'accept'|'decline'>>({});
   const [friendError,setFriendError]=useState<string|null>(null);
+  const [pendingFriendHandles,setPendingFriendHandles]=useState<Set<string>>(new Set());
+  useEffect(()=>{
+    let active=true;
+    const check=()=>void fetch('/api/v1/friends',{credentials:'same-origin',cache:'no-store'})
+      .then(async response=>response.ok?response.json() as Promise<{received:{handle:string}[]}>:null)
+      .then(result=>{if(active&&result)setPendingFriendHandles(new Set(result.received.map(person=>person.handle)));})
+      .catch(()=>{});
+    check();
+    window.addEventListener('uorqui:friends-updated',check);
+    return()=>{active=false;window.removeEventListener('uorqui:friends-updated',check);};
+  },[accountId]);
   async function respondToFriend(item:ActivityNotification,action:'accept'|'decline'){
     if(friendBusy||!/^[a-z][a-z0-9_]{2,31}$/.test(item.actorHandle))return;
     setFriendBusy(item.id);setFriendError(null);
@@ -27,6 +38,7 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
       });
       if(!response.ok)throw Error('FAILED');
       setFriendDone(previous=>({...previous,[item.id]:action}));
+      setPendingFriendHandles(previous=>{const next=new Set(previous);next.delete(item.actorHandle);return next;});
       window.dispatchEvent(new Event('uorqui:friends-updated'));
       onRefresh();
     }catch{setFriendError(item.id);}
@@ -80,7 +92,7 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
             <span className="flex shrink-0 items-center gap-2"><Icon aria-hidden="true" className="size-4 text-primary"/>
               {!item.readAt&&<span aria-hidden="true" className="size-2 rounded-full bg-primary"/>}</span>
           </button>
-          {item.kind==='friend_request'&&<div className="flex w-full items-center justify-end gap-2 pl-12">
+          {item.kind==='friend_request'&&(pendingFriendHandles.has(item.actorHandle)||!!friendDone[item.id])&&<div className="flex w-full items-center justify-end gap-2 pl-12">
             {friendDone[item.id]?<span role="status" className="text-xs text-muted-foreground">
               {friendDone[item.id]==='accept'?(pt?'Amizade aceita':'Friend request accepted'):(pt?'Solicitação recusada':'Request declined')}
             </span>:<>
