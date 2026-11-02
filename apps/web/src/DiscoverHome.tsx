@@ -97,6 +97,7 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
   const recommended=[...publicGroups.filter(item=>!item.myRole)].sort((a,b)=>b.memberCount-a.memberCount||a.name.localeCompare(b.name)).slice(0,6);
   const displayed=normalized?matches:recommended.length?recommended:publicGroups.slice(0,6);
   const unreadByChannel=new Map(unreadLocations.map(location=>[location.channelId,location.count]));
+  const activeVoiceChannels=new Set(activity.rooms.map(room=>room.channelId));
   const timestamp=(value:string)=>{
     const date=new Date(value);
     return Number.isNaN(date.getTime())?'':date.toLocaleString(locale,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -149,7 +150,7 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
               <span className="mt-1 block text-xs text-primary">{room.participantCount} {pt?(room.participantCount===1?'pessoa na sala':'pessoas na sala'):(room.participantCount===1?'person in voice':'people in voice')}</span>
             </span><ArrowRight className="size-4 shrink-0 text-muted-foreground"/>
           </button>)}
-          {activity.recent.slice(0,Math.max(3,8-activity.rooms.length)).map(item=><button type="button" key={'recent:'+item.channelId}
+          {activity.recent.filter(item=>!activeVoiceChannels.has(item.channelId)).slice(0,Math.max(3,8-activity.rooms.length)).map(item=><button type="button" key={'recent:'+item.channelId}
             onClick={()=>onOpenCommunity(item.communityId,item.channelId)}
             className="flex min-h-24 items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-secondary text-primary">{item.channelKind==='voice'?<Headphones className="size-5"/>:<Hash className="size-5"/>}</span>
