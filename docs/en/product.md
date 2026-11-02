@@ -2,7 +2,7 @@
 
 [English](product.md) · [Português](../pt-BR/produto.md)
 
-**Status:** product direction approved November 2, 2026, **not yet implemented** in the beta. Sections identified as legacy preserve implementation history rather than future requirements.
+**Status:** direction approved November 2, 2026, with an **initial implementation committed to `main`** (Discover, authorized activity, navigation and onboarding). Production deployment and real-device tests remain unverified; legacy feed sections preserve implementation history.
 
 ## Product decision
 
