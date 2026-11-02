@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Copy, Download, FileText, Flag, Forward, LoaderCircle, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { MessageText } from './MessageText';
+import { LinkPreview } from './LinkPreview';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { useCachedChatMedia } from './chatMediaCache';
 import { cn } from '@/lib/utils';
@@ -234,6 +235,8 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
             )}
           </span>
         </p>
+        {!message.deletedAt&&!locationMessage&&!sharedPostId&&message.body&&
+          <LinkPreview text={message.body} locale={locale}/>}
       </div>
       {!!message.reactions?.length && !message.deletedAt && <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'justify-end' : 'justify-start')}>
         {message.reactions.map(reaction => <button key={reaction.emoji} type="button"
