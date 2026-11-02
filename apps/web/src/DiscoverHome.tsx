@@ -106,10 +106,10 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
     {item.avatarUrl?<img src={item.avatarUrl} alt="" className="size-full object-cover"/>:item.name.charAt(0).toUpperCase()}
   </div>;
 
-  return <div className="h-full min-h-0 w-full overflow-y-auto overscroll-contain">
-    <main className="mx-auto w-full max-w-5xl space-y-7 px-4 py-6 pb-12 sm:px-7 sm:py-8">
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+  return <div className="h-full min-h-0 min-w-0 w-full max-w-full overflow-x-hidden overflow-y-auto overscroll-contain">
+    <main className="mx-auto box-border w-full min-w-0 max-w-5xl space-y-7 px-4 py-6 pb-12 sm:px-7 sm:py-8">
+      <header className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl"><Compass className="size-7 text-primary"/>{pt?'Descobrir':'Discover'}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{pt?'Encontre comunidades e participe do que está acontecendo.':'Find communities and join the conversation.'}</p>
         </div>
@@ -123,7 +123,7 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
       </div>}
       <section aria-label={pt?'Buscar comunidades':'Search communities'} className="relative">
         <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-5 text-muted-foreground"/>
-        <Input value={query} onChange={e=>setQuery(e.target.value)} className="h-11 pl-10 text-base"
+        <Input value={query} onChange={e=>setQuery(e.target.value)} className="h-11 min-w-0 w-full pl-10 text-base"
           placeholder={pt?'Buscar comunidades por nome ou interesse':'Search communities by name or interest'} />
       </section>
       {!normalized&&<section aria-labelledby="discover-activity-heading" className="space-y-3">
@@ -131,7 +131,7 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
           <h2 id="discover-activity-heading" className="text-lg font-semibold">{pt?'Acontecendo agora':'Happening now'}</h2>
           <span className="text-xs text-muted-foreground">{pt?'Nas suas comunidades':'In your communities'}</span>
         </div>
-        {loading?<div className="grid gap-3 sm:grid-cols-2">{[0,1,2,3].map(i=><Skeleton key={i} className="h-24 rounded-xl"/>)}</div>:
+        {loading?<div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">{[0,1,2,3].map(i=><Skeleton key={i} className="h-24 rounded-xl"/>)}</div>:
         !joined.length?<div className="rounded-xl border border-dashed border-border bg-card/50 p-5">
           <p className="font-medium">{pt?'Sua próxima conversa começa em uma comunidade.':'Your next conversation starts in a community.'}</p>
           <p className="mt-1 text-sm text-muted-foreground">{pt?'Explore as sugestões abaixo para encontrar seu espaço.':'Explore the suggestions below to find your place.'}</p>
@@ -139,10 +139,10 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
           <p className="font-medium">{pt?'Nenhuma atividade recente por enquanto.':'No recent activity yet.'}</p>
           <p className="mt-1 text-sm text-muted-foreground">{pt?'Você já participa de comunidades. Entre em um canal para começar.':'You have joined communities. Open a channel to get started.'}</p>
           <Button size="sm" variant="secondary" className="mt-3 gap-2" onClick={()=>onOpenCommunity(joined[0].id)}>{pt?'Abrir comunidade':'Open community'}<ArrowRight className="size-4"/></Button>
-        </div>:<div className="grid gap-3 sm:grid-cols-2">
+        </div>:<div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {activity.rooms.map(room=><button type="button" key={'voice:'+room.channelId}
             onClick={()=>onOpenCommunity(room.communityId,room.channelId)}
-            className="flex min-h-24 items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+            className="flex min-h-24 min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Headphones className="size-5"/></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{room.channelName}</span>
@@ -152,7 +152,7 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
           </button>)}
           {activity.recent.filter(item=>!activeVoiceChannels.has(item.channelId)).slice(0,Math.max(3,8-activity.rooms.length)).map(item=><button type="button" key={'recent:'+item.channelId}
             onClick={()=>onOpenCommunity(item.communityId,item.channelId)}
-            className="flex min-h-24 items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+            className="flex min-h-24 min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-secondary text-primary">{item.channelKind==='voice'?<Headphones className="size-5"/>:<Hash className="size-5"/>}</span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2"><strong className="truncate text-sm">{item.channelName}</strong>
@@ -169,17 +169,17 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
           <h2 id="discover-groups-heading" className="text-lg font-semibold">{normalized?(pt?'Resultados da busca':'Search results'):(pt?'Comunidades recomendadas':'Recommended communities')}</h2>
           {!normalized&&<span className="text-xs text-muted-foreground">{pt?'Espaços públicos':'Public spaces'}</span>}
         </div>
-        {loading?<div className="grid gap-3 sm:grid-cols-2">{[0,1,2,3].map(i=><Skeleton key={i} className="h-32 rounded-xl"/>)}</div>:
+        {loading?<div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">{[0,1,2,3].map(i=><Skeleton key={i} className="h-32 rounded-xl"/>)}</div>:
         !displayed.length?<div className="rounded-xl border border-dashed border-border bg-card/50 p-6 text-sm text-muted-foreground">
           {normalized?(pt?'Nenhuma comunidade corresponde à sua busca.':'No communities match your search.'):(pt?'Ainda não há comunidades públicas disponíveis. Você pode criar uma em Comunidades.':'No public communities are available yet. You can create one under Communities.')}
-        </div>:<div className="grid gap-3 sm:grid-cols-2">
+        </div>:<div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {displayed.map(item=><button type="button" key={item.id} onClick={()=>onOpenCommunity(item.id)}
-            className="flex min-h-32 w-full items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+            className="flex min-h-32 min-w-0 w-full max-w-full items-start gap-3 overflow-hidden rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
             {avatar(item)}
             <span className="min-w-0 flex-1">
               <strong className="block truncate text-sm">{item.name}</strong>
               <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-3.5"/>{item.memberCount} {pt?'membros':'members'} · {item.myRole?(pt?'Você participa':'Joined'):item.visibility==='approval'?(pt?'Entrada por aprovação':'Approval required'):(pt?'Entrada livre':'Open to join')}</span>
-              {item.description&&<span className="mt-2 block line-clamp-2 text-xs text-muted-foreground">{item.description}</span>}
+              {item.description&&<span className="mt-2 block line-clamp-2 break-words text-xs text-muted-foreground">{item.description}</span>}
               <span className="mt-2 flex items-center gap-1 text-xs font-medium text-primary">{item.myRole?(pt?'Abrir comunidade':'Open community'):(pt?'Conhecer comunidade':'Explore community')}<ArrowRight className="size-3.5"/></span>
             </span>
           </button>)}
