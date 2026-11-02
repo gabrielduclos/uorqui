@@ -17,7 +17,7 @@ const allowedOrigin=(r:FastifyRequest)=>r.headers.origin===(process.env.WEB_ORIG
 // Explicit leave still removes the session immediately.
 const activePresence="s.last_seen_at > now()-interval '180 seconds'";
 const voiceAccess='SELECT 1 FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
-  "WHERE c.id=$1 AND c.community_id=$2 AND c.kind='voice' LIMIT 1";
+  "WHERE c.id=$1 AND c.community_id=$2 AND c.kind IN ('voice','meeting') LIMIT 1";
 
 async function rtcConfig():Promise<{iceServers:unknown[],relayAvailable:boolean}>{
   const stun=[{urls:['stun:stun.cloudflare.com:3478']}];
@@ -90,7 +90,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'JOIN community_members present ON present.community_id=ch.community_id AND present.user_id=s.user_id '+
         'JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=s.user_id '+
         'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
-        "WHERE ch.community_id=$1 AND ch.kind='voice' AND "+activePresence+' '+
+        "WHERE ch.community_id=$1 AND ch.kind IN ('voice','meeting') AND "+activePresence+' '+
         'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
         '(b.blocker_id=s.user_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) '+
         'ORDER BY s.channel_id,s.joined_at,s.id LIMIT 300',[id,me]);
@@ -176,7 +176,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const result=await getPool().query(
         'UPDATE community_voice_sessions s SET last_seen_at=now(),muted=$4,deafened=$6 '+
         'FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
-        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind='voice' AND s.last_seen_at>now()-interval '180 seconds' RETURNING s.id",
+        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind IN ('voice','meeting') AND s.last_seen_at>now()-interval '180 seconds' RETURNING s.id",
         [sessionId,channelId,me,muted,id,deafened]);
       if(!result.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
@@ -210,7 +210,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'JOIN community_members mine ON mine.community_id=c.community_id AND mine.user_id=s.user_id '+
         'JOIN community_voice_sessions t ON t.channel_id=s.channel_id AND t.id=$3 '+
         'JOIN community_members theirs ON theirs.community_id=c.community_id AND theirs.user_id=t.user_id '+
-        'WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$6 AND c.community_id=$7 AND c.kind=\'voice\' '+
+        'WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$6 AND c.community_id=$7 AND c.kind IN (\'voice\',\'meeting\') '+
         "AND s.last_seen_at>now()-interval '180 seconds' AND t.last_seen_at>now()-interval '180 seconds' "+
         'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=t.user_id) '+
         'OR (b.blocker_id=t.user_id AND b.blocked_id=s.user_id)) RETURNING id',
@@ -228,7 +228,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         const {id,channelId,sessionId}=request.params as {id:string;channelId:string;sessionId:string};
         const removed=await getPool().query(
           'DELETE FROM community_voice_sessions s USING community_channels c '+
-          "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=s.channel_id AND c.community_id=$4 AND c.kind='voice'",
+          "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=s.channel_id AND c.community_id=$4 AND c.kind IN ('voice','meeting')",
           [sessionId,channelId,me,id]);
         if(removed.rowCount)void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
         return reply.code(204).send();

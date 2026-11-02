@@ -17,7 +17,7 @@ const groupBody={type:'object',required:['name','slug','visibility'],additionalP
   description:{type:'string',maxLength:500}
 }};
 const channelBody={type:'object',required:['name','kind'],additionalProperties:false,properties:{
-  name:{type:'string',minLength:2,maxLength:64},kind:{type:'string',enum:['text','voice']}
+  name:{type:'string',minLength:2,maxLength:64},kind:{type:'string',enum:['text','voice','meeting']}
 }};
 const attachmentSchema={type:'object',additionalProperties:false,required:['id','name','type','size'],properties:{
   id:uuid,name:{type:'string',minLength:1,maxLength:180},type:{type:'string',maxLength:100},
@@ -152,7 +152,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'ch.id AS "channelId",ch.name AS "channelName",'+
         'COUNT(DISTINCT voice.user_id)::int AS "participantCount" '+
         'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
-        'JOIN community_channels ch ON ch.community_id=c.id AND ch.kind=\'voice\' '+
+        'JOIN community_channels ch ON ch.community_id=c.id AND ch.kind IN (\'voice\',\'meeting\') '+
         'JOIN community_voice_sessions voice ON voice.channel_id=ch.id '+
         "AND voice.last_seen_at>now()-interval '180 seconds' "+
         'JOIN community_members participant ON participant.community_id=c.id AND participant.user_id=voice.user_id '+
@@ -400,7 +400,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!manager(await membership(id,me)))return reply.code(403).send({error:'Forbidden'});
-      const {name,kind}=request.body as {name:string;kind:'text'|'voice'};
+      const {name,kind}=request.body as {name:string;kind:'text'|'voice'|'meeting'};
       const normalized=name.trim();
       if(normalized.length<2)return reply.code(400).send({error:'Invalid channel name'});
       const c=await getPool().query('SELECT COUNT(*)::int AS n FROM community_channels WHERE community_id=$1',[id]);

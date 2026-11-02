@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 
 export type UnreadLocation={communityId:string;communityName:string;channelId:string;channelName:string;
-  channelKind:'text'|'voice';count:number};
+  channelKind:'text'|'voice'|'meeting';count:number};
 type Unread={total:number;channels:Record<string,number>;communities:Record<string,number>;locations:UnreadLocation[]};
 const empty:Unread={total:0,channels:{},communities:{},locations:[]};
 

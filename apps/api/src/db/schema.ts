@@ -158,7 +158,7 @@ export const communityChannels = pgTable('community_channels', {
 }, table => [
   uniqueIndex('community_channels_unique_name').on(table.communityId, table.name),
   index('community_channels_community_idx').on(table.communityId),
-  check('community_channels_kind', sql`${table.kind} IN ('text', 'voice')`),
+  check('community_channels_kind', sql`${table.kind} IN ('text', 'voice', 'meeting')`),
 ]);
 
 export const communityMessages = pgTable('community_messages', {

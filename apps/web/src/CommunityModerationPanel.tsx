@@ -10,7 +10,7 @@ type Role='owner'|'admin'|'moderator'|'member';
 type Visibility='public'|'approval'|'private';
 type Member={handle:string;displayName:string;role:Role;joinedAt:string};
 type BanEntry={handle:string;reason:string|null;bannedAt:string};
-type Channel={id:string;name:string;kind:'text'|'voice'};
+type Channel={id:string;name:string;kind:'text'|'voice'|'meeting'};
 type Data={members:Member[];bans:BanEntry[];myRole:Role};
 const weight:Record<Role,number>={owner:4,admin:3,moderator:2,member:1};
 const api=async(path:string,init?:RequestInit)=>{
@@ -196,7 +196,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         {canAdmin&&<div className="space-y-2 border-t border-border pt-3">
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
           {channels.map(ch=><div key={ch.id} className="space-y-2 rounded-lg border border-border/70 p-2">
-            <p className="truncate text-xs font-medium">{ch.kind==='text'?'#':'◉'} {ch.name}</p>
+            <p className="truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}</p>
             {rename===ch.id?<form className="flex gap-1" onSubmit={event=>{
               event.preventDefault();
               void action('channel:name:'+ch.id,()=>api(base+'/channels/'+ch.id,{

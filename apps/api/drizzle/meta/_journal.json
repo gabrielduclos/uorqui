@@ -211,6 +211,13 @@
       "when": 1793653200000,
       "tag": "0029_retire_global_feed",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793658600000,
+      "tag": "0030_community_video_meetings",
+      "breakpoints": true
     }
   ]
 }
