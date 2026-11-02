@@ -100,6 +100,17 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     setConversationOpened(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
   }, []);
+  useEffect(()=>{
+    const open=(event:Event)=>{
+      const target=(event as CustomEvent<{communityId?:string;channelId?:string}>).detail;
+      if(!target?.communityId||!/^[0-9a-f-]{36}$/i.test(target.communityId))return;
+      move('communities');
+      window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:target}));
+    };
+    window.addEventListener('uorqui:open-community-link',open);
+    return()=>window.removeEventListener('uorqui:open-community-link',open);
+  },[move]);
+
 
   useEffect(()=>{
     const open=(urlValue:string)=>{
