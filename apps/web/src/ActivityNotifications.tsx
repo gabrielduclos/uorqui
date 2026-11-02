@@ -1,6 +1,6 @@
 
 import {useEffect,useState} from 'react';
-import {Bell,Check,CheckCheck,Heart,MessageCircle,Settings,UserPlus,UserRoundCheck,UserRoundPlus,X} from 'lucide-react';
+import {Bell,Check,CheckCheck,Settings,UserPlus,UserRoundCheck,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar} from './UserProfiles';
@@ -45,14 +45,10 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
     finally{setFriendBusy(null);}
   }
   const verbs={
-    post_like:pt?'curtiu sua publicação':'liked your post',
-    post_comment:pt?'comentou na sua publicação':'commented on your post',
     friend_request:pt?'enviou uma solicitação de amizade':'sent you a friend request',
-    friend_accepted:pt?'aceitou sua solicitação de amizade':'accepted your friend request',
-    follow:pt?'começou a seguir você':'started following you'
+    friend_accepted:pt?'aceitou sua solicitação de amizade':'accepted your friend request'
   };
-  const icons={post_like:Heart,post_comment:MessageCircle,friend_request:UserPlus,
-    friend_accepted:UserRoundCheck,follow:UserRoundPlus};
+  const icons={friend_request:UserPlus,friend_accepted:UserRoundCheck};
   const all=async()=>{setBusy(true);setActionError(false);
     try{await onReadAll();}catch{setActionError(true);}finally{setBusy(false);}};
   if(settingsOpen)return <NotificationSettings accountId={accountId} onBack={()=>setSettingsOpen(false)}/>;

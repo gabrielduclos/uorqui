@@ -45,3 +45,9 @@ Unused demonstration chat components (`DemoChatBubble`, `DemoChatMedia`, `DemoIm
 **Production Neon database — read-only inventory:** `feed_posts` (5 rows), `feed_media` (4), `feed_comments` (2), `feed_likes` (8), `feed_follows` (2), plus 8 legacy post/follow notifications and no post reports. No user data was deleted. Legacy feed deep links still exist; decommissioning must coordinate API, R2 media, notifications, tests and schema. Export/backup retained content, then validate a migration on an isolated Neon branch before approving any production deletion.
 
 **Former feed UI retirement:** `LiveFeed` and feed-only session caching have been removed from the frontend. Historical post notifications open the actor profile rather than the former posting UI. Legacy feed API endpoints and stored content remain temporarily available for a controlled export and safe migration; no automatic user-data deletion is performed.
+
+## Legacy feed retirement — schema migration
+
+The old global feed has already been removed from primary navigation. Branch `chore/retire-feed-database-2026-11-02` additionally removes legacy API and media paths, followers, likes, comments, and obsolete notification UI. Migration `0029_retire_global_feed.sql` removes the five feed-only tables, legacy activity events and three retired push preference columns, while preserving users, friendships, community and direct messages, message reports, active push subscriptions and voice data.
+
+**Recovery:** Neon branch `backup/pre-retire-feed-2026-11-02` (`br-red-star-b6uqrqe4`) is the pre-migration database snapshot. R2 legacy feed files are intentionally left in object storage; SQL migration does not delete them. Audit and separately validate any R2 clean-up. Never overwrite newer production changes with an entire backup without a merge strategy.

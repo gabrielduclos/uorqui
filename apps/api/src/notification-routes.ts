@@ -17,15 +17,14 @@ export function registerNotificationRoutes(app:FastifyInstance,readSession:Sessi
     return found.rows[0]?.id??null;
   }
 
-  const preferenceKeys=['direct_message','community_message','post_like','post_comment',
-    'friend_request','friend_accepted','follow'] as const;
+  const preferenceKeys=['direct_message','community_message','friend_request','friend_accepted'] as const;
   const preferenceSchema={type:'object',additionalProperties:false,
     required:[...preferenceKeys],properties:Object.fromEntries(preferenceKeys.map(key=>[key,{type:'boolean'}]))};
   app.get('/api/v1/notifications/preferences',async(request,reply)=>{
     try{
       const id=await me(request);if(!id)return reply.code(401).send({error:'Unauthorized'});
       const result=await getPool().query(
-        'SELECT direct_message,community_message,post_like,post_comment,friend_request,friend_accepted,follow '+
+        'SELECT direct_message,community_message,friend_request,friend_accepted '+
         'FROM notification_preferences WHERE user_id=$1',[id]);
       const raw=result.rows[0]??{};
       return reply.header('Cache-Control',noCache).send({preferences:Object.fromEntries(

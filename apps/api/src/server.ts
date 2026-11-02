@@ -19,12 +19,10 @@ import { registerCommunityRoutes } from './community-routes.js';
 import { registerCommunityInviteLinks } from './community-invite-links.js';
 import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
 import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
-import { registerFeedRoutes } from './feed-routes.js';
 import { registerContentReportRoutes } from './content-report-routes.js';
 import { registerPlatformModerationRoutes } from './platform-moderation-routes.js';
 import { TERMS_VERSION, PRIVACY_NOTICE_VERSION, validSignupAgreement } from './legal-policy.js';
 import { closeDmEvents } from './dm-events.js';
-import { closeFeedEvents } from './feed-events.js';
 import {closeCommunityEvents} from './community-events.js';
 
 const app = Fastify({
@@ -289,7 +287,6 @@ registerCommunityRoutes(app, async request => readSession(request));
 registerCommunityInviteLinks(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
 registerCommunityModerationRoutes(app, async request => readSession(request));
-registerFeedRoutes(app, async request => readSession(request));
 registerContentReportRoutes(app, async request => readSession(request));
 registerPlatformModerationRoutes(app, async request => readSession(request));
 
@@ -310,6 +307,6 @@ try {
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
-    void app.close().then(closeDmEvents).then(closeCommunityEvents).then(closeFeedEvents).then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
+    void app.close().then(closeDmEvents).then(closeCommunityEvents).then(closeDatabase).catch((error: unknown) => app.log.error({ err: error }, 'Shutdown error'));
   });
 }

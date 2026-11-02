@@ -184,20 +184,16 @@ export async function pushActivityNotification(notificationId:string){
     'LEFT JOIN notification_preferences np ON np.user_id=n.recipient_id '+
     'WHERE n.id=$1 AND n.read_at IS NULL '+
     'AND COALESCE(CASE n.kind '+
-    "WHEN 'post_like' THEN np.post_like WHEN 'post_comment' THEN np.post_comment "+
     "WHEN 'friend_request' THEN np.friend_request WHEN 'friend_accepted' THEN np.friend_accepted "+
-    "WHEN 'follow' THEN np.follow ELSE false END,true)=true "+
+    'ELSE false END,true)=true '+
     'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE '+
     '(b.blocker_id=n.recipient_id AND b.blocked_id=n.actor_id) OR '+
     '(b.blocked_id=n.recipient_id AND b.blocker_id=n.actor_id))',[notificationId]);
   if(!row.rowCount)return;
   const n=row.rows[0];
   const verb:Record<string,string>={
-    post_like:'curtiu sua publicação',
-    post_comment:'comentou na sua publicação',
     friend_request:'enviou uma solicitação de amizade',
-    friend_accepted:'aceitou sua solicitação de amizade',
-    follow:'começou a seguir você'
+    friend_accepted:'aceitou sua solicitação de amizade'
   };
   const subs=await getPool().query<Subscription>(
     'SELECT endpoint,p256dh,auth,user_id FROM push_subscriptions WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 10',

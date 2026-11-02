@@ -65,18 +65,6 @@ test('reports: three kinds, access checks, origin, duplicate and durable evidenc
   await signup(alice, 'report_alice');
   await signup(bob, 'report_bob');
   await signup(outsider, 'report_outsider');
-  const post = await alice('/api/v1/feed/posts', 'POST', { body: 'Flagged original post', mediaCount: 0 });
-  assert.equal(post.status, 201, JSON.stringify(post.data));
-  const postId = post.data.post.id;
-  const postReport = { targetKind: 'post', targetId: postId, reason: 'spam', details: ' Please review this ' };
-  assert.equal((await anonymous('/api/v1/reports', 'POST', postReport)).status, 401);
-  assert.equal((await bob('/api/v1/reports', 'POST', postReport, false)).status, 403);
-  assert.equal((await bob('/api/v1/reports', 'POST', { ...postReport, reason: 'invalid' })).status, 400);
-  assert.equal((await bob('/api/v1/reports', 'POST', { ...postReport, targetId: 'invalid' })).status, 400);
-  assert.equal((await alice('/api/v1/reports', 'POST', postReport)).status, 404, 'cannot report own post');
-  assert.equal((await bob('/api/v1/reports', 'POST', postReport)).status, 201);
-  assert.equal((await bob('/api/v1/reports', 'POST', postReport)).status, 409, 'same person cannot file twice');
-
   const conversation = await alice('/api/v1/dm/conversations', 'POST', { handle: 'report_bob' });
   assert.equal(conversation.status, 200, JSON.stringify(conversation.data));
   const msg = await alice('/api/v1/dm/conversations/' + conversation.data.id + '/messages', 'POST', {
@@ -84,6 +72,11 @@ test('reports: three kinds, access checks, origin, duplicate and durable evidenc
   });
   assert.equal(msg.status, 201, JSON.stringify(msg.data));
   const dmReport = { targetKind: 'direct_message', targetId: msg.data.message.id, reason: 'harassment' };
+  assert.equal((await anonymous('/api/v1/reports', 'POST', dmReport)).status,401);
+  assert.equal((await bob('/api/v1/reports', 'POST', dmReport, false)).status,403);
+  assert.equal((await bob('/api/v1/reports', 'POST', {...dmReport,targetKind:'post'})).status,400);
+  assert.equal((await bob('/api/v1/reports', 'POST', {...dmReport,targetId:'invalid'})).status,400);
+  assert.equal((await bob('/api/v1/reports', 'POST', {...dmReport,reason:'invalid'})).status,400);
   assert.equal((await outsider('/api/v1/reports', 'POST', dmReport)).status, 404, 'stranger cannot report private DM');
   assert.equal((await alice('/api/v1/reports', 'POST', dmReport)).status, 404, 'cannot report own message');
   assert.equal((await bob('/api/v1/reports', 'POST', dmReport)).status, 201);
@@ -111,13 +104,11 @@ test('reports: three kinds, access checks, origin, duplicate and durable evidenc
   try {
     const result = await db.query(
       'SELECT target_kind, reason, details, evidence, status FROM content_reports WHERE target_id=ANY($1::uuid[]) ORDER BY target_kind',
-      [[postId, msg.data.message.id, channelMsg.data.id]],
+      [[msg.data.message.id, channelMsg.data.id]],
     );
-    assert.equal(result.rows.length, 3);
+    assert.equal(result.rows.length, 2);
     const byKind = Object.fromEntries(result.rows.map(row => [row.target_kind, row]));
-    assert.deepEqual(Object.keys(byKind).sort(), ['community_message', 'direct_message', 'post']);
-    assert.equal(byKind.post.evidence.body, 'Flagged original post');
-    assert.equal(byKind.post.details, 'Please review this');
+    assert.deepEqual(Object.keys(byKind).sort(), ['community_message', 'direct_message']);
     assert.equal(byKind.direct_message.evidence.body, 'Flagged direct message');
     assert.equal(byKind.community_message.evidence.body, 'Flagged channel message');
     assert.ok(result.rows.every(item => item.status === 'pending'));
@@ -164,39 +155,35 @@ test('platform moderation: default deny, privileged review, audit log and remova
 
     const listing=await requestAs(bob,'/api/v1/moderation/reports?status=pending&kind=all&page=0');
     assert.equal(listing.status,200,JSON.stringify(listing.data));
-    assert.equal(listing.data.reports.length,3);
+    assert.equal(listing.data.reports.length,2);
     const byKind=Object.fromEntries(listing.data.reports.map(r=>[r.targetKind,r]));
-    assert.equal(byKind.post.evidence.body,'Flagged original post');
     assert.equal(byKind.direct_message.evidence.body,'Flagged direct message');
     assert.equal(byKind.community_message.evidence.body,'Flagged channel message');
     assert.equal((await requestAs(bob,'/api/v1/moderation/reports?status=not-valid')).status,400);
 
     const path=(id)=>'/api/v1/moderation/reports/'+id+'/review';
-    assert.equal((await requestAs(outsider,path(byKind.post.id),'POST',{action:'remove',note:'abuse'})).status,403);
-    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'review'},false)).status,403);
-    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'invalid'})).status,400);
-    const reviewing=await requestAs(bob,path(byKind.post.id),'POST',{action:'review',note:'Under review'});
+    assert.equal((await requestAs(outsider,path(byKind.direct_message.id),'POST',{action:'remove',note:'abuse'})).status,403);
+    assert.equal((await requestAs(bob,path(byKind.direct_message.id),'POST',{action:'review'},false)).status,403);
+    assert.equal((await requestAs(bob,path(byKind.direct_message.id),'POST',{action:'invalid'})).status,400);
+    const reviewing=await requestAs(bob,path(byKind.direct_message.id),'POST',{action:'review',note:'Under review'});
     assert.equal(reviewing.status,200,JSON.stringify(reviewing.data));
     assert.equal(reviewing.data.status,'reviewing');
-    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'resolve',note:'No violation found'})).status,200);
-    assert.equal((await requestAs(bob,path(byKind.post.id),'POST',{action:'remove',note:'late'})).status,409,
+    assert.equal((await requestAs(bob,path(byKind.direct_message.id),'POST',{action:'resolve',note:'No violation found'})).status,200);
+    assert.equal((await requestAs(bob,path(byKind.direct_message.id),'POST',{action:'remove',note:'late'})).status,409,
       'closed report cannot be acted upon again');
-    assert.equal((await requestAs(bob,path(byKind.direct_message.id),'POST',{action:'dismiss'})).status,200);
     assert.equal((await requestAs(bob,path(byKind.community_message.id),'POST',{action:'remove'})).status,400,
       'content removal requires an internal note');
     assert.equal((await requestAs(bob,path(byKind.community_message.id),'POST',
       {action:'remove',note:'Hate speech confirmed'})).status,200);
-    const audit=await requestAs(bob,'/api/v1/moderation/reports/'+byKind.post.id+'/actions');
+    const audit=await requestAs(bob,'/api/v1/moderation/reports/'+byKind.direct_message.id+'/actions');
     assert.equal(audit.status,200);
     assert.equal(audit.data.actions.length,2);
     assert.deepEqual(audit.data.actions.map(a=>a.action),['review','resolve']);
     assert.equal(audit.data.actions[1].moderatorHandle,'report_bob');
-    assert.equal((await requestAs(outsider,'/api/v1/moderation/reports/'+byKind.post.id+'/actions')).status,403);
+    assert.equal((await requestAs(outsider,'/api/v1/moderation/reports/'+byKind.direct_message.id+'/actions')).status,403);
     const closed=await requestAs(bob,'/api/v1/moderation/reports?status=resolved');
     assert.equal(closed.status,200);
-    assert.equal(closed.data.reports.length,2,'resolved includes post and removed community content');
-    assert.equal((await alice('/api/v1/feed/posts/'+byKind.post.targetId)).status,200,
-      'reviewing a post without removal preserves it');
+    assert.equal(closed.data.reports.length,2,'resolved includes DM and removed community content');
     const db=new pg.Client({connectionString:process.env.DATABASE_URL});
     await db.connect();
     try{
@@ -204,7 +191,7 @@ test('platform moderation: default deny, privileged review, audit log and remova
         [byKind.community_message.targetId]);
       assert.ok(removed.rows[0].deleted_at,'removal hides the original message');
       const log=await db.query('SELECT action,next_status FROM moderation_report_actions ORDER BY created_at');
-      assert.equal(log.rows.length,4,'every decision is audited');
+      assert.equal(log.rows.length,3,'every decision is audited');
     }finally{await db.end();}
   }finally{
     moderatorServer.kill('SIGTERM');await delay(300);

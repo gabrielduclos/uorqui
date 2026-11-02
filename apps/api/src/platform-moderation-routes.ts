@@ -13,7 +13,7 @@ const reviewBody={type:'object',additionalProperties:false,required:['action'],
     note:{type:'string',maxLength:1000}}};
 const filterSchema={type:'object',additionalProperties:false,properties:{
   status:{type:'string',enum:['all','pending','reviewing','resolved','dismissed']},
-  kind:{type:'string',enum:['all','post','direct_message','community_message']},
+  kind:{type:'string',enum:['all','direct_message','community_message']},
   page:{type:'integer',minimum:0,maximum:200}
 }};
 const noStore='private, no-store';
@@ -133,12 +133,7 @@ export function registerPlatformModerationRoutes(app:FastifyInstance,readSession
             await client.query('ROLLBACK');return reply.code(409).send({error:'ALREADY_REVIEWING'});
           }
           if(action==='remove'){
-            if(report.target_kind==='post'){
-              const changed=await client.query(
-                'UPDATE feed_posts SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id',
-                [report.target_id]);
-              if(!changed.rowCount){await client.query('ROLLBACK');return reply.code(409).send({error:'CONTENT_UNAVAILABLE'});}
-            }else if(report.target_kind==='direct_message'){
+            if(report.target_kind==='direct_message'){            }else if(report.target_kind==='direct_message'){
               const changed=await client.query(
                 'UPDATE direct_messages SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING conversation_id',
                 [report.target_id]);
