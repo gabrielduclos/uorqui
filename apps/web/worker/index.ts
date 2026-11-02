@@ -451,6 +451,31 @@ async function deleteCommunityWithImage(request:Request,env:Env,api:URL,id:strin
 }
 
 export default {
+  // Cron Trigger keeps Render's free instance warm without a browser session.
+  // /health is lightweight and intentionally does not query Neon.
+  async scheduled(_event: unknown, env: Env): Promise<void> {
+    if (!env.API_ORIGIN) return;
+    try {
+      const origin = new URL(env.API_ORIGIN);
+      // No untrusted URL inputs or redirects: the target comes from our Worker binding.
+      if (origin.protocol !== 'https:' || origin.username || origin.password ||
+          origin.pathname !== '/' || origin.search || origin.hash) return;
+      const target = new URL('/health', origin);
+      const response = await fetch(target, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json', 'User-Agent': 'Uorqui-Worker-Keepalive/1.0' },
+        cache: 'no-store',
+        redirect: 'manual',
+        signal: AbortSignal.timeout(25_000),
+      });
+      await response.body?.cancel().catch(() => {});
+      if (!response.ok) console.warn('Uorqui API keepalive returned HTTP', response.status);
+    } catch (error) {
+      // Health checks are best-effort; a Render restart or deploy can interrupt one.
+      console.warn('Uorqui API keepalive could not connect',
+        error instanceof Error ? error.name : 'unknown error');
+    }
+  },
   async fetch(request: Request, env: Env): Promise<Response> {
     const current = new URL(request.url);
     const media = MEDIA_PATH.exec(current.pathname);
