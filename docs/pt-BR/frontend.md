@@ -1,40 +1,41 @@
-# Front-end do Uorqui — padrão e primeira entrega
+# Front-end do Uorqui — padrões e direção de navegação
+
+[Português](frontend.md) · [English](../en/frontend.md)
+
+## Estado do documento
+
+O beta técnico já contém **mensageiro real, comunidades reais, feed híbrido legado e salas de voz**. As telas demonstrativas citadas na documentação inicial não representam mais o estado do aplicativo. A direção aprovada em **02/11/2026**, detalhada em [Descobrir](descobrir.md), **ainda precisa ser implementada no front-end**.
 
 ## Objetivo
 
-Interface simples e funcional, com **comunidades e canais inspirados na organização do Stoat** e **conversas privadas 1:1 inspiradas na simplicidade do WeChat**. As marcas e telas de terceiros são referências de comportamento; identidade, componentes e texto são próprios do Uorqui.
+Interface mobile-first para **descobrir comunidades, participar de canais/salas de voz e conversar individualmente**. Organização de canais e interações de chat podem se inspirar em padrões de mercado, mas a identidade visual, o código e o conteúdo devem ser próprios.
+
+## Navegação futura
+
+- **Descobrir (início):** atividades reais dos canais e salas de voz das comunidades do usuário; busca e comunidades públicas recomendadas. Sem posts, feed infinito, filtro «Para você/Seguindo» ou modo vertical de vídeos.
+- **Mensagens:** conversas individuais 1:1, histórico, anexos, reações e estados de entrega/leitura.
+- **Comunidades:** espaços do usuário, canais de texto, salas de voz e ferramentas de administração/moderação.
+- **Perfil, notificações e configurações:** acessíveis sem ocupar obrigatoriamente uma aba principal. A privacidade do perfil continua independente de comunidades.
+
+Em Descobrir, atalhos levam à comunidade e ao canal exato, sem ingressar automaticamente na chamada ou marcar mensagens como lidas. O usuário sem comunidades vê busca, recomendações públicas e estados vazios honestos. Privacidade e contagens são verificadas pela API.
 
 ## Design system
 
-- **shadcn/ui (estilo New York, Radix)** é a primeira opção para elementos reutilizáveis. Use o componente de catálogo existente antes de escrever um componente primitivo novo. Composições de produto, como lista de canais e shell do aplicativo, são próprias quando não há componente pronto correspondente.
-- **Tailwind CSS v4**, tokens semânticos definidos em `src/styles.css` e tema existente em índigo, preparado para ajuste pelo tweakcn sem duplicar estilos.
-- **Motion** para transições breves; respeitar `prefers-reduced-motion`.
-- Componentes versionados em `apps/web/src/components/ui/`, configurações em `apps/web/components.json` e `apps/web/vite.config.ts`.
-- Cabeçalhos fixos durante a rolagem, navegação inferior mobile, campos de formulário com ao menos 16px, safe-area do iPhone, contraste e foco de teclado.
-- Spinner no botão enquanto aguarda backend; skeleton local nas consultas; logo e barra indeterminada na inicialização da sessão.
+- Preferir os componentes reutilizáveis **shadcn/ui (New York/Radix)** e tokens semânticos **Tailwind CSS v4** em `apps/web/src/styles.css`.
+- **Motion** para transições curtas, respeitando `prefers-reduced-motion`.
+- Componentes em `apps/web/src/components/ui/`. O [UI Kit](ui-kit.md) é **somente documentação**.
+- Cabeçalhos fixos; navegação mobile adaptada ao teclado e safe areas; controle de foco e toque confortável; tradução PT/EN e temas Light/Dark.
+- Skeleton nos carregamentos iniciais e spinners em ações dependentes da API. Atualizações em segundo plano não apagam dados já exibidos.
+- Atividades, presenças, badgets e recomendações não devem ser simulados como reais.
 
-## Telas já codificadas
+## Migração da interface atual
 
-- **Sem sessão:** tela inicial de boas-vindas com cadastro principal, login secundário, confirmação/reenvio, recuperação e perfil social inicial. Continua integrada ao Better Auth e à API existente.
-- **Com sessão e perfil:** shell adaptado a celular/desktop com Início, Conversas, Comunidades e Perfil.
-- **Conversas:** lista, busca local, avatar, detalhe de conversa com balões e campo de mensagem **somente demonstrativos**.
-- **Comunidades:** trilho de comunidades, canais de texto, salas de voz e mensagens de exemplo. **Não são grupos de DM:** são espaços distintos.
-- **Feed:** estado inicial honesto, sem fingir publicações persistidas.
-- **Perfil:** exibe os dados reais da sessão; sair envia a requisição ao backend com spinner.
+1. Construir Descobrir e ajustar menu, links internos e onboarding para **Descobrir · Mensagens · Comunidades**.
+2. Reutilizar as APIs e eventos autenticados de comunidades/voz para atividade; projetar os novos endpoints somente se necessário, sempre com controle de acesso no servidor.
+3. Revisar dependências do feed no perfil, notificações, roteamento, compartilhamento e deep links antigos.
+4. Descontinuar o acesso global aos posts e modo vídeos depois da migração, **sem apagar dados** e sem interromper o compartilhamento de mídias em chats/canais.
+5. Validar desktop, iPhone Safari/PWA, Android/PWA, Light/Dark e PT/EN.
 
-## Limites da prévia
+## Validação e isolamento
 
-O backend ainda não expõe contratos sociais para DMs, canais, posts ou voz. **Todas as mensagens, comunidades e canais exibidos na prévia são dados fictícios e não persistem.** Apenas autenticação, onboarding, perfil autenticado e logout são integrações reais. Não exibir dados de comunidade privada, contadores não fundamentados ou estado de entrega inventado.
-
-## Próximas etapas
-
-1. Implementar contratos de API, permissão e persistência de conversas 1:1.
-2. Comunidades reais, entrada, membros, papéis, canais públicos/privados e moderação.
-3. Feed híbrido e modo de vídeos separado, sem chamar a função de “Reels”.
-4. Auditoria visual real em iPhone Safari/PWA, Android e desktop; verificar sobreposições, scroll, teclado e safe areas.
-
-## Validação
-
-O CI `.github/workflows/web-ui.yml` executa TypeScript, build Vite e dry-run Wrangler. O Cloudflare Builds é responsável pela publicação do Worker `main` em `https://main.uorqui1.workers.dev`. CI verde não substitui conferência do SHA publicado e testes de dispositivo.
-
-**Isolamento:** não modificar `uorqui.app` nem o Worker legado `uorqui-chat`.
+`.github/workflows/web-ui.yml` valida TypeScript, Vite e configuração Wrangler; a publicação ocorre pelo Cloudflare Builds. CI verde não comprova deploy ou testes em dispositivos. Não alterar o Worker **legado** `uorqui-chat` nem suas bases de dados.
