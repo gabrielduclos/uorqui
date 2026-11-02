@@ -41,6 +41,10 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   const [pending,setPending] = useState<File | null>(null);
   const [pendingUrl,setPendingUrl] = useState<string | null>(null);
   const localUrl = useRef<string | null>(null);
+  const [pendingPhotos,setPendingPhotos] = useState<File[]>([]);
+  const [photoUrls,setPhotoUrls] = useState<string[]>([]);
+  const photoLocalUrls = useRef<string[]>([]);
+  const [editingPhotoIndex,setEditingPhotoIndex] = useState<number | null>(null);
   const [editorOpen,setEditorOpen] = useState(false);
   const [pendingLocation,setPendingLocation] = useState<{latitude:number;longitude:number}|null>(null);
   const [locating,setLocating] = useState(false);
@@ -52,7 +56,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   const recordingChunks = useRef<Blob[]>([]);
   const discardRecording = useRef(false);
   const mounted = useRef(true);
-  const canSend = (!!value.trim() || !!pending || !!pendingLocation) && !sending && !locating && recording==='idle';
+  const canSend = (!!value.trim() || !!pending || pendingPhotos.length>0 || !!pendingLocation) && !sending && !locating && recording==='idle';
   const maxHeight = 208;
   useEffect(()=>{
     mounted.current = true;
@@ -61,6 +65,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
       if(recorder.current && recorder.current.state!=='inactive') { recorder.current.onstop=null; recorder.current.stop(); }
       audioStream.current?.getTracks().forEach(track=>track.stop());
       if(localUrl.current) URL.revokeObjectURL(localUrl.current);
+      photoLocalUrls.current.forEach(url=>URL.revokeObjectURL(url));
     };
   },[]);
   useEffect(()=>{
@@ -72,7 +77,43 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   function clearPending() {
     if(localUrl.current)URL.revokeObjectURL(localUrl.current);
     localUrl.current=null;
-    setPending(null); setPendingUrl(null); setEditorOpen(false);
+    photoLocalUrls.current.forEach(url=>URL.revokeObjectURL(url));
+    photoLocalUrls.current=[];
+    setPending(null); setPendingUrl(null); setPendingPhotos([]); setPhotoUrls([]);
+    setEditingPhotoIndex(null); setEditorOpen(false);
+  }
+  function stagePhotos(files:File[]) {
+    if(editing || !files.length)return;
+    const next=[...(pending?.type.startsWith('image/')?[pending]:[]),...pendingPhotos,...files];
+    if(next.length>10){setError(pt?'Selecione no máximo 10 fotos por envio.':'Select up to 10 photos per batch.');return;}
+    const valid=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif']);
+    if(next.some(file=>!valid.has(file.type) || !file.size || file.size>50*1024*1024 ||
+      !file.name || file.name.length>180 || /[\\/\r\n\u0000-\u001f]/.test(file.name))){
+      setError(pt?'Selecione fotos válidas de até 50 MB cada.':'Select valid photos up to 50 MB each.');return;
+    }
+    clearPending();
+    const urls=next.map(file=>URL.createObjectURL(file));
+    photoLocalUrls.current=urls;
+    setPendingPhotos(next);setPhotoUrls(urls);
+    setPendingLocation(null);setError('');setAttachmentsOpen(false);
+  }
+  function removePhoto(index:number) {
+    const remaining=pendingPhotos.filter((_,i)=>i!==index);
+    const urls=photoUrls.filter((_,i)=>i!==index);
+    URL.revokeObjectURL(photoUrls[index]);
+    photoLocalUrls.current=urls;setPendingPhotos(remaining);setPhotoUrls(urls);
+    setEditorOpen(false);setEditingPhotoIndex(null);
+  }
+  function saveEditedPhoto(blob:Blob) {
+    if(editingPhotoIndex===null || !pendingPhotos[editingPhotoIndex])return;
+    const source=pendingPhotos[editingPhotoIndex];
+    const file=new File([blob],source.name.replace(/\.[^.]+$/,'')+'-editada.png',{type:'image/png'});
+    const next=URL.createObjectURL(file),index=editingPhotoIndex;
+    URL.revokeObjectURL(photoUrls[index]);
+    setPendingPhotos(old=>old.map((item,i)=>i===index?file:item));
+    const urls=photoUrls.map((url,i)=>i===index?next:url);
+    photoLocalUrls.current=urls;setPhotoUrls(urls);
+    setEditorOpen(false);setEditingPhotoIndex(null);
   }
   function stageFile(file:File) {
     setPendingLocation(null);
@@ -133,7 +174,8 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   }
   function sendSelected(){
     if(!canSend)return;
-    if(pending){const file=pending;const caption=value.trim();clearPending();onChange('');onAttach(file,caption);}
+    if(pendingPhotos.length){const files=[...pendingPhotos],caption=value.trim();clearPending();onChange('');files.forEach((file,index)=>onAttach(file,index===0?caption:''));}
+    else if(pending){const file=pending;const caption=value.trim();clearPending();onChange('');onAttach(file,caption);}
     else if(pendingLocation){const {latitude,longitude}=pendingLocation;setPendingLocation(null);const caption=value.trim();onChange('');onShareLocation(latitude,longitude,caption);}
     else onSubmit();
   }
@@ -212,6 +254,18 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
 
   return <form ref={controls} onSubmit={submit}
     className="relative flex w-full min-w-0 flex-wrap items-end gap-1 sm:gap-2" data-live-message-composer>
+    {pendingPhotos.length>0 && <div className="w-full min-w-0 border border-border bg-muted/60 p-2 text-xs" role="status">
+      <p className="mb-2 font-semibold">{pt?pendingPhotos.length+' foto(s) selecionada(s)':pendingPhotos.length+' selected photo(s)'}</p>
+      <div className="grid max-h-48 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">
+        {pendingPhotos.map((file,index)=><div key={photoUrls[index]} className="relative min-w-0 border border-border bg-background p-1">
+          <img src={photoUrls[index]} alt={pt?'Foto '+(index+1):'Photo '+(index+1)} className="h-20 w-full object-contain"/>
+          <div className="flex items-center justify-between gap-1 pt-1">
+            <button type="button" aria-label={pt?'Editar foto '+(index+1):'Edit photo '+(index+1)} onClick={()=>{setEditingPhotoIndex(index);setEditorOpen(true);}} className="grid size-7 place-items-center hover:bg-accent"><Pencil className="size-3.5"/></button>
+            <button type="button" aria-label={pt?'Remover foto '+(index+1):'Remove photo '+(index+1)} onClick={()=>removePhoto(index)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-3.5"/></button>
+          </div>
+        </div>)}
+      </div>
+    </div>}
     {(pending && pendingUrl) && <div className="flex w-full min-w-0 items-start gap-2 border border-border bg-muted/60 p-2 text-xs" role="status">
       <div className="min-w-0 flex-1">
         <p className="mb-1 truncate font-semibold">{attachmentLabel(pending.type,locale)} · {(pending.size/1048576).toFixed(1)} MB</p>
@@ -241,10 +295,13 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
       <button type="button" onClick={cancelRecording} className="grid size-9 place-items-center hover:bg-accent" aria-label={pt?'Descartar áudio':'Discard audio'}><X className="size-4"/></button>
     </div>}
     {error && <p role="alert" className="w-full text-xs text-destructive">{error}</p>}
-    {editorOpen && pendingUrl && pending && typeof document!=='undefined' && createPortal(
+    {editorOpen && (editingPhotoIndex!==null ? !!photoUrls[editingPhotoIndex] : !!pendingUrl&&!!pending) && typeof document!=='undefined' && createPortal(
       <div className="fixed inset-0 z-[120] flex flex-col bg-black/95 p-3 text-white sm:p-6" role="dialog" aria-modal="true" aria-label={pt?'Editar imagem':'Edit image'}>
-        <ChatImageEditor key={pendingUrl} src={pendingUrl} onCancel={()=>setEditorOpen(false)}
-          onSave={blob=>{const filename=pending.name.replace(/\.[^.]+$/,'')+'-editada.png';stageFile(new File([blob],filename,{type:'image/png'}));setEditorOpen(false);}}/>
+        <ChatImageEditor key={editingPhotoIndex!==null?photoUrls[editingPhotoIndex]:pendingUrl!}
+          src={editingPhotoIndex!==null?photoUrls[editingPhotoIndex]:pendingUrl!}
+          onCancel={()=>{setEditorOpen(false);setEditingPhotoIndex(null);}}
+          onSave={blob=>{if(editingPhotoIndex!==null)saveEditedPhoto(blob);
+            else if(pending){const filename=pending.name.replace(/\.[^.]+$/,'')+'-editada.png';stageFile(new File([blob],filename,{type:'image/png'}));setEditorOpen(false);}}}/>
       </div>,document.body)}
     <div className="relative shrink-0">
       <button type="button" aria-label={pt ? 'Adicionar anexo' : 'Add attachment'}
@@ -307,8 +364,8 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         </p>
       </div>}
     </div>
-    <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only"
-      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
+    <input ref={galleryRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only"
+      onChange={e => { const files=Array.from(e.target.files??[]); e.target.value=''; stagePhotos(files); }} />
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,.mp3,.m4a,.ogg,.webm,.wav,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
@@ -355,7 +412,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         className="grid size-11 shrink-0 place-items-center rounded-[5px] bg-primary text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         <Send className="size-5"/>
       </button>
-      : <button type="button" onClick={()=>void toggleRecording()} disabled={sending || editing || (!!pending && recording==='idle')}
+      : <button type="button" onClick={()=>void toggleRecording()} disabled={sending || editing || (!!pending && recording==='idle') || pendingPhotos.length>0}
         aria-label={recording!=='idle'?(pt?'Finalizar gravação':'Finish recording'):(pt?'Gravar áudio':'Record voice note')}
         className={cn('grid size-11 shrink-0 place-items-center',recording!=='idle'?'bg-destructive text-destructive-foreground':'text-muted-foreground',sending && 'opacity-40')}>
         {recording!=='idle'?<Square className="size-4" fill="currentColor"/>:<Mic className="size-5"/>}
