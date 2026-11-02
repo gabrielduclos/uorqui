@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy, Check } from 'lucide-react';
+import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -619,6 +619,9 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {meeting&&<Button type="button" variant="outline" size="sm" className="min-h-10 gap-1.5" onClick={()=>setInviteOpen(v=>!v)}>
+            <Link2 className="size-4"/>{pt?'Convidar':'Invite'}
+          </Button>}
           <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground" role="status">
             <span className={'size-2 rounded-full '+(phase==='joined'?'bg-emerald-500':phase==='joining'?'bg-amber-500':'bg-muted-foreground/40')}/>
             {phase==='joined'?(pt?'Conectado':'Connected'):phase==='joining'?(pt?'Conectando':'Connecting'):(pt?'Desconectado':'Disconnected')}
@@ -629,6 +632,18 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </Button>}
         </div>
       </div>
+      {meeting&&inviteOpen&&<div className="mx-auto mt-3 w-full max-w-5xl rounded-xl border border-border bg-card p-3">
+        <h4 className="text-sm font-semibold">{pt?'Convidar para esta reunião':'Invite to this meeting'}</h4>
+        <p className="mt-1 text-xs text-muted-foreground">{pt?'O convidado precisa participar da comunidade. A aprovação da reunião, quando ativa, continua obrigatória.':'Invitees must belong to the community. Meeting approval still applies when enabled.'}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={()=>void copyMeetingUrl()}><Copy className="size-4"/>{pt?'Copiar link':'Copy link'}</Button>
+          <form className="flex min-w-0 flex-1 flex-wrap items-center gap-2" onSubmit={event=>{event.preventDefault();void sendMeetingInvite();}}>
+            <input className="min-h-10 min-w-28 flex-1 rounded-lg border border-input bg-background px-3 text-base sm:text-sm" autoComplete="off" aria-label={pt?'@usuário para convidar':'@handle to invite'} placeholder="@usuario" maxLength={33} value={inviteHandle} onChange={e=>setInviteHandle(e.target.value)}/>
+            <Button type="submit" size="sm" disabled={inviteBusy||!inviteHandle.trim()}><Send className="size-4"/>{inviteBusy?(pt?'Enviando…':'Sending…'):(pt?'Enviar pelo Uorqui':'Send in Uorqui')}</Button>
+          </form>
+        </div>
+        {inviteFeedback&&<p role="status" className="mt-2 break-all text-xs text-muted-foreground">{inviteFeedback}</p>}
+      </div>}
       {error&&<div role="alert" className="mx-auto mt-4 max-w-5xl rounded-xl border border-destructive/35 bg-destructive/5 p-3 text-xs text-destructive">
         {error==='VOICE_NETWORK_RETRY'?(pt?'Reconectando…':'Reconnecting…'):error}</div>}
       {phase==='joined'&&micInterrupted&&<div role="status" className="mx-auto mt-3 flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs">
