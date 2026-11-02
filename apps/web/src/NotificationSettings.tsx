@@ -5,10 +5,9 @@ import {Spinner} from '@/components/ui/spinner';
 import {PushPreferences} from './PushPreferences';
 import {useUorquiPreferences} from './UorquiPreferences';
 
-export type PushKind='direct_message'|'community_message'|'post_like'|'post_comment'|'friend_request'|'friend_accepted'|'follow';
+export type PushKind='direct_message'|'community_message'|'friend_request'|'friend_accepted';
 export type PushSettings=Record<PushKind,boolean>;
-const initial:PushSettings={direct_message:true,community_message:true,post_like:true,post_comment:true,
-  friend_request:true,friend_accepted:true,follow:true};
+const initial:PushSettings={direct_message:true,community_message:true,friend_request:true,friend_accepted:true};
 const options=[
   {key:'direct_message',pt:'Mensagens privadas',en:'Direct messages',icon:MessageCircle},
   {key:'community_message',pt:'Mensagens em comunidades',en:'Community messages',icon:Users},

@@ -1,7 +1,7 @@
 
 import {useCallback,useEffect,useRef,useState} from 'react';
 export type ActivityNotification={
-  id:string;kind:'post_like'|'post_comment'|'friend_request'|'friend_accepted'|'follow';
+  id:string;kind:'friend_request'|'friend_accepted';
   targetId:string;createdAt:string;readAt:string|null;actorHandle:string;actorName:string;actorAvatar:string|null;
 };
 export function useActivityNotifications(accountId:string){

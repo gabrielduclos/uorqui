@@ -5,7 +5,7 @@ import { SkeletonRows } from '@/components/ui/skeleton';
 
 type Status='pending'|'reviewing'|'resolved'|'dismissed';
 type FilterStatus='all'|Status;
-type Kind='post'|'direct_message'|'community_message';
+type Kind='direct_message'|'community_message';
 type KindFilter='all'|Kind;
 type Action='review'|'resolve'|'dismiss'|'remove';
 type Report={
@@ -17,7 +17,6 @@ type Report={
 type ReportAction={id:string;action:Action;previousStatus:Status;nextStatus:Status;
   moderatorHandle:string|null;note:string|null;createdAt:string};
 const kinds:Record<Kind,{pt:string;en:string}>={
-  post:{pt:'Publicação',en:'Post'},
   direct_message:{pt:'Mensagem privada',en:'Direct message'},
   community_message:{pt:'Canal de texto',en:'Text channel'},
 };
