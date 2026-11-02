@@ -62,11 +62,11 @@ Esses itens documentam entregas passadas, **não** a próxima prioridade de dese
 
 ## Próxima etapa — Descobrir (antes do piloto)
 
-- [ ] Substituir a tela inicial do feed por **Descobrir**, com busca e recomendações de comunidades públicas.
-- [ ] Mostrar atividades recentes e salas de voz ativas **das comunidades do usuário**, com contagens fundamentadas e autorização no servidor.
-- [ ] Acesso direto ao canal/sala correto sem entrar automaticamente em chamada, marcar como lido ou expor conteúdo privado.
-- [ ] Funcionar para contas novas, sem comunidades, sem listas artificiais de posts/atividade.
-- [ ] Atualizar navegação principal, onboarding, perfil público, busca e acessibilidade em PT-BR/EN e Light/Dark.
+- [x] Substituir a tela inicial do feed por **Descobrir**, com busca e recomendações de comunidades públicas (código na `main`; validação de deploy pendente).
+- [x] Mostrar atividades recentes e salas de voz ativas **das comunidades do usuário**, com contagens fundamentadas e autorização no servidor.
+- [x] Acesso direto ao canal/sala correto sem entrar automaticamente em chamada, marcar como lido ou expor conteúdo privado.
+- [x] Implementar estado vazio para contas sem comunidades, sem listas artificiais de posts/atividade (validação manual pendente).
+- [x] Ajustar a navegação, onboarding, perfil público, busca e textos da nova tela em PT-BR/EN, usando os tokens Light/Dark (auditoria acessibilidade/dispositivos pendente).
 - [ ] Revisar notificações, links internos e links antigos de posts; definir compatibilidade e transição.
 - [ ] Retirar o acesso ao feed global, criação de posts e modo de vídeos após revisar dependências, **sem apagar dados, tabelas ou mídias automaticamente**.
 - [ ] Documentar retenção/exportação, migrations versionadas, rollback e validação no desktop, Android e iOS/PWA.
