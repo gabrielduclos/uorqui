@@ -124,9 +124,9 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
       <button type="button" disabled={!!pending} onClick={()=>void action(person.handle,'accept')}
         aria-label={pt?'Aceitar '+person.displayName:'Accept '+person.displayName}
         className="grid size-9 shrink-0 place-items-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-50"><Check className="size-4"/></button>
-      <button type="button" disabled={!!pending} onClick={()=>void action(person.handle,'decline')}
-        aria-label={pt?'Recusar '+person.displayName:'Decline '+person.displayName}
-        className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50"><X className="size-4"/></button>
+      <Button type="button" size="sm" variant="outline" disabled={!!pending} onClick={()=>void action(person.handle,'decline')}
+        aria-label={pt?'Recusar solicitação de '+person.displayName:'Decline request from '+person.displayName}
+        className="shrink-0 gap-1 px-2"><X className="size-4"/>{pt?'Recusar':'Decline'}</Button>
     </>:<button type="button" disabled={!!pending} onClick={()=>void action(person.handle,'remove')}
       aria-label={pt?'Cancelar solicitação para '+person.displayName:'Cancel request to '+person.displayName}
       className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-secondary disabled:opacity-50"><X className="size-4"/></button>}
