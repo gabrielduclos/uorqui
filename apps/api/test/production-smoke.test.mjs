@@ -64,6 +64,23 @@ test('retired global feed endpoints are unavailable on Cloudflare and Render', {
   }
 });
 
+// A new meeting endpoint returns 401 before any room or member lookup.
+// The prior API release returned 404, making this a harmless deployment check.
+test('live meeting routes are deployed and reject anonymous access', { timeout: 180_000 }, async () => {
+  const path='/api/v1/communities/00000000-0000-4000-8000-000000000001/channels/00000000-0000-4000-8000-000000000002/meeting';
+  for (const origin of [backend,frontend]) {
+    await ready(origin);
+    let result;
+    for(let attempt=0;attempt<12;attempt++){
+      result=await request(origin,path);
+      if(result.status===401)break;
+      if(result.status!==404)break;
+      await new Promise(resolve=>setTimeout(resolve,8000));
+    }
+    assert.equal(result.status,401,'Meeting API must be deployed and require login on '+origin+': '+JSON.stringify(result.data));
+  }
+});
+
 test('production signup configuration and anonymous profile', { timeout: 120_000 }, async () => {
   const r = await request(frontend, '/api/v1/status');
   assert.equal(r.status, 200);
