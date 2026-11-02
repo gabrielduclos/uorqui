@@ -1,6 +1,6 @@
 # Uorqui
 
-**Plataforma social open source com mensageiro, feed híbrido e comunidades.**
+**Plataforma social open source centrada em comunidades, descoberta e mensagens individuais.**
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
@@ -13,10 +13,12 @@
 O Uorqui reúne três experiências:
 
 - **Conversas individuais:** mensagens privadas 1:1, respostas, reações, anexos, estados de mensagens, push e atualização em tempo real via SSE. Não há grupos tradicionais no mensageiro.
-- **Feed híbrido:** publicações contínuas com texto, fotos e vídeos, filtros fixos "Para você" e "Seguindo", botão + à esquerda que abre o modal de nova postagem e modo imersivo para vídeos.
+- **Descobrir (nova direção, ainda não implementada):** tela inicial sem publicações, com comunidades públicas recomendadas, busca e atividades das comunidades das quais o usuário participa. O feed global e o modo de vídeos imersivo serão descontinuados após uma migração segura.
 - **Comunidades:** participação pública/privada, convites, canais de texto, moderação e salas de voz via WebRTC, com chamada minimizável durante a navegação.
 
 O público inicial inclui comunidades gamers, mas o produto é de uso geral.
+
+> **Mudança de direção em 02/11/2026:** a visão futura elimina o feed global; o beta ainda contém o feed implementado anteriormente. Esta atualização é **somente da documentação**, não é um deploy nem uma remoção de dados. Leia a [decisão Descobrir](docs/pt-BR/descobrir.md).
 
 ## Situação do beta
 
@@ -24,7 +26,8 @@ O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 | --- | --- |
 | Cadastro e perfis | Better Auth, verificação/recuperação por e-mail, privacidade e bloqueio implementados; falta validar cadastro real e entrega de e-mails |
 | Mensageiro | Conversas 1:1 persistidas, anexos, reações, estados de leitura/entrega, SSE e Web Push implementados |
-| Feed | Publicações híbridas e mídias com API/banco, filtros persistentes e criação por modal |
+| Feed (legado no beta atual) | Publicações híbridas e mídias com API/banco, filtros persistentes e criação por modal; retirada planejada, não executada |
+| Descobrir (planejado) | Recomendações de comunidades públicas, busca e atividades autorizadas das comunidades do usuário; implementação pendente |
 | Comunidades | Membros, convites, cargos, canais de texto, presença e voz WebRTC |
 | Infraestrutura | PWA React no Worker `main` da Cloudflare, API Fastify no Render e PostgreSQL na Neon |
 | Lançamento amplo | **Ainda pendente:** testes reais no iOS/Android, push, TURN/redes diferentes, monitoramento e testes de PWA instalado após a troca do domínio |
@@ -54,6 +57,7 @@ A identificação do beta está nos manifestos npm e aparece ao lado do logo no 
 | Worker Cloudflare | [Workers](docs/pt-BR/cloudflare-workers.md) | [Workers](docs/en/cloudflare-workers.md) |
 | Arquitetura | [Arquitetura](docs/pt-BR/arquitetura.md) | [Architecture](docs/en/architecture.md) |
 | Requisitos | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
+| Direção da descoberta | [Descobrir](docs/pt-BR/descobrir.md) | [Discover](docs/en/discover.md) |
 | Planejamento | [Roadmap](docs/pt-BR/roadmap.md) | [Roadmap](docs/en/roadmap.md) |
 | Identidade visual | [UI Kit](docs/pt-BR/ui-kit.md) | [UI Kit](docs/en/ui-kit.md) |
 | Migração de domínio | [Plano e reversão](docs/pt-BR/migracao-dominio-uorqui-app.md) | [Migration runbook (PT-BR)](docs/pt-BR/migracao-dominio-uorqui-app.md) |
