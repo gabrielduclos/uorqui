@@ -116,6 +116,18 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,54321))',[channelId]);
         const ok=await client.query(voiceAccess,[channelId,id,me]);
         if(!ok.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'MEMBERS_ONLY'});}
+        // A member must have an explicit approval before joining a restricted meeting.
+        const access=await client.query(
+          "SELECT ch.kind,ch.meeting_join_policy,m.role,req.status FROM community_channels ch "+
+          "JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$3 "+
+          "LEFT JOIN meeting_access_requests req ON req.channel_id=ch.id AND req.user_id=$3 "+
+          "WHERE ch.community_id=$1 AND ch.id=$2",[id,channelId,me]);
+        const room=access.rows[0];
+        if(room?.kind==='meeting'&&room.meeting_join_policy==='approval'&&
+          !['owner','admin'].includes(room.role)&&room.status!=='approved'){
+          await client.query('ROLLBACK');
+          return reply.code(403).send({error:'MEETING_APPROVAL_REQUIRED'});
+        }
         await client.query("DELETE FROM community_voice_sessions WHERE last_seen_at < now()-interval '180 seconds'");
         await client.query("DELETE FROM community_voice_signals WHERE created_at < now()-interval '3 minutes'");
         const seats=await client.query('SELECT user_id FROM community_voice_sessions WHERE channel_id=$1',[channelId]);
