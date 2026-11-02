@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{user:{id:string}} | null>;
-type TargetKind = 'post' | 'direct_message' | 'community_message';
+type TargetKind = 'direct_message' | 'community_message';
 type ReportReason = 'spam' | 'harassment' | 'hate' | 'sexual' | 'violence' | 'scam' | 'privacy' | 'other';
 
 const reportBody = {
@@ -10,7 +10,7 @@ const reportBody = {
   required: ['targetKind', 'targetId', 'reason'],
   additionalProperties: false,
   properties: {
-    targetKind: { type: 'string', enum: ['post', 'direct_message', 'community_message'] },
+    targetKind: { type: 'string', enum: ['direct_message', 'community_message'] },
     targetId: { type: 'string', format: 'uuid' },
     reason: { type: 'string', enum: ['spam', 'harassment', 'hate', 'sexual', 'violence', 'scam', 'privacy', 'other'] },
     details: { type: 'string', maxLength: 1000 },
@@ -19,7 +19,7 @@ const reportBody = {
 const originValid = (request: FastifyRequest) =>
   request.headers.origin === (process.env.WEB_ORIGIN ?? 'http://localhost:5173');
 
-type Evidence = { author_id: string; body: string; attachment_id?: string | null; media_ids?: string[] };
+type Evidence = { author_id: string; body: string; attachment_id?: string | null };
 
 export function registerContentReportRoutes(app: FastifyInstance, readSession: SessionReader) {
   app.post('/api/v1/reports', { schema: { body: reportBody } }, async (request, reply) => {
@@ -37,18 +37,7 @@ export function registerContentReportRoutes(app: FastifyInstance, readSession: S
       // Never trust a target ID submitted by the browser. Re-check the same
       // access rules used for reading each target, and forbid self-reporting.
       let evidence: Evidence | null = null;
-      if (targetKind === 'post') {
-        const found = await getPool().query(
-          "SELECT p.author_id,p.body,COALESCE((SELECT json_agg(m.id) FROM feed_media m WHERE m.post_id=p.id),'[]'::json) AS media_ids " +
-          'FROM feed_posts p JOIN profiles prof ON prof.user_id=p.author_id ' +
-          'WHERE p.id=$2 AND p.author_id<>$1 AND p.deleted_at IS NULL AND p.published_at IS NOT NULL ' +
-          "AND (prof.is_public=true OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.user_a_id=LEAST(p.author_id,$1::uuid) " +
-          "AND f.user_b_id=GREATEST(p.author_id,$1::uuid) AND f.status='accepted')) " +
-          'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE ' +
-          '(b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))',
-          [reporter, targetId]);
-        evidence = found.rows[0] ?? null;
-      } else if (targetKind === 'direct_message') {
+      if (targetKind === 'direct_message') {      } else if (targetKind === 'direct_message') {
         const found = await getPool().query(
           'SELECT m.author_id,m.body,m.attachment_id FROM direct_messages m ' +
           'JOIN direct_conversations c ON c.id=m.conversation_id ' +
@@ -74,7 +63,6 @@ export function registerContentReportRoutes(app: FastifyInstance, readSession: S
       const snapshot = {
         body: evidence.body,
         attachmentId: evidence.attachment_id ?? null,
-        mediaIds: evidence.media_ids ?? [],
       };
       const inserted = await getPool().query(
         'INSERT INTO content_reports (reporter_id,target_kind,target_id,target_author_id,reason,details,evidence) ' +

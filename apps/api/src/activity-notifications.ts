@@ -2,7 +2,7 @@ import { getPool } from './db/client.js';
 import { publishDmUserEvent } from './dm-events.js';
 import { pushActivityNotification } from './push-routes.js';
 
-export type ActivityKind = 'post_like'|'post_comment'|'friend_request'|'friend_accepted'|'follow';
+export type ActivityKind = 'friend_request'|'friend_accepted';
 
 /** Persist only server-verified relationships; do not expose blocked users. */
 export async function recordActivity(recipientId:string,actorId:string,kind:ActivityKind,
@@ -20,9 +20,3 @@ export async function recordActivity(recipientId:string,actorId:string,kind:Acti
   void pushActivityNotification(result.rows[0].id).catch(()=>{});
 }
 
-export async function recordPostActivity(postId:string,actorId:string,
-  kind:'post_like'|'post_comment',eventKey:string):Promise<void>{
-  const result=await getPool().query<{author_id:string}>(
-    'SELECT author_id FROM feed_posts WHERE id=$1 AND published_at IS NOT NULL AND deleted_at IS NULL',[postId]);
-  if(result.rows.length)await recordActivity(result.rows[0].author_id,actorId,kind,postId,eventKey);
-}

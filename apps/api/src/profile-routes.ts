@@ -97,12 +97,6 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
         if (blocked.rowCount) return reply.status(404).send({ error: 'Profile not found' });
       }
       const audience=requester?.user.id??null;
-      const counts=await getPool().query(
-        'SELECT (SELECT COUNT(*)::int FROM feed_follows WHERE followed_id=$1) AS "followersCount", '+
-        '(SELECT COUNT(*)::int FROM feed_follows WHERE follower_id=$1) AS "followingCount", '+
-        'EXISTS(SELECT 1 FROM feed_follows WHERE followed_id=$1 AND follower_id=$2::uuid) AS following',
-        [record.id,audience]
-      );
       const { isPublic: _visibility, ...publicData } = record;
       const isPrivate=!record.isPublic;
       let canViewDetails=!isPrivate || audience===record.id;
@@ -112,69 +106,16 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
           "AND user_b_id=GREATEST($1::uuid,$2::uuid) AND status='accepted'",[record.id,audience]);
         canViewDetails=!!friend.rowCount;
       }
-      // Private profiles expose their totals, never the identity of followed accounts
-      // or private photos/bio to strangers. Blocks still return 404 above.
+      // Private profile details are hidden from strangers and blocked accounts.
       const safeProfile=canViewDetails?publicData:{
         ...publicData, bio:null, avatarUrl:null, coverUrl:null, createdAt:null,
       };
       return reply.header('Cache-Control','no-store').send({profile:{
-        ...safeProfile,isPrivate,following:!!counts.rows[0]?.following,
-        mine:audience===record.id,followersCount:counts.rows[0]?.followersCount??0,
-        followingCount:counts.rows[0]?.followingCount??0,
+        ...safeProfile,isPrivate,mine:audience===record.id,
       }});
     } catch (error) {
       request.log.error({ err: error }, 'Get public profile failed');
       return reply.status(503).send({ error: 'Service unavailable' });
-    }
-  });
-
-  app.get('/api/v1/profiles/:handle/follows/:kind', {
-    schema:{
-      params:{type:'object',additionalProperties:false,required:['handle','kind'],properties:{
-        handle:{type:'string',pattern:'^@?[a-zA-Z][a-zA-Z0-9_]{2,31}$'},
-        kind:{type:'string',enum:['followers','following']}
-      }},
-      querystring:{type:'object',additionalProperties:false,properties:{
-        offset:{type:'integer',minimum:0,maximum:1000}
-      }}
-    }
-  },async(request,reply)=>{
-    const {handle,kind}=request.params as {handle:string;kind:'followers'|'following'};
-    const {offset=0}=request.query as {offset?:number};
-    try{
-      const requester=await readSession(request);
-      const result=await getPool().query(
-        'SELECT u.id,p.is_public FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.handle=$1',
-        [handle.replace(/^@/,'').toLowerCase()]
-      );
-      const target=result.rows[0] as {id:string;is_public:boolean}|undefined;
-      if(!target)return reply.code(404).send({error:'Profile unavailable'});
-      if(requester){
-        const blocked=await getPool().query(
-          'SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',
-          [requester.user.id,target.id]
-        );
-        if(blocked.rowCount)return reply.code(404).send({error:'Profile unavailable'});
-      }
-      if(!target.is_public)return reply.code(403).send({error:'PRIVATE_FOLLOW_LIST'});
-      const role=kind==='followers'?'follower_id':'followed_id';
-      const match=kind==='followers'?'followed_id':'follower_id';
-      const me=requester?.user.id??null;
-      const people=await getPool().query(
-        'SELECT u.handle,p.display_name AS "displayName",p.avatar_url AS "avatarUrl" '+
-        'FROM feed_follows f JOIN users u ON u.id=f.'+role+' JOIN profiles p ON p.user_id=u.id '+
-        'WHERE f.'+match+'=$1 AND p.is_public=true '+
-        'AND ($2::uuid IS NULL OR NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
-        '(b.blocker_id=$2::uuid AND b.blocked_id=u.id) OR (b.blocker_id=u.id AND b.blocked_id=$2::uuid))) '+
-        'ORDER BY f.created_at DESC,f.'+role+' DESC LIMIT 21 OFFSET $3',
-        [target.id,me,offset]
-      );
-      return reply.header('Cache-Control','no-store').send({
-        users:people.rows.slice(0,20),nextOffset:people.rows.length>20?offset+20:null,
-      });
-    }catch(error){
-      request.log.error({err:error},'List profile follows failed');
-      return reply.code(503).send({error:'Service unavailable'});
     }
   });
 
