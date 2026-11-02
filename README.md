@@ -14,7 +14,7 @@ Uorqui brings together three connected experiences:
 
 - **Direct messages:** private 1:1 text conversations, replies, reactions, media attachments, message status, background push and SSE-driven updates. No conventional private group chats.
 - **Discover:** a home screen without global posts, featuring recommended public communities, search and activity from communities a user has joined. Obsolete global feed UI, API, and PostgreSQL tables were retired November 2, 2026.
-- **Communities:** public/private membership, invitations, text channels, moderation and live WebRTC voice rooms, including a floating call control when navigating.
+- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, configurable meeting admission, join-request push notifications and optional password-protected channels.
 
 The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
 
@@ -28,9 +28,9 @@ The initial audience includes gaming communities, but Uorqui is designed for gen
 | Direct messages | Persisted 1:1 messages, media, reactions, read/delivery state, SSE updates and Web Push implementation |
 | Legacy feed | Retired from app, API and PostgreSQL; Neon recovery snapshots and four legacy R2 files retained |
 | Discover | Public community recommendations, search and authorized joined-community activity; live API smoke checks passed, device testing pending |
-| Communities | Membership, invitations, roles, text channels, voice presence and WebRTC |
+| Communities | Text, voice and video meeting channels; per-room admission, invitations, channel passwords and community-request alerts; live API smoke passed, real-device media tests pending |
 | Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
-| Public launch | **Not yet approved:** real-device tests, push, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
+| Public launch | **Not yet approved:** real-device camera/microphone tests, push delivery, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
 
 The project has automated CI for the API, UI and integration flows. Passing CI does **not** mean the iOS/Android installed-PWA experience has been fully certified.
 
