@@ -161,6 +161,15 @@ test('meeting: direct entry, approval gates, invitations and community request n
   assert.equal((await friend(meeting)).data.policy,'open','new meetings use direct entry by default');
   assert.equal((await friend(rtc+'/join','POST',{sessionId:first})).status,200);
   assert.equal((await friend(rtc+'/sessions/'+first,'DELETE')).status,204);
+  // An authenticated community member must still unlock a password-protected
+  // video room before joining or exchanging WebRTC signals.
+  assert.equal((await owner(prefix+'/channels/'+channelId+'/password','PUT',{password:'meeting-safe-1234'})).status,200);
+  assert.equal((await friend(rtc+'/join','POST',{sessionId:crypto.randomUUID()})).status,403);
+  assert.equal((await friend(prefix+'/channels/'+channelId+'/unlock','POST',{password:'meeting-safe-1234'})).status,200);
+  const secureSession=crypto.randomUUID();
+  assert.equal((await friend(rtc+'/join','POST',{sessionId:secureSession})).status,200);
+  assert.equal((await friend(rtc+'/sessions/'+secureSession,'DELETE')).status,204);
+  assert.equal((await owner(prefix+'/channels/'+channelId+'/password','PUT',{password:null})).status,200);
   assert.equal((await stranger(meeting)).status,404,'nonmembers cannot inspect meeting policy');
   assert.equal((await friend(meeting+'/policy','PUT',{policy:'approval'})).status,403,'only administrators set admission policy');
   assert.equal((await owner(meeting+'/policy','PUT',{policy:'approval'})).status,200);
