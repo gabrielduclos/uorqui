@@ -824,7 +824,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.name}</h2>
             <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
         </header>
-        <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+        {channelLocked?<form className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 py-8 text-center" onSubmit={event=>void unlockChannel(event)}>
+          <span className="grid size-14 place-items-center rounded-2xl bg-primary/10"><LockKeyhole className="size-7 text-primary"/></span>
+          <h3 className="font-semibold">{pt?'Canal protegido por senha':'Password-protected channel'}</h3>
+          <p className="max-w-xs text-sm text-muted-foreground">{pt?'Digite a senha do canal para acessar mensagens, arquivos e chamadas.':'Enter the channel password to access messages, files and calls.'}</p>
+          <Input type="password" autoComplete="off" required maxLength={72} value={unlockPassword}
+            onChange={event=>setUnlockPassword(event.target.value)} className="w-full max-w-xs text-base"
+            placeholder={pt?'Senha do canal':'Channel password'} aria-label={pt?'Senha do canal':'Channel password'}/>
+          {unlockError&&<p role="alert" className="max-w-xs text-xs text-destructive">{unlockError}</p>}
+          <Button type="submit" loading={unlockBusy} disabled={!unlockPassword||unlockBusy}>{pt?'Desbloquear canal':'Unlock channel'}</Button>
+        </form>:<div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
           activeChannel.kind!=='text'&&voiceTextExpanded&&'lg:flex-row')}>
         {activeChannel.kind!=='text'&&(
           <div ref={voiceHostRef} className={cn('relative flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-border',
@@ -931,7 +940,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </div>
         </div>}
         </div>
-        </div>
+        </div>}
       </>:<div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-xs"><Users className="mx-auto size-11 text-primary"/>
           <h3 className="mt-4 font-semibold">{pt?'Suas comunidades':'Your communities'}</h3>
