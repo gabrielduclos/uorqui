@@ -446,10 +446,10 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         }
       }catch{/* Ignore malformed event payloads. */}
     };
-    let firstReady=true;
     const onReady=()=>{
-      if(firstReady){firstReady=false;return;}
-      void fetchNew();
+      // Refresh after every reconnect, including returning from another tab.
+      // First-load without a snapshot is handled by the normal timeline loader.
+      if(postsRef.current.length)void fetchNew();
     };
     const disconnect=()=>{
       if(!stream)return;
@@ -459,7 +459,6 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     };
     const connect=()=>{
       if(disposed||stream||document.visibilityState!=='visible'||typeof EventSource==='undefined')return;
-      firstReady=true;
       stream=new EventSource('/api/v1/feed/events',{withCredentials:true});
       stream.addEventListener('feed-update',onUpdate);
       stream.addEventListener('ready',onReady);
