@@ -204,6 +204,13 @@
       "when": 1793557200000,
       "tag": "0028_notification_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793653200000,
+      "tag": "0029_retire_global_feed",
+      "breakpoints": true
     }
   ]
 }
