@@ -25,7 +25,7 @@ type Community={
   id:string;name:string;slug:string;description:string|null;avatarUrl:string|null;visibility:Visibility;
   memberCount:number;myRole:string|null;requestKind:string|null;requestStatus:string|null;
 };
-type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';createdAt:string};
+type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';createdAt:string;hasPassword?:boolean;unlocked?:boolean};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
@@ -111,6 +111,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
+  const [unlockPassword,setUnlockPassword]=useState('');
+  const [unlockBusy,setUnlockBusy]=useState(false);
+  const [unlockError,setUnlockError]=useState('');
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
   const [pendingMessages,setPendingMessages]=useState<PendingMessage[]>([]);
@@ -139,6 +142,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const acknowledged=useRef(new Map<string,string>());
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
+  const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
   const community=detail?.community??null;
   const renderedMessages=[...messages,...pendingMessages.filter(p=>p.channelId===channelId&&!messages.some(m=>m.clientId===p.clientId))];
 
@@ -271,7 +275,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
-    if(!selectedId||!channelId||!activeChannel||!community?.myRole){
+    if(!selectedId||!channelId||!activeChannel||!community?.myRole||(activeChannel.hasPassword&&!activeChannel.unlocked)){
       setMessages([]);setMessagesLoadFailed(false);return;
     }
     let active=true,loadedOnce=false,requestId=0;
@@ -308,7 +312,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       window.removeEventListener('uorqui:community-event',event);
       window.removeEventListener('focus',focus);
     };
-  },[selectedId,channelId,activeChannel?.kind,community?.myRole]);
+  },[selectedId,channelId,activeChannel?.kind,activeChannel?.hasPassword,activeChannel?.unlocked,community?.myRole]);
   useEffect(()=>{
     const latest=messages.at(-1)?.id??null;
     if(latest&&latest!==previousLastMessage.current){
@@ -401,6 +405,21 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       ?(pt?'Este endereço já pertence a uma comunidade.':'This slug already exists.')
       :(pt?'Falha ao criar comunidade.':'Could not create community.'));}
     finally{setBusy(false);setBusyAction(null);}
+  }
+  async function unlockChannel(event:FormEvent){
+    event.preventDefault();
+    if(!selectedId||!channelId||!unlockPassword||unlockBusy)return;
+    setUnlockBusy(true);setUnlockError('');
+    try{
+      await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/unlock',body({password:unlockPassword}));
+      setUnlockPassword('');
+      await loadDetail(selectedId);
+    }catch(e){
+      const code=e instanceof Error?e.message:'';
+      setUnlockError(code==='CHANNEL_PASSWORD_RATE_LIMIT'?(pt?'Muitas tentativas. Tente novamente em 15 minutos.':'Too many attempts. Try again in 15 minutes.'):
+        code==='INVALID_CHANNEL_PASSWORD'?(pt?'Senha incorreta.':'Incorrect password.'):
+        (pt?'Não foi possível desbloquear o canal.':'Could not unlock the channel.'));
+    }finally{setUnlockBusy(false);}
   }
   async function createChannel(event:FormEvent){
     event.preventDefault();
@@ -674,9 +693,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
                 aria-label={ch.name+(unreadChannels[ch.id]?' · '+unreadChannels[ch.id]+(pt?' não lidas':' unread'):'')}
-                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');setUnlockPassword('');setUnlockError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
-                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>{ch.hasPassword&&<LockKeyhole aria-label={pt?'Canal protegido':'Protected channel'} className="size-3.5 shrink-0 text-primary"/>}
                 {!!unreadChannels[ch.id]&&<span aria-hidden="true"
                   className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                   {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
@@ -687,12 +706,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   ?voiceParticipants:(voiceRooms[ch.id]??[]);
                 return <div key={ch.id} className="mb-1">
                   <button type="button" onClick={()=>{
-                      setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');
-                      openVoiceRoom({communityId:selectedId!,channelId:ch.id,communityName:community.name,channelName:ch.name,kind:ch.kind as 'voice'|'meeting'});
+                      setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');setUnlockPassword('');setUnlockError('');
+                      if(!ch.hasPassword||ch.unlocked)openVoiceRoom({communityId:selectedId!,channelId:ch.id,communityName:community.name,channelName:ch.name,kind:ch.kind as 'voice'|'meeting'});
                     }}
                     className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
                     {ch.kind==='meeting'?<Video className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>:<Volume2 className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>}
-                    <span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{ch.name}</span>{ch.hasPassword&&<LockKeyhole aria-label={pt?'Canal protegido':'Protected channel'} className="size-3.5 shrink-0 text-primary"/>}
                     {!!unreadChannels[ch.id]&&<span aria-label={unreadChannels[ch.id]+(pt?' mensagens não lidas':' unread messages')}
                       className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                       {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
