@@ -4,7 +4,16 @@
 
 ## Purpose
 
-The shared visual foundation for Uorqui's direct messaging, social feed, and communities. It supports desktop and mobile, semantic theming, accessible interactions, and Brazilian Portuguese / English localization.
+The shared visual foundation for Uorqui's **Discover, direct messaging and communities**. It supports desktop and mobile, semantic theming, accessible interactions, and Brazilian Portuguese / English localization.
+
+## UX direction — Discover
+
+- No global post feed on the home screen. Sections: **Happening now** (authorized channel/voice activity from joined communities), **Recommended communities**, and **Search**.
+- Community cards show verified names, images, descriptions/categories, counts and actions to join or request access.
+- Activity shortcuts open the exact channel/room, without auto-connecting the microphone or acknowledging unread messages.
+- Helpful empty states for new users; no invented membership, activity or messages.
+- Primary navigation: **Discover · Messages · Communities**; Profile, notifications and settings remain accessible.
+- This is a **pending implementation specification**. The beta feed is legacy, not the future interface. See the [decision](discover.md).
 
 ## Theme design
 
