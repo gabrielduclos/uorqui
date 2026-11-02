@@ -91,7 +91,7 @@ function decode(value: string): string {
   return value.replace(/&(?:amp|quot|apos|lt|gt|nbsp|#(\d+)|#x([0-9a-f]+));/gi,
     (entity: string, decimal: string | undefined, hex: string | undefined) => {
       if (decimal || hex) {
-        const code = parseInt(decimal ?? hex, decimal ? 10 : 16);
+        const code = parseInt(decimal ?? hex ?? '0', decimal ? 10 : 16);
         return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
           ? String.fromCodePoint(code) : '';
       }
