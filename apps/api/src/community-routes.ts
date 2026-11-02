@@ -126,6 +126,50 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }catch(error){request.log.error({err:error},'List communities');return reply.code(503).send({error:'Unavailable'});}
   });
 
+  // Community-first home. Only joined communities are eligible for activity;
+  // do not expose private channel titles, blocked authors, or stale voice sessions.
+  app.get('/api/v1/communities/discover/activity',async(request,reply)=>{
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const recent=await getPool().query(
+        'SELECT c.id AS "communityId",c.name AS "communityName",ch.id AS "channelId",'+
+        'ch.name AS "channelName",ch.kind AS "channelKind",latest.created_at AS "createdAt",'+
+        "LEFT(COALESCE(latest.body,''),180) AS preview "+
+        'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
+        'JOIN community_channels ch ON ch.community_id=c.id '+
+        'JOIN LATERAL (SELECT m.body,m.created_at FROM community_messages m '+
+        'WHERE m.channel_id=ch.id AND m.deleted_at IS NULL '+
+        "AND m.created_at>now()-interval '14 days' "+
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
+        '(b.blocker_id=m.author_id AND b.blocked_id=$1) OR '+
+        '(b.blocker_id=$1 AND b.blocked_id=m.author_id)) '+
+        'ORDER BY m.created_at DESC,m.id DESC LIMIT 1) latest ON true '+
+        'WHERE mine.user_id=$1 AND NOT EXISTS (SELECT 1 FROM community_bans ban '+
+        'WHERE ban.community_id=c.id AND ban.user_id=$1) '+
+        'ORDER BY latest.created_at DESC LIMIT 18',[me]);
+      const rooms=await getPool().query(
+        'SELECT c.id AS "communityId",c.name AS "communityName",'+
+        'ch.id AS "channelId",ch.name AS "channelName",'+
+        'COUNT(DISTINCT voice.user_id)::int AS "participantCount" '+
+        'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
+        'JOIN community_channels ch ON ch.community_id=c.id AND ch.kind=\'voice\' '+
+        'JOIN community_voice_sessions voice ON voice.channel_id=ch.id '+
+        "AND voice.last_seen_at>now()-interval '180 seconds' "+
+        'JOIN community_members participant ON participant.community_id=c.id AND participant.user_id=voice.user_id '+
+        'WHERE mine.user_id=$1 AND NOT EXISTS (SELECT 1 FROM community_bans ban '+
+        'WHERE ban.community_id=c.id AND ban.user_id=$1) '+
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
+        '(b.blocker_id=voice.user_id AND b.blocked_id=$1) OR '+
+        '(b.blocker_id=$1 AND b.blocked_id=voice.user_id)) '+
+        'GROUP BY c.id,ch.id HAVING COUNT(DISTINCT voice.user_id)>0 '+
+        'ORDER BY "participantCount" DESC,c.name,ch.name LIMIT 12',[me]);
+      return reply.header('Cache-Control',noCache).send({recent:recent.rows,rooms:rooms.rows});
+    }catch(error){
+      request.log.error({err:error},'Discover community activity');
+      return reply.code(503).send({error:'Unavailable'});
+    }
+  });
+
   app.post('/api/v1/communities',{schema:{body:groupBody}},async(request,reply)=>{
     if(!originValid(request))return reply.code(403).send({error:'Invalid origin'});
     try{
