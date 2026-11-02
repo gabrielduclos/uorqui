@@ -48,8 +48,9 @@ export function registerContentReportRoutes(app: FastifyInstance, readSession: S
       } else {
         const found = await getPool().query(
           'SELECT m.author_id,m.body,m.attachment_id FROM community_messages m ' +
-          'JOIN community_channels ch ON ch.id=m.channel_id AND ch.kind=\'text\' ' +
+          'JOIN community_channels ch ON ch.id=m.channel_id AND ch.kind IN (\'text\',\'voice\',\'meeting\') ' +
           'JOIN community_members member ON member.community_id=ch.community_id AND member.user_id=$1 ' +
+          "AND (ch.password_hash IS NULL OR member.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access grant_access WHERE grant_access.channel_id=ch.id AND grant_access.user_id=$1)) " +
           'WHERE m.id=$2 AND m.author_id<>$1 AND m.deleted_at IS NULL ' +
           'AND NOT EXISTS (SELECT 1 FROM community_bans ban WHERE ban.community_id=ch.community_id AND ban.user_id=$1)',
           [reporter, targetId]);
