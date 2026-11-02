@@ -4,13 +4,13 @@
 
 ## Document status
 
-The technical beta already includes **real direct messaging, real communities, a legacy hybrid post feed and voice rooms**. Early documentation about demo-only screens no longer reflects the current application. The direction approved **November 2, 2026**, detailed in [Discover](discover.md), **has not yet been implemented in the frontend**.
+The technical beta already includes **real direct messaging, real communities, a legacy hybrid post feed and voice rooms**. Early documentation about demo-only screens no longer reflects the current application. The direction approved **November 2, 2026**, detailed in [Discover](discover.md), **has an initial implementation in the frontend on `main`, pending production verification**.
 
 ## Goal
 
 Build a mobile-first interface for **discovering communities, participating in text/voice rooms and having one-to-one conversations**. Familiar patterns can inform chat and channel organization, but Uorqui owns its design, implementation and language.
 
-## Future navigation
+## Navigation implemented in code (new direction)
 
 - **Discover (home):** real channel and voice-room activity from joined communities, search and recommended public communities. No post feed, endless scrolling, “For you/Following” filter or vertical short-video mode.
 - **Messages:** private 1:1 chats, history, media, reactions, and delivery/read states.
