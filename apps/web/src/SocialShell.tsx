@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, Home, LogOut, MessageCircle, ShieldCheck, Users,
+  Bell, Compass, LogOut, MessageCircle, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BetaBadge } from './BetaBadge';
@@ -18,6 +18,7 @@ import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
 import LiveCommunities from './LiveCommunities';
 import LiveFeed from './LiveFeed';
+import DiscoverHome from './DiscoverHome';
 import ModerationPanel from './ModerationPanel';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 import {useCommunityUnread} from './useCommunityUnread';
@@ -30,10 +31,10 @@ export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: UserProfileData | null;
 };
-type Area = 'feed' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
+type Area = 'discover' | 'feed' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
 
 const navigation = [
-  { id: 'feed', label: 'Início', icon: Home },
+  { id: 'discover', label: 'Descobrir', icon: Compass },
   { id: 'conversations', label: 'Conversas', icon: MessageCircle },
   { id: 'communities', label: 'Comunidades', icon: Users },
   { id: 'notifications', label: 'Notificações', icon: Bell },
@@ -54,7 +55,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 }) {
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
-  const [area, setArea] = useState<Area>(invitedCommunityId?'communities':'feed');
+  const [area, setArea] = useState<Area>(invitedCommunityId?'communities':'discover');
   const [platformModerator,setPlatformModerator]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();
@@ -156,12 +157,17 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 
+  const openDiscoveryCommunity=useCallback((communityId:string,channelId?:string)=>{
+    setArea('communities');setConversationOpened(false);
+    window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:{communityId,channelId}}));
+  },[]);
+
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
     <div data-uorqui-app-shell className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
       <aside className="hidden h-full min-h-0 w-55 shrink-0 flex-col overflow-hidden border-r border-border bg-card/65 md:flex">
-        <button className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('feed')} aria-label={t('Uorqui — ir para o início')}>
+        <button className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('discover')} aria-label={t('Uorqui — ir para o início')}>
           <UorquiWordmark className="h-[18px] w-auto max-w-full text-foreground" />
           <BetaBadge />
         </button>
@@ -197,7 +203,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6 md:h-16 md:min-h-16 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
-            <button type="button" onClick={() => move('feed')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+            <button type="button" onClick={() => move('discover')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
               <UorquiWordmark className="h-4 w-auto max-w-[34vw] text-foreground" />
               <BetaBadge compact />
             </button>
@@ -212,7 +218,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <div className="h-full min-h-0 overflow-hidden">
-            {/* Feed remains mounted so changing tabs never resets list, drafts, or scroll position. */}
+            <div hidden={area!=='discover'} className="h-full min-h-0">
+              <DiscoverHome active={area==='discover'} unreadLocations={communityUnread.locations}
+                onOpenCommunity={openDiscoveryCommunity}/>
+            </div>
+            {/* Legacy posts remain reachable via existing deep links while the migration is audited. */}
             <div hidden={area!=='feed'} className="h-full min-h-0">
               <LiveFeed key={account.user.id} userId={account.user.id} active={area==='feed'}
                 ownName={account.profile?.displayName??account.user.name}
@@ -220,7 +230,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 onCommentFocusChange={setFeedTyping}/>
             </div>
             {/* A persistent mount keeps the microphone, signaling and room state alive
-                when switching between Feed, Messages, Profile and Communities. */}
+                when switching between Discover, Messages, Profile and Communities. */}
             <div hidden={area!=='communities'} className="h-full min-h-0">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
@@ -228,7 +238,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
             </div>
-            {area!=='feed'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
+            {area!=='discover'&&area!=='feed'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
               transition={{duration:0.16}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
@@ -303,7 +313,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       {tourVisible&&account.profile&&<OnboardingTour userId={account.user.id} profile={account.profile}
         onNavigate={move}
         onProfileSaved={next=>onAccountUpdate({...account,profile:next})}
-        onFinish={()=>{setTourVisible(false);move(invitedCommunityId?'communities':'feed');}}/>}
+        onFinish={()=>{setTourVisible(false);move(invitedCommunityId?'communities':'discover');}}/>}
     </div>
   );
 }
