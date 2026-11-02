@@ -120,6 +120,21 @@ test('persistent communities: discover, create, join, channels and real messages
   assert.equal(destination.channelName,text.name,'unread shortcut identifies its channel');
   assert.equal(destination.channelKind,'text');
   assert.equal(destination.count,1);
+  // Discover exposes activity only from joined communities, never their private
+  // channel details to a user who has not joined.
+  const discoverPath='/api/v1/communities/discover/activity';
+  assert.equal((await anonymous(discoverPath)).status,401);
+  const outsiderActivity=await outsider(discoverPath);
+  assert.equal(outsiderActivity.status,200,JSON.stringify(outsiderActivity.data));
+  assert.deepEqual(outsiderActivity.data.recent,[]);
+  assert.deepEqual(outsiderActivity.data.rooms,[]);
+  const memberActivity=await owner(discoverPath);
+  assert.equal(memberActivity.status,200,JSON.stringify(memberActivity.data));
+  const channelActivity=memberActivity.data.recent.find(item=>item.channelId===text.id);
+  assert.equal(channelActivity.communityId,id);
+  assert.equal(channelActivity.communityName,'Live Community');
+  assert.equal(channelActivity.channelName,text.name);
+  assert.match(channelActivity.preview,/Hello community/);
   assert.equal((await anonymous('/api/v1/links/preview?url=https%3A%2F%2Fwww.example.com')).status,401);
   assert.equal((await owner('/api/v1/links/preview?url=http%3A%2F%2Fpublic.example.com')).status,400,'plaintext link previews are disabled');
   assert.equal((await owner('/api/v1/links/preview?url=https%3A%2F%2F127.0.0.1')).status,400,'IP addresses cannot be previewed');
