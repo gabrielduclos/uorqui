@@ -4,13 +4,13 @@
 
 ## Estado do documento
 
-O beta técnico já contém **mensageiro real, comunidades reais, feed híbrido legado e salas de voz**. As telas demonstrativas citadas na documentação inicial não representam mais o estado do aplicativo. A direção aprovada em **02/11/2026**, detalhada em [Descobrir](descobrir.md), **ainda precisa ser implementada no front-end**.
+O beta técnico já contém **mensageiro real, comunidades reais, feed híbrido legado e salas de voz**. As telas demonstrativas citadas na documentação inicial não representam mais o estado do aplicativo. A direção aprovada em **02/11/2026**, detalhada em [Descobrir](descobrir.md), **teve sua implementação inicial adicionada ao front-end na `main`, com validação em produção ainda pendente**.
 
 ## Objetivo
 
 Interface mobile-first para **descobrir comunidades, participar de canais/salas de voz e conversar individualmente**. Organização de canais e interações de chat podem se inspirar em padrões de mercado, mas a identidade visual, o código e o conteúdo devem ser próprios.
 
-## Navegação futura
+## Navegação implementada no código (nova direção)
 
 - **Descobrir (início):** atividades reais dos canais e salas de voz das comunidades do usuário; busca e comunidades públicas recomendadas. Sem posts, feed infinito, filtro «Para você/Seguindo» ou modo vertical de vídeos.
 - **Mensagens:** conversas individuais 1:1, histórico, anexos, reações e estados de entrega/leitura.
