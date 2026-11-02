@@ -13,12 +13,12 @@
 O Uorqui reúne três experiências:
 
 - **Conversas individuais:** mensagens privadas 1:1, respostas, reações, anexos, estados de mensagens, push e atualização em tempo real via SSE. Não há grupos tradicionais no mensageiro.
-- **Descobrir (nova direção, ainda não implementada):** tela inicial sem publicações, com comunidades públicas recomendadas, busca e atividades das comunidades das quais o usuário participa. O feed global e o modo de vídeos imersivo serão descontinuados após uma migração segura.
+- **Descobrir (implementação inicial na `main`):** tela inicial sem publicações, com comunidades públicas recomendadas, busca e atividades das comunidades das quais o usuário participa. O feed global saiu da navegação principal; o código/dados anteriores permanecem para compatibilidade com links antigos.
 - **Comunidades:** participação pública/privada, convites, canais de texto, moderação e salas de voz via WebRTC, com chamada minimizável durante a navegação.
 
 O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 
-> **Mudança de direção em 02/11/2026:** a visão futura elimina o feed global; o beta ainda contém o feed implementado anteriormente. Esta atualização é **somente da documentação**, não é um deploy nem uma remoção de dados. Leia a [decisão Descobrir](docs/pt-BR/descobrir.md).
+> **Mudança de direção em 02/11/2026:** a visão futura elimina o feed global; o beta ainda contém o feed implementado anteriormente. A primeira implementação está no GitHub; a publicação do novo código em produção **não foi confirmada**, e não houve remoção de dados. Leia a [decisão Descobrir](docs/pt-BR/descobrir.md).
 
 ## Situação do beta
 
@@ -27,7 +27,7 @@ O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 | Cadastro e perfis | Better Auth, verificação/recuperação por e-mail, privacidade e bloqueio implementados; falta validar cadastro real e entrega de e-mails |
 | Mensageiro | Conversas 1:1 persistidas, anexos, reações, estados de leitura/entrega, SSE e Web Push implementados |
 | Feed (legado no beta atual) | Publicações híbridas e mídias com API/banco, filtros persistentes e criação por modal; retirada planejada, não executada |
-| Descobrir (planejado) | Recomendações de comunidades públicas, busca e atividades autorizadas das comunidades do usuário; implementação pendente |
+| Descobrir (código na `main`) | Recomendações de comunidades públicas, busca e atividades autorizadas; publicação/testes em aparelhos pendentes |
 | Comunidades | Membros, convites, cargos, canais de texto, presença e voz WebRTC |
 | Infraestrutura | PWA React no Worker `main` da Cloudflare, API Fastify no Render e PostgreSQL na Neon |
 | Lançamento amplo | **Ainda pendente:** testes reais no iOS/Android, push, TURN/redes diferentes, monitoramento e testes de PWA instalado após a troca do domínio |
