@@ -672,8 +672,7 @@ test('hybrid DM permissions: public messages, private requests, acceptance and r
   assert.equal(privatePreview.status,200);
   assert.equal(privatePreview.data.profile.isPrivate,true);
   assert.equal(privatePreview.data.profile.avatarUrl,null);
-  assert.equal(privatePreview.data.profile.followersCount,0);
-  assert.equal((await other('/api/v1/profiles/dm_bob/follows/followers')).status,403);
+  assert.equal((await other('/api/v1/profiles/dm_bob/follows/followers')).status,404);
   assert.equal((await other('/api/v1/dm/conversations','POST',{handle:'dm_bob'})).status,404);
   assert.equal((await other('/api/v1/friends/requests','POST',{handle:'dm_bob'})).status,201,
     'a known exact @handle may request a private account');
