@@ -155,6 +155,7 @@ export const communityChannels = pgTable('community_channels', {
   name: varchar('name', { length: 64 }).notNull(),
   kind: varchar('kind', { length: 8 }).notNull(),
   meetingJoinPolicy: varchar('meeting_join_policy', { length: 12 }).notNull().default('open'),
+  passwordHash: text('password_hash'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
   uniqueIndex('community_channels_unique_name').on(table.communityId, table.name),
@@ -175,6 +176,21 @@ export const meetingAccessRequests = pgTable('meeting_access_requests', {
   index('meeting_access_requests_status_idx').on(table.channelId,table.status),
   check('meeting_access_requests_status',sql`${table.status} IN ('pending','approved','declined')`),
 ]);
+
+/** Password grants are specific to the account and the protected channel. */
+export const communityChannelPasswordAccess = pgTable('community_channel_password_access', {
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id,{onDelete:'cascade'}),
+  userId: uuid('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  grantedAt: timestamp('granted_at',{withTimezone:true}).notNull().defaultNow(),
+}, t=>[primaryKey({columns:[t.channelId,t.userId]})]);
+
+/** Throttle online guesses without recording failed password values. */
+export const communityChannelPasswordAttempts = pgTable('community_channel_password_attempts', {
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id,{onDelete:'cascade'}),
+  userId: uuid('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  failedCount: integer('failed_count').notNull().default(0),
+  lastFailedAt: timestamp('last_failed_at',{withTimezone:true}),
+}, t=>[primaryKey({columns:[t.channelId,t.userId]})]);
 
 export const communityMessages = pgTable('community_messages', {
   id: uuid('id').defaultRandom().primaryKey(),

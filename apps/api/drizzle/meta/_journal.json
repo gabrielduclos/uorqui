@@ -225,6 +225,13 @@
       "when": 1793660400000,
       "tag": "0031_meeting_approvals_community_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793662200000,
+      "tag": "0032_password_protected_channels",
+      "breakpoints": true
     }
   ]
 }
