@@ -2,7 +2,7 @@
 
 [Português](roadmap.md) · [English](../en/roadmap.md)
 
-**Status:** roadmap do **beta técnico `0.1.0-beta.1`**. Itens marcados indicam implementação ou teste CI, não aprovação automática em celulares reais ou operação.
+**Status:** roadmap do **beta técnico `0.1.0-beta.1`** e da mudança de direção aprovada em **02/11/2026**. Itens marcados indicam implementação ou teste CI, não publicação comprovada nem validação em aparelhos reais. O feed existente é legado; **Descobrir** ainda precisa ser desenvolvido. Ver [decisão](descobrir.md).
 
 ## Fase 0 — Descoberta e fundação
 
@@ -53,14 +53,26 @@
 
 **Critério:** voz estável em grupos pequenos e custos mensuráveis.
 
-## v0.3 — Descoberta híbrida
+## v0.3 — Histórico do beta: feed híbrido (legado)
 
-- [x] Implementar feed híbrido com texto, imagens, carrosséis e vídeos.
-- [x] Implementar navegação imersiva por vídeos; testar retorno nos aparelhos reais.
-- [ ] Compartilhamento e descoberta de comunidades públicas, respeitando a privacidade.
-- [ ] Cotas, processamento e carregamento adaptativo de vídeos; moderação.
+- [x] Implementar feed híbrido com texto, imagens, carrosséis e vídeos — **já existente, mas fora da visão futura**.
+- [x] Implementar navegação imersiva por vídeos — **já existente, mas descontinuação planejada**.
 
-**Critério:** pessoas reais podem testar a jornada conteúdo → comunidade.
+Esses itens documentam entregas passadas, **não** a próxima prioridade de desenvolvimento.
+
+## Próxima etapa — Descobrir (antes do piloto)
+
+- [ ] Substituir a tela inicial do feed por **Descobrir**, com busca e recomendações de comunidades públicas.
+- [ ] Mostrar atividades recentes e salas de voz ativas **das comunidades do usuário**, com contagens fundamentadas e autorização no servidor.
+- [ ] Acesso direto ao canal/sala correto sem entrar automaticamente em chamada, marcar como lido ou expor conteúdo privado.
+- [ ] Funcionar para contas novas, sem comunidades, sem listas artificiais de posts/atividade.
+- [ ] Atualizar navegação principal, onboarding, perfil público, busca e acessibilidade em PT-BR/EN e Light/Dark.
+- [ ] Revisar notificações, links internos e links antigos de posts; definir compatibilidade e transição.
+- [ ] Retirar o acesso ao feed global, criação de posts e modo de vídeos após revisar dependências, **sem apagar dados, tabelas ou mídias automaticamente**.
+- [ ] Documentar retenção/exportação, migrations versionadas, rollback e validação no desktop, Android e iOS/PWA.
+- [ ] Testar a nova jornada **comunidade recomendada → ingresso → canal/voz → mensagem individual** com usuários reais.
+
+**Critério:** Descobrir é útil mesmo sem comunidades inscritas e respeita privacidade, atividade real e participação efetiva.
 
 ## v0.4 — Piloto
 
@@ -81,7 +93,7 @@
 
 ## Decisões pendentes
 
-Prioridades, licenças de dependências, custos e cotas, recomendação de vídeos, processo de moderação, qualidade do TURN e validação da mudança de domínio. SSE, WebRTC e R2 já têm implementação inicial.
+Prioridades, licenças de dependências, custos e cotas, política de migração/retenção do feed legado, processo de moderação, qualidade do TURN e validação da mudança de domínio. SSE, WebRTC e R2 já têm implementação inicial.
 
 ### Comunidades (trabalho incremental)
 
