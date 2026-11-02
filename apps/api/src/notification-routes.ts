@@ -32,7 +32,9 @@ export function registerNotificationRoutes(app:FastifyInstance,readSession:Sessi
         preferenceKeys.map(key=>[key,raw[key]??true]))});
     }catch(error){request.log.error({err:error},'Push preferences');return reply.code(503).send({error:'Preferences unavailable'});}
   });
-  app.put('/api/v1/notifications/preferences',{schema:{body:preferenceSchema}},async(request,reply)=>{
+  app.put('/api/v1/notifications/preferences',{onRequest:(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+  },schema:{body:preferenceSchema}},async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
       const id=await me(request);if(!id)return reply.code(401).send({error:'Unauthorized'});
