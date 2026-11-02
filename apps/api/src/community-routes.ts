@@ -304,7 +304,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           'INSERT INTO community_join_requests(community_id,user_id,kind) VALUES($1,$2,\'join\') '+
           'ON CONFLICT(community_id,user_id) DO UPDATE SET kind=\'join\',status=\'pending\',created_at=now(),updated_at=now()',
           [id,me]);
-        void recordCommunityRequest(id,me,'community_join_request',id,'community-request:'+id+':'+me+':'+Date.now())
+        await recordCommunityRequest(id,me,'community_join_request',id,'community-request:'+id+':'+me+':'+Date.now())
           .catch(error=>request.log.warn({err:error},'Community approval push'));
         return reply.code(201).header('Cache-Control',noCache).send({status:'pending'});
       }
