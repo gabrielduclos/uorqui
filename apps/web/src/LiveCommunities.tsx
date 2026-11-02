@@ -15,6 +15,7 @@ import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker'
 import CommunityMessageReactions, { type CommunityReaction } from './CommunityMessageReactions';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import { MessageText } from './MessageText';
+import { LinkPreview } from './LinkPreview';
 import type {UnreadLocation} from './useCommunityUnread';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 import { ContentReportDialog } from './ContentReportDialog';
@@ -833,7 +834,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   </form>:isCommunityGifUrl(message.body)?
                     <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" referrerPolicy="no-referrer"
                       className="mt-2 max-h-64 max-w-full rounded-xl object-contain"/>:
-                    <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''}/></p>}
+                    <div className="mt-1 min-w-0">
+                      <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''}/></p>
+                      {!!message.body&&<LinkPreview text={message.body} locale={locale}/>}
+                    </div>}
                 {message.attachment&&!message.deletedAt&&selectedId&&channelId&&
                   <CommunityMessageAttachment attachment={message.attachment}
                     src={message.attachmentUrl||('/media/community-attachment/'+selectedId+'/'+channelId+'/'+message.attachment.id)}
