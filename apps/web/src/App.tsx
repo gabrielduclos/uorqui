@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { motion, MotionConfig } from 'motion/react';
+import { MotionConfig } from 'motion/react';
 import { Github, MessageCircle, Users, Newspaper, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import AuthPanel, { type Account } from './AuthPanel';
 import { UorquiWordmark } from './UorquiWordmark';
+import { StartupSplash } from './StartupSplash';
 import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
@@ -19,21 +20,6 @@ import { BetaBadge } from './BetaBadge';
 import { Button } from '@/components/ui/button';
 import { LegalPage, legalDocumentFromPath } from './LegalPages';
 import { CookieNotice } from './CookieNotice';
-
-function StartupSplash() {
-  const { t } = useUorquiPreferences();
-  return (
-    <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-background p-6" role="status" aria-live="polite" aria-label={t("Iniciando Uorqui")}>
-      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="text-center">
-        <UorquiWordmark className="mx-auto h-9 w-auto max-w-[85vw] text-foreground"/>
-        <p className="mt-3 text-sm text-muted-foreground">{t("Preparando sua experiência…")}</p>
-        <div className="mt-6 h-1 w-52 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
-          <motion.div className="h-full w-1/3 rounded-full bg-primary" initial={{ x: '-100%' }} animate={{ x: '310%' }} transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }} />
-        </div>
-      </motion.div>
-    </main>
-  );
-}
 
 const areas = [
   { title: 'Conversas', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
