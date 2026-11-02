@@ -554,10 +554,10 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   </section>;
   const remoteReady=peers.filter(p=>!p.isSelf&&connections[p.sessionId]==='connected').length;
   return <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 sm:px-5 sm:py-4">
       <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Volume2 className="size-5"/></div>
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary sm:size-11"><Volume2 className="size-5"/></div>
           <div className="min-w-0">
             <h3 className="text-base font-semibold">{pt?'Conversa por voz':'Voice chat'}</h3>
             <p className="text-xs text-muted-foreground">{phase==='joined'?(pt?count+' na sala':count+' in room'):
@@ -581,44 +581,44 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         <span>{pt?'O sistema interrompeu o microfone, mas a sala permanece aberta.':'System microphone capture was interrupted; the room remains open.'}</span>
         <Button size="sm" variant="outline" onClick={()=>void restoreMic()}><Mic className="size-4"/>{pt?'Reativar microfone':'Restore microphone'}</Button>
       </div>}
-      {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-5 grid w-full max-w-5xl grid-cols-1 gap-3 lg:grid-cols-2">
+      {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-1 gap-2 sm:grid-cols-2">
         {Object.entries(screens).map(([id,stream])=><ScreenTile key={id} stream={stream} label={id===selfSession.current?
           (pt?'Sua tela':'Your screen'):
           (pt?'Tela de ':'Screen from ')+(peers.find(p=>p.sessionId===id)?.displayName??'')}/>)}
       </div>}
-      {phase!=='joined'?<div className="flex min-h-[280px] flex-col items-center justify-center gap-4 py-12 text-center">
-        <div className="grid size-24 place-items-center rounded-[2rem] border border-border bg-card shadow-sm"><Headphones className="size-11 text-primary"/></div>
+      {phase!=='joined'?<div className="flex min-h-0 flex-col items-center justify-center gap-2 py-4 text-center sm:gap-3 sm:py-8">
+        <div className="grid size-12 place-items-center rounded-xl border border-border bg-card shadow-sm sm:size-16"><Headphones className="size-6 text-primary sm:size-8"/></div>
         <div className="space-y-1">
           <h4 className="text-base font-semibold">{pt?'Entre no canal de voz':'Join voice channel'}</h4>
           <p className="max-w-sm text-sm text-muted-foreground">{pt?'Converse com os membros que estiverem conectados.':'Talk with other members in the room.'}</p>
         </div>
         <Button className="min-h-11 rounded-xl px-6" disabled={phase==='joining'} onClick={()=>void join()}>
           <Headphones className="size-4"/>{phase==='joining'?(pt?'Conectando…':'Connecting…'):(pt?'Conectar':'Connect')}</Button>
-      </div>:<div className="mx-auto mt-6 max-w-5xl">
-        <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      </div>:<div className="mx-auto mt-3 max-w-5xl">
+        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <Users className="size-4"/><span>{pt?'Participantes':'Participants'} · {count}/6</span>
           {remoteReady>0&&<span className="ml-auto">{remoteReady} {pt?'áudio conectado':'audio connected'}</span>}
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-4">
           {visiblePeers.map(peer=>{
             const connection=connections[peer.sessionId];
             const ready=peer.isSelf||connection==='connected';
             const talking=ready&&!!peer.speaking;
             return <div key={peer.sessionId}
-              className={'relative flex min-h-44 min-w-0 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border bg-card px-3 py-5 text-center shadow-sm transition-[box-shadow,border-color] sm:min-h-48 '+(talking?'border-emerald-500 ring-2 ring-emerald-500/65 shadow-[0_0_16px_rgba(16,185,129,0.35)]':'border-border/70')}>
+              className={'relative flex min-h-24 min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border bg-card px-2 py-2 text-center shadow-sm transition-[box-shadow,border-color] sm:min-h-32 sm:gap-2 sm:py-3 '+(talking?'border-emerald-500 ring-2 ring-emerald-500/65 shadow-[0_0_16px_rgba(16,185,129,0.35)]':'border-border/70')}>
               {talking&&<span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-emerald-400 animate-pulse"/>}
               <div className={'rounded-full p-1 '+(talking?'ring-2 ring-emerald-500':ready?'ring-1 ring-border':'ring-2 ring-border')}>
-                <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="lg"/>
+                <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="sm"/>
               </div>
               <div className="min-w-0 max-w-full">
                 <p className="truncate text-sm font-semibold">{peer.displayName}</p>
                 <p className="truncate text-xs text-muted-foreground">{peer.isSelf?(pt?'Você':'You'):'@'+peer.handle}</p>
               </div>
-              <div className="absolute right-3 top-3 flex items-center gap-1">
-                {peer.deafened&&<span className="grid size-8 place-items-center rounded-full border border-destructive/30 bg-destructive/10 text-destructive"
+              <div className="absolute right-1 top-1 flex items-center gap-1 sm:right-2 sm:top-2">
+                {peer.deafened&&<span className="grid size-6 place-items-center rounded-full border border-destructive/30 bg-destructive/10 text-destructive sm:size-8"
                   title={pt?'Áudio desligado':'Audio disabled'} aria-label={pt?'Áudio desligado':'Audio disabled'}>
                   <VolumeX className="size-4"/></span>}
-                <span className={'grid size-8 place-items-center rounded-full border '+(peer.muted?'border-destructive/30 bg-destructive/10 text-destructive':'border-border/50 bg-background/90 text-muted-foreground')}
+                <span className={'grid size-6 place-items-center rounded-full border sm:size-8 '+(peer.muted?'border-destructive/30 bg-destructive/10 text-destructive':'border-border/50 bg-background/90 text-muted-foreground')}
                   title={peer.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}
                   aria-label={peer.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
                   {peer.muted?<MicOff className="size-4"/>:<Mic className="size-4"/>}
@@ -632,7 +632,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       </div>}
     </div>
 
-    {phase==='joined'&&<div className="z-10 shrink-0 border-t border-border bg-card/95 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+    {phase==='joined'&&<div className="z-10 shrink-0 border-t border-border bg-card/95 px-2 py-2 sm:px-4 sm:py-3">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
         <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
           <span className="size-2 rounded-full bg-emerald-500"/>{pt?'Voz conectada':'Voice connected'}
