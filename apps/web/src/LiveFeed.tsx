@@ -184,6 +184,11 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const [hasMore,setHasMore]=useState(()=>readFeedSession<Post>(userId,readFeedSessionFilter(userId))?.hasMore??true);
   const [error,setError]=useState('');
   const [refreshKey,setRefreshKey]=useState(0);
+  const [pendingPosts,setPendingPosts]=useState<Post[]>([]);
+  const postsRef=useRef(posts);
+  const pendingPostsRef=useRef(pendingPosts);
+  postsRef.current=posts;
+  pendingPostsRef.current=pendingPosts;
   const scrollRef=useRef<HTMLDivElement>(null);
   const bottomRef=useRef<HTMLDivElement>(null);
   const loadingRef=useRef(false);
@@ -228,6 +233,8 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
   const [posting,setPosting]=useState(false);
   const [uploadProgress,setUploadProgress]=useState('');
   const [openComments,setOpenComments]=useState<string|null>(null);
+  const openCommentsRef=useRef(openComments);
+  openCommentsRef.current=openComments;
   const [comments,setComments]=useState<Record<string,Comment[]>>({});
   const [commentDraft,setCommentDraft]=useState('');
   const [commentBusy,setCommentBusy]=useState(false);
@@ -281,7 +288,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
       clearFeedSessionCache();
       snapshots.current={};
       fetchedAtRef.current={};
-      setPosts([]);setVideos([]);setCursor(null);setHasMore(true);
+      setPosts([]);setVideos([]);setPendingPosts([]);setCursor(null);setHasMore(true);
       setLoading(true);setRefreshKey(k=>k+1);
     };
     window.addEventListener('uorqui:blocks-updated',purge);
@@ -343,7 +350,7 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     const cached=snapshots.current[next]??readFeedSession<Post>(userId,next)??undefined;
     setPosts(cached?.posts??[]);setCursor(cached?.cursor??null);
     setHasMore(cached?.hasMore??true);
-    setLoading(!cached);setError('');setFilter(next);
+    setLoading(!cached);setError('');setPendingPosts([]);setFilter(next);
     window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:cached?.scrollTop??0,behavior:'instant'}));
   }
   useEffect(()=>{
@@ -359,6 +366,121 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
     document.addEventListener('visibilitychange',onVisible);
     return ()=>document.removeEventListener('visibilitychange',onVisible);
   },[active,filter]);
+
+  // Live updates only while the feed is visible. The stream re-authenticates on
+  // reconnection, and the existing visibility revalidation covers offline gaps.
+  useEffect(()=>{
+    if(!active)return;
+    let disposed=false,stream:EventSource|null=null;
+    let newPostTimer:number|undefined;
+    let changedTimer:number|undefined;
+    const changed=new Map<string,'edit'|'delete'|'like'|'comment'>();
+    const pendingRequests=new Set<string>();
+    const fetchNew=async()=>{
+      try{
+        const result=await api<{posts:Post[]}>('/api/v1/feed/posts?filter='+filter);
+        if(disposed)return;
+        if(!postsRef.current.length){setRefreshKey(old=>old+1);return;}
+        const existing=new Set([...postsRef.current,...pendingPostsRef.current].map(post=>post.id));
+        const arriving=result.posts.filter(post=>!existing.has(post.id));
+        if(arriving.length)setPendingPosts(old=>{
+          const ids=new Set([...postsRef.current,...old].map(post=>post.id));
+          const additions=arriving.filter(post=>!ids.has(post.id));
+          return [...additions,...old].slice(0,30);
+        });
+      }catch{/* The next visibility refresh recovers network errors. */}
+    };
+    const refreshPost=async(id:string,kind:'edit'|'delete'|'like'|'comment')=>{
+      if(kind==='delete'){
+        setPosts(old=>old.filter(post=>post.id!==id));
+        setVideos(old=>old.filter(post=>post.id!==id));
+        setPendingPosts(old=>old.filter(post=>post.id!==id));
+        if(openCommentsRef.current===id)setOpenComments(null);
+        return;
+      }
+      if(!postsRef.current.some(post=>post.id===id)&&
+        !videosRef.current.some(post=>post.id===id)&&
+        !pendingPostsRef.current.some(post=>post.id===id))return;
+      if(pendingRequests.has(id))return;
+      pendingRequests.add(id);
+      try{
+        const result=await api<{post:Post}>('/api/v1/feed/posts/'+id);
+        if(disposed)return;
+        setPosts(old=>old.map(post=>post.id===id?result.post:post));
+        setVideos(old=>old.map(post=>post.id===id?result.post:post));
+        setPendingPosts(old=>old.map(post=>post.id===id?result.post:post));
+        if(kind==='comment'&&openCommentsRef.current===id){
+          const comments=await api<{comments:Comment[]}>('/api/v1/feed/posts/'+id+'/comments');
+          if(!disposed)setComments(old=>({...old,[id]:comments.comments}));
+        }
+      }catch(error){
+        if(disposed)return;
+        if(error instanceof Error&&error.message==='HTTP_404'){
+          setPosts(old=>old.filter(post=>post.id!==id));
+          setVideos(old=>old.filter(post=>post.id!==id));
+          setPendingPosts(old=>old.filter(post=>post.id!==id));
+        }
+      }finally{pendingRequests.delete(id);}
+    };
+    const onUpdate=(event:Event)=>{
+      try{
+        const data=JSON.parse((event as MessageEvent<string>).data) as {kind?:string;postId?:string};
+        if(!data.postId||!/^[0-9a-f-]{36}$/i.test(data.postId))return;
+        if(data.kind==='publish'){
+          if(newPostTimer!==undefined)window.clearTimeout(newPostTimer);
+          newPostTimer=window.setTimeout(()=>void fetchNew(),350);
+        }else if(data.kind==='edit'||data.kind==='delete'||data.kind==='like'||data.kind==='comment'){
+          changed.set(data.postId,data.kind);
+          if(changedTimer!==undefined)window.clearTimeout(changedTimer);
+          changedTimer=window.setTimeout(()=>{
+            const updates=Array.from(changed);changed.clear();
+            for(const [id,kind] of updates)void refreshPost(id,kind);
+          },280);
+        }
+      }catch{/* Ignore malformed event payloads. */}
+    };
+    let firstReady=true;
+    const onReady=()=>{
+      if(firstReady){firstReady=false;return;}
+      void fetchNew();
+    };
+    const disconnect=()=>{
+      if(!stream)return;
+      stream.removeEventListener('feed-update',onUpdate);
+      stream.removeEventListener('ready',onReady);
+      stream.close();stream=null;
+    };
+    const connect=()=>{
+      if(disposed||stream||document.visibilityState!=='visible'||typeof EventSource==='undefined')return;
+      firstReady=true;
+      stream=new EventSource('/api/v1/feed/events',{withCredentials:true});
+      stream.addEventListener('feed-update',onUpdate);
+      stream.addEventListener('ready',onReady);
+    };
+    const visibility=()=>{
+      if(document.visibilityState==='hidden')disconnect();
+      else{connect();void fetchNew();}
+    };
+    document.addEventListener('visibilitychange',visibility);
+    connect();
+    return ()=>{
+      disposed=true;document.removeEventListener('visibilitychange',visibility);
+      if(newPostTimer!==undefined)window.clearTimeout(newPostTimer);
+      if(changedTimer!==undefined)window.clearTimeout(changedTimer);
+      disconnect();
+    };
+  },[active,filter]);
+
+  function showNewPosts(){
+    if(!pendingPosts.length)return;
+    const incoming=pendingPosts;
+    setPendingPosts([]);
+    setPosts(old=>{
+      const existing=new Set(old.map(post=>post.id));
+      return [...incoming.filter(post=>!existing.has(post.id)),...old].slice(0,100);
+    });
+    scrollRef.current?.scrollTo({top:0,behavior:'smooth'});
+  }
 
   const loadMore=useCallback(async()=>{
     if(!activeRef.current||loadingRef.current||!cursor||loading||!hasMore)return;
@@ -712,6 +834,11 @@ export default function LiveFeed({userId,ownName,ownAvatar,active,onCommentFocus
         </Button>
       </div>
     </div>
+    {pendingPosts.length>0&&<div className="pointer-events-none absolute inset-x-0 top-[66px] z-30 flex justify-center px-3">
+      <button type="button" onClick={showNewPosts} className="pointer-events-auto flex min-h-10 items-center gap-2 rounded-full bg-primary px-5 py-2 text-xs font-semibold text-primary-foreground shadow-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        <ArrowDown className="size-4 rotate-180"/>{pt?(pendingPosts.length===1?'1 nova publicação':pendingPosts.length+' novas publicações'):(pendingPosts.length===1?'1 new post':pendingPosts.length+' new posts')}
+      </button>
+    </div>}
     <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background" data-feed-scroll>
       <div className="mx-auto max-w-2xl space-y-4 px-3 py-4 pb-28 sm:px-6 sm:py-6">
         {notice&&<div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
