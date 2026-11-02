@@ -365,6 +365,7 @@ export const activityNotifications = pgTable('activity_notifications', {
   index('activity_notifications_recipient_date_idx').on(t.recipientId,t.createdAt),
   index('activity_notifications_unread_idx').on(t.recipientId,t.readAt),
   check('activity_notifications_no_self', sql`${t.recipientId} <> ${t.actorId}`),
+  check('activity_notifications_kind',sql`${t.kind} IN ('friend_request','friend_accepted','community_join_request','meeting_join_request')`),
 ]);
 
 /** Browser Web Push subscriptions are account-bound and never reused for the next sign-in. */
