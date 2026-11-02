@@ -688,7 +688,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                 return <div key={ch.id} className="mb-1">
                   <button type="button" onClick={()=>{
                       setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');
-                      openVoiceRoom({communityId:selectedId!,channelId:ch.id,communityName:community.name,channelName:ch.name,kind:ch.kind});
+                      openVoiceRoom({communityId:selectedId!,channelId:ch.id,communityName:community.name,channelName:ch.name,kind:ch.kind as 'voice'|'meeting'});
                     }}
                     className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
                     {ch.kind==='meeting'?<Video className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>:<Volume2 className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>}
