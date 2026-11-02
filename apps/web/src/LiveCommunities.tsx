@@ -180,6 +180,26 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     void loadDetail(selectedId).catch(()=>{if(active)setError(pt?'Não foi possível abrir a comunidade.':'Could not open community.');}).finally(()=>{if(active)setDetailLoading(false);});
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
+  // Discover opens the exact community/channel using the already-mounted community
+  // view; opening a voice room never starts a WebRTC session automatically.
+  useEffect(()=>{
+    const navigate=(event:Event)=>{
+      const target=(event as CustomEvent<{communityId?:string;channelId?:string}>).detail;
+      if(!target||typeof target.communityId!=='string'||!/^[0-9a-f-]{36}$/i.test(target.communityId))return;
+      const selectedChannel=typeof target.channelId==='string'&&/^[0-9a-f-]{36}$/i.test(target.channelId)
+        ?target.channelId:null;
+      requestedChannel.current=selectedChannel?{communityId:target.communityId,channelId:selectedChannel}:null;
+      setSelectedId(target.communityId);
+      setDiscovery(false);setCreateOpen(false);setError('');setNotice('');
+      setChannelOpen(Boolean(selectedChannel));
+      if(selectedChannel){
+        setChannelId(selectedChannel);
+        setVoiceMinimized(true);
+      }
+    };
+    window.addEventListener('uorqui:open-community',navigate);
+    return()=>window.removeEventListener('uorqui:open-community',navigate);
+  },[]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
   // The main room roster is refreshed immediately by the shared community SSE.
   // Retain a slow fallback only for disconnected browsers or expired sessions.
