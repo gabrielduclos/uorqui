@@ -2,7 +2,7 @@
 
 [English](discover.md) · [Português](../pt-BR/descobrir.md)
 
-**Decision date:** November 2, 2026. **Status:** approved product direction for future implementation; the current UI and API **have not** been migrated by this documentation change.
+**Decision date:** November 2, 2026. **Status:** initial implementation committed to `main`: Discover home, recommendations, authenticated activity, navigation and onboarding. **Production deployment and device acceptance are not yet confirmed.** Old feed data/code remain for compatibility.
 
 ## Product proposition
 
@@ -36,4 +36,4 @@ The present beta includes implemented feed posts, post grids on profiles, short-
 4. Review retention and potential export of existing posts; **do not automatically drop database tables, delete R2 files or erase user data**. Schema removal requires versioned migrations, privacy review and rollback planning.
 5. Validate with pilot users and real desktop/Android/iOS PWA tests. Update historical documentation/changelog when the actual application changes.
 
-**Out of scope for this documentation update:** implementing the UI or deleting code/data.
+**Implemented in code:** `DiscoverHome`, authenticated `GET /api/v1/communities/discover/activity`, community/channel navigation, updated onboarding, removal of public-profile post galleries and follow controls. **Still pending:** deployment verification, full migration of legacy post links/notifications, retention review and technical retirement of post endpoints/data.
