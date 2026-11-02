@@ -401,6 +401,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       if(role==='owner')return reply.code(409).send({error:'OWNER_CANNOT_LEAVE'});
       if(!role)return reply.code(204).send();
       await getPool().query('DELETE FROM community_members WHERE community_id=$1 AND user_id=$2',[id,me]);
+      await getPool().query('DELETE FROM community_channel_password_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,me]);
       return reply.code(204).send();
     }catch(error){request.log.error({err:error},'Leave community');return reply.code(503).send({error:'Unavailable'});}
   });
