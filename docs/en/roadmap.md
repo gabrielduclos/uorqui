@@ -62,11 +62,11 @@ These record delivered features and **are not** the next product priority.
 
 ## Next milestone — Discover (before pilot)
 
-- [ ] Replace the feed home screen with **Discover**, public community search and recommendations.
-- [ ] Surface recent channel activity and live voice rooms **from joined communities**, using factual counts and server authorization.
-- [ ] Open the correct channel/room without auto-joining voice, prematurely marking read, or leaking private content.
-- [ ] Support new accounts with no memberships, without fictional posts or activity.
-- [ ] Update main navigation, onboarding, profiles, search and accessibility in PT-BR/EN, Light/Dark.
+- [x] Replace the feed home screen with **Discover**, public community search and recommendations (committed to `main`, deployment unverified).
+- [x] Surface recent channel activity and live voice rooms **from joined communities**, using factual counts and server authorization.
+- [x] Open the correct channel/room without auto-joining voice, prematurely marking read, or leaking private content.
+- [x] Implement empty states for accounts with no memberships, without fictional posts or activity (manual acceptance pending).
+- [x] Update navigation, onboarding, public profile and search UI in PT-BR/EN using Light/Dark tokens (accessibility/device acceptance pending).
 - [ ] Audit notifications, internal links and legacy post deep links for backwards-compatible handling.
 - [ ] Retire global feed access, post creation and immersive video mode after auditing dependencies, **without automatically deleting data, tables or media**.
 - [ ] Document retention/export, versioned schema migrations, rollback and desktop/Android/iOS PWA testing.
