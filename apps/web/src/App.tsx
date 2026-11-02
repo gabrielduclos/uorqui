@@ -89,7 +89,11 @@ function invitationFromUrl(){
 function pendingInvitation(){
   const token=invitationFromUrl();
   if(token&&/^[0-9a-f-]{36}$/i.test(token)){
-    try{localStorage.setItem(INVITE_KEY,token);}catch{}
+    try{
+      localStorage.setItem(INVITE_KEY,token);
+      const channel=new URLSearchParams(window.location.search).get('channel');
+      if(channel&&/^[0-9a-f-]{36}$/i.test(channel))localStorage.setItem('uorqui:pending-meeting-channel',channel);
+    }catch{}
     return token;
   }
   try{return localStorage.getItem(INVITE_KEY);}catch{return null;}
@@ -160,8 +164,17 @@ function AppContent() {
       .then(data=>{
         if(!active)return;
         setInvitedCommunity(data.communityId);setInviteToken(null);
-        try{localStorage.removeItem(INVITE_KEY);}catch{}
+        let meetingChannel:string|null=null;
+        try{
+          meetingChannel=localStorage.getItem('uorqui:pending-meeting-channel');
+          localStorage.removeItem('uorqui:pending-meeting-channel');
+          localStorage.removeItem(INVITE_KEY);
+        }catch{}
         window.history.replaceState(null,'','/');
+        if(meetingChannel&&/^[0-9a-f-]{36}$/i.test(meetingChannel))
+          window.setTimeout(()=>window.dispatchEvent(new CustomEvent('uorqui:open-community-link',{
+            detail:{communityId:data.communityId,channelId:meetingChannel}
+          })),120);
         // Verification callbacks may already have an authenticated session.
         setIsVerificationResult(false);
       }).catch(err=>{if(active){setInviteError(err instanceof Error&&err.message==='COMMUNITY_BANNED'?
@@ -198,7 +211,7 @@ function AppContent() {
       {inviteToken && !publicHandle && !isVerificationResult && !legalDocument && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
         <button type="button" className="absolute right-2 top-2 rounded-md p-1.5 hover:bg-secondary"
           aria-label="Fechar convite / Dismiss invitation" onClick={()=>{
-            try{localStorage.removeItem(INVITE_KEY);}catch{}
+            try{localStorage.removeItem(INVITE_KEY);localStorage.removeItem('uorqui:pending-meeting-channel');}catch{}
             if(/^\/invite\//.test(window.location.pathname))window.history.replaceState(null,'','/');
             setInviteToken(null);setInviteError('');
           }}><X className="size-4"/></button>

@@ -119,3 +119,12 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - The main voice-room channel list shows **name, microphone on/off and speaker audio on/off**, with no profile images. A small presence dot remains next to the username; speaking is highlighted only when actual activity is known.
 - Text-channel messages, unread badges and voice-room occupants use authenticated **Server-Sent Events (SSE)**, the same pattern as direct messaging. `GET /api/v1/communities/events` requires a valid session, resubscribes every five minutes and transmits only channel/community IDs plus event kinds. All content is fetched via membership-gated API requests. A ~30-second fallback covers disconnections.
 - A dedicated cluster-wide PostgreSQL `LISTEN/NOTIFY` subscription per API instance dispatches message, channel and voice activity without streaming content or private identities; it is closed during shutdown.
+
+### Video meetings and password-protected channels
+
+- **Meeting rooms** are distinct from ordinary voice and text channels. They reuse the WebRTC signaling system, providing a responsive video grid and camera/microphone controls for up to six participants initially. Room text chat remains available.
+- Organizers can copy the room link or send it as a one-to-one Uorqui Messenger invitation. A link never bypasses community membership, user blocks or meeting admission policy.
+- Meeting administrators choose **open admission** or **approval required**. Pending requests are enforced server-side; verified community and meeting join requests can notify moderators via the inbox and opt-in push preference.
+- **Channel passwords:** owners/admins can set, rotate and remove passwords for text, voice and meeting channels. Passwords use random-salt scrypt hashes, not plaintext storage. Unlock grants are scoped to the member and channel and are revoked on password changes. Server-side gates protect messages, attachments, message push recipients, live participant presence and WebRTC signaling. Incorrect guesses are rate limited.
+- Channel passwords do not replace community membership or community moderation. Admins can access the channels they manage.
+- **Deployment:** forward migrations 0030–0032 must be applied before these features are released. Validate integration tests, backup and live API deployment before migrating the active database.

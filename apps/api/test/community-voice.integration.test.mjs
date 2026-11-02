@@ -23,6 +23,7 @@ function visitor(){
   let cookie='';
   return async(path,method='GET',payload,withOrigin=true)=>{
     const response=await fetch(base+path,{
+      signal:AbortSignal.timeout(12000),
       method,headers:{...(withOrigin?{origin}:{}),...(payload?{'Content-Type':'application/json'}:{}),...(cookie?{cookie}:{})},
       ...(payload?{body:JSON.stringify(payload)}:{})
     });
@@ -145,6 +146,68 @@ test('voice: secure joins, presence, signaling, heartbeat and leave',async()=>{
   assert.equal((await friend(room+'/sessions/'+b,'DELETE')).status,204);
   assert.deepEqual((await owner(presence)).data.rooms,{},'leaving must clear the main-screen roster');
   assert.equal((await friend(room+'/state?sessionId='+b)).status,410);
+});
+
+test('meeting: direct entry, approval gates, invitations and community request notifications',async()=>{
+  const communities=(await owner('/api/v1/communities')).data.communities;
+  const group=communities.find(c=>c.slug==='voice-test-suite');
+  assert.ok(group);
+  const prefix='/api/v1/communities/'+group.id;
+  const created=await owner(prefix+'/channels','POST',{name:'video-review',kind:'meeting'});
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const channelId=created.data.channel.id;
+  const meeting=prefix+'/channels/'+channelId+'/meeting';
+  const rtc=prefix+'/channels/'+channelId+'/voice';
+  const first=crypto.randomUUID();
+  assert.equal((await friend(meeting)).data.policy,'open','new meetings use direct entry by default');
+  assert.equal((await friend(rtc+'/join','POST',{sessionId:first})).status,200);
+  assert.equal((await friend(rtc+'/sessions/'+first,'DELETE')).status,204);
+  // An authenticated community member must still unlock a password-protected
+  // video room before joining or exchanging WebRTC signals.
+  assert.equal((await owner(prefix+'/channels/'+channelId+'/password','PUT',{password:'meeting-safe-1234'})).status,200);
+  assert.equal((await friend(meeting)).status,404,'locked meeting policy and pending participants stay private');
+  assert.equal((await friend(rtc+'/join','POST',{sessionId:crypto.randomUUID()})).status,403);
+  assert.equal((await friend(prefix+'/channels/'+channelId+'/unlock','POST',{password:'meeting-safe-1234'})).status,200);
+  const secureSession=crypto.randomUUID();
+  assert.equal((await friend(rtc+'/join','POST',{sessionId:secureSession})).status,200);
+  assert.equal((await friend(rtc+'/sessions/'+secureSession,'DELETE')).status,204);
+  assert.equal((await owner(prefix+'/channels/'+channelId+'/password','PUT',{password:null})).status,200);
+  assert.equal((await stranger(meeting)).status,404,'nonmembers cannot inspect meeting policy');
+  assert.equal((await friend(meeting+'/policy','PUT',{policy:'approval'})).status,403,'only administrators set admission policy');
+  assert.equal((await owner(meeting+'/policy','PUT',{policy:'approval'})).status,200);
+  const denied=await friend(rtc+'/join','POST',{sessionId:crypto.randomUUID()});
+  assert.equal(denied.status,403);
+  assert.equal(denied.data.error,'MEETING_APPROVAL_REQUIRED');
+  const request=await friend(meeting+'/requests','POST');
+  assert.equal(request.status,201,JSON.stringify(request.data));
+  assert.equal(request.data.status,'pending');
+  assert.equal((await friend(meeting+'/requests','POST')).data.status,'pending','do not resend a pending request');
+  const requests=(await owner(meeting)).data.pending;
+  assert.deepEqual(requests.map(r=>r.handle),['voice_friend']);
+  const inbox=(await owner('/api/v1/notifications')).data.notifications;
+  assert.ok(inbox.some(n=>n.kind==='meeting_join_request'&&n.targetId===channelId&&n.communityId===group.id),
+    'admins should see meeting requests with the meeting deep link: '+JSON.stringify(inbox));
+  assert.equal((await friend(meeting+'/requests/voice_friend/approve','POST')).status,403);
+  assert.equal((await owner(meeting+'/requests/voice_friend/approve','POST')).status,200);
+  const approved=crypto.randomUUID();
+  assert.equal((await friend(rtc+'/join','POST',{sessionId:approved})).status,200,
+    'approved member can join');
+  assert.equal((await friend(rtc+'/sessions/'+approved,'DELETE')).status,204);
+  assert.equal((await owner(meeting+'/policy','PUT',{policy:'open'})).status,200);
+  assert.equal((await owner(meeting+'/policy','PUT',{policy:'approval'})).status,200);
+
+  const approval=await owner('/api/v1/communities','POST',{name:'Approvals Test',slug:'community-approvals-suite',visibility:'approval'});
+  assert.equal(approval.status,201);
+  const joined=await stranger('/api/v1/communities/'+approval.data.id+'/join','POST');
+  assert.equal(joined.status,201);
+  assert.equal(joined.data.status,'pending');
+  assert.ok((await owner('/api/v1/notifications')).data.notifications.some(n=>
+    n.kind==='community_join_request'&&n.targetId===approval.data.id),
+    'community administrators should receive join requests');
+  const prefs=(await owner('/api/v1/notifications/preferences')).data.preferences;
+  assert.equal(prefs.community_request,true);
+  assert.equal((await owner('/api/v1/notifications/preferences','PUT',{...prefs,community_request:false})).status,200);
+  assert.equal((await owner('/api/v1/notifications/preferences')).data.preferences.community_request,false);
 });
 
 test('voice: lost membership ends active RTC room access',async()=>{

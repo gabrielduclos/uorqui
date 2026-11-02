@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users } from 'lucide-react';
+import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -7,7 +7,7 @@ import { VoiceActivityMonitor } from './VoiceActivityMonitor';
 import { playVoiceRoomCue, unlockVoiceRoomAudio } from './communityVoiceSounds';
 
 export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;deafened:boolean;isSelf:boolean;speaking?:boolean};
-export type VoiceRoomTarget={communityId:string;channelId:string;communityName:string;channelName:string};
+export type VoiceRoomTarget={communityId:string;channelId:string;communityName:string;channelName:string;kind:'voice'|'meeting'};
 export type VoicePhase='idle'|'joining'|'joined';
 type VoicePeer=CommunityVoiceParticipant & {joinedAt:string};
 type VoiceSignal={id:string;senderSessionId:string;kind:'offer'|'answer'|'candidate';payload:RTCSessionDescriptionInit|RTCIceCandidateInit};
@@ -31,8 +31,8 @@ function ScreenTile({stream,label}:{stream:MediaStream;label:string}){
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
-export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange}:{
-  communityId:string;channelId:string;communityName:string;channelName:string;
+export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,kind='voice',mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange}:{
+  communityId:string;channelId:string;communityName:string;channelName:string;kind?:'voice'|'meeting';
   mode?:'expanded'|'floating';onMinimize?:()=>void;onRestore?:()=>void;onLeave?:()=>void;
   onPhaseChange?:(phase:VoicePhase)=>void;
   onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void;
@@ -50,6 +50,17 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [screenBusy,setScreenBusy]=useState(false);
   const [sharing,setSharing]=useState(false);
   const [screens,setScreens]=useState<Record<string,MediaStream>>({});
+  const [cameras,setCameras]=useState<Record<string,MediaStream>>({});
+  const [cameraOn,setCameraOn]=useState(false);
+  const [cameraBusy,setCameraBusy]=useState(false);
+  const [inviteOpen,setInviteOpen]=useState(false);
+  const [inviteHandle,setInviteHandle]=useState('');
+  const [inviteBusy,setInviteBusy]=useState(false);
+  const [inviteFeedback,setInviteFeedback]=useState('');
+  const [meetingInfo,setMeetingInfo]=useState<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}|null>(null);
+  const [meetingAction,setMeetingAction]=useState('');
+  const [meetingNotice,setMeetingNotice]=useState('');
+  const meeting=kind==='meeting';
   const running=useRef(false);
   const disposed=useRef(false);
   const joining=useRef(false);
@@ -75,6 +86,24 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const recoveringMic=useRef(false);
   const foregroundTimer=useRef<number|null>(null);
   const base='/api/v1/communities/'+communityId+'/channels/'+channelId+'/voice';
+  const meetingBase='/api/v1/communities/'+communityId+'/channels/'+channelId+'/meeting';
+  const fetchMeetingInfo=useCallback(async()=>{
+    if(!meeting)return;
+    try{const data=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}>(meetingBase);
+      if(!disposed.current)setMeetingInfo(data);
+    }catch{if(!disposed.current)setMeetingNotice(pt?'Não foi possível atualizar as permissões.':'Could not update meeting permissions.');}
+  },[meeting,meetingBase,pt]);
+  useEffect(()=>{
+    if(!meeting)return;
+    void fetchMeetingInfo();
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void fetchMeetingInfo();},8000);
+    const update=(event:Event)=>{
+      const info=(event as CustomEvent<{communityId?:string;channelId?:string;kind?:string}>).detail;
+      if(info?.kind==='voice'&&info.channelId===channelId)void fetchMeetingInfo();
+    };
+    window.addEventListener('uorqui:community-event',update);
+    return()=>{window.clearInterval(timer);window.removeEventListener('uorqui:community-event',update);};
+  },[meeting,channelId,fetchMeetingInfo]);
 
   const stop=useCallback((notify=true)=>{
     if(foregroundTimer.current!==null)window.clearTimeout(foregroundTimer.current);
@@ -84,7 +113,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     const sessionId=selfSession.current;selfSession.current=null;
     for(const timer of timers.current)window.clearInterval(timer);
     screenRef.current?.getTracks().forEach(t=>{t.onended=null;t.stop();});screenRef.current=null;
-    screenSenders.current.clear();negotiations.current.clear();setSharing(false);setScreens({});setScreenBusy(false);
+    screenSenders.current.clear();negotiations.current.clear();setSharing(false);setScreens({});setScreenBusy(false);setCameras({});setCameraOn(false);setCameraBusy(false);
     timers.current=[];
     for(const pc of pcMap.current.values())pc.close();
     pcMap.current.clear();candidateQueue.current.clear();knownPeers.current.clear();
@@ -118,12 +147,20 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       await Promise.all([...pcMap.current.values()].flatMap(pc=>
         pc.getSenders().filter(sender=>sender.track?.kind==='audio')
           .map(sender=>sender.replaceTrack(replacement).catch(()=>{}))));
-      const previous=local.current;
-      local.current=stream;
+      // Replace only the microphone. The video track stays live in the same
+      // MediaStream, even when iOS interrupts and restores microphone capture.
+      const current=local.current;
+      if(!running.current||!selfSession.current||!current){
+        replacement.stop();return;
+      }
+      for(const old of current.getAudioTracks()){
+        current.removeTrack(old);
+        old.onmute=null;old.onunmute=null;old.onended=null;old.stop();
+      }
+      current.addTrack(replacement);
       watchMic(replacement);
       voiceMonitor.current?.remove(selfSession.current);
-      voiceMonitor.current?.add(selfSession.current,stream);
-      previous?.getTracks().forEach(t=>{t.onmute=null;t.onunmute=null;t.onended=null;t.stop();});
+      voiceMonitor.current?.add(selfSession.current,current);
       setMicInterrupted(false);
     }catch{
       stream?.getTracks().forEach(t=>t.stop());
@@ -143,6 +180,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(pc){pc.close();pcMap.current.delete(id);}
     screenSenders.current.delete(id);negotiations.current.delete(id);
     setScreens(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
+    setCameras(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
     const audio=audioMap.current.get(id);
     if(audio){audio.pause();audio.srcObject=null;audio.remove();audioMap.current.delete(id);}
     candidateQueue.current.delete(id);
@@ -170,8 +208,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       if(!running.current)return;
       if(event.track.kind==='video'){
         const media=event.streams[0]??new MediaStream([event.track]);
-        const display=()=>{if(running.current)setScreens(old=>({...old,[id]:media}));};
-        const hide=()=>setScreens(old=>{if(!(id in old))return old;const next={...old};delete next[id];return next;});
+        const display=()=>{if(running.current){if(meeting)setCameras(old=>({...old,[id]:media}));else setScreens(old=>({...old,[id]:media}));}};
+        const hide=()=>{const update=(old:Record<string,MediaStream>)=>{if(!(id in old))return old;const next={...old};delete next[id];return next;};if(meeting)setCameras(update);else setScreens(update);};
         event.track.onunmute=display;event.track.onmute=hide;event.track.onended=hide;
         display();return;
       }
@@ -188,7 +226,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       voiceMonitor.current?.add(id,media);
       void element.play().catch(()=>{if(running.current)setAudioBlocked(true);});
     };
-    local.current?.getAudioTracks().forEach(track=>pc.addTrack(track,local.current!));
+    local.current?.getTracks().forEach(track=>pc.addTrack(track,local.current!));
     const video=screenRef.current?.getVideoTracks()[0];
     if(video&&screenRef.current)screenSenders.current.set(id,pc.addTrack(video,screenRef.current));
     if(initiator){
@@ -203,7 +241,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       }
     }
     return pc;
-  },[sendSignal,closePeer,pt]);
+  },[sendSignal,closePeer,pt,meeting]);
 
   const handleSignal=useCallback(async(signal:VoiceSignal)=>{
     if(!running.current||signal.senderSessionId===selfSession.current)return;
@@ -338,6 +376,36 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
 
   async function join(){
     if(joining.current||running.current)return;
+    // Meeting approval must not trigger camera or microphone permission prompts.
+    // Admission is independently enforced by the API on every actual join.
+    if(meeting){
+      let admission=meetingInfo;
+      if(!admission){
+        try{
+          admission=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}>(meetingBase);
+          setMeetingInfo(admission);
+        }catch{setMeetingNotice(pt?'Não foi possível verificar a entrada. Tente novamente.':'Could not check meeting admission. Try again.');return;}
+      }
+      if(admission.policy==='approval'&&!admission.manager&&admission.status!=='approved'){
+        if(admission.status==='pending'){
+          setMeetingNotice(pt?'Sua solicitação ainda aguarda aprovação.':'Your request is still awaiting approval.');
+          return;
+        }
+        joining.current=true;
+        setMeetingAction('request');setMeetingNotice('');
+        try{
+          const response=await req<{status:string}>(meetingBase+'/requests',json({}));
+          setMeetingNotice(response.status==='approved'?(pt?'Entrada aprovada. Você já pode se conectar.':'Approved. You can now join.'):
+            pt?'Solicitação enviada. Aguarde a aprovação do administrador.':'Request sent. Waiting for an administrator.');
+          await fetchMeetingInfo();
+        }catch(error){
+          setMeetingNotice(error instanceof Error&&error.message==='REQUEST_COOLDOWN'?
+            (pt?'Solicitação recusada. Tente novamente mais tarde.':'Request declined. Try again later.'):
+            (pt?'Não foi possível solicitar aprovação.':'Could not request admission.'));
+        }finally{joining.current=false;setMeetingAction('');}
+        return;
+      }
+    }
     // Unlock during the actual click, before awaiting getUserMedia and the API.
     unlockVoiceRoomAudio();
     try{
@@ -348,9 +416,16 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     let stream:MediaStream|null=null;
     try{
       if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection)throw Error('UNSUPPORTED');
-      stream=await navigator.mediaDevices.getUserMedia({
-        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false
-      });
+      const audio={echoCancellation:true,noiseSuppression:true,autoGainControl:true};
+      if(meeting){
+        try{stream=await navigator.mediaDevices.getUserMedia({audio,video:{facingMode:'user',width:{ideal:640},height:{ideal:360},frameRate:{ideal:15,max:24}}});}
+        catch(e){
+          if(e instanceof Error&&['NotAllowedError','NotFoundError','OverconstrainedError'].includes(e.name)){
+            stream=await navigator.mediaDevices.getUserMedia({audio,video:false});
+            setError(pt?'Câmera indisponível. Você pode participar apenas com áudio.':'Camera unavailable. You can join with audio only.');
+          }else throw e;
+        }
+      }else stream=await navigator.mediaDevices.getUserMedia({audio,video:false});
       if(disposed.current){stream.getTracks().forEach(track=>track.stop());return;}
       const sessionId=crypto.randomUUID();
       const result=await req<VoiceJoin>(base+'/join',json({sessionId}));
@@ -360,6 +435,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         return;
       }
       local.current=stream;selfSession.current=sessionId;
+      if(meeting&&stream.getVideoTracks().length){setCameraOn(true);setCameras(old=>({...old,[sessionId]:stream!}));}
       voiceMonitor.current=new VoiceActivityMonitor();voiceMonitor.current.add(sessionId,stream);
       config.current=result.rtc.iceServers;
       ownJoinedAt.current=result.peers.find(peer=>peer.sessionId===sessionId)?.joinedAt??new Date().toISOString();
@@ -393,6 +469,11 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       stream?.getTracks().forEach(track=>track.stop());
       stop(false);
       const code=e instanceof Error?e.message:'';
+      if(meeting&&code==='MEETING_APPROVAL_REQUIRED'){
+        try{await req(meetingBase+'/requests',json({}));setMeetingNotice(pt?'Solicitação enviada. Aguarde a aprovação do administrador.':'Request sent. Waiting for an administrator.');await fetchMeetingInfo();}
+        catch(requestError){setMeetingNotice(requestError instanceof Error&&requestError.message==='REQUEST_COOLDOWN'?(pt?'Solicitação recusada. Tente novamente mais tarde.':'Request declined. Try again later.'):(pt?'Não foi possível solicitar aprovação.':'Could not request admission.'));}
+        return;
+      }
       setError(code==='VOICE_ROOM_FULL'?(pt?'Sala cheia (limite de 6 pessoas).':'Room is full (6 participants).'):
         code==='UNSUPPORTED'?(pt?'Este navegador não suporta áudio WebRTC.':'This browser does not support WebRTC audio.'):
         code==='NotAllowedError'?(pt?'Autorize o microfone nas configurações do navegador.':'Allow microphone access in browser settings.'):
@@ -404,6 +485,74 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(running.current&&!deafenedRef.current)playVoiceRoomCue('leave');
     stop();
     onLeave?.();
+  }
+  async function changeMeetingPolicy(policy:'open'|'approval'){
+    if(!meetingInfo?.manager||meetingAction)return;
+    setMeetingAction('policy');setMeetingNotice('');
+    try{await req(meetingBase+'/policy',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({policy})});
+      await fetchMeetingInfo();setMeetingNotice(pt?'Configuração atualizada.':'Meeting settings updated.');
+    }catch{setMeetingNotice(pt?'Não foi possível alterar a entrada na sala.':'Could not update meeting admission.');}
+    finally{setMeetingAction('');}
+  }
+  async function decideMeeting(handle:string,decision:'approve'|'decline'){
+    if(!meetingInfo?.manager||meetingAction)return;
+    setMeetingAction(handle);setMeetingNotice('');
+    try{await req(meetingBase+'/requests/'+encodeURIComponent(handle)+'/'+decision,json({}));
+      await fetchMeetingInfo();
+      setMeetingNotice(decision==='approve'?(pt?'Participação aprovada.':'Participant approved.'):(pt?'Solicitação recusada.':'Request declined.'));
+    }catch{setMeetingNotice(pt?'Não foi possível responder à solicitação.':'Could not process request.');}
+    finally{setMeetingAction('');}
+  }
+  async function toggleCamera(){
+    if(!meeting||!running.current||!local.current||cameraBusy)return;
+    const current=local.current.getVideoTracks()[0];
+    if(current&&current.readyState==='live'){
+      current.enabled=!current.enabled;setCameraOn(current.enabled);return;
+    }
+    setCameraBusy(true);
+    try{
+      const capture=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:360},frameRate:{ideal:15,max:24}},audio:false});
+      const track=capture.getVideoTracks()[0];
+      if(!track||!running.current||!local.current){capture.getTracks().forEach(t=>t.stop());return;}
+      local.current.addTrack(track);
+      if(selfSession.current)setCameras(old=>({...old,[selfSession.current!]:local.current!}));
+      for(const [id,pc] of pcMap.current){if(pc.signalingState!=='closed'){pc.addTrack(track,local.current);void renegotiate(id);}}
+      setCameraOn(true);setError('');
+    }catch{setError(pt?'Não foi possível ativar a câmera. Verifique a permissão.':'Could not enable camera. Check permissions.');}
+    finally{setCameraBusy(false);}
+  }
+  async function meetingUrl(){
+    // Reuse the community's existing bearer invite when available. Only managers
+    // may create a new invite: ordinary members can share the room URL with members.
+    try{
+      const existing=await req<{link:{id:string}|null}>('/api/v1/communities/'+communityId+'/share');
+      let token=existing.link?.id;
+      if(!token&&meetingInfo?.manager){
+        const created=await req<{link:{id:string}}>('/api/v1/communities/'+communityId+'/share',json({}));
+        token=created.link.id;
+      }
+      if(token)return new URL('/invite/'+encodeURIComponent(token)+'?channel='+encodeURIComponent(channelId),window.location.origin).toString();
+    }catch{/* Room URLs still work for people who already belong to the community. */}
+    return new URL('/?community='+encodeURIComponent(communityId)+'&channel='+encodeURIComponent(channelId),window.location.origin).toString();
+  }
+  async function copyMeetingUrl(){
+    const link=await meetingUrl();
+    try{await navigator.clipboard.writeText(link);setInviteFeedback(pt?'Link copiado.':'Link copied.');}
+    catch{setInviteFeedback((pt?'Copie o endereço: ':'Copy the address: ')+link);}
+  }
+  async function sendMeetingInvite(){
+    const handle=inviteHandle.trim().replace(/^@/,'').toLowerCase();
+    if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)||inviteBusy)return;
+    setInviteBusy(true);setInviteFeedback('');
+    try{
+      const started=await req<{id:string}>('/api/v1/dm/conversations',json({handle}));
+      await req('/api/v1/dm/conversations/'+started.id+'/messages',json({
+        body:(pt?'Convite para reunião: ':'Meeting invitation: ')+channelName+'\n'+await meetingUrl(),clientId:crypto.randomUUID()
+      }));
+      setInviteFeedback(pt?'Convite enviado pelo mensageiro do Uorqui.':'Invite sent in Uorqui Messenger.');
+      setInviteHandle('');
+    }catch{setInviteFeedback(pt?'Não foi possível enviar. Confira o @usuário e as permissões de mensagens.':'Could not send invite. Check the @handle and messaging permissions.');}
+    finally{setInviteBusy(false);}
   }
   function toggleMute(){
     if(deafenedRef.current)return;
@@ -524,13 +673,13 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
 
   const count=phase==='joined'?peers.length:0;
   const activeSpeakers=phase==='joined'?visiblePeers.filter(peer=>peer.speaking):[];
-  if(mode==='floating')return <section role="region" aria-label={pt?'Chamada de voz em andamento':'Ongoing voice call'}
+  if(mode==='floating')return <section role="region" aria-label={meeting?(pt?'Reunião em andamento':'Ongoing meeting'):(pt?'Chamada de voz em andamento':'Ongoing voice call')}
     className="inline-flex max-w-full overflow-hidden rounded-xl border border-primary/30 bg-card shadow-2xl">
     <div className="flex min-w-0 items-center gap-1 p-1.5">
       <button type="button" className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-accent"
         onClick={onRestore} aria-label={pt?'Voltar para a sala de voz':'Return to voice room'}>
         <span className="relative grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-          <Headphones className="size-4"/>
+          {meeting?<Video className="size-4"/>:<Headphones className="size-4"/>}
           <span className={'absolute -right-0.5 -top-0.5 size-2 rounded-full bg-emerald-500 ring-2 ring-card '+(activeSpeakers.length?'animate-pulse':'')} aria-hidden="true"/>
         </span>
         <span className="min-w-0 max-w-24 sm:max-w-32">
@@ -557,14 +706,17 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 sm:px-5 sm:py-4">
       <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary sm:size-11"><Volume2 className="size-5"/></div>
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary sm:size-11">{meeting?<Video className="size-5"/>:<Volume2 className="size-5"/>}</div>
           <div className="min-w-0">
-            <h3 className="text-base font-semibold">{pt?'Conversa por voz':'Voice chat'}</h3>
+            <h3 className="text-base font-semibold">{meeting?(pt?'Sala de reunião':'Meeting room'):(pt?'Conversa por voz':'Voice chat')}</h3>
             <p className="text-xs text-muted-foreground">{phase==='joined'?(pt?count+' na sala':count+' in room'):
               phase==='joining'?(pt?'Entrando…':'Joining…'):(pt?'Conecte-se para conversar':'Connect to join the conversation')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {meeting&&<Button type="button" variant="outline" size="sm" className="min-h-10 gap-1.5" onClick={()=>setInviteOpen(v=>!v)}>
+            <Link2 className="size-4"/>{pt?'Convidar':'Invite'}
+          </Button>}
           <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground" role="status">
             <span className={'size-2 rounded-full '+(phase==='joined'?'bg-emerald-500':phase==='joining'?'bg-amber-500':'bg-muted-foreground/40')}/>
             {phase==='joined'?(pt?'Conectado':'Connected'):phase==='joining'?(pt?'Conectando':'Connecting'):(pt?'Desconectado':'Disconnected')}
@@ -575,11 +727,49 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </Button>}
         </div>
       </div>
+      {meeting&&meetingInfo&&<div className="mx-auto mt-3 w-full max-w-5xl rounded-xl border border-border bg-card p-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-medium">{pt?'Entrada na reunião':'Meeting admission'}: {meetingInfo.policy==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Entrada direta':'Direct entry')}</span>
+          {meetingInfo.manager&&<select className="min-h-10 rounded-lg border border-input bg-background px-2 text-sm" aria-label={pt?'Permissão para entrar na reunião':'Meeting join policy'}
+            disabled={!!meetingAction} value={meetingInfo.policy} onChange={e=>void changeMeetingPolicy(e.target.value as 'open'|'approval')}>
+            <option value="open">{pt?'Entrada direta':'Direct entry'}</option>
+            <option value="approval">{pt?'Por aprovação':'Approval required'}</option>
+          </select>}
+        </div>
+        {!meetingInfo.manager&&meetingInfo.policy==='approval'&&meetingInfo.status==='pending'&&
+          <p role="status" className="mt-2 text-muted-foreground">{pt?'Sua solicitação está aguardando aprovação.':'Your request is awaiting approval.'}</p>}
+        {!meetingInfo.manager&&meetingInfo.policy==='approval'&&meetingInfo.status==='approved'&&phase!=='joined'&&
+          <p role="status" className="mt-2 text-primary">{pt?'Entrada aprovada. Você já pode se conectar.':'Approved. You can now join.'}</p>}
+        {meetingInfo.manager&&meetingInfo.pending.length>0&&<div className="mt-3 border-t border-border pt-2">
+          <h4 className="font-semibold">{pt?'Solicitações de entrada':'Join requests'} ({meetingInfo.pending.length})</h4>
+          {meetingInfo.pending.map(person=><div key={person.handle} className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+            <span className="min-w-0 flex-1 truncate">{person.displayName} (@{person.handle})</span>
+            <Button type="button" size="sm" disabled={!!meetingAction} onClick={()=>void decideMeeting(person.handle,'approve')}><Check className="size-4"/>{pt?'Aprovar':'Approve'}</Button>
+            <Button type="button" variant="outline" size="sm" disabled={!!meetingAction} onClick={()=>void decideMeeting(person.handle,'decline')}>{pt?'Recusar':'Decline'}</Button>
+          </div>)}
+        </div>}
+        {meetingNotice&&<p role="status" className="mt-2 text-muted-foreground">{meetingNotice}</p>}
+      </div>}
+      {meeting&&inviteOpen&&<div className="mx-auto mt-3 w-full max-w-5xl rounded-xl border border-border bg-card p-3">
+        <h4 className="text-sm font-semibold">{pt?'Convidar para esta reunião':'Invite to this meeting'}</h4>
+        <p className="mt-1 text-xs text-muted-foreground">{pt?'O convidado precisa participar da comunidade. A aprovação da reunião, quando ativa, continua obrigatória.':'Invitees must belong to the community. Meeting approval still applies when enabled.'}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={()=>void copyMeetingUrl()}><Copy className="size-4"/>{pt?'Copiar link':'Copy link'}</Button>
+          <form className="flex min-w-0 flex-1 flex-wrap items-center gap-2" onSubmit={event=>{event.preventDefault();void sendMeetingInvite();}}>
+            <input className="min-h-10 min-w-28 flex-1 rounded-lg border border-input bg-background px-3 text-base sm:text-sm" autoComplete="off" aria-label={pt?'@usuário para convidar':'@handle to invite'} placeholder="@usuario" maxLength={33} value={inviteHandle} onChange={e=>setInviteHandle(e.target.value)}/>
+            <Button type="submit" size="sm" disabled={inviteBusy||!inviteHandle.trim()}><Send className="size-4"/>{inviteBusy?(pt?'Enviando…':'Sending…'):(pt?'Enviar pelo Uorqui':'Send in Uorqui')}</Button>
+          </form>
+        </div>
+        {inviteFeedback&&<p role="status" className="mt-2 break-all text-xs text-muted-foreground">{inviteFeedback}</p>}
+      </div>}
       {error&&<div role="alert" className="mx-auto mt-4 max-w-5xl rounded-xl border border-destructive/35 bg-destructive/5 p-3 text-xs text-destructive">
         {error==='VOICE_NETWORK_RETRY'?(pt?'Reconectando…':'Reconnecting…'):error}</div>}
       {phase==='joined'&&micInterrupted&&<div role="status" className="mx-auto mt-3 flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card p-3 text-xs">
         <span>{pt?'O sistema interrompeu o microfone, mas a sala permanece aberta.':'System microphone capture was interrupted; the room remains open.'}</span>
         <Button size="sm" variant="outline" onClick={()=>void restoreMic()}><Mic className="size-4"/>{pt?'Reativar microfone':'Restore microphone'}</Button>
+      </div>}
+      {meeting&&phase==='joined'&&Object.keys(cameras).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-2 gap-2 sm:grid-cols-3">
+        {Object.entries(cameras).filter(([id])=>id===selfSession.current?cameraOn:true).map(([id,stream])=><ScreenTile key={'camera:'+id} stream={stream} label={id===selfSession.current?(pt?'Sua câmera':'Your camera'):(peers.find(p=>p.sessionId===id)?.displayName??'')}/>)}
       </div>}
       {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-1 gap-2 sm:grid-cols-2">
         {Object.entries(screens).map(([id,stream])=><ScreenTile key={id} stream={stream} label={id===selfSession.current?
@@ -589,11 +779,11 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       {phase!=='joined'?<div className="flex min-h-0 flex-col items-center justify-center gap-2 py-4 text-center sm:gap-3 sm:py-8">
         <div className="grid size-12 place-items-center rounded-xl border border-border bg-card shadow-sm sm:size-16"><Headphones className="size-6 text-primary sm:size-8"/></div>
         <div className="space-y-1">
-          <h4 className="text-base font-semibold">{pt?'Entre no canal de voz':'Join voice channel'}</h4>
-          <p className="max-w-sm text-sm text-muted-foreground">{pt?'Converse com os membros que estiverem conectados.':'Talk with other members in the room.'}</p>
+          <h4 className="text-base font-semibold">{meeting?(pt?'Entrar na reunião':'Join meeting'):(pt?'Entre no canal de voz':'Join voice channel')}</h4>
+          <p className="max-w-sm text-sm text-muted-foreground">{meeting?(pt?'Participe com áudio e vídeo. Câmera e microfone exigem permissão.':'Join with audio and video. Camera and microphone require permission.'):(pt?'Converse com os membros que estiverem conectados.':'Talk with other members in the room.')}</p>
         </div>
         <Button className="min-h-11 rounded-xl px-6" disabled={phase==='joining'} onClick={()=>void join()}>
-          <Headphones className="size-4"/>{phase==='joining'?(pt?'Conectando…':'Connecting…'):(pt?'Conectar':'Connect')}</Button>
+          {meeting?<Video className="size-4"/>:<Headphones className="size-4"/>}{phase==='joining'?(pt?'Conectando…':'Connecting…'):(pt?'Conectar':'Connect')}</Button>
       </div>:<div className="mx-auto mt-3 max-w-5xl">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <Users className="size-4"/><span>{pt?'Participantes':'Participants'} · {count}/6</span>
@@ -644,20 +834,25 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
             title={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}>
             {muted?<MicOff className="size-5"/>:<Mic className="size-5"/>}
           </button>
+          {meeting&&<button type="button" onClick={()=>void toggleCamera()} disabled={cameraBusy}
+             className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-50 '+(!cameraOn?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
+             aria-label={cameraOn?(pt?'Desativar câmera':'Turn camera off'):(pt?'Ativar câmera':'Turn camera on')} title={cameraOn?(pt?'Desativar câmera':'Turn camera off'):(pt?'Ativar câmera':'Turn camera on')}>
+             {cameraOn?<Video className="size-5"/>:<VideoOff className="size-5"/>}
+           </button>}
           <button type="button" onClick={toggleDeafen}
             className={'grid size-11 place-items-center rounded-xl border transition-colors '+(deafened?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}
             title={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}>
             {deafened?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
           </button>
-          <button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
+          {!meeting&&<button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
             className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-40 '+(sharing?'border-primary/60 bg-primary/15 text-primary':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={sharing?(pt?'Parar compartilhamento de tela':'Stop screen sharing'):(pt?'Compartilhar tela':'Share screen')}
             title={('getDisplayMedia' in (navigator.mediaDevices??{}))?(sharing?(pt?'Parar apresentação':'Stop presenting'):(pt?'Compartilhar tela':'Share screen')):
               (pt?'Não disponível neste navegador':'Unavailable in this browser')}>
             {screenBusy?<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"/>:
               sharing?<MonitorOff className="size-5"/>:<MonitorUp className="size-5"/>}
-          </button>
+          </button>}
           {audioBlocked&&!deafened&&<Button variant="outline" className="min-h-11 rounded-xl" onClick={enableAudio}>
             <Volume2 className="size-4"/>{pt?'Ativar som':'Enable sound'}</Button>}
           <button type="button" onClick={leaveRoom}

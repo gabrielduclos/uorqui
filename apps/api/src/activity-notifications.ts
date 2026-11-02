@@ -2,7 +2,7 @@ import { getPool } from './db/client.js';
 import { publishDmUserEvent } from './dm-events.js';
 import { pushActivityNotification } from './push-routes.js';
 
-export type ActivityKind = 'friend_request'|'friend_accepted';
+export type ActivityKind = 'friend_request'|'friend_accepted'|'community_join_request'|'meeting_join_request';
 
 /** Persist only server-verified relationships; do not expose blocked users. */
 export async function recordActivity(recipientId:string,actorId:string,kind:ActivityKind,
@@ -20,3 +20,13 @@ export async function recordActivity(recipientId:string,actorId:string,kind:Acti
   void pushActivityNotification(result.rows[0].id).catch(()=>{});
 }
 
+
+/** Fan out a verified community/meeting request to owners and admins. */
+export async function recordCommunityRequest(communityId:string,actorId:string,
+  kind:'community_join_request'|'meeting_join_request',targetId:string,eventKey:string){
+  const managers=await getPool().query<{user_id:string}>(
+    "SELECT user_id FROM community_members WHERE community_id=$1 AND role IN ('owner','admin') AND user_id<>$2",
+    [communityId,actorId]);
+  await Promise.allSettled(managers.rows.map(manager=>
+    recordActivity(manager.user_id,actorId,kind,targetId,eventKey+':'+manager.user_id)));
+}

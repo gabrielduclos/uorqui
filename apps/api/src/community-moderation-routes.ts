@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
+import { channelGate,channelGateError,channelGateStatus } from './channel-password.js';
 
 type SessionReader=(request:FastifyRequest)=>Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -191,6 +192,7 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
           await client.query('DELETE FROM community_join_requests WHERE community_id=$1 AND user_id=$2',[id,other]);
         }
         await client.query('DELETE FROM community_members WHERE community_id=$1 AND user_id=$2',[id,other]);
+        await client.query('DELETE FROM community_channel_password_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,other]);
         await client.query('DELETE FROM community_voice_sessions WHERE user_id=$2 AND channel_id IN (SELECT id FROM community_channels WHERE community_id=$1)',[id,other]);
         await client.query('COMMIT');
         return reply.header('Cache-Control',noCache).send({handle:h,status:ban?'banned':'removed'});
@@ -266,12 +268,14 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
       try{
         const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
         const {id,channelId,messageId}=request.params as {id:string;channelId:string;messageId:string};
+        const gate=await channelGate(id,channelId,me);
+        if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
         const content=(request.body as {body:string}).body.trim();
         if(!content||content.length>4000)return reply.code(400).send({error:'Invalid message'});
         const changed=await getPool().query(
           'UPDATE community_messages msg SET body=$5,edited_at=now() FROM community_channels channel '+
           'JOIN community_members member ON member.community_id=channel.community_id AND member.user_id=$4 '+
-          "WHERE msg.id=$1 AND msg.channel_id=$2 AND channel.id=$2 AND channel.community_id=$3 AND channel.kind='text' "+
+          "WHERE msg.id=$1 AND msg.channel_id=$2 AND channel.id=$2 AND channel.community_id=$3 AND channel.kind IN ('text','voice','meeting') "+
           'AND msg.author_id=$4 AND msg.deleted_at IS NULL RETURNING msg.id,msg.body,msg.edited_at AS "editedAt"',
           [messageId,channelId,id,me,content]);
         if(!changed.rowCount)return reply.code(404).send({error:'Message not editable'});
@@ -285,10 +289,12 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
       try{
         const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
         const {id,channelId,messageId}=request.params as {id:string;channelId:string;messageId:string};
+        const gate=await channelGate(id,channelId,me);
+        if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
         const changed=await getPool().query(
           'UPDATE community_messages msg SET deleted_at=now(),deleted_by_id=$4 FROM community_channels channel '+
           'JOIN community_members member ON member.community_id=channel.community_id AND member.user_id=$4 '+
-          "WHERE msg.id=$1 AND msg.channel_id=$2 AND channel.id=$2 AND channel.community_id=$3 AND channel.kind='text' "+
+          "WHERE msg.id=$1 AND msg.channel_id=$2 AND channel.id=$2 AND channel.community_id=$3 AND channel.kind IN ('text','voice','meeting') "+
           "AND msg.deleted_at IS NULL AND (msg.author_id=$4 OR member.role IN ('owner','admin','moderator')) RETURNING msg.id",
           [messageId,channelId,id,me]);
         if(!changed.rowCount)return reply.code(404).send({error:'Message not deletable'});

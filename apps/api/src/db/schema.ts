@@ -154,12 +154,43 @@ export const communityChannels = pgTable('community_channels', {
   communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 64 }).notNull(),
   kind: varchar('kind', { length: 8 }).notNull(),
+  meetingJoinPolicy: varchar('meeting_join_policy', { length: 12 }).notNull().default('open'),
+  passwordHash: text('password_hash'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
   uniqueIndex('community_channels_unique_name').on(table.communityId, table.name),
   index('community_channels_community_idx').on(table.communityId),
-  check('community_channels_kind', sql`${table.kind} IN ('text', 'voice')`),
+  check('community_channels_kind', sql`${table.kind} IN ('text', 'voice', 'meeting')`),
+  check('community_meeting_policy',sql`${table.meetingJoinPolicy} IN ('open','approval')`),
 ]);
+
+/** A meeting invite/approval is distinct from community membership. */
+export const meetingAccessRequests = pgTable('meeting_access_requests', {
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id,{onDelete:'cascade'}),
+  userId: uuid('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  status: varchar('status',{length:10}).notNull().default('pending'),
+  requestedAt: timestamp('requested_at',{withTimezone:true}).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
+}, table=>[
+  primaryKey({columns:[table.channelId,table.userId]}),
+  index('meeting_access_requests_status_idx').on(table.channelId,table.status),
+  check('meeting_access_requests_status',sql`${table.status} IN ('pending','approved','declined')`),
+]);
+
+/** Password grants are specific to the account and the protected channel. */
+export const communityChannelPasswordAccess = pgTable('community_channel_password_access', {
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id,{onDelete:'cascade'}),
+  userId: uuid('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  grantedAt: timestamp('granted_at',{withTimezone:true}).notNull().defaultNow(),
+}, t=>[primaryKey({columns:[t.channelId,t.userId]})]);
+
+/** Throttle online guesses without recording failed password values. */
+export const communityChannelPasswordAttempts = pgTable('community_channel_password_attempts', {
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id,{onDelete:'cascade'}),
+  userId: uuid('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  failedCount: integer('failed_count').notNull().default(0),
+  lastFailedAt: timestamp('last_failed_at',{withTimezone:true}),
+}, t=>[primaryKey({columns:[t.channelId,t.userId]})]);
 
 export const communityMessages = pgTable('community_messages', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -334,6 +365,7 @@ export const activityNotifications = pgTable('activity_notifications', {
   index('activity_notifications_recipient_date_idx').on(t.recipientId,t.createdAt),
   index('activity_notifications_unread_idx').on(t.recipientId,t.readAt),
   check('activity_notifications_no_self', sql`${t.recipientId} <> ${t.actorId}`),
+  check('activity_notifications_kind',sql`${t.kind} IN ('friend_request','friend_accepted','community_join_request','meeting_join_request')`),
 ]);
 
 /** Browser Web Push subscriptions are account-bound and never reused for the next sign-in. */
@@ -352,6 +384,7 @@ export const notificationPreferences = pgTable('notification_preferences', {
   userId: uuid('user_id').primaryKey().notNull().references(() => users.id, { onDelete: 'cascade' }),
   directMessage: boolean('direct_message').notNull().default(true),
   communityMessage: boolean('community_message').notNull().default(true),
+  communityRequest: boolean('community_request').notNull().default(true),
   friendRequest: boolean('friend_request').notNull().default(true),
   friendAccepted: boolean('friend_accepted').notNull().default(true),
 });

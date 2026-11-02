@@ -55,6 +55,7 @@ jobs:
       - name: Verify message reports and moderator audit
         run: node --test apps/api/test/content-reports.integration.test.mjs
       - name: Verify authenticated community voice signaling
+        timeout-minutes: 3
         run: node --test apps/api/test/community-voice.integration.test.mjs
       - name: Verify disabled registration is enforced server-side
         run: node --test apps/api/test/signup-closed.integration.test.mjs

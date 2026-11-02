@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, MessageSquareText, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, MessageSquareText, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -25,7 +25,7 @@ type Community={
   id:string;name:string;slug:string;description:string|null;avatarUrl:string|null;visibility:Visibility;
   memberCount:number;myRole:string|null;requestKind:string|null;requestStatus:string|null;
 };
-type Channel={id:string;name:string;kind:'text'|'voice';createdAt:string};
+type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';createdAt:string;hasPassword?:boolean;unlocked?:boolean};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
@@ -78,8 +78,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         'You are already connected to another room. Disconnect before joining another.');
       return;
     }
-    // Show voice and text together when opening a room.
-    setVoiceTextExpanded(true);
+    // Voice chat opens expanded; video meetings prioritize the camera grid.
+    setVoiceTextExpanded(target.kind==='voice');
     setActiveVoiceRoom(target);setVoiceMinimized(false);
   }
   const [voiceRooms,setVoiceRooms]=useState<Record<string,CommunityVoiceParticipant[]>>({});
@@ -110,7 +110,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   }
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
-  const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'>('text');
+  const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
+  const [unlockPassword,setUnlockPassword]=useState('');
+  const [unlockBusy,setUnlockBusy]=useState(false);
+  const [unlockError,setUnlockError]=useState('');
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
   const [pendingMessages,setPendingMessages]=useState<PendingMessage[]>([]);
@@ -139,6 +142,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const acknowledged=useRef(new Map<string,string>());
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
+  const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
   const community=detail?.community??null;
   const renderedMessages=[...messages,...pendingMessages.filter(p=>p.channelId===channelId&&!messages.some(m=>m.clientId===p.clientId))];
 
@@ -271,7 +275,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
-    if(!selectedId||!channelId||!activeChannel||!community?.myRole){
+    if(!selectedId||!channelId||!activeChannel||!community?.myRole||(activeChannel.hasPassword&&!activeChannel.unlocked)){
       setMessages([]);setMessagesLoadFailed(false);return;
     }
     let active=true,loadedOnce=false,requestId=0;
@@ -308,7 +312,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       window.removeEventListener('uorqui:community-event',event);
       window.removeEventListener('focus',focus);
     };
-  },[selectedId,channelId,activeChannel?.kind,community?.myRole]);
+  },[selectedId,channelId,activeChannel?.kind,activeChannel?.hasPassword,activeChannel?.unlocked,community?.myRole]);
   useEffect(()=>{
     const latest=messages.at(-1)?.id??null;
     if(latest&&latest!==previousLastMessage.current){
@@ -319,7 +323,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     previousLastMessage.current=latest;
   },[messages]);
   useEffect(()=>{
-    if(activeChannel?.kind!=='voice'||!voiceTextExpanded)return;
+    if(activeChannel?.kind==='text'||!voiceTextExpanded)return;
     const frame=window.requestAnimationFrame(()=>{
       const el=scrollRef.current;
       if(el)el.scrollTop=el.scrollHeight;
@@ -332,7 +336,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   // in background tabs; the cursor is tied to a message present in our response.
   useEffect(()=>{
     if(!active||!channelOpen||!selectedId||!channelId||!activeChannel||
-       (activeChannel.kind==='voice'&&!voiceTextExpanded)||
+       (activeChannel.kind!=='text'&&!voiceTextExpanded)||
        document.visibilityState!=='visible'||messagesLoading)return;
     const lastMessageId=messages.at(-1)?.id;
     if(!lastMessageId)return;
@@ -380,7 +384,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     setSelectedId(location.communityId);setDiscovery(false);setCreateOpen(false);
     setChannelId(location.channelId);setChannelOpen(true);setVoiceMinimized(true);
     setError('');setNotice('');
-    if(location.channelKind==='voice' && voicePhase==='idle'){
+    if(location.channelKind!=='text' && voicePhase==='idle'){
       // Reading room text must not automatically join a voice call.
       setActiveVoiceRoom(null);
     }
@@ -401,6 +405,21 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       ?(pt?'Este endereço já pertence a uma comunidade.':'This slug already exists.')
       :(pt?'Falha ao criar comunidade.':'Could not create community.'));}
     finally{setBusy(false);setBusyAction(null);}
+  }
+  async function unlockChannel(event:FormEvent){
+    event.preventDefault();
+    if(!selectedId||!channelId||!unlockPassword||unlockBusy)return;
+    setUnlockBusy(true);setUnlockError('');
+    try{
+      await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/unlock',body({password:unlockPassword}));
+      setUnlockPassword('');
+      await loadDetail(selectedId);
+    }catch(e){
+      const code=e instanceof Error?e.message:'';
+      setUnlockError(code==='CHANNEL_PASSWORD_RATE_LIMIT'?(pt?'Muitas tentativas. Tente novamente em 15 minutos.':'Too many attempts. Try again in 15 minutes.'):
+        code==='INVALID_CHANNEL_PASSWORD'?(pt?'Senha incorreta.':'Incorrect password.'):
+        (pt?'Não foi possível desbloquear o canal.':'Could not unlock the channel.'));
+    }finally{setUnlockBusy(false);}
   }
   async function createChannel(event:FormEvent){
     event.preventDefault();
@@ -554,7 +573,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
 
   const voiceInline=Boolean(activeVoiceRoom&&active&&channelOpen&&!voiceMinimized&&!discovery&&
     community?.id===activeVoiceRoom.communityId&&activeChannel?.id===activeVoiceRoom.channelId&&
-    activeChannel?.kind==='voice');
+    activeChannel?.kind!=='text');
 
   return <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
     <nav data-uorqui-community-rail aria-label={pt?'Minhas comunidades':'My communities'}
@@ -597,7 +616,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <div className="space-y-1">
               {unreadLocations.map(item=><button key={item.channelId} type="button" onClick={()=>openUnread(item)}
                 className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-xs hover:bg-secondary">
-                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':'#'} {item.channelName}</span>
+                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':item.channelKind==='meeting'?'📹':'#'} {item.channelName}</span>
                 <span className="rounded-full bg-destructive px-1.5 py-0.5 font-bold text-white">{item.count>99?'99+':item.count}</span>
               </button>)}
             </div>
@@ -654,7 +673,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <div className="space-y-1">
               {unreadLocations.map(item=><button type="button" key={item.channelId}
                 onClick={()=>openUnread(item)} className="flex min-h-9 w-full items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 text-left text-xs hover:bg-secondary">
-                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':'#'} {item.channelName}</span>
+                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':item.channelKind==='meeting'?'📹':'#'} {item.channelName}</span>
                 <span className="rounded-full bg-destructive px-1.5 py-0.5 font-bold text-white">{item.count>99?'99+':item.count}</span>
               </button>)}
             </div>
@@ -674,25 +693,25 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
                 aria-label={ch.name+(unreadChannels[ch.id]?' · '+unreadChannels[ch.id]+(pt?' não lidas':' unread'):'')}
-                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');}}
+                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');setUnlockPassword('');setUnlockError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
-                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>{ch.hasPassword&&<LockKeyhole aria-label={pt?'Canal protegido':'Protected channel'} className="size-3.5 shrink-0 text-primary"/>}
                 {!!unreadChannels[ch.id]&&<span aria-hidden="true"
                   className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                   {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
               </button>)}</section>
-            <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Salas de voz':'Voice rooms'}</p>
-              {detail?.channels.filter(ch=>ch.kind==='voice').map(ch=>{
+            {(['voice','meeting'] as const).map(roomKind=><section key={roomKind}><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{roomKind==='meeting'?(pt?'Salas de reunião':'Video meetings'):(pt?'Salas de voz':'Voice rooms')}</p>
+              {detail?.channels.filter(ch=>ch.kind===roomKind).map(ch=>{
                 const occupants=activeVoiceRoom?.communityId===selectedId&&activeVoiceRoom.channelId===ch.id&&voiceParticipants.length
                   ?voiceParticipants:(voiceRooms[ch.id]??[]);
                 return <div key={ch.id} className="mb-1">
                   <button type="button" onClick={()=>{
-                      setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');
-                      openVoiceRoom({communityId:selectedId!,channelId:ch.id,communityName:community.name,channelName:ch.name});
+                      setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');setUnlockPassword('');setUnlockError('');
+                      if(!ch.hasPassword||ch.unlocked)openVoiceRoom({communityId:selectedId!,channelId:ch.id,communityName:community.name,channelName:ch.name,kind:ch.kind as 'voice'|'meeting'});
                     }}
                     className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
-                    <Volume2 className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>
-                    <span className="min-w-0 flex-1 truncate">{ch.name}</span>
+                    {ch.kind==='meeting'?<Video className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>:<Volume2 className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>}
+                    <span className="min-w-0 flex-1 truncate">{ch.name}</span>{ch.hasPassword&&<LockKeyhole aria-label={pt?'Canal protegido':'Protected channel'} className="size-3.5 shrink-0 text-primary"/>}
                     {!!unreadChannels[ch.id]&&<span aria-label={unreadChannels[ch.id]+(pt?' mensagens não lidas':' unread messages')}
                       className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                       {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
@@ -724,16 +743,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               })}
               {voicePresenceFailed&&<p role="status" className="px-2 text-xs text-muted-foreground">
                 {pt?'Atualizando a lista de participantes…':'Updating the participant list…'}
-              </p>}</section>
+              </p>}</section>)}
             {manage(community)&&<section className="space-y-2 border-t border-border pt-3">
               <button type="button" className="flex w-full items-center gap-2 rounded-xl p-2 text-sm text-primary hover:bg-secondary"
                 onClick={()=>setNewChannelOpen(v=>!v)}><Plus className="size-4"/>{pt?'Novo canal':'New channel'}</button>
               {newChannelOpen&&<form className="space-y-2" onSubmit={event=>void createChannel(event)}>
                 <Input required value={newChannelName} onChange={e=>setNewChannelName(e.target.value)} maxLength={64}
                   className="text-base" placeholder={pt?'Nome do canal':'Channel name'}/>
-                <select value={newChannelKind} onChange={e=>setNewChannelKind(e.target.value as 'text'|'voice')}
+                <select value={newChannelKind} onChange={e=>setNewChannelKind(e.target.value as 'text'|'voice'|'meeting')}
                   className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
-                  <option value="text">{pt?'Texto':'Text'}</option><option value="voice">{pt?'Voz':'Voice'}</option>
+                  <option value="text">{pt?'Texto':'Text'}</option><option value="voice">{pt?'Voz':'Voice'}</option><option value="meeting">{pt?'Reunião (áudio e vídeo)':'Meeting (audio and video)'}</option>
                 </select>
                 <Button size="sm" type="submit" loading={busyAction==='createChannel'} disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
               </form>}
@@ -798,30 +817,39 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       {community&&memberView(community)&&activeChannel&&!discovery?<>
         <header data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-3 backdrop-blur sm:px-4">
           <Button type="button" size="icon" variant="ghost"
-            className={activeChannel.kind==='voice'?'shrink-0':'shrink-0 md:hidden'}
+            className={activeChannel.kind!=='text'?'shrink-0':'shrink-0 md:hidden'}
             aria-label={pt?'Voltar aos canais':'Back to channels'} onClick={closeChannel}>
             <ArrowLeft className="size-5"/></Button>
-          {activeChannel.kind==='voice'?<Volume2 className="size-5 text-muted-foreground"/>:<Hash className="size-5 text-muted-foreground"/>}
+          {activeChannel.kind==='meeting'?<Video className="size-5 text-muted-foreground"/>:activeChannel.kind==='voice'?<Volume2 className="size-5 text-muted-foreground"/>:<Hash className="size-5 text-muted-foreground"/>}
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.name}</h2>
             <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
         </header>
-        <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-          activeChannel.kind==='voice'&&voiceTextExpanded&&'lg:flex-row')}>
-        {activeChannel.kind==='voice'&&(
+        {channelLocked?<form className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 py-8 text-center" onSubmit={event=>void unlockChannel(event)}>
+          <span className="grid size-14 place-items-center rounded-2xl bg-primary/10"><LockKeyhole className="size-7 text-primary"/></span>
+          <h3 className="font-semibold">{pt?'Canal protegido por senha':'Password-protected channel'}</h3>
+          <p className="max-w-xs text-sm text-muted-foreground">{pt?'Digite a senha do canal para acessar mensagens, arquivos e chamadas.':'Enter the channel password to access messages, files and calls.'}</p>
+          <Input type="password" autoComplete="off" required maxLength={72} value={unlockPassword}
+            onChange={event=>setUnlockPassword(event.target.value)} className="w-full max-w-xs text-base"
+            placeholder={pt?'Senha do canal':'Channel password'} aria-label={pt?'Senha do canal':'Channel password'}/>
+          {unlockError&&<p role="alert" className="max-w-xs text-xs text-destructive">{unlockError}</p>}
+          <Button type="submit" loading={unlockBusy} disabled={!unlockPassword||unlockBusy}>{pt?'Desbloquear canal':'Unlock channel'}</Button>
+        </form>:<div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+          activeChannel.kind!=='text'&&voiceTextExpanded&&'lg:flex-row')}>
+        {activeChannel.kind!=='text'&&(
           <div ref={voiceHostRef} className={cn('relative flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-border',
             voiceTextExpanded?'h-[43%] shrink-0 sm:h-[46%] lg:h-full lg:w-[52%] lg:border-b-0 lg:border-r':'flex-1')}>
             {!voiceInline&&<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground">
-              <Headphones className="size-9 text-primary"/>
-              <p>{pt?'Entre e converse sem sair da comunidade.':'Join the conversation right inside your community.'}</p>
+              {activeChannel.kind==='meeting'?<Video className="size-9 text-primary"/>:<Headphones className="size-9 text-primary"/>}
+              <p>{activeChannel.kind==='meeting'?(pt?'Entre na reunião com áudio e vídeo.':'Join the meeting with audio and video.'):(pt?'Entre e converse sem sair da comunidade.':'Join the conversation right inside your community.')}</p>
               <Button type="button" variant="outline" onClick={()=>openVoiceRoom({
-                communityId:community.id,channelId:activeChannel.id,communityName:community.name,channelName:activeChannel.name
-              })}>{pt?'Abrir sala de voz':'Open voice room'}</Button>
+                communityId:community.id,channelId:activeChannel.id,communityName:community.name,channelName:activeChannel.name,kind:activeChannel.kind as 'voice'|'meeting'
+              })}>{activeChannel.kind==='meeting'?(pt?'Abrir reunião':'Open meeting'):(pt?'Abrir sala de voz':'Open voice room')}</Button>
             </div>}
           </div>
         )}
         <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden',
-          activeChannel.kind==='voice'&&!voiceTextExpanded?'shrink-0':'flex-1')}>
-        {activeChannel.kind==='voice'&&<button type="button" onClick={()=>{setVoiceTextExpanded(v=>!v);setMediaPicker(null);}}
+          activeChannel.kind!=='text'&&!voiceTextExpanded?'shrink-0':'flex-1')}>
+        {activeChannel.kind!=='text'&&<button type="button" onClick={()=>{setVoiceTextExpanded(v=>!v);setMediaPicker(null);}}
           aria-expanded={voiceTextExpanded} aria-controls={voiceTextExpanded?'uorqui-voice-text-panel':undefined}
           className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 text-sm font-medium hover:bg-secondary"
           title={voiceTextExpanded?(pt?'Recolher conversa de texto':'Collapse text chat'):(pt?'Expandir conversa de texto':'Expand text chat')}>
@@ -831,7 +859,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </span>
           {voiceTextExpanded?<ChevronDown className="size-4 shrink-0"/>:<ChevronUp className="size-4 shrink-0"/>}
         </button>}
-        {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind==='voice'?'uorqui-voice-text-panel':undefined}
+        {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind!=='text'?'uorqui-voice-text-panel':undefined}
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             {!messages.length&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
@@ -912,7 +940,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </div>
         </div>}
         </div>
-        </div>
+        </div>}
       </>:<div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-xs"><Users className="mx-auto size-11 text-primary"/>
           <h3 className="mt-4 font-semibold">{pt?'Suas comunidades':'Your communities'}</h3>

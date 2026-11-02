@@ -211,6 +211,27 @@
       "when": 1793653200000,
       "tag": "0029_retire_global_feed",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793658600000,
+      "tag": "0030_community_video_meetings",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793660400000,
+      "tag": "0031_meeting_approvals_community_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793662200000,
+      "tag": "0032_password_protected_channels",
+      "breakpoints": true
     }
   ]
 }

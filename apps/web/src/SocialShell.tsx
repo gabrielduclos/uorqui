@@ -100,6 +100,17 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     setConversationOpened(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
   }, []);
+  useEffect(()=>{
+    const open=(event:Event)=>{
+      const target=(event as CustomEvent<{communityId?:string;channelId?:string}>).detail;
+      if(!target?.communityId||!/^[0-9a-f-]{36}$/i.test(target.communityId))return;
+      move('communities');
+      window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:target}));
+    };
+    window.addEventListener('uorqui:open-community-link',open);
+    return()=>window.removeEventListener('uorqui:open-community-link',open);
+  },[move]);
+
 
   useEffect(()=>{
     const open=(urlValue:string)=>{
@@ -107,9 +118,13 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       if(url.origin!==window.location.origin)return;
       const id=url.searchParams.get('conversation');
       const community=url.searchParams.get('community');
+      const channel=url.searchParams.get('channel');
       const notification=url.searchParams.get('notification');
       if(id&&/^[0-9a-f-]{36}$/i.test(id)){setRequestedConversationId(id);move('conversations');}
-      else if(community&&/^[0-9a-f-]{36}$/i.test(community))move('communities');
+      else if(community&&/^[0-9a-f-]{36}$/i.test(community)){
+        move('communities');
+        if(channel&&/^[0-9a-f-]{36}$/i.test(channel))window.setTimeout(()=>window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:{communityId:community,channelId:channel}})),50);
+      }
       else if(notification&&/^[0-9a-f-]{36}$/i.test(notification))move('notifications');
     };
     const onMessage=(event:MessageEvent)=>{
@@ -119,7 +134,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     navigator.serviceWorker?.addEventListener('message',onMessage);
     const current=new URL(window.location.href);
     if(current.searchParams.has('conversation')||current.searchParams.has('community')||current.searchParams.has('notification')){
-      open(current.toString());current.searchParams.delete('conversation');current.searchParams.delete('community');current.searchParams.delete('notification');
+      open(current.toString());current.searchParams.delete('conversation');current.searchParams.delete('community');current.searchParams.delete('channel');current.searchParams.delete('notification');
       window.history.replaceState({},'',current.pathname+current.search);
     }
     return()=>navigator.serviceWorker?.removeEventListener('message',onMessage);
@@ -127,6 +142,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
   function openActivity(item:ActivityNotification){
     void activity.markRead(item.id);
+    if(item.kind==='community_join_request'||item.kind==='meeting_join_request'){
+      const communityId=item.communityId??(item.kind==='community_join_request'?item.targetId:null);
+      if(communityId){openDiscoveryCommunity(communityId,item.kind==='meeting_join_request'?item.targetId:undefined);return;}
+    }
     if(/^[a-z][a-z0-9_]{2,31}$/.test(item.actorHandle)){
       window.history.pushState({uorquiInternalProfile:true},'','/@'+item.actorHandle);
       window.dispatchEvent(new PopStateEvent('popstate'));
