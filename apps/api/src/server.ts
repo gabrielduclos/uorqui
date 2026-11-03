@@ -55,6 +55,7 @@ app.get('/health/db', async (_request, reply) => {
     const result = await getPool().query<{
       social_ready: boolean;
       auth_ready: boolean;
+      channel_access_ready: boolean;
       migration_count: string;
     }>(`
       SELECT
@@ -64,10 +65,14 @@ app.get('/health/db', async (_request, reply) => {
           AND to_regclass('public.account') IS NOT NULL
           AND to_regclass('public.session') IS NOT NULL
           AND to_regclass('public.verification') IS NOT NULL AS auth_ready,
+        to_regclass('public.community_channel_member_access') IS NOT NULL
+          AND EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='community_channels' AND column_name='access_mode')
+          AS channel_access_ready,
         (SELECT count(*) FROM drizzle.__drizzle_migrations)::text AS migration_count
     `);
     const row = result.rows[0];
-    if (!row?.social_ready || !row?.auth_ready || Number(row.migration_count) < 2) {
+    if (!row?.social_ready || !row?.auth_ready || !row?.channel_access_ready || Number(row.migration_count) < 34) {
       return reply.status(503).send({ ok: false, database: 'schema_incomplete' });
     }
     return { ok: true, database: 'connected', schema: 'ready' };
