@@ -9,12 +9,21 @@ import {useUorquiPreferences} from './UorquiPreferences';
 import type {ActivityNotification} from './useActivityNotifications';
 
 type Props={items:ActivityNotification[];unread:number;loading:boolean;error:boolean;accountId:string;
-  onRefresh:()=>void;onReadAll:()=>Promise<void>;onOpen:(item:ActivityNotification)=>void};
-export function ActivityNotifications({items,unread,loading,error,accountId,onRefresh,onReadAll,onOpen}:Props){
+  onRefresh:()=>void;onReadAll:()=>Promise<void>;onDelete:(id:string)=>Promise<void>;onOpen:(item:ActivityNotification)=>void};
+export function ActivityNotifications({items,unread,loading,error,accountId,onRefresh,onReadAll,onDelete,onOpen}:Props){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [busy,setBusy]=useState(false);
   const [actionError,setActionError]=useState(false);
+  const [deletingId,setDeletingId]=useState<string|null>(null);
+  const [deleteError,setDeleteError]=useState<string|null>(null);
+  async function deleteNotification(id:string){
+    if(deletingId)return;
+    setDeletingId(id);setDeleteError(null);
+    try{await onDelete(id);}
+    catch{setDeleteError(id);}
+    finally{setDeletingId(null);}
+  }
   const [friendBusy,setFriendBusy]=useState<string|null>(null);
   const [friendDone,setFriendDone]=useState<Record<string,'accept'|'decline'>>({});
   const [friendError,setFriendError]=useState<string|null>(null);
@@ -98,6 +107,15 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
             <span className="flex shrink-0 items-center gap-2"><Icon aria-hidden="true" className="size-4 text-primary"/>
               {!item.readAt&&<span aria-hidden="true" className="size-2 rounded-full bg-primary"/>}</span>
           </button>
+          <button type="button" disabled={!!deletingId} onClick={()=>void deleteNotification(item.id)}
+            aria-label={pt?'Excluir notificação de '+item.actorName:'Delete notification from '+item.actorName}
+            title={pt?'Excluir notificação':'Delete notification'}
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40">
+            {deletingId===item.id?<Spinner className="size-4"/>:<X className="size-4"/>}
+          </button>
+          {deleteError===item.id&&<p role="alert" className="w-full pl-12 text-xs text-destructive">
+            {pt?'Não foi possível excluir a notificação.':'Could not delete notification.'}
+          </p>}
           {item.kind==='friend_request'&&(pendingFriendHandles.has(item.actorHandle)||!!friendDone[item.id])&&<div className="flex w-full items-center justify-end gap-2 pl-12">
             {friendDone[item.id]?<span role="status" className="text-xs text-muted-foreground">
               {friendDone[item.id]==='accept'?(pt?'Amizade aceita':'Friend request accepted'):(pt?'Solicitação recusada':'Request declined')}
