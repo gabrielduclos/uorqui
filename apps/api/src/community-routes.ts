@@ -365,7 +365,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'WHERE cm.community_id=$1 AND cm.user_id<>$2 '+
         'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE '+
           '(b.blocker_id=$2 AND b.blocked_id=u.id) OR (b.blocked_id=$2 AND b.blocker_id=u.id)) '+
-        'ORDER BY lower(COALESCE(p.display_name,u.handle)),u.handle LIMIT 600',[id,me]);
+        'ORDER BY lower(CASE WHEN p.is_public=true OR f.status=\'accepted\' THEN COALESCE(p.display_name,u.handle) ELSE u.handle END),u.handle LIMIT 600',[id,me]);
       return reply.header('Cache-Control',noCache).send({members:result.rows});
     }catch(error){request.log.error({err:error},'Channel invite member list');return reply.code(503).send({error:'Unavailable'});}
   });
