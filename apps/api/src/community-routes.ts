@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import {publishCommunityEvent,subscribeCommunityEvents} from './community-events.js';
+import {publishCommunityEvent,publishCommunityMembershipForUser,subscribeCommunityEvents} from './community-events.js';
 import { channelGate, channelGateError, channelGateStatus, hashChannelPassword, verifyChannelPassword } from './channel-password.js';
 import {recordCommunityRequest} from './activity-notifications.js';
 import {pushCommunityMessage} from './push-routes.js';
@@ -104,8 +104,11 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       }
       response.once('close',finish);
       unsubscribe=await subscribeCommunityEvents(
-        groups.rows.map((r:{community_id:string})=>r.community_id),
-        event=>write('event: community-update\ndata: '+JSON.stringify(event)+'\n\n'));
+        groups.rows.map((r:{community_id:string})=>r.community_id),me,
+        event=>write('event: community-update\ndata: '+JSON.stringify({
+          kind:event.kind,communityId:event.communityId,channelId:event.channelId,
+          ...(event.recipientId?{membershipChanged:true}:{})
+        })+'\n\n'));
       if(response.destroyed){finish();return;}
       write('retry: 2000\n\n');
       write('event: ready\ndata: {}\n\n');
@@ -306,12 +309,17 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           [id,me]);
         await recordCommunityRequest(id,me,'community_join_request',id,'community-request:'+id+':'+me+':'+Date.now())
           .catch(error=>request.log.warn({err:error},'Community approval push'));
+        void publishCommunityEvent(id,null,'membership').catch(()=>{});
         return reply.code(201).header('Cache-Control',noCache).send({status:'pending'});
       }
       const inserted=await getPool().query("INSERT INTO community_members(community_id,user_id,role) "+
         "SELECT $1,$2,'member' WHERE NOT EXISTS (SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2) "+
         "ON CONFLICT DO NOTHING RETURNING user_id",[id,me]);
       if(!inserted.rowCount && !await membership(id,me))return reply.code(403).send({error:'COMMUNITY_BANNED'});
+      if(inserted.rowCount){
+        void publishCommunityEvent(id,null,'membership').catch(()=>{});
+        void publishCommunityMembershipForUser(id,me).catch(()=>{});
+      }
       return reply.header('Cache-Control',noCache).send({status:'member'});
     }catch(error){request.log.error({err:error},'Join community');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -335,6 +343,10 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           "ON CONFLICT DO NOTHING RETURNING user_id",[id,r.rows[0].user_id]);
         if(!added.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'COMMUNITY_BANNED'});}
         await client.query('COMMIT');
+        // Publish after commit: the applicant's SSE was opened before they
+        // became a member, so a community-wide event alone cannot reach them.
+        void publishCommunityMembershipForUser(id,r.rows[0].user_id as string).catch(()=>{});
+        void publishCommunityEvent(id,null,'membership').catch(()=>{});
         return reply.header('Cache-Control',noCache).send({status:'member'});
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
     }catch(error){request.log.error({err:error},'Approve community member');return reply.code(503).send({error:'Unavailable'});}
@@ -363,6 +375,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'INSERT INTO community_join_requests(community_id,user_id,kind) VALUES($1,$2,\'invite\') '+
         'ON CONFLICT(community_id,user_id) DO UPDATE SET kind=\'invite\',status=\'pending\',created_at=now(),updated_at=now()',
         [id,target]);
+      void publishCommunityMembershipForUser(id,target as string).catch(()=>{});
       return reply.code(201).header('Cache-Control',noCache).send({status:'invited'});
     }catch(error){request.log.error({err:error},'Invite community member');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -387,6 +400,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           if(!added.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'COMMUNITY_BANNED'});}
         }
         await client.query('COMMIT');
+        void publishCommunityMembershipForUser(id,me).catch(()=>{});
+        if(action==='accept')void publishCommunityEvent(id,null,'membership').catch(()=>{});
         return reply.header('Cache-Control',noCache).send({status:action==='accept'?'member':'declined'});
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
     }catch(error){request.log.error({err:error},'Community invitation');return reply.code(503).send({error:'Unavailable'});}
@@ -402,6 +417,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       if(!role)return reply.code(204).send();
       await getPool().query('DELETE FROM community_members WHERE community_id=$1 AND user_id=$2',[id,me]);
       await getPool().query('DELETE FROM community_channel_password_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,me]);
+      void publishCommunityMembershipForUser(id,me).catch(()=>{});
+      void publishCommunityEvent(id,null,'membership').catch(()=>{});
       return reply.code(204).send();
     }catch(error){request.log.error({err:error},'Leave community');return reply.code(503).send({error:'Unavailable'});}
   });
