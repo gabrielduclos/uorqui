@@ -21,9 +21,9 @@ import { LegalPage, legalDocumentFromPath } from './LegalPages';
 import { CookieNotice } from './CookieNotice';
 
 const areas = [
+  { title: 'Comunidades', icon: Users, description: 'Seu ponto de partida para canais de texto, salas de voz e reuniões.' },
   { title: 'Conversas', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
   { title: 'Descobrir', icon: Compass, description: 'Encontre comunidades recomendadas e acompanhe a atividade dos seus canais.' },
-  { title: 'Comunidades', icon: Users, description: 'Grupos com canais de texto e salas de voz organizados por assunto.' },
 ] as const;
 
 function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => void }) {
