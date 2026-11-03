@@ -64,7 +64,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
   const [voiceMinimized,setVoiceMinimized]=useState(false);
-  const [voiceTextExpanded,setVoiceTextExpanded]=useState(true);
+  const [voiceTextExpanded,setVoiceTextExpanded]=useState(false);
   const [voicePhase,setVoicePhase]=useState<VoicePhase>('idle');
   const voiceHostRef=useRef<HTMLDivElement|null>(null);
   useEffect(()=>{if(!active){setVoiceMinimized(true);if(voicePhase==='idle')setActiveVoiceRoom(null);}},[active,voicePhase]);
@@ -78,8 +78,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         'You are already connected to another room. Disconnect before joining another.');
       return;
     }
-    // Voice chat opens expanded; video meetings prioritize the camera grid.
-    setVoiceTextExpanded(target.kind==='voice');
+    // Keep the text chat collapsed initially in voice rooms and meetings.
+    // Members can expand it using the existing button when they need it.
+    setVoiceTextExpanded(false);
     setActiveVoiceRoom(target);setVoiceMinimized(false);
   }
   const [voiceRooms,setVoiceRooms]=useState<Record<string,CommunityVoiceParticipant[]>>({});
