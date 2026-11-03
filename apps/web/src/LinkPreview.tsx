@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {ExternalLink,Link2} from 'lucide-react';
-import {splitMessageLinks} from './MessageText';
+import {splitMessageLinks,internalChatLink,openInternalChatLink} from './MessageText';
 
 type Preview={url:string;siteName:string;title:string;description:string|null;image:string|null};
 const shared=new Map<string,Preview|null>();
@@ -46,8 +46,8 @@ export function LinkPreview({text,locale}:{text:string;locale:string}){
   if(!first)return null;
   const pt=locale==='pt-BR';
   return <div ref={ref} className="mt-2 min-w-0" data-uorqui-link-preview>
-    {preview&&<a href={preview.url} target="_blank" rel="noopener noreferrer nofollow ugc"
-      onClick={event=>event.stopPropagation()}
+    {preview&&<a href={preview.url} target={internalChatLink(preview.url)?undefined:'_blank'} rel="noopener noreferrer nofollow ugc"
+      onClick={event=>{if(!openInternalChatLink(event,preview.url))event.stopPropagation();}}
       aria-label={(pt?'Abrir link: ':'Open link: ')+preview.title}
       className="flex min-w-0 max-w-md overflow-hidden rounded-lg border border-current/20 bg-background/90 text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
       {preview.image&&!imageFailed&&<img src={preview.image} alt="" loading="lazy" decoding="async"
