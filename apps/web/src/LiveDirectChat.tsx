@@ -857,9 +857,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <UserPlus className="size-4 shrink-0 text-muted-foreground"/>
           </button>)}
         </>}
-        <div className="md:divide-y md:divide-foreground/25">
         {visibleThreads.map(thread => <button type="button" key={thread.id} onClick={() => openThread(thread.id)}
-          className={cn('flex min-h-[76px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left md:rounded-none transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+          className={cn('flex min-h-[76px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
             activeId === thread.id && mobileOpened && 'bg-secondary')}
           aria-current={activeId === thread.id && mobileOpened ? 'true' : undefined}>
           <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
@@ -885,7 +884,6 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             </span>
           </span>
         </button>)}
-        </div>
         {!loading && !visibleThreads.length && query.length < 2 && <div className="px-5 py-14 text-center">
           <MessageCircle className="mx-auto size-9 text-primary"/>
           <h3 className="mt-3 font-semibold">{filter === 'unread' ? (pt ? 'Tudo em dia' : 'All caught up') : filter === 'archived' ? (pt?'Nenhuma conversa arquivada':'No archived chats') : (pt ? 'Comece uma conversa' : 'Start a conversation')}</h3>
