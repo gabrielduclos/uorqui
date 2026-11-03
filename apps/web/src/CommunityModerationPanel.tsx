@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Dialog } from 'radix-ui';
-import { Ban, Camera, Check, Shield, Trash2, UserMinus, X, LockKeyhole } from 'lucide-react';
+import { Dialog, Tabs } from 'radix-ui';
+import { Ban, Camera, Check, Hash, LockKeyhole, Settings, Shield, Trash2, UserMinus, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SkeletonRows } from '@/components/ui/skeleton';
@@ -9,6 +9,7 @@ import { useUorquiPreferences } from './UorquiPreferences';
 
 type Role='owner'|'admin'|'moderator'|'member';
 type Visibility='public'|'approval'|'private';
+type ModerationTab='members'|'bans'|'channels'|'settings'|'danger';
 type Member={handle:string;displayName:string;role:Role;joinedAt:string;restrictedChannelIds?:string[]};
 type BanEntry={handle:string;reason:string|null;bannedAt:string};
 type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';hasPassword?:boolean;accessMode?:'open'|'restricted'};
@@ -26,6 +27,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
 }){
   const {locale}=useUorquiPreferences();const pt=locale==='pt-BR';
   const [open,setOpen]=useState(false);
+  const [tab,setTab]=useState<ModerationTab>('members');
   const [data,setData]=useState<Data|null>(null);
   const [busyKey,setBusyKey]=useState<string|null>(null);
   const busy=busyKey!==null;
@@ -76,7 +78,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
 
   return <Dialog.Root open={open} onOpenChange={next=>{
     if(busy)return;
-    setOpen(next);setError('');setNotice('');setConfirm(null);
+    setOpen(next);if(next)setTab('members');setError('');setNotice('');setConfirm(null);
   }}>
     <Dialog.Trigger asChild>
       <button type="button"
@@ -103,13 +105,35 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
             </Button>
           </Dialog.Close>
         </header>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
+        <Tabs.Root value={tab} onValueChange={value=>{
+          if(busy)return;
+          setTab(value as ModerationTab);setConfirm(null);setNotice('');setError('');
+        }} className="flex min-h-0 flex-1 flex-col">
+          <Tabs.List aria-label={pt?'Seções da moderação':'Moderation sections'}
+            className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card px-3 py-2 sm:px-5">
+            <Tabs.Trigger value="members" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Users className="size-4"/>{pt?'Membros':'Members'}{data&&<span className="text-xs opacity-70">({data.members.length})</span>}
+            </Tabs.Trigger>
+            <Tabs.Trigger value="bans" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Ban className="size-4"/>{pt?'Banimentos':'Bans'}
+            </Tabs.Trigger>
+            {canAdmin&&<Tabs.Trigger value="channels" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Hash className="size-4"/>{pt?'Canais':'Channels'}
+            </Tabs.Trigger>}
+            {canAdmin&&<Tabs.Trigger value="settings" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Settings className="size-4"/>{pt?'Configurações':'Settings'}
+            </Tabs.Trigger>}
+            {role==='owner'&&<Tabs.Trigger value="danger" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-destructive/85 outline-none hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive disabled:opacity-50">
+              <Trash2 className="size-4"/>{pt?'Exclusão':'Delete'}
+            </Tabs.Trigger>}
+          </Tabs.List>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
       {error&&<p role="alert" className="text-xs text-destructive">{error}</p>}
       {notice&&<p role="status" className="text-xs text-primary">{notice}</p>}
       {confirm&&<div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 p-2">
         <p className="text-xs text-muted-foreground">{pt?'Clique novamente na ação para confirmar.':'Click the action again to confirm.'}</p>
         <Button type="button" size="icon" variant="ghost" aria-label={pt?'Cancelar':'Cancel'} onClick={()=>{setConfirm(null);setNotice('');}}><X className="size-4"/></Button></div>}
-      {canAdmin&&<div className="space-y-3 border-b border-border pb-4">
+      {canAdmin&&<Tabs.Content value="settings" className="space-y-3 outline-none">
         <h4 className="text-xs font-semibold">{pt?'Configurações da comunidade':'Community settings'}</h4>
         <div className="flex items-center gap-3">
           {photo?<div className="size-16 shrink-0 overflow-hidden rounded-2xl"><img src={photo} alt="" className="block size-full object-cover"/></div>:
@@ -160,9 +184,9 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
           <Button type="submit" size="sm" loading={busyKey==='settings'} disabled={busy||groupName.trim().length<2}>
             <Check className="size-4"/>{pt?'Salvar alterações':'Save changes'}</Button>
         </form>
-      </div>}
-      {!data?<SkeletonRows rows={4}/>:<>
-        <div className="space-y-2">
+      </Tabs.Content>}
+      <Tabs.Content value="members" className="space-y-3 outline-none">
+        {!data?<SkeletonRows rows={4}/>:<div className="space-y-2">
           <h4 className="text-xs font-semibold">{pt?'Membros':'Members'} ({data.members.length})</h4>
           {data.members.map(person=><div key={person.handle} className="space-y-2 rounded-lg border border-border/70 p-2">
             <div className="flex min-w-0 items-center gap-2">
@@ -218,8 +242,11 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
                 <Ban className="size-3.5"/>{pt?'Banir':'Ban'}</Button>
             </div>}
           </div>)}
-        </div>
-        <form className="space-y-2 border-t border-border pt-3" onSubmit={event=>{
+        </div>}
+      </Tabs.Content>
+      <Tabs.Content value="bans" className="space-y-4 outline-none">
+        {!data?<SkeletonRows rows={4}/>:<>
+        <form className="space-y-2" onSubmit={event=>{
           event.preventDefault();const clean=handle.trim().replace(/^@/,'').toLowerCase();
           if(!/^[a-z][a-z0-9_]{2,31}$/.test(clean))return;
           request('ban:new:'+clean,()=>api(base+'/bans',requestBody({handle:clean,reason})),
@@ -231,7 +258,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
             placeholder={pt?'Motivo (opcional)':'Reason (optional)'}/>
           <Button type="submit" size="sm" variant="outline" loading={busyKey?.startsWith('ban:new:')??false} disabled={busy||!handle.trim()}><Ban className="size-4"/>{pt?'Banir conta':'Ban account'}</Button>
         </form>
-        {!!data.bans.length&&<div className="space-y-2 border-t border-border pt-3">
+        {!!data.bans.length?<div className="space-y-2 border-t border-border pt-3">
           <p className="text-xs font-semibold">{pt?'Contas banidas':'Banned accounts'}</p>
           {data.bans.map(person=><div key={person.handle} className="flex min-w-0 items-center gap-2 rounded-lg border border-border/70 px-2 py-2">
             <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">@{person.handle}</p>
@@ -241,8 +268,10 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
               pt?'desbanir @'+person.handle:'unban @'+person.handle)}>
               <Check className="size-3.5"/>{pt?'Desbanir':'Unban'}</Button>}
           </div>)}
-        </div>}
-        {canAdmin&&<div className="space-y-2 border-t border-border pt-3">
+        </div>:<p className="rounded-lg border border-border/70 p-4 text-sm text-muted-foreground">{pt?'Nenhuma conta banida nesta comunidade.':'No accounts are banned in this community.'}</p>}
+        </>}
+      </Tabs.Content>
+      {canAdmin&&<Tabs.Content value="channels" className="space-y-2 outline-none">
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
           {channels.map(ch=><div key={ch.id} className="space-y-2 rounded-lg border border-border/70 p-2">
             <p className="flex items-center gap-1.5 truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}{ch.accessMode==='restricted'&&
@@ -253,8 +282,8 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
                 pt?'excluir canal '+ch.name:'delete channel '+ch.name)}>
               <Trash2 className="size-3.5"/>{pt?'Excluir':'Delete'}</Button>
           </div>)}
-        </div>}
-        {role==='owner'&&<div className="space-y-3 border-t border-destructive/30 pt-4">
+        </Tabs.Content>}
+        {role==='owner'&&<Tabs.Content value="danger" className="space-y-3 outline-none">
           <h4 className="text-xs font-semibold text-destructive">{pt?'Excluir comunidade permanentemente':'Permanently delete community'}</h4>
           <p className="text-xs text-muted-foreground">{pt?'Esta ação exclui canais, mensagens e membros. Não pode ser desfeita.':'This deletes channels, messages and memberships. It cannot be undone.'}</p>
           <label className="block text-xs">{pt?'Digite o nome exato para confirmar':'Type the exact community name to confirm'}
@@ -272,9 +301,9 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
             }}><Trash2 className="size-4"/>
             {confirm==='delete-community'?(pt?'Confirmar exclusão definitiva':'Confirm permanent deletion'):(pt?'Excluir comunidade':'Delete community')}
           </Button>
-        </div>}
-      </>}
-        </div>
+        </Tabs.Content>}
+          </div>
+        </Tabs.Root>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;
