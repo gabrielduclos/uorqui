@@ -14,7 +14,7 @@ Start with a **modular monolith**: one API deployment with clear bounded modules
 | --- | --- | --- |
 | Web/PWA | **React + TypeScript + Tailwind CSS on Cloudflare Workers Static Assets** | Cached SPA, accessible responsive UI and same-origin API gateway |
 | API | **Node.js + Fastify + TypeScript** | HTTP endpoints, validation and authorization |
-| Database | **PostgreSQL hosted on Neon** | Relational storage for users, posts, communities, conversations and permissions |
+| Database | **PostgreSQL hosted on Neon** | Relational storage for accounts, messages, communities, membership and access permissions |
 | Database access | **Drizzle ORM + Drizzle Kit** | Type-safe SQL queries, schema and versioned migrations |
 
 These technologies are **implemented in the current technical beta**. Cloudflare confirmed `uorqui.app` is attached to the new Worker `main` on November 1, 2026. Installed-PWA and email validation are still separate outstanding checks.
@@ -57,18 +57,24 @@ PostgreSQL and Drizzle manage **structured data**, not original video/image file
 - Prefer straightforward SQL and indexes before adding an extra cache or queue. Measure query performance and connection usage.
 
 
+## Realtime membership and media
+
+Community events use PostgreSQL LISTEN/NOTIFY with authenticated SSE. Community-wide message/voice/channel events are scoped to existing memberships; when a join request is approved, a separately routed membership event reaches the applicant's existing SSE connection. The browser refreshes list/detail and reconnects its SSE stream to include newly acquired access. The stream carries no private message bodies.
+
+Video meetings and voice rooms share a six-person WebRTC P2P mesh. The meeting UI supports fullscreen active-speaker focus, a self-camera miniature and browser-dependent screen sharing. Text panels start collapsed in voice and meetings. `getDisplayMedia` and PWA background behavior require device tests. See [Meetings](video-meetings.md) and [Audit](maintenance-audit.md).
+
 ## Modules and boundaries
 
-**Identity & profiles:** accounts, authentication, settings and relationships. **Direct messaging:** strictly two-person conversations and receipts. **Communities:** membership, roles, channels and invitations. **Feed:** posts, follows, ranking and content permissions. **Media:** uploads, processing, quotas and signed access. **Voice:** rooms, participants and moderation. **Trust & safety:** reports, blocking, rate limits and audit trails. **Notifications:** delivery state and privacy-aware payloads.
+**Identity & profiles:** accounts, authentication, settings and relationships. **Direct messaging:** strictly two-person conversations and receipts. **Communities:** membership, approval requests, roles, channels and invitations. **Discover:** authorized activity and public community recommendations (no global post feed). **Media:** uploads, quotas and permission-checked access. **Voice and meetings:** WebRTC sessions, participants, speaker focus and admission. **Trust & safety:** reports, blocking, rate limits and audit trails. **Notifications:** delivery state and privacy-aware payloads.
 
 ## Core entities (draft)
 
-user, profile, follow, direct_conversation, direct_message, community, member, role, channel, channel_message, voice_room, presence, post, media_asset, comment, reaction, notification, report, moderation_action.
+user, profile, friendship, block, direct_conversation, direct_message, attachment, community, member, join_request, channel, channel_message, channel_reaction, voice_session, meeting_request, notification, report, moderation_action.
 
 ## Non-negotiable security requirements
 
 - All content and membership authorization is enforced **server-side**, not just hidden in UI.
-- Never expose a private community through feed recommendations, thumbnails, copied media URLs, search, or push notifications.
+- Never expose a private community through Discover recommendations, thumbnails, copied media URLs, search, or push notifications.
 - Apply rate limits, file type/size validation, content scanning strategy, secure credentials, and audit events.
 - Use short-lived media access when appropriate; secrets and production data do not belong in Git.
 - Define data retention, deletion/export requests, backups, restoration tests and migration policies.
