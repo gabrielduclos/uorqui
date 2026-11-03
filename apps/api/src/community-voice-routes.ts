@@ -17,7 +17,8 @@ const allowedOrigin=(r:FastifyRequest)=>r.headers.origin===(process.env.WEB_ORIG
 // Explicit leave still removes the session immediately.
 const activePresence="s.last_seen_at > now()-interval '180 seconds'";
 const voiceAccess='SELECT 1 FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
-  "WHERE c.id=$1 AND c.community_id=$2 AND c.kind IN ('voice','meeting') AND (c.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access grant_access WHERE grant_access.channel_id=c.id AND grant_access.user_id=$3)) LIMIT 1";
+  "WHERE c.id=$1 AND c.community_id=$2 AND c.kind IN ('voice','meeting') AND (c.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access grant_access WHERE grant_access.channel_id=c.id AND grant_access.user_id=$3)) "+
+  "AND (c.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access grant_access WHERE grant_access.channel_id=c.id AND grant_access.user_id=$3)) LIMIT 1";
 
 async function rtcConfig():Promise<{iceServers:unknown[],relayAvailable:boolean}>{
   const stun=[{urls:['stun:stun.cloudflare.com:3478']}];
@@ -58,7 +59,7 @@ async function roomPeers(channelId:string,me:string,sessionId:string){
     'FROM community_voice_sessions s JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=s.user_id '+
     'JOIN community_channels c ON c.id=s.channel_id JOIN community_members m ON m.community_id=c.community_id AND m.user_id=s.user_id '+
     'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
-    'WHERE s.channel_id=$1 AND '+activePresence+' '+
+    "WHERE s.channel_id=$1 AND (c.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access grant_access WHERE grant_access.channel_id=c.id AND grant_access.user_id=s.user_id)) AND "+activePresence+' '+
     'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=$2) '+
     'OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) ORDER BY s.joined_at,s.id LIMIT 8',
     [channelId,me],
@@ -90,7 +91,9 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'JOIN community_members present ON present.community_id=ch.community_id AND present.user_id=s.user_id '+
         'JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=s.user_id '+
         'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
-        "WHERE ch.community_id=$1 AND ch.kind IN ('voice','meeting') AND (ch.password_hash IS NULL OR EXISTS (SELECT 1 FROM community_members viewer WHERE viewer.community_id=ch.community_id AND viewer.user_id=$2 AND viewer.role IN ('owner','admin')) OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=ch.id AND g.user_id=$2)) AND "+activePresence+' '+
+        "WHERE ch.community_id=$1 AND ch.kind IN ('voice','meeting') AND (ch.password_hash IS NULL OR EXISTS (SELECT 1 FROM community_members viewer WHERE viewer.community_id=ch.community_id AND viewer.user_id=$2 AND viewer.role IN ('owner','admin')) OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=ch.id AND g.user_id=$2)) "+
+        "AND (ch.access_mode='open' OR EXISTS (SELECT 1 FROM community_members viewer WHERE viewer.community_id=ch.community_id AND viewer.user_id=$2 AND viewer.role IN ('owner','admin')) OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=ch.id AND g.user_id=$2)) "+
+        "AND (ch.access_mode='open' OR present.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=ch.id AND g.user_id=s.user_id)) AND "+activePresence+' '+
         'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
         '(b.blocker_id=s.user_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) '+
         'ORDER BY s.channel_id,s.joined_at,s.id LIMIT 300',[id,me]);
@@ -188,7 +191,8 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const result=await getPool().query(
         'UPDATE community_voice_sessions s SET last_seen_at=now(),muted=$4,deafened=$6 '+
         'FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
-        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind IN ('voice','meeting') AND (c.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=c.id AND g.user_id=$3)) AND s.last_seen_at>now()-interval '180 seconds' RETURNING s.id",
+        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind IN ('voice','meeting') AND (c.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=c.id AND g.user_id=$3)) "+
+        "AND (c.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=c.id AND g.user_id=$3)) AND s.last_seen_at>now()-interval '180 seconds' RETURNING s.id",
         [sessionId,channelId,me,muted,id,deafened]);
       if(!result.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
@@ -224,6 +228,8 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'JOIN community_members theirs ON theirs.community_id=c.community_id AND theirs.user_id=t.user_id '+
         'WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$6 AND c.community_id=$7 AND c.kind IN (\'voice\',\'meeting\') '+
         "AND (c.password_hash IS NULL OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=c.id AND g.user_id=$6)) "+
+        "AND (c.access_mode='open' OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=c.id AND g.user_id=$6)) "+
+        "AND (c.access_mode='open' OR theirs.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=c.id AND g.user_id=t.user_id)) "+
         "AND s.last_seen_at>now()-interval '180 seconds' AND t.last_seen_at>now()-interval '180 seconds' "+
         'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=t.user_id) '+
         'OR (b.blocker_id=t.user_id AND b.blocked_id=s.user_id)) RETURNING id',
