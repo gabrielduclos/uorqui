@@ -95,7 +95,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-4">
           <Shield className="size-5 shrink-0 text-primary" aria-hidden="true"/>
           <div className="min-w-0 flex-1">
-            <Dialog.Title className="truncate text-base font-semibold">{pt?'Moderação da comunidade':'Community moderation'}</Dialog.Title>
+            <Dialog.Title className="truncate text-base font-semibold sm:text-lg">{pt?'Moderação da comunidade':'Community moderation'}</Dialog.Title>
             <p className="truncate text-xs text-muted-foreground">{name}</p>
           </div>
           <Dialog.Close asChild>
@@ -111,20 +111,20 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         }} className="flex min-h-0 flex-1 flex-col">
           <Tabs.List aria-label={pt?'Seções da moderação':'Moderation sections'}
             className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card px-3 py-2 sm:px-5">
-            <Tabs.Trigger value="members" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
-              <Users className="size-4"/>{pt?'Membros':'Members'}{data&&<span className="text-xs opacity-70">({data.members.length})</span>}
+            <Tabs.Trigger value="members" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium sm:gap-2 sm:px-4 sm:text-base text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Users className="size-4 sm:size-5"/>{pt?'Membros':'Members'}{data&&<span className="text-xs opacity-70">({data.members.length})</span>}
             </Tabs.Trigger>
-            <Tabs.Trigger value="bans" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
-              <Ban className="size-4"/>{pt?'Banimentos':'Bans'}
+            <Tabs.Trigger value="bans" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium sm:gap-2 sm:px-4 sm:text-base text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Ban className="size-4 sm:size-5"/>{pt?'Banimentos':'Bans'}
             </Tabs.Trigger>
-            {canAdmin&&<Tabs.Trigger value="channels" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
-              <Hash className="size-4"/>{pt?'Canais':'Channels'}
+            {canAdmin&&<Tabs.Trigger value="channels" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium sm:gap-2 sm:px-4 sm:text-base text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Hash className="size-4 sm:size-5"/>{pt?'Canais':'Channels'}
             </Tabs.Trigger>}
-            {canAdmin&&<Tabs.Trigger value="settings" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
-              <Settings className="size-4"/>{pt?'Configurações':'Settings'}
+            {canAdmin&&<Tabs.Trigger value="settings" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium sm:gap-2 sm:px-4 sm:text-base text-muted-foreground outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-primary/10 data-[state=active]:text-primary disabled:opacity-50">
+              <Settings className="size-4 sm:size-5"/>{pt?'Configurações':'Settings'}
             </Tabs.Trigger>}
-            {role==='owner'&&<Tabs.Trigger value="danger" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-destructive/85 outline-none hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive disabled:opacity-50">
-              <Trash2 className="size-4"/>{pt?'Exclusão':'Delete'}
+            {role==='owner'&&<Tabs.Trigger value="danger" disabled={busy} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium sm:gap-2 sm:px-4 sm:text-base text-destructive/85 outline-none hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive disabled:opacity-50">
+              <Trash2 className="size-4 sm:size-5"/>{pt?'Exclusão':'Delete'}
             </Tabs.Trigger>}
           </Tabs.List>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
@@ -134,7 +134,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         <p className="text-xs text-muted-foreground">{pt?'Clique novamente na ação para confirmar.':'Click the action again to confirm.'}</p>
         <Button type="button" size="icon" variant="ghost" aria-label={pt?'Cancelar':'Cancel'} onClick={()=>{setConfirm(null);setNotice('');}}><X className="size-4"/></Button></div>}
       {canAdmin&&<Tabs.Content value="settings" className="space-y-3 outline-none">
-        <h4 className="text-xs font-semibold">{pt?'Configurações da comunidade':'Community settings'}</h4>
+        <h4 className="text-xs font-semibold sm:text-sm">{pt?'Configurações da comunidade':'Community settings'}</h4>
         <div className="flex items-center gap-3">
           {photo?<div className="size-16 shrink-0 overflow-hidden rounded-2xl"><img src={photo} alt="" className="block size-full object-cover"/></div>:
             <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">{name[0]?.toUpperCase()}</div>}
@@ -187,12 +187,12 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
       </Tabs.Content>}
       <Tabs.Content value="members" className="space-y-3 outline-none">
         {!data?<SkeletonRows rows={4}/>:<div className="space-y-2">
-          <h4 className="text-xs font-semibold">{pt?'Membros':'Members'} ({data.members.length})</h4>
+          <h4 className="text-xs font-semibold sm:text-sm">{pt?'Membros':'Members'} ({data.members.length})</h4>
           {data.members.map(person=><div key={person.handle} className="space-y-2 rounded-lg border border-border/70 p-2">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">{person.displayName.charAt(0).toUpperCase()}</div>
-              <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{person.displayName}</p>
-                <p className="truncate text-[11px] text-muted-foreground">@{person.handle} · {person.role}</p></div>
+              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold sm:size-10 sm:text-sm">{person.displayName.charAt(0).toUpperCase()}</div>
+              <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold sm:text-sm">{person.displayName}</p>
+                <p className="truncate text-[11px] text-muted-foreground sm:text-xs">@{person.handle} · {person.role}</p></div>
             </div>
             {canAdmin&&role!==undefined&& !(['owner','admin'] as Role[]).includes(person.role)&&
               channels.some(ch=>ch.accessMode==='restricted')&&<details className="rounded-lg border border-border/70 p-2">
@@ -274,7 +274,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
       {canAdmin&&<Tabs.Content value="channels" className="space-y-2 outline-none">
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
           {channels.map(ch=><div key={ch.id} className="space-y-2 rounded-lg border border-border/70 p-2">
-            <p className="flex items-center gap-1.5 truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}{ch.accessMode==='restricted'&&
+            <p className="flex items-center gap-1.5 truncate text-xs font-medium sm:text-sm">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}{ch.accessMode==='restricted'&&
               <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{pt?'Fechado':'Closed'}</span>}</p>
             <Button size="sm" variant="outline" className="h-9" disabled={busy} loading={busyKey==='channel:delete:'+ch.id}
               onClick={()=>request('channel:delete:'+ch.id,
