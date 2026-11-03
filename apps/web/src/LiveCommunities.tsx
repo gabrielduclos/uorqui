@@ -121,18 +121,42 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [channelSettingsError,setChannelSettingsError]=useState('');
   const [channelRemoveConfirm,setChannelRemoveConfirm]=useState(false);
   const channelSettingsRef=useRef<HTMLDivElement|null>(null);
+  const channelSettingsMenuRef=useRef<HTMLDivElement|null>(null);
+  const [channelSettingsPosition,setChannelSettingsPosition]=useState<{top:number;left:number}|null>(null);
   useEffect(()=>{
     setChannelSettingsOpen(false);setChannelSettingsName('');setChannelSettingsPassword('');
-    setChannelSettingsError('');setChannelRemoveConfirm(false);
+    setChannelSettingsError('');setChannelRemoveConfirm(false);setChannelSettingsPosition(null);
   },[selectedId,channelId]);
   useEffect(()=>{
     if(!channelSettingsOpen)return;
+    // Voice/video is rendered in a document-body portal above the app shell.
+    // Portaling this menu as well keeps it clickable and visible on every room type.
+    const reposition=()=>{
+      const rect=channelSettingsRef.current?.getBoundingClientRect();
+      if(!rect){setChannelSettingsOpen(false);return;}
+      const width=Math.min(352,Math.max(220,window.innerWidth-24));
+      setChannelSettingsPosition({
+        top:Math.max(12,Math.min(rect.bottom+8,window.innerHeight-72)),
+        left:Math.max(12,Math.min(rect.right-width,window.innerWidth-width-12))
+      });
+    };
+    reposition();
     const dismiss=(event:PointerEvent)=>{
-      if(channelSettingsRef.current&&!channelSettingsRef.current.contains(event.target as Node))setChannelSettingsOpen(false);
+      const target=event.target as Node;
+      if(!channelSettingsRef.current?.contains(target)&&!channelSettingsMenuRef.current?.contains(target))
+        setChannelSettingsOpen(false);
     };
     const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setChannelSettingsOpen(false);};
     document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',escape);
-    return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape);};
+    window.addEventListener('resize',reposition);
+    window.addEventListener('scroll',reposition,true);
+    window.visualViewport?.addEventListener('resize',reposition);
+    return ()=>{
+      document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape);
+      window.removeEventListener('resize',reposition);
+      window.removeEventListener('scroll',reposition,true);
+      window.visualViewport?.removeEventListener('resize',reposition);
+    };
   },[channelSettingsOpen]);
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
@@ -206,6 +230,27 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     void loadDetail(selectedId).catch(()=>{if(active)setError(pt?'Não foi possível abrir a comunidade.':'Could not open community.');}).finally(()=>{if(active)setDetailLoading(false);});
     return ()=>{active=false;};
   },[selectedId,loadDetail,pt]);
+  useEffect(()=>{
+    let lastRequest=0;
+    const membershipUpdate=(incoming:Event)=>{
+      const event=(incoming as CustomEvent<{kind?:string;communityId?:string}>).detail;
+      if(event?.kind!=='membership'&&event?.kind!=='ready')return;
+      const request=++lastRequest;
+      // List and selected community detail are different queries. Both must
+      // refresh when an approval arrives while the applicant is viewing the app.
+      void Promise.all([loadList(),selectedId?loadDetail(selectedId):Promise.resolve(null)])
+        .then(([,updated])=>{
+          if(request!==lastRequest||event?.kind!=='membership'||event.communityId!==selectedId)return;
+          if(updated?.community.myRole)
+            setNotice(pt?'Sua entrada na comunidade foi aprovada.':'Your community request was approved.');
+        }).catch(()=>{/* Focus/reconnect can retry without interrupting the user. */});
+    };
+    const onFocus=()=>{if(document.visibilityState==='visible')membershipUpdate(new CustomEvent('membership-refresh',{detail:{kind:'ready'}}));};
+    window.addEventListener('uorqui:community-event',membershipUpdate);
+    window.addEventListener('focus',onFocus);
+    return()=>{lastRequest++;window.removeEventListener('uorqui:community-event',membershipUpdate);
+      window.removeEventListener('focus',onFocus);};
+  },[loadList,loadDetail,selectedId,pt]);
   // Discover opens the exact community/channel using the already-mounted community
   // view; opening a voice room never starts a WebRTC session automatically.
   useEffect(()=>{
@@ -880,9 +925,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               }}>
               <Pencil className="size-4"/><span className="hidden sm:inline">{pt?'Editar canal':'Edit channel'}</span>
             </Button>
-            {channelSettingsOpen&&<div id="uorqui-channel-settings" role="group"
+            {channelSettingsOpen&&createPortal(<div ref={channelSettingsMenuRef}
+              id="uorqui-channel-settings" role="group"
               aria-label={pt?'Configurações do canal':'Channel settings'}
-              className="absolute right-0 top-[calc(100%+0.75rem)] z-50 max-h-[calc(100dvh-6rem)] w-[calc(100vw-2rem)] max-w-[22rem] space-y-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-xl sm:w-80">
+              style={channelSettingsPosition?{top:channelSettingsPosition.top,left:channelSettingsPosition.left}:{visibility:'hidden'}}
+              className="fixed z-[250] max-h-[calc(100dvh-6rem)] w-[calc(100vw-1.5rem)] max-w-[22rem] space-y-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-2xl">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold">{pt?'Editar canal':'Edit channel'}</h3>
                 <Button type="button" size="icon" variant="ghost" aria-label={pt?'Fechar':'Close'}
@@ -928,7 +975,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   {pt?'Cancelar':'Cancel'}
                 </Button>}
               </div>}
-            </div>}
+            </div>,document.body)}
           </div>}
         </header>
         {channelLocked?<form className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 py-8 text-center" onSubmit={event=>void unlockChannel(event)}>
