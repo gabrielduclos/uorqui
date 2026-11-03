@@ -14,7 +14,7 @@ O Uorqui reúne três experiências:
 
 - **Conversas individuais:** mensagens privadas 1:1, respostas, reações, anexos, estados de mensagens, push e atualização em tempo real via SSE. Não há grupos tradicionais no mensageiro.
 - **Descobrir:** tela inicial sem publicações globais, com recomendações de comunidades públicas, busca e atividades das comunidades das quais o usuário participa. O feed antigo foi retirado da interface, API e PostgreSQL em 02/11/2026.
-- **Comunidades:** participação pública/privada, convites, canais de texto, moderação, salas de voz e **reuniões com áudio e vídeo** (até seis pessoas), convites por link ou mensagem do Uorqui, aprovação de entrada, notificações e canais protegidos por senha. O chat de texto inicia recolhido em voz/reunião; reuniões têm compartilhamento de tela, destaque de quem fala e câmera em miniatura na tela cheia.
+- **Comunidades:** participação pública/privada, convites, canais de texto, moderação, salas de voz e **reuniões com áudio e vídeo** (até seis pessoas), convites por link ou mensagem do Uorqui, aprovação de entrada, notificações e canais protegidos por senha. Canais podem ser abertos ou fechados por permissão individual atribuída na moderação. O chat de texto inicia recolhido em voz/reunião; reuniões têm compartilhamento de tela, destaque de quem fala e câmera em miniatura na tela cheia.
 
 O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 
@@ -61,6 +61,7 @@ A identificação do beta está nos manifestos npm e aparece ao lado do logo no 
 | Requisitos | [Produto](docs/pt-BR/produto.md) | [Product](docs/en/product.md) |
 | Direção da descoberta | [Descobrir](docs/pt-BR/descobrir.md) | [Discover](docs/en/discover.md) |
 | Planejamento | [Roadmap](docs/pt-BR/roadmap.md) | [Roadmap](docs/en/roadmap.md) |
+| Permissões de canais | [Canais abertos e fechados](docs/pt-BR/permissoes-canais.md) | [Channel permissions](docs/en/channel-permissions.md) |
 | Auditoria e limpeza de código | [Auditoria 03/11](docs/pt-BR/auditoria-manutencao.md) | [November 3 audit](docs/en/maintenance-audit.md) |
 | Salas de voz e reunião | [Reuniões](docs/pt-BR/reunioes-video.md) | [Meetings](docs/en/video-meetings.md) |
 | Identidade visual | [UI Kit](docs/pt-BR/ui-kit.md) | [UI Kit](docs/en/ui-kit.md) |
