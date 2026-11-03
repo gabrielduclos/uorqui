@@ -66,6 +66,16 @@ test('persistent communities: discover, create, join, channels and real messages
   assert.equal((await member('/api/v1/communities/'+id+'/join','POST')).status,200);
   const joined=await member('/api/v1/communities/'+id);
   assert.equal(joined.data.community.myRole,'member');
+  const inviteList='/api/v1/communities/'+id+'/invitable-members';
+  assert.equal((await outsider(inviteList)).status,403,'nonmembers cannot browse member invite options');
+  const availableToOwner=await owner(inviteList);
+  assert.equal(availableToOwner.status,200);
+  assert.ok(availableToOwner.data.members.some(person=>person.handle==='comm_member'),'members can invite other community members');
+  assert.ok(!availableToOwner.data.members.some(person=>person.handle==='comm_outsider'),'outsiders are not shown in the channel invite picker');
+  assert.ok(!availableToOwner.data.members.some(person=>person.handle==='comm_owner'),'the current user is not an invite option');
+  const availableToMember=await member(inviteList);
+  assert.equal(availableToMember.status,200);
+  assert.ok(availableToMember.data.members.some(person=>person.handle==='comm_owner'),'ordinary community members can find the other members');
   assert.equal(joined.data.channels.length,2,'create includes text + voice channels');
   const text=joined.data.channels.find(c=>c.kind==='text'),voice=joined.data.channels.find(c=>c.kind==='voice');
   assert.ok(text&&voice);
