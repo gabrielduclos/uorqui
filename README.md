@@ -14,7 +14,7 @@ Uorqui brings together three connected experiences:
 
 - **Direct messages:** private 1:1 text conversations, replies, reactions, media attachments, message status, background push and SSE-driven updates. No conventional private group chats.
 - **Discover:** a home screen without global posts, featuring recommended public communities, search and activity from communities a user has joined. Obsolete global feed UI, API, and PostgreSQL tables were retired November 2, 2026.
-- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, admission approval, request notifications and optional password-protected channels. Voice/meeting text chat starts collapsed; meetings support screen sharing, active-speaker highlighting and fullscreen camera/PiP view.
+- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, admission approval, request notifications and optional password-protected channels. Channels may be open or closed with member-specific permissions assigned in moderation. Voice/meeting text chat starts collapsed; meetings support screen sharing, active-speaker highlighting and fullscreen camera/PiP view.
 
 The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
 
@@ -61,6 +61,7 @@ This beta version is defined in the npm workspace manifests and shown beside the
 | Features and goals | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
 | Discovery decision | [Discover](docs/en/discover.md) | [Descobrir](docs/pt-BR/descobrir.md) |
 | Roadmap | [Roadmap](docs/en/roadmap.md) | [Roadmap](docs/pt-BR/roadmap.md) |
+| Channel permissions | [Open and closed channels](docs/en/channel-permissions.md) | [Canais por permissão](docs/pt-BR/permissoes-canais.md) |
 | Code audit & cleanup | [November 3 audit](docs/en/maintenance-audit.md) | [Auditoria de 03/11](docs/pt-BR/auditoria-manutencao.md) |
 | Voice and meetings | [Meetings](docs/en/video-meetings.md) | [Reuniões](docs/pt-BR/reunioes-video.md) |
 | UI design system | [UI kit](docs/en/ui-kit.md) | [UI kit](docs/pt-BR/ui-kit.md) |
