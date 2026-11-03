@@ -7,6 +7,8 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 This is ongoing technical-beta work on `main`, **not a tagged release or proof of a successful live deployment**.
 
 ### Updated product and communities
+- Community/meeting join-request notifications now identify the community (and meeting when available) in-app and in push. Moderation member identities have a larger profile-opening target and the public profile overlays the dialog. Community home participant names remain plain text; profile links stay within channels and moderation.
+- Desktop conversation rows now use clearer continuous separators between items.
 - **Communities** is now the default landing screen and first navigation tab; the logo returns to Communities and onboarding starts there. The app restores the most recently visited community only if the account remains a member, and offers discovery for newcomers.
 - Community message authors and participants (including voice and moderation) link to their public profiles; the floating meeting player shows self video and the active speaker's video/avatar with speaking feedback.
 - Subtle desktop conversation-list dividers; aligned 48 px desktop voice/meeting controls and chat composer actions, while preserving compact mobile controls.
