@@ -226,7 +226,7 @@ function AppContent() {
         </p>
       </div>}
       {!isVerificationResult && !legalDocument && publicHandle && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain bg-background">
+        <div className="fixed inset-0 z-[400] overflow-y-auto overscroll-contain bg-background">
           <PublicProfilePage handle={publicHandle} onMessage={account?.profile && account.profile.handle !== publicHandle ? onPublicProfileMessage : undefined} />
         </div>
       )}
