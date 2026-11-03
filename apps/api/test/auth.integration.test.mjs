@@ -92,6 +92,14 @@ test('Auth + social profile local integration', async () => {
       termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2020-01-01',privacyVersion:'2026-11-03'},
   });
   assert.equal(wrongVersion.response.status,400);
+  // Existing accounts retain their recorded acceptance history. New signup
+  // cannot claim an older legal version after the published revision.
+  const outdatedAgreement = await send('/api/auth/sign-up/email', {
+    method:'POST',body:{name:'Old Agreement',email:'old-terms@example.invalid',password:'correct-horse-battery-staple-demo',
+      termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'},
+  });
+  assert.equal(outdatedAgreement.response.status,400);
+  assert.equal(outdatedAgreement.data.error,'LEGAL_ACCEPTANCE_REQUIRED');
   const tooShortSignup = await send('/api/auth/sign-up/email', {
     method: 'POST',
     body: {name:'Short Password', email:'short-password@example.invalid', password:'Short7!',
