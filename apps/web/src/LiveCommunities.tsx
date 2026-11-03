@@ -862,9 +862,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                       title={person.displayName}>
                       <span className={cn('size-2 shrink-0 rounded-full',person.speaking?'animate-pulse bg-emerald-500':'bg-emerald-500/50')}
                         aria-label={person.speaking?(pt?'Falando':'Speaking'):(pt?'Conectado':'Connected')}/>
-                      <a href={'/@'+person.handle} onClick={event=>navigateToPublicProfile(event,person.handle)}
-                        className="min-w-0 flex-1 truncate rounded-sm font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-                        {person.displayName}{person.isSelf&&(pt?' (você)':' (you)')}</a>
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                        {person.displayName}{person.isSelf&&(pt?' (você)':' (you)')}</span>
                       <span title={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}
                         aria-label={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
                         {person.muted?<MicOff className="size-3.5 shrink-0 text-destructive"/>:
@@ -910,9 +909,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {!!detail?.pendingRequests.length&&<div className="space-y-2 border-t border-border pt-3">
                 <p className="text-xs font-semibold">{pt?'Pedidos de entrada':'Join requests'}</p>
                 {detail.pendingRequests.map(person=><div key={person.handle} className="flex items-center gap-2">
-                  <a href={'/@'+person.handle} onClick={event=>navigateToPublicProfile(event,person.handle)}
-                    className="min-w-0 flex-1 truncate rounded-sm text-xs hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-                    {person.displayName} (@{person.handle})</a>
+                  <span className="min-w-0 flex-1 truncate text-xs">
+                    {person.displayName} (@{person.handle})</span>
                   <Button size="sm" variant="outline" loading={busyAction==='approve:'+person.handle} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/requests/'+person.handle+'/approve',{method:'POST'}),pt?'Membro aprovado.':'Member approved.',community.id,'approve:'+person.handle)}>
                     <Check className="size-4"/></Button>
                 </div>)}
