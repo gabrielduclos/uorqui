@@ -497,3 +497,68 @@ test('community attachments require signed R2 proof and are private to channel m
   assert.equal((await owner(access)).status,404,'removed messages cannot expose attachments');
   assert.equal((await owner(basePath+'/messages')).data.messages.find(m=>m.id===message.id).attachment,null);
 });
+
+
+test('restricted channels: hidden by default, per-member grants and revocation block content and discovery',async()=>{
+  const created=await owner('/api/v1/communities','POST',{
+    name:'Restricted Channels',slug:'restricted-channels-suite',visibility:'public'
+  });
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const root='/api/v1/communities/'+created.data.id;
+  assert.equal((await member(root+'/join','POST')).status,200);
+  assert.equal((await outsider(root+'/join','POST')).status,200);
+
+  const closed=await owner(root+'/channels','POST',{
+    name:'staff-only',kind:'text',accessMode:'restricted'
+  });
+  assert.equal(closed.status,201,JSON.stringify(closed.data));
+  const channelId=closed.data.channel.id,channel=root+'/channels/'+channelId;
+  assert.equal(closed.data.channel.accessMode,'restricted');
+  const sender=await owner(channel+'/messages','POST',{clientId:crypto.randomUUID(),body:'Secret channel activity'});
+  assert.equal(sender.status,201,JSON.stringify(sender.data));
+  assert.equal((await owner(root)).data.channels.find(x=>x.id===channelId).accessMode,'restricted');
+  assert.ok(!(await member(root)).data.channels.some(x=>x.id===channelId),'closed channel is not listed to unapproved members');
+  assert.ok(!(await outsider(root)).data.channels.some(x=>x.id===channelId));
+  assert.equal((await member(channel+'/messages')).status,403);
+  assert.equal((await member(channel+'/messages','POST',{clientId:crypto.randomUUID(),body:'not allowed'})).status,403);
+  assert.equal((await member(channel+'/attachments/allowed')).status,403);
+  assert.equal((await member(channel+'/read','POST',{lastMessageId:sender.data.id})).status,403);
+  assert.equal((await member(channel+'/unlock','POST',{password:'anything'})).data.error,'CHANNEL_PERMISSION_REQUIRED');
+  assert.ok(!(await member('/api/v1/communities/discover/activity')).data.recent.some(x=>x.channelId===channelId));
+  assert.ok(!(await member('/api/v1/communities/unread')).data.locations.some(x=>x.channelId===channelId));
+  assert.equal((await member(channel+'/access','PUT',{accessMode:'open'})).status,403);
+  assert.equal((await member(root+'/members/comm_outsider/channels/'+channelId+'/access','PUT',{allowed:true})).status,403);
+  const grantPath=root+'/members/comm_member/channels/'+channelId+'/access';
+  assert.equal((await owner(grantPath,'PUT',{allowed:true})).status,200);
+  const moderation=(await owner(root+'/moderation')).data;
+  assert.ok(moderation.members.find(x=>x.handle==='comm_member').restrictedChannelIds.includes(channelId));
+  assert.ok(!(moderation.members.find(x=>x.handle==='comm_outsider').restrictedChannelIds??[]).includes(channelId));
+  assert.ok((await member(root)).data.channels.some(x=>x.id===channelId));
+  assert.equal((await member(channel+'/messages')).status,200);
+  assert.ok((await member('/api/v1/communities/discover/activity')).data.recent.some(x=>x.channelId===channelId));
+  assert.equal((await outsider(channel+'/messages')).status,403);
+
+  // Password and explicit member grants are independent checks.
+  assert.equal((await owner(channel+'/password','PUT',{password:'secret-password-123'})).status,200);
+  assert.equal((await member(channel+'/messages')).data.error,'CHANNEL_PASSWORD_REQUIRED');
+  assert.equal((await outsider(channel+'/unlock','POST',{password:'secret-password-123'})).data.error,'CHANNEL_PERMISSION_REQUIRED');
+  assert.equal((await member(channel+'/unlock','POST',{password:'secret-password-123'})).status,200);
+  assert.equal((await member(channel+'/messages')).status,200);
+  assert.equal((await owner(grantPath,'PUT',{allowed:false})).status,200);
+  assert.ok(!(await member(root)).data.channels.some(x=>x.id===channelId));
+  assert.equal((await member(channel+'/messages')).data.error,'CHANNEL_PERMISSION_REQUIRED',
+    'previous password unlock must not bypass revoked membership grant');
+
+  assert.equal((await owner(channel+'/access','PUT',{accessMode:'open'})).status,200);
+  assert.equal((await owner(channel+'/password','PUT',{password:null})).status,200);
+  assert.ok((await outsider(root)).data.channels.some(x=>x.id===channelId),'opening reveals channel to members');
+  assert.equal((await outsider(channel+'/messages')).status,200);
+  assert.equal((await owner(channel+'/access','PUT',{accessMode:'restricted'})).status,200);
+  assert.equal((await outsider(channel+'/messages')).status,403);
+  assert.equal((await member(channel+'/messages')).status,403);
+  assert.equal((await owner(root+'/members/comm_member/channels/'+channelId+'/access','PUT',{allowed:true})).status,200);
+  assert.equal((await member(channel+'/messages')).status,200);
+  assert.equal((await member(root+'/membership','DELETE')).status,204);
+  assert.equal((await member(root+'/join','POST')).status,200);
+  assert.ok(!(await member(root)).data.channels.some(x=>x.id===channelId),'leaving clears grants');
+});
