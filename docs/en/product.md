@@ -1,14 +1,14 @@
-# Product requirements — initial draft
+# Product requirements — technical beta
 
 [English](product.md) · [Português](../pt-BR/produto.md)
 
-**Status:** direction approved November 2, 2026, with an **initial implementation committed to `main`** (Discover, authorized activity, navigation and onboarding). Production deployment and real-device tests remain unverified; legacy feed sections preserve implementation history.
+**Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
 ## Product decision
 
-The future Uorqui is **community-first**, without a public/global post feed or infinite immersive video mode. The home destination becomes **Discover**, featuring recommended communities and activities **from communities the person has joined**. Text, photos, video, audio, files and links remain available inside messages and channels.
+Uorqui is **community-first**, without a public/global post feed or infinite immersive video mode. The home destination is **Discover**, featuring recommended communities and activities **from communities the person has joined**. Text, photos, video, audio, files and links remain available inside messages and channels.
 
-Details, authorization, migration and success metrics: [Discover replaces the feed](discover.md). This documentation update **has not removed the existing feed code or user data**.
+Details, authorization, migration and success metrics: [Discover replaces the feed](discover.md). The retired global feed UI/API/schema was removed with versioned migrations and recovery snapshots. No feed restoration is planned; see [maintenance audit](maintenance-audit.md).
 
 ## Navigation
 
@@ -66,7 +66,7 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - Uploads require Worker-issued HMAC proof. Media downloads require current membership and an active, non-canceled message.
 - Drizzle migration `0018_community_message_attachments` adds attachment metadata and allows empty text only with an attachment. Apply it to Neon before enabling the feature in production; existing text messages remain intact.
 
-### Beta history: persistent feed implementation (legacy; planned retirement)
+### Beta history: persistent feed implementation (retired November 2, 2026)
 
 > **Technical record of previously implemented behavior.** These items do not define the future experience. Do not delete existing posts, media, database tables, endpoints or links without a retention, migration and rollback plan. See the [Discover decision](discover.md).
 
@@ -98,8 +98,8 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 - The one-to-one chat **Send** control matches the subtle **5 px** message bubble corners.
 - Message actions and the media viewer support sharing text, photos, videos, audio and files with **friends** or **existing conversations** using a searchable recipient picker with per-recipient delivery feedback. Blocked or restricted destinations cannot receive new messages.
 - Private media is checked for access and uploaded as a **new destination-scoped attachment**, never by reusing a private URL across conversations. The 50 MB upload limits still apply. Text forwarding uses the idempotent authorized forwarding API.
-- **Feed posts and videos** can be shared as internal authorized links to friends and existing conversations; the recipient can open them in the mounted feed without a full reload. External sharing and copying post links remain available. A private post does not become public through link sharing.
-- A **Sign out** button is now visible at the top of the account profile on mobile and desktop and shows a confirmation dialog. Signing out clears session-scoped media and feed caches.
+- **Retired behavior:** feed-post sharing is no longer available. The current `InternalShareDialog` forwards messages/media only. Older post URLs already present in DMs show a historical-content notice rather than linking to a nonexistent feed screen.
+- A **Sign out** button is now visible at the top of the account profile on mobile and desktop and shows a confirmation dialog. Signing out clears session-scoped media caches.
 
 ### Voice-room presence and login resilience (November 2026)
 
@@ -109,7 +109,7 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 
 ### First-run tour and community unread badges
 
-- On first authenticated entry per account, a **four-stage onboarding** introduces the actual **Feed** (posts/photos/videos in the previous beta; to be replaced by Discover), **Messages** (one-to-one chats), **Communities** (text/voice channels) and **Profile photo** (choose, crop and save or proceed with no photo). The tour can be skipped; completion is saved per account on the device.
+- On first authenticated entry per account, a **four-stage onboarding** introduces **Discover** (communities and their activity), **Messages** (one-to-one chats), **Communities** (text/voice channels) and **Profile photo** (choose, crop and save or proceed with no photo). The tour can be skipped; completion is saved per account on the device.
 - Avatar onboarding reuses the private profile-media endpoint and photo cropper; the avatar can be replaced later in Profile.
 - **Numeric unread badges** are shown on text channels, individual community icons and the main mobile/desktop Communities navigation. Own/deleted messages are excluded; reading is acknowledged only when a text channel is open and its messages have loaded. Per-user/channel cursors persist in PostgreSQL across devices. The API checks session, membership, origin and enforces monotonic read progress.
 - Sign-in and account creation use edge-to-edge mobile card spacing and actual link styles for recovery and email verification in both light and dark modes.
@@ -118,13 +118,13 @@ Traditional group chats, large-scale livestreaming, creator payouts, marketplace
 
 - The main voice-room channel list shows **name, microphone on/off and speaker audio on/off**, with no profile images. A small presence dot remains next to the username; speaking is highlighted only when actual activity is known.
 - Text-channel messages, unread badges and voice-room occupants use authenticated **Server-Sent Events (SSE)**, the same pattern as direct messaging. `GET /api/v1/communities/events` requires a valid session, resubscribes every five minutes and transmits only channel/community IDs plus event kinds. All content is fetched via membership-gated API requests. A ~30-second fallback covers disconnections.
-- A dedicated cluster-wide PostgreSQL `LISTEN/NOTIFY` subscription per API instance dispatches message, channel and voice activity without streaming content or private identities; it is closed during shutdown.
+- A dedicated cluster-wide PostgreSQL `LISTEN/NOTIFY` subscription per API instance dispatches message, channel and voice activity without message bodies. Community approval also emits account-targeted membership events; the applicant refreshes community access and reconnects SSE without reloading.
 
 ### Video meetings and password-protected channels
 
-- **Meeting rooms** are distinct from ordinary voice and text channels. They reuse the WebRTC signaling system, providing a responsive video grid and camera/microphone controls for up to six participants initially. Room text chat remains available.
+- **Meeting rooms** are distinct from ordinary voice and text channels. They reuse WebRTC signaling for up to six participants. Text starts collapsed in voice and meeting channels; meeting cameras highlight the active speaker and support a fullscreen view with self-picture-in-picture, manual selection and screen sharing (when supported by the browser).
 - Organizers can copy the room link or send it as a one-to-one Uorqui Messenger invitation. A link never bypasses community membership, user blocks or meeting admission policy.
 - Meeting administrators choose **open admission** or **approval required**. Pending requests are enforced server-side; verified community and meeting join requests can notify moderators via the inbox and opt-in push preference.
-- **Channel passwords:** owners/admins can set, rotate and remove passwords for text, voice and meeting channels. Passwords use random-salt scrypt hashes, not plaintext storage. Unlock grants are scoped to the member and channel and are revoked on password changes. Server-side gates protect messages, attachments, message push recipients, live participant presence and WebRTC signaling. Incorrect guesses are rate limited.
+- **Channel passwords:** owners/admins can set, rotate and remove passwords from the channel header in text, voice and meeting channels. Passwords use random-salt scrypt hashes, not plaintext storage. Unlock grants are scoped to the member and channel and are revoked on password changes. Server-side gates protect messages, attachments, message push recipients, live participant presence and WebRTC signaling. Incorrect guesses are rate limited.
 - Channel passwords do not replace community membership or community moderation. Admins can access the channels they manage.
-- **Deployment:** forward migrations 0030–0032 must be applied before these features are released. Validate integration tests, backup and live API deployment before migrating the active database.
+- **Deployment:** migrations `0030`–`0032` are versioned and recorded in the project's production deployment history. Always verify the live API, backup and migration state independently of GitHub CI.
