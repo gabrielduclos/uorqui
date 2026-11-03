@@ -25,7 +25,7 @@ type Community={
   id:string;name:string;slug:string;description:string|null;avatarUrl:string|null;visibility:Visibility;
   memberCount:number;myRole:string|null;requestKind:string|null;requestStatus:string|null;
 };
-type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';createdAt:string;hasPassword?:boolean;unlocked?:boolean};
+type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';createdAt:string;hasPassword?:boolean;unlocked?:boolean;accessMode?:'open'|'restricted'};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
@@ -112,13 +112,15 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
+  const [newChannelAccessMode,setNewChannelAccessMode]=useState<'open'|'restricted'>('open');
   const [unlockPassword,setUnlockPassword]=useState('');
   const [unlockBusy,setUnlockBusy]=useState(false);
   const [unlockError,setUnlockError]=useState('');
   const [channelSettingsOpen,setChannelSettingsOpen]=useState(false);
   const [channelSettingsName,setChannelSettingsName]=useState('');
   const [channelSettingsPassword,setChannelSettingsPassword]=useState('');
-  const [channelSettingsBusy,setChannelSettingsBusy]=useState<'name'|'password'|'remove'|null>(null);
+  const [channelSettingsAccessMode,setChannelSettingsAccessMode]=useState<'open'|'restricted'>('open');
+  const [channelSettingsBusy,setChannelSettingsBusy]=useState<'name'|'password'|'remove'|'access'|null>(null);
   const [channelSettingsError,setChannelSettingsError]=useState('');
   const [channelRemoveConfirm,setChannelRemoveConfirm]=useState(false);
   const channelSettingsRef=useRef<HTMLDivElement|null>(null);
@@ -235,7 +237,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     let lastRequest=0;
     const membershipUpdate=(incoming:Event)=>{
       const event=(incoming as CustomEvent<{kind?:string;communityId?:string}>).detail;
-      if(event?.kind!=='membership'&&event?.kind!=='ready')return;
+      if(event?.kind!=='membership'&&event?.kind!=='channel'&&event?.kind!=='ready')return;
       const request=++lastRequest;
       // List and selected community detail are different queries. Both must
       // refresh when an approval arrives while the applicant is viewing the app.
@@ -512,12 +514,30 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         (pt?'Não foi possível salvar as alterações.':'Could not save changes.'));
     }finally{setChannelSettingsBusy(null);}
   }
+  async function updateChannelAccessMode(){
+    if(!selectedId||!activeChannel||!community||!manage(community)||channelSettingsBusy||
+       channelSettingsAccessMode===(activeChannel.accessMode??'open'))return;
+    setChannelSettingsBusy('access');setChannelSettingsError('');
+    try{
+      await api('/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/access',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({accessMode:channelSettingsAccessMode})
+      });
+      await loadDetail(selectedId);
+      setChannelSettingsOpen(false);
+      setNotice(channelSettingsAccessMode==='restricted'
+        ?(pt?'Canal fechado. Libere os membros em Moderação.':'Channel closed. Assign members in Moderation.')
+        :(pt?'Canal aberto para os membros da comunidade.':'Channel open to community members.'));
+    }catch{
+      setChannelSettingsError(pt?'Não foi possível alterar o acesso do canal.':'Could not change channel access.');
+    }finally{setChannelSettingsBusy(null);}
+  }
   async function createChannel(event:FormEvent){
     event.preventDefault();
     if(!selectedId||!newChannelName.trim())return;
-    await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind})),
+    await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind,accessMode:newChannelAccessMode})),
       pt?'Canal criado.':'Channel created.',selectedId,'createChannel');
-    setNewChannelOpen(false);setNewChannelName('');
+    setNewChannelOpen(false);setNewChannelName('');setNewChannelAccessMode('open');
   }
   async function invite(event:FormEvent){
     event.preventDefault();
@@ -845,6 +865,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
                   <option value="text">{pt?'Texto':'Text'}</option><option value="voice">{pt?'Voz':'Voice'}</option><option value="meeting">{pt?'Reunião (áudio e vídeo)':'Meeting (audio and video)'}</option>
                 </select>
+                <label className="block space-y-1 text-xs font-medium">
+                  <span>{pt?'Quem pode acessar':'Who can access'}</span>
+                  <select value={newChannelAccessMode} onChange={event=>setNewChannelAccessMode(event.target.value as 'open'|'restricted')}
+                    className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
+                    <option value="open">{pt?'Aberto — todos os membros':'Open — all community members'}</option>
+                    <option value="restricted">{pt?'Fechado — somente autorizados':'Closed — authorized members only'}</option>
+                  </select>
+                </label>
                 <Button size="sm" type="submit" loading={busyAction==='createChannel'} disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
               </form>}
               <form className="space-y-2 pt-2" onSubmit={event=>void invite(event)}>
@@ -919,10 +947,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           {manage(community)&&<div ref={channelSettingsRef} className="relative ml-auto shrink-0">
             <Button type="button" size="sm" variant="ghost" className="gap-2 px-2 sm:px-3"
               aria-expanded={channelSettingsOpen} aria-controls="uorqui-channel-settings"
-              aria-label={pt?'Editar nome e senha do canal':'Edit channel name and password'}
+              aria-label={pt?'Editar nome, acesso e senha do canal':'Edit channel name, access and password'}
               onClick={()=>{
                 setChannelSettingsOpen(old=>!old);setChannelSettingsName(activeChannel.name);
-                setChannelSettingsPassword('');setChannelSettingsError('');setChannelRemoveConfirm(false);
+                setChannelSettingsPassword('');setChannelSettingsAccessMode(activeChannel.accessMode??'open');setChannelSettingsError('');setChannelRemoveConfirm(false);
               }}>
               <Pencil className="size-4"/><span className="hidden sm:inline">{pt?'Editar canal':'Edit channel'}</span>
             </Button>
@@ -947,6 +975,28 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                     channelSettingsName.trim()===activeChannel.name}>
                   <Check className="size-4"/>{pt?'Salvar nome':'Save name'}</Button>
               </form>
+              <div className="space-y-2 border-t border-border pt-3">
+                <label htmlFor="uorqui-channel-access" className="block text-xs font-medium">
+                  {pt?'Permissão de acesso':'Access permissions'}
+                </label>
+                <select id="uorqui-channel-access" value={channelSettingsAccessMode}
+                  disabled={channelSettingsBusy!==null}
+                  onChange={event=>setChannelSettingsAccessMode(event.target.value as 'open'|'restricted')}
+                  className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
+                  <option value="open">{pt?'Aberto — todos os membros':'Open — all members'}</option>
+                  <option value="restricted">{pt?'Fechado — só membros autorizados':'Closed — permitted members only'}</option>
+                </select>
+                {channelSettingsAccessMode==='restricted'&&<p className="text-xs text-muted-foreground">
+                  {pt?'Proprietário e administradores têm acesso automático. Autorize os demais usuários em Moderação > Membros.':
+                    'Owner and admins have automatic access. Grant other members access in Moderation > Members.'}
+                </p>}
+                <Button type="button" size="sm" className="w-full"
+                  loading={channelSettingsBusy==='access'} disabled={channelSettingsBusy!==null||
+                    channelSettingsAccessMode===(activeChannel.accessMode??'open')}
+                  onClick={()=>void updateChannelAccessMode()}>
+                  <Check className="size-4"/>{pt?'Salvar acesso':'Save access'}
+                </Button>
+              </div>
               <form className="space-y-2 border-t border-border pt-3"
                 onSubmit={event=>{event.preventDefault();void updateChannelSettings('password');}}>
                 <label htmlFor="uorqui-channel-password" className="block text-xs font-medium">
