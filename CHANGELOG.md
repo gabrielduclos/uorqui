@@ -7,6 +7,7 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 This is ongoing technical-beta work on `main`, **not a tagged release or proof of a successful live deployment**.
 
 ### Updated product and communities
+- Subtle desktop conversation-list dividers; aligned 48 px desktop voice/meeting controls and chat composer actions, while preserving compact mobile controls.
 - Main desktop sidebar navigation now has slightly larger labels and icons with taller rows; mobile conversation rows provide tactile pressed-state feedback when opening chats.
 - Community moderation dialog organized into tabs: **Members** (including restricted-channel access), **Bans**, **Channels**, **Settings**, and **Delete** (owner-only), with mobile-friendly navigation.
 - Community moderation now opens in a **responsive dialog**: full-screen on phones and centered on desktop, with managed focus, internal scrolling and no closing during pending operations.
