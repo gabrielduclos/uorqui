@@ -25,12 +25,12 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
   const [error,setError]=useState('');
   const [photoSaved,setPhotoSaved]=useState(false);
   const screens=[
-    {icon:Compass,tab:'discover' as Tab,title:pt?'Descobrir':'Discover',
-      description:pt?'Encontre comunidades e veja o que acontece nas suas.':'Find communities and see what is happening in yours.'},
+    {icon:Users,tab:'communities' as Tab,title:pt?'Comunidades':'Communities',
+      description:pt?'Aqui começam as conversas em canais de texto, voz e reuniões.':'Start conversations in text, voice and meeting channels here.'},
     {icon:MessageCircle,tab:'conversations' as Tab,title:pt?'Mensagens':'Messages',
       description:pt?'Aqui ficam suas conversas privadas.':'Find your private conversations here.'},
-    {icon:Users,tab:'communities' as Tab,title:pt?'Comunidades':'Communities',
-      description:pt?'Explore canais de texto e salas de áudio.':'Explore text channels and voice rooms.'},
+    {icon:Compass,tab:'discover' as Tab,title:pt?'Descobrir':'Discover',
+      description:pt?'Encontre novas comunidades e veja o que acontece nas suas.':'Find new communities and see what is happening in yours.'},
   ];
   const current=screens[step];
 
