@@ -19,12 +19,13 @@
 - **Development entrypoints:** `apps/api/src/auth/auth.cli.ts` is an auth CLI configuration entrypoint, even though the HTTP server does not import it.
 - **Backups and media:** no Neon or R2 data deletion was performed; existing recovery copies remain subject to explicit retention decisions.
 
-## Follow-up findings
+## Follow-up resolution — November 3, 2026
 
-1. **Historical translations:** `UorquiPreferences.tsx` retains older demo/feed strings. Check every key against all `t(...)` call sites before deleting translations.
-2. **Legal text:** `LegalPages.tsx` still references a feed. Updating published terms/policies requires review of their content and acceptance versioning; it was not silently changed.
-3. **Old product documentation:** the original feed release notes and historical migrations are legitimate records. Current product pages, roadmap and UI Kit should explicitly distinguish **retired** feed functionality from the active Discover experience.
-4. **Real-device tests:** test a meeting with at least two people across devices/networks: camera, mic, speaker focus, screen sharing, fullscreen, and installed PWAs on iOS/Android. `getDisplayMedia` support differs by browser.
+1. **Translations resolved:** checked references across the TypeScript/React files under `apps/web/src`. Removed **38 unreferenced** old demo/feed translation entries, retained strings still used, and changed the live signup copy to Discover/communities in Portuguese and English.
+2. **Legal descriptions revised:** Terms and Privacy Notice in PT-BR/EN describe the current community-first app, messaging, channels, voice/video meetings and relevant personal data. Both were versioned `2026-11-03` for **new registrations**. The unchanged Cookie Policy retains version `2026-11-01`. The status endpoint exposes expected versions; integration tests accept current and reject older signup agreements.
+3. **Existing acceptance history retained:** existing `account_legal_acceptances` rows were neither removed nor backfilled with false acknowledgements. **There is no forced retroactive re-acceptance** for already registered accounts; legal review, change notification and any required re-consent remain launch-readiness decisions.
+4. **Current documentation reconciled:** README, changelog, product, architecture, roadmap, UI Kit and meetings distinguish active Discover from retired feed functionality. Legitimate historical release notes and migrations are preserved.
+5. **Real-device testing remains open:** evaluate meetings across devices/networks, mic/camera, speaker focus, fullscreen/screen sharing and installed Android/iOS PWAs. `getDisplayMedia` support varies by browser.
 
 ## Validation and limitations
 
