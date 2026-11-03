@@ -858,7 +858,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           </button>)}
         </>}
         {visibleThreads.map(thread => <button type="button" key={thread.id} onClick={() => openThread(thread.id)}
-          className={cn('flex min-h-[76px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+          className={cn('flex min-h-[76px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left md:rounded-b-none md:border-b md:border-border/60 transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
             activeId === thread.id && mobileOpened && 'bg-secondary')}
           aria-current={activeId === thread.id && mobileOpened ? 'true' : undefined}>
           <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
