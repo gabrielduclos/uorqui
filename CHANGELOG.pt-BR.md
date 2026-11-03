@@ -11,7 +11,8 @@ Evolução do beta técnico na `main`, **sem criar tag e sem comprovar deploy da
 - Reuniões com áudio/vídeo, links ou convites via mensagem individual, controle de entrada, compartilhamento de tela, destaque de quem fala e tela cheia com câmera própria em miniatura.
 - O painel de texto das salas de voz e reuniões inicia **recolhido**, com expansão sem desconectar.
 - Aprovação de solicitação de comunidade envia evento SSE direcionado ao solicitante e atualiza a participação sem recarregar a página.
-- Proprietário/admins editam nome e senha pelo cabeçalho de canais de texto/voz/reunião; exclusão continua na moderação.
+- Proprietário/admins editam nome, senha e acesso **aberto/fechado** pelo cabeçalho de canais de texto/voz/reunião; exclusão continua na moderação.
+- **Permissões individuais de canais fechados** em Moderação → Membros; API filtra mensagens, Descobrir, notificações, mídia, presença e WebRTC. Revogação encerra a chamada. Migração `0033_restricted_channel_members` versionada; aplicar e verificar no banco de destino antes de liberar o recurso.
 
 ### Manutenção
 - Auditoria de traduções: excluídas 38 chaves sem uso de feed/demonstrações; texto do cadastro e tradução inglesa atualizados para Descobrir.
