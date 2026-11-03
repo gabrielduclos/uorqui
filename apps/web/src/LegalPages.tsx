@@ -2,8 +2,8 @@ import { useUorquiPreferences } from './UorquiPreferences';
 import { PreferencesControls } from './PreferencesControls';
 import { ArrowLeft, FileText, Shield, Cookie } from 'lucide-react';
 
-export const LEGAL_VERSION='2026-11-03';
 export type LegalDocument='terms'|'privacy'|'cookies';
+export const LEGAL_VERSIONS:Record<LegalDocument,string>={terms:'2026-11-03',privacy:'2026-11-03',cookies:'2026-11-01'};
 export function legalDocumentFromPath(path:string):LegalDocument|null{
   const p=path.replace(/\/$/,'');
   return p==='/termos'||p==='/terms'?'terms':p==='/privacidade'||p==='/privacy'?'privacy':p==='/cookies'?'cookies':null;
@@ -97,7 +97,7 @@ export function LegalPage({document}: {document:LegalDocument}){
     <article className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-20 sm:px-6">
       <div><div className="mb-3 flex items-center gap-2"><Icon className="size-6 text-primary"/>
         <h1 className="text-2xl font-semibold sm:text-3xl">{doc.title}</h1></div>
-        <p className="text-xs text-muted-foreground">{pt?'Versão vigente':'Current version'}: {LEGAL_VERSION}</p>
+        <p className="text-xs text-muted-foreground">{pt?'Versão vigente':'Current version'}: {LEGAL_VERSIONS[document]}</p>
         <p className="mt-4 text-sm leading-7 text-muted-foreground">{doc.lead}</p></div>
       {doc.clauses.map(clause=><section key={clause.title} className="space-y-2 border-t border-border pt-5">
         <h2 className="text-base font-semibold">{clause.title}</h2>
