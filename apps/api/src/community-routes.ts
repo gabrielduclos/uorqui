@@ -146,23 +146,72 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const recent=await getPool().query(
-        'SELECT c.id AS "communityId",c.name AS "communityName",ch.id AS "channelId",'+
-        'ch.name AS "channelName",ch.kind AS "channelKind",latest.created_at AS "createdAt",'+
-        "LEFT(COALESCE(latest.body,''),180) AS preview "+
-        'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
-        'JOIN community_channels ch ON ch.community_id=c.id '+
-        "AND (ch.password_hash IS NULL OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
-        "AND (ch.access_mode='open' OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access access_grant WHERE access_grant.channel_id=ch.id AND access_grant.user_id=$1)) "+
-        'JOIN LATERAL (SELECT m.body,m.created_at FROM community_messages m '+
-        'WHERE m.channel_id=ch.id AND m.deleted_at IS NULL '+
-        "AND m.created_at>now()-interval '14 days' "+
-        'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
-        '(b.blocker_id=m.author_id AND b.blocked_id=$1) OR '+
-        '(b.blocker_id=$1 AND b.blocked_id=m.author_id)) '+
-        'ORDER BY m.created_at DESC,m.id DESC LIMIT 1) latest ON true '+
-        'WHERE mine.user_id=$1 AND NOT EXISTS (SELECT 1 FROM community_bans ban '+
-        'WHERE ban.community_id=c.id AND ban.user_id=$1) '+
-        'ORDER BY latest.created_at DESC LIMIT 18',[me]);
+        `SELECT c.id AS "communityId",c.name AS "communityName",
+            ch.id AS "channelId",ch.name AS "channelName",ch.kind AS "channelKind",
+            GREATEST(latest.created_at,reacted.created_at) AS "createdAt",
+            CASE WHEN choice.is_reaction THEN 'reaction' ELSE 'message' END AS "activityKind",
+            CASE WHEN choice.is_reaction THEN reacted.actor_name ELSE latest.actor_name END AS "actorName",
+            LEFT(COALESCE(CASE WHEN choice.is_reaction THEN reacted.body ELSE latest.body END,''),180) AS preview,
+            CASE WHEN choice.is_reaction THEN reacted.attachment_type ELSE latest.attachment_type END AS "attachmentType",
+            CASE WHEN choice.is_reaction THEN reacted.emoji ELSE NULL END AS "reactionEmoji",
+            CASE WHEN choice.is_reaction THEN reacted.message_author_name ELSE NULL END AS "messageAuthorName"
+         FROM community_members mine
+         JOIN communities c ON c.id=mine.community_id
+         JOIN community_channels ch ON ch.community_id=c.id
+           AND (ch.password_hash IS NULL OR mine.role IN ('owner','admin') OR
+             EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1))
+           AND (ch.access_mode='open' OR mine.role IN ('owner','admin') OR
+             EXISTS (SELECT 1 FROM community_channel_member_access ag WHERE ag.channel_id=ch.id AND ag.user_id=$1))
+         LEFT JOIN LATERAL (
+           SELECT m.body,m.attachment_type,m.created_at,
+             COALESCE(CASE WHEN p.is_public=true OR m.author_id=$1 OR EXISTS (
+               SELECT 1 FROM user_friendships f WHERE f.status='accepted'
+               AND ((f.user_a_id=$1 AND f.user_b_id=m.author_id) OR
+                 (f.user_b_id=$1 AND f.user_a_id=m.author_id))
+             ) THEN p.display_name END,u.handle) AS actor_name
+           FROM community_messages m
+           JOIN users u ON u.id=m.author_id
+           LEFT JOIN profiles p ON p.user_id=m.author_id
+           WHERE m.channel_id=ch.id AND m.deleted_at IS NULL
+             AND m.created_at>now()-interval '14 days'
+             AND NOT EXISTS (SELECT 1 FROM user_blocks b
+               WHERE (b.blocker_id=m.author_id AND b.blocked_id=$1) OR
+                 (b.blocker_id=$1 AND b.blocked_id=m.author_id))
+           ORDER BY m.created_at DESC,m.id DESC LIMIT 1
+         ) latest ON true
+         LEFT JOIN LATERAL (
+           SELECT rx.emoji,rx.created_at,msg.body,msg.attachment_type,
+             COALESCE(CASE WHEN rp.is_public=true OR rx.user_id=$1 OR EXISTS (
+               SELECT 1 FROM user_friendships f WHERE f.status='accepted'
+               AND ((f.user_a_id=$1 AND f.user_b_id=rx.user_id) OR
+                 (f.user_b_id=$1 AND f.user_a_id=rx.user_id))
+             ) THEN rp.display_name END,ru.handle) AS actor_name,
+             COALESCE(CASE WHEN op.is_public=true OR msg.author_id=$1 OR EXISTS (
+               SELECT 1 FROM user_friendships f WHERE f.status='accepted'
+               AND ((f.user_a_id=$1 AND f.user_b_id=msg.author_id) OR
+                 (f.user_b_id=$1 AND f.user_a_id=msg.author_id))
+             ) THEN op.display_name END,ou.handle) AS message_author_name
+           FROM community_message_reactions rx
+           JOIN community_messages msg ON msg.id=rx.message_id
+             AND msg.channel_id=ch.id AND msg.deleted_at IS NULL
+           JOIN users ru ON ru.id=rx.user_id
+           LEFT JOIN profiles rp ON rp.user_id=rx.user_id
+           JOIN users ou ON ou.id=msg.author_id
+           LEFT JOIN profiles op ON op.user_id=msg.author_id
+           WHERE rx.created_at>now()-interval '14 days'
+             AND NOT EXISTS (SELECT 1 FROM user_blocks b
+               WHERE (b.blocker_id=rx.user_id AND b.blocked_id=$1) OR
+                 (b.blocker_id=$1 AND b.blocked_id=rx.user_id) OR
+                 (b.blocker_id=msg.author_id AND b.blocked_id=$1) OR
+                 (b.blocker_id=$1 AND b.blocked_id=msg.author_id))
+           ORDER BY rx.created_at DESC,rx.message_id DESC LIMIT 1
+         ) reacted ON true
+         CROSS JOIN LATERAL (SELECT reacted.created_at IS NOT NULL
+           AND (latest.created_at IS NULL OR reacted.created_at>latest.created_at) AS is_reaction) choice
+         WHERE mine.user_id=$1 AND (latest.created_at IS NOT NULL OR reacted.created_at IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM community_bans ban
+             WHERE ban.community_id=c.id AND ban.user_id=$1)
+         ORDER BY "createdAt" DESC LIMIT 18`,[me]);
       const rooms=await getPool().query(
         'SELECT c.id AS "communityId",c.name AS "communityName",'+
         'ch.id AS "channelId",ch.name AS "channelName",'+
