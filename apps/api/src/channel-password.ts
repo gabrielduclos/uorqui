@@ -13,20 +13,24 @@ export function verifyChannelPassword(password:string,stored:string):boolean {
   const actual=scryptSync(password,Buffer.from(salt,'hex'),HASH_BYTES);
   return timingSafeEqual(actual,Buffer.from(hash,'hex'));
 }
-export type ChannelGate='allowed'|'members_only'|'password_required'|'not_found';
+export type ChannelGate='allowed'|'members_only'|'password_required'|'permission_required'|'not_found';
 /** All channel reads and writes must use this server-side gate, not a UI-only lock. */
 export async function channelGate(communityId:string,channelId:string,userId:string):Promise<ChannelGate>{
   const result=await getPool().query(
-    'SELECT c.password_hash IS NOT NULL AS protected,m.role,gr.user_id IS NOT NULL AS granted '+
+    'SELECT c.password_hash IS NOT NULL AS protected,c.access_mode,m.role,gr.user_id IS NOT NULL AS granted, '+
+    'permitted.user_id IS NOT NULL AS permitted '+
     'FROM community_channels c LEFT JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
     'LEFT JOIN community_channel_password_access gr ON gr.channel_id=c.id AND gr.user_id=$3 '+
+    'LEFT JOIN community_channel_member_access permitted ON permitted.channel_id=c.id AND permitted.user_id=$3 '+
     'WHERE c.id=$1 AND c.community_id=$2',[channelId,communityId,userId]);
   if(!result.rowCount)return 'not_found';
-  const row=result.rows[0] as {protected:boolean;role:string|null;granted:boolean};
+  const row=result.rows[0] as {protected:boolean;access_mode:'open'|'restricted';role:string|null;granted:boolean;permitted:boolean};
   if(!row.role)return 'members_only';
+  if(row.access_mode==='restricted'&&!['owner','admin'].includes(row.role)&&!row.permitted)return 'permission_required';
   if(row.protected&&!['owner','admin'].includes(row.role)&&!row.granted)return 'password_required';
   return 'allowed';
 }
 export const channelGateError=(gate:ChannelGate)=>gate==='password_required'?'CHANNEL_PASSWORD_REQUIRED':
+  gate==='permission_required'?'CHANNEL_PERMISSION_REQUIRED':
   gate==='not_found'?'CHANNEL_NOT_FOUND':'MEMBERS_ONLY';
 export const channelGateStatus=(gate:ChannelGate)=>gate==='not_found'?404:403;
