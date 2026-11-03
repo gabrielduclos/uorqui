@@ -239,6 +239,13 @@
       "when": 1793691000000,
       "tag": "0033_restricted_channel_members",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793710000000,
+      "tag": "0034_channel_names_per_kind",
+      "breakpoints": true
     }
   ]
 }
