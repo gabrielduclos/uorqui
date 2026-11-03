@@ -2,7 +2,7 @@
 
 [English](roadmap.md) · [Português](../pt-BR/roadmap.md)
 
-**Status:** roadmap for the **technical beta `0.1.0-beta.1`** and the direction approved **November 2, 2026**. Checked items refer to implemented code or CI, not confirmed deployment or real-device acceptance. The current feed is legacy; **Discover** is pending implementation. See the [decision](discover.md).
+**Status:** roadmap for the **technical beta `0.1.0-beta.1`** and the direction approved **November 2, 2026**. Checked items refer to implemented code or CI, not confirmed deployment or real-device acceptance. The global feed was retired on November 2, 2026; **Discover is implemented**, with real-device validation pending. See the [decision](discover.md) and [maintenance audit](maintenance-audit.md).
 
 ## Phase 0 — Discovery and foundation
 
@@ -56,20 +56,22 @@
 ## v0.3 — Beta history: hybrid feed (legacy)
 
 - [x] Implement the mixed post feed with text, images, carousels and video — **previously built, outside the new vision**.
-- [x] Implement immersive video browsing — **previously built, planned for retirement**.
+- [x] Implement immersive video browsing — **historically delivered and now retired**.
 
 These record delivered features and **are not** the next product priority.
 
-## Next milestone — Discover (before pilot)
+## Delivered milestone — Discover (before pilot)
 
 - [x] Replace the feed home screen with **Discover**, public community search and recommendations (committed to `main`, deployment unverified).
 - [x] Surface recent channel activity and live voice rooms **from joined communities**, using factual counts and server authorization.
 - [x] Open the correct channel/room without auto-joining voice, prematurely marking read, or leaking private content.
 - [x] Implement empty states for accounts with no memberships, without fictional posts or activity (manual acceptance pending).
 - [x] Update navigation, onboarding, public profile and search UI in PT-BR/EN using Light/Dark tokens (accessibility/device acceptance pending).
-- [ ] Audit notifications, internal links and legacy post deep links for backwards-compatible handling.
-- [ ] Retire global feed access, post creation and immersive video mode after auditing dependencies, **without automatically deleting data, tables or media**.
-- [ ] Document retention/export, versioned schema migrations, rollback and desktop/Android/iOS PWA testing.
+- [x] Handle retired post deep links in received DMs without broken navigation; remove unused global-feed sharing UI (November 3).
+- [ ] Finish the wider notification and deep-link acceptance review in installed PWAs.
+- [x] Retire global feed navigation, post creation, immersive video mode and the obsolete API/schema (November 2; recoverable Neon snapshots and retained R2 files documented).
+- [x] Document preserved migration history, backups and initial cleanup scope in the maintenance audit.
+- [ ] Finish retention/export policy and desktop/Android/iOS PWA acceptance testing.
 - [ ] Validate **recommended community → join → text/voice channel → one-to-one messaging** with real pilot users.
 
 **Exit condition:** Discover works for users with zero memberships and promotes authorized real participation.
@@ -93,4 +95,4 @@ These record delivered features and **are not** the next product priority.
 
 ## Open decisions
 
-Feature priorities, dependency licenses, operating budgets/quotas, legacy feed retention/migration, moderation procedures, TURN quality and domain cutover acceptance. The initial realtime/SSE, WebRTC and media/R2 implementations are no longer hypothetical.
+Feature priorities, dependency licenses, operating budgets/quotas, legacy feed backup retention, moderation procedures, TURN quality and installed-PWA/domain acceptance. The initial realtime/SSE, WebRTC and media/R2 implementations are no longer hypothetical.
