@@ -19,6 +19,7 @@ import { LinkPreview } from './LinkPreview';
 import type {UnreadLocation} from './useCommunityUnread';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 import { ContentReportDialog } from './ContentReportDialog';
+import { navigateToPublicProfile } from './publicProfileNavigation';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -49,11 +50,12 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,unreadChannels,unreadCommunities,unreadLocations,active}:{
-  myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
+export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,onExploreDiscover,initialCommunityId,unreadChannels,unreadCommunities,unreadLocations,active}:{
+  myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;onExploreDiscover?:()=>void;initialCommunityId?:string|null;
   unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
+  const lastCommunityKey='uorqui:last-community:'+myId;
   const [list,setList]=useState<Community[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(initialCommunityId??null);
   const [detail,setDetail]=useState<Detail|null>(null);
@@ -228,13 +230,21 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         setSelectedId(initialCommunityId);
         setDiscovery(false);
       }else{
-        const first=groups.find(group=>group.myRole);
-        setSelectedId(first?.id??null);
-        setDiscovery(!first);
+        // Restore only a community this account still belongs to.
+        let remembered:string|null=null;
+        try{remembered=localStorage.getItem(lastCommunityKey);}catch{}
+        const chosen=groups.find(group=>group.id===remembered&&group.myRole)??groups.find(group=>group.myRole);
+        setSelectedId(chosen?.id??null);
+        setDiscovery(false);
       }
     }).catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar as comunidades.':'Could not load communities.');}});
     return ()=>{active=false;};
-  },[loadList,pt,initialCommunityId]);
+  },[loadList,pt,initialCommunityId,lastCommunityKey]);
+  useEffect(()=>{
+    // Persist validated memberships only; public previews and expired access are never remembered.
+    if(!selectedId||detail?.community.id!==selectedId||!detail.community.myRole)return;
+    try{localStorage.setItem(lastCommunityKey,selectedId);}catch{}
+  },[selectedId,detail,lastCommunityKey]);
   useEffect(()=>{
     if(!selectedId){setDetail(null);setChannelId(null);return;}
     let active=true;setDetail(null);setDetailLoading(true);
@@ -740,6 +750,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               </button>)}
             </div>
           </section>}
+          {!loading&&!owned.length&&!createOpen&&<section className="mb-4 space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <h3 className="text-sm font-semibold">{pt?'Comece por uma comunidade':'Start with a community'}</h3>
+            <p className="text-xs leading-5 text-muted-foreground">{pt?'Encontre uma comunidade para participar ou crie a sua.':'Find a community to join or create your own.'}</p>
+            <Button type="button" size="sm" className="w-full" onClick={onExploreDiscover}>
+              <Compass className="size-4"/>{pt?'Explorar comunidades':'Explore communities'}
+            </Button>
+          </section>}
           {createOpen?<form onSubmit={event=>void create(event)} className="space-y-3">
             <label className="block text-xs font-medium">{pt?'Nome':'Name'}
               <Input value={createName} onChange={e=>{setCreateName(e.target.value);if(!slugTouched)setCreateSlug(e.target.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9-]+/g,'-').replace(/^-+/,'').slice(0,64));}}
@@ -845,7 +862,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                       title={person.displayName}>
                       <span className={cn('size-2 shrink-0 rounded-full',person.speaking?'animate-pulse bg-emerald-500':'bg-emerald-500/50')}
                         aria-label={person.speaking?(pt?'Falando':'Speaking'):(pt?'Conectado':'Connected')}/>
-                      <span className="min-w-0 flex-1 truncate">{person.displayName}{person.isSelf&&(pt?' (você)':' (you)')}</span>
+                      <a href={'/@'+person.handle} onClick={event=>navigateToPublicProfile(event,person.handle)}
+                        className="min-w-0 flex-1 truncate rounded-sm font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                        {person.displayName}{person.isSelf&&(pt?' (você)':' (you)')}</a>
                       <span title={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}
                         aria-label={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
                         {person.muted?<MicOff className="size-3.5 shrink-0 text-destructive"/>:
@@ -891,7 +910,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {!!detail?.pendingRequests.length&&<div className="space-y-2 border-t border-border pt-3">
                 <p className="text-xs font-semibold">{pt?'Pedidos de entrada':'Join requests'}</p>
                 {detail.pendingRequests.map(person=><div key={person.handle} className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-xs">{person.displayName} (@{person.handle})</span>
+                  <a href={'/@'+person.handle} onClick={event=>navigateToPublicProfile(event,person.handle)}
+                    className="min-w-0 flex-1 truncate rounded-sm text-xs hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                    {person.displayName} (@{person.handle})</a>
                   <Button size="sm" variant="outline" loading={busyAction==='approve:'+person.handle} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/requests/'+person.handle+'/approve',{method:'POST'}),pt?'Membro aprovado.':'Member approved.',community.id,'approve:'+person.handle)}>
                     <Check className="size-4"/></Button>
                 </div>)}
@@ -1087,7 +1108,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <div className="space-y-4">{renderedMessages.map(message=><div key={message.clientId} className="flex min-w-0 gap-3">
               <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-baseline gap-2"><strong className="text-sm">{message.authorName}</strong>
+                <div className="flex flex-wrap items-baseline gap-2">{message.authorHandle?
+                  <a href={'/@'+message.authorHandle} onClick={event=>navigateToPublicProfile(event,message.authorHandle)}
+                    className="rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                    {message.authorName}</a>:
+                  <strong className="text-sm">{message.authorName}</strong>}
                   <span className="text-[11px] text-muted-foreground">@{message.authorHandle}</span>
                   <time className="text-[11px] text-muted-foreground">{new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}).format(new Date(message.createdAt))}</time></div>
                 {message.deletedAt?<p className="mt-1 text-sm italic text-muted-foreground">{pt?'Mensagem cancelada':'Message removed'}</p>:
@@ -1157,9 +1182,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       </>:<div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-xs"><Users className="mx-auto size-11 text-primary"/>
           <h3 className="mt-4 font-semibold">{pt?'Suas comunidades':'Your communities'}</h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{pt?
-            'Escolha uma comunidade e um canal para começar. Você também pode explorar ou criar uma nova comunidade.':
-            'Choose a community and a channel. You can also discover or create a new community.'}</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{!owned.length
+            ?(pt?'Encontre uma comunidade para conversar, participar de canais e entrar em chamadas.':'Find a community to chat, join channels and take part in calls.')
+            :(pt?'Selecione uma comunidade e um canal para começar.':'Choose a community and channel to get started.')}</p>
+          {!owned.length&&<Button className="mt-4 gap-2" onClick={onExploreDiscover}>
+            <Compass className="size-4"/>{pt?'Explorar comunidades':'Explore communities'}
+          </Button>}
           <Button className="mt-4 md:hidden" variant="outline" onClick={closeChannel}>{pt?'Voltar':'Back'}</Button>
         </div>
       </div>}
