@@ -123,12 +123,15 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     if(!channelInviteOpen)return;
     const controller=new AbortController();
     setChannelInviteLoading(true);setChannelInviteError('');setChannelInviteSuccess('');
-    void api<{friends:{handle:string;displayName:string;avatarUrl:string|null}[]}>('/api/v1/friends',{signal:controller.signal})
-      .then(data=>{if(!controller.signal.aborted)setChannelInviteContacts(data.friends??[]);})
-      .catch(()=>{if(!controller.signal.aborted)setChannelInviteError(pt?'Não foi possível carregar seus contatos.':'Could not load your contacts.');})
+    setChannelInviteContacts([]);
+    if(!selectedId){setChannelInviteLoading(false);return()=>controller.abort();}
+    void api<{members:{handle:string;displayName:string;avatarUrl:string|null}[]}>(
+      '/api/v1/communities/'+selectedId+'/invitable-members',{signal:controller.signal})
+      .then(data=>{if(!controller.signal.aborted)setChannelInviteContacts(data.members??[]);})
+      .catch(()=>{if(!controller.signal.aborted)setChannelInviteError(pt?'Não foi possível carregar os membros da comunidade.':'Could not load community members.');})
       .finally(()=>{if(!controller.signal.aborted)setChannelInviteLoading(false);});
     return()=>controller.abort();
-  },[channelInviteOpen,pt]);
+  },[channelInviteOpen,selectedId,pt]);
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
@@ -377,23 +380,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     }
   }
   async function inviteContactToChannel(handle:string){
-    if(channelInviteSending||!selectedId||!channelId||!activeChannel||!community?.myRole)return;
+    if(channelInviteSending||!selectedId||!channelId||!activeChannel||!community?.myRole||
+       !channelInviteContacts.some(member=>member.handle===handle))return;
     setChannelInviteSending(handle);setChannelInviteError('');setChannelInviteSuccess('');
     try{
-      // A community invite token also works for contacts who are not yet members.
-      // Existing members open the channel directly. Password and closed-channel
-      // grants remain enforced by the API for every recipient.
-      let link=new URL('/',window.location.origin);
-      link.searchParams.set('community',selectedId);link.searchParams.set('channel',channelId);
-      try{
-        const shared=await api<{link:{id:string}|null}>('/api/v1/communities/'+selectedId+'/share');
-        let token=shared.link?.id;
-        if(!token&&manage(community)){
-          const created=await api<{link:{id:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
-          token=created.link.id;
-        }
-        if(token)link=new URL('/invite/'+encodeURIComponent(token)+'?channel='+encodeURIComponent(channelId),window.location.origin);
-      }catch{/* Existing members can still use the direct channel link. */}
+      // This picker includes only current community members, so use the
+      // direct channel link rather than generating a community-wide invite.
+      // Password and restricted-channel grants are still enforced on arrival.
+      const link=new URL('/',window.location.origin);
+      link.searchParams.set('community',selectedId);
+      link.searchParams.set('channel',channelId);
       const target=await api<{id:string}>('/api/v1/dm/conversations',body({handle}));
       await api('/api/v1/dm/conversations/'+target.id+'/messages',body({
         clientId:crypto.randomUUID(),
@@ -1025,7 +1021,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             {(activeChannel.hasPassword||activeChannel.accessMode==='restricted')&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?(activeChannel.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(activeChannel.accessMode==='restricted'?'Closed channel':'Password-protected channel')}/>} 
           </h2><p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
           <Button type="button" size="sm" variant="ghost" className="shrink-0 gap-2 px-2 sm:px-3"
-            aria-label={pt?'Convidar contato para o canal':'Invite contact to channel'}
+            aria-label={pt?'Convidar membro da comunidade para o canal':'Invite community member to channel'}
             onClick={()=>{setChannelSettingsOpen(false);setChannelInviteFilter('');setChannelInviteOpen(true);}}>
             <UserPlus className="size-4"/><span className="hidden sm:inline">{pt?'Convidar':'Invite'}</span>
           </Button>
@@ -1280,7 +1276,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           className="fixed left-1/2 top-1/2 z-[315] flex max-h-[min(85dvh,650px)] w-[min(92vw,470px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl outline-none">
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border p-4">
             <div className="min-w-0">
-              <Dialog.Title className="text-base font-semibold">{pt?'Convidar para o canal':'Invite to channel'}</Dialog.Title>
+              <Dialog.Title className="text-base font-semibold">{pt?'Convidar membro para o canal':'Invite member to channel'}</Dialog.Title>
               <p className="mt-1 truncate text-xs text-muted-foreground">
                 {activeChannel?.name} · {community?.name}
               </p>
@@ -1290,8 +1286,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </div>
           <div className="min-h-0 space-y-3 overflow-y-auto overscroll-contain p-4">
             <p className="text-sm text-muted-foreground">{pt?
-              'Escolha um contato para enviar uma mensagem privada com o link direto do canal.':
-              'Choose a contact to send a direct message containing the channel link.'}</p>
+              'Selecione alguém que já participa da comunidade para enviar o link direto do canal pelo chat.':
+              'Select someone who is already in this community to send the direct channel link by chat.'}</p>
             {activeChannel?.accessMode==='restricted'&&<p className="text-xs text-muted-foreground">
               {pt?'Canais fechados exigem autorização do administrador.':'Restricted channels require admin authorization.'}
             </p>}
@@ -1300,13 +1296,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </p>}
             <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground"/>
               <Input value={channelInviteFilter} onChange={event=>setChannelInviteFilter(event.target.value)}
-                className="h-10 pl-9 text-base" placeholder={pt?'Pesquisar contato':'Search contact'}/>
+                className="h-10 pl-9 text-base" placeholder={pt?'Pesquisar membro':'Search member'}/>
             </div>
             {channelInviteError&&<p role="alert" className="text-xs text-destructive">{channelInviteError}</p>}
             {channelInviteSuccess&&<p role="status" className="text-xs text-primary">{channelInviteSuccess}</p>}
             {channelInviteLoading?<SkeletonRows rows={3}/>:channelInviteContacts.length===0?
               <p className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
-                {pt?'Nenhum contato disponível. Adicione amigos para convidá-los.':'No contacts yet. Add friends to invite them.'}
+                {pt?'Não há outros membros desta comunidade para convidar.':'No other members of this community are available to invite.'}
               </p>:<div className="space-y-1">
               {channelInviteContacts.filter(person=>(person.displayName+' '+person.handle).toLocaleLowerCase(locale)
                 .includes(channelInviteFilter.trim().toLocaleLowerCase(locale))).map(person=>
