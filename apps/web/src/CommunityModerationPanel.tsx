@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Ban, Camera, Check, ChevronDown, ChevronUp, Pencil, Shield, Trash2, UserMinus, X, LockKeyhole, LockKeyholeOpen } from 'lucide-react';
+import { Ban, Camera, Check, ChevronDown, ChevronUp, Shield, Trash2, UserMinus, X, LockKeyhole } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SkeletonRows } from '@/components/ui/skeleton';
@@ -33,10 +33,6 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   const [notice,setNotice]=useState('');
   const [handle,setHandle]=useState('');
   const [reason,setReason]=useState('');
-  const [rename,setRename]=useState<string|null>(null);
-  const [newName,setNewName]=useState('');
-  const [passwordFor,setPasswordFor]=useState<string|null>(null);
-  const [newPassword,setNewPassword]=useState('');
   const [groupName,setGroupName]=useState(name);
   const [groupDescription,setGroupDescription]=useState(description??'');
   const [groupVisibility,setGroupVisibility]=useState<Visibility>(visibility);
@@ -56,7 +52,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   async function action(key:string,call:()=>Promise<unknown>,success:string){
     if(busy)return;
     setBusyKey(key);setError('');setNotice('');
-    try{await call();await load();await onChanged();setNotice(success);setConfirm(null);setRename(null);setHandle('');setReason('');}
+    try{await call();await load();await onChanged();setNotice(success);setConfirm(null);setHandle('');setReason('');}
     catch(e){
       const code=e instanceof Error?e.message:'';
       setError(code==='LAST_TEXT_CHANNEL'?(pt?'É necessário manter pelo menos um canal de texto.':'At least one text channel must remain.'):
@@ -199,48 +195,11 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
           {channels.map(ch=><div key={ch.id} className="space-y-2 rounded-lg border border-border/70 p-2">
             <p className="flex items-center gap-1.5 truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}</p>
-            {rename===ch.id?<form className="flex gap-1" onSubmit={event=>{
-              event.preventDefault();
-              void action('channel:name:'+ch.id,()=>api(base+'/channels/'+ch.id,{
-                method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:newName.trim()})
-              }),pt?'Canal renomeado.':'Channel renamed.');
-            }}>
-              <Input value={newName} onChange={e=>setNewName(e.target.value)} maxLength={64} className="h-9 min-w-0 text-base"/>
-              <Button size="icon" type="submit" disabled={busy||newName.trim().length<2} loading={busyKey==='channel:name:'+ch.id}><Check className="size-4"/></Button>
-              <Button size="icon" variant="ghost" type="button" onClick={()=>setRename(null)}><X className="size-4"/></Button>
-            </form>:<div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-9" onClick={()=>{setRename(ch.id);setNewName(ch.name);}}>
-                <Pencil className="size-3.5"/>{pt?'Renomear':'Rename'}</Button>
-              <Button size="sm" variant="outline" className="h-9" disabled={busy} loading={busyKey==='channel:delete:'+ch.id} onClick={()=>request('channel:delete:'+ch.id,
+            <Button size="sm" variant="outline" className="h-9" disabled={busy} loading={busyKey==='channel:delete:'+ch.id}
+              onClick={()=>request('channel:delete:'+ch.id,
                 ()=>api(base+'/channels/'+ch.id,{method:'DELETE'}),pt?'Canal excluído.':'Channel deleted.',
                 pt?'excluir canal '+ch.name:'delete channel '+ch.name)}>
-                <Trash2 className="size-3.5"/>{pt?'Excluir':'Delete'}</Button>
-            </div>}
-            <div className="space-y-2 border-t border-border/70 pt-2">
-              <Button size="sm" type="button" variant="outline" className="h-9" onClick={()=>{setPasswordFor(passwordFor===ch.id?null:ch.id);setNewPassword('');}}>
-                <LockKeyhole className="size-3.5"/>{ch.hasPassword?(pt?'Alterar senha':'Change password'):(pt?'Proteger com senha':'Set password')}
-              </Button>
-              {passwordFor===ch.id&&<form className="flex flex-wrap items-center gap-2" onSubmit={event=>{
-                event.preventDefault();if(newPassword.length<8)return;
-                void action('channel:password:'+ch.id,()=>api(base+'/channels/'+ch.id+'/password',{
-                  method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:newPassword})
-                }),pt?'Senha do canal atualizada.':'Channel password updated.').then(()=>{setNewPassword('');setPasswordFor(null);});
-              }}>
-                <Input type="password" autoComplete="new-password" required minLength={8} maxLength={72} value={newPassword}
-                  onChange={e=>setNewPassword(e.target.value)} className="h-9 min-w-28 flex-1 text-base"
-                  placeholder={pt?'Senha (mínimo de 8 caracteres)':'Password (8+ characters)'}/>
-                <Button size="sm" type="submit" disabled={busy||newPassword.length<8} loading={busyKey==='channel:password:'+ch.id}>
-                  <Check className="size-3.5"/>{pt?'Salvar':'Save'}
-                </Button>
-              </form>}
-              {ch.hasPassword&&<Button size="sm" type="button" variant="ghost" className="h-9" disabled={busy}
-                loading={busyKey==='channel:password:remove:'+ch.id}
-                onClick={()=>request('channel:password:remove:'+ch.id,()=>api(base+'/channels/'+ch.id+'/password',{
-                  method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:null})
-                }),pt?'Senha removida.':'Password removed.',pt?'remover a senha do canal':'remove channel password')}>
-                <LockKeyholeOpen className="size-3.5"/>{pt?'Remover senha':'Remove password'}
-              </Button>}
-            </div>
+              <Trash2 className="size-3.5"/>{pt?'Excluir':'Delete'}</Button>
           </div>)}
         </div>}
         {role==='owner'&&<div className="space-y-3 border-t border-destructive/30 pt-4">
