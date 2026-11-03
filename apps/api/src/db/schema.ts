@@ -159,7 +159,7 @@ export const communityChannels = pgTable('community_channels', {
   accessMode: varchar('access_mode', { length: 12 }).notNull().default('open'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
-  uniqueIndex('community_channels_unique_name').on(table.communityId, table.name),
+  uniqueIndex('community_channels_unique_kind_name').on(table.communityId, table.kind, table.name),
   index('community_channels_community_idx').on(table.communityId),
   check('community_channels_kind', sql`${table.kind} IN ('text', 'voice', 'meeting')`),
   check('community_meeting_policy',sql`${table.meetingJoinPolicy} IN ('open','approval')`),
