@@ -137,7 +137,9 @@ function channelInvitationTitle(body:string){
     const valid=UUID.test(String(channel))&&
       (link.pathname==='/'&&UUID.test(String(link.searchParams.get('community')))||
        /^\/invite\/[0-9a-f-]{36}$/i.test(link.pathname));
-    return valid?match[1].slice(0,100):null;
+    return valid?{label:match[1].slice(0,100),
+      communityId:link.pathname==='/'?link.searchParams.get('community'):null,
+      channelId:channel}:null;
   }catch{return null;}
 }
 export async function pushDirectMessage(messageId:string){
@@ -163,7 +165,8 @@ export async function pushDirectMessage(messageId:string){
     try{
       const status=await sendPush(sub,{kind:'dm',recipientId:m.recipient,conversationId:m.conversation_id,
         messageId:m.id,title:String(m.sender).slice(0,80),
-        body:channelInvitation?'Convite para o canal '+channelInvitation:
+        ...(channelInvitation?.communityId?{communityId:channelInvitation.communityId,channelId:channelInvitation.channelId}:{}),
+        body:channelInvitation?'Convite para o canal '+channelInvitation.label:
           m.attachment_type?'Novo anexo recebido':'Nova mensagem privada',proof});
       if(status===404||status===410)await getPool().query('DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',[sub.endpoint,m.recipient]);
     }catch{/* Best effort: existing live inbox delivery remains authoritative. */}
