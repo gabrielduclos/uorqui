@@ -211,14 +211,11 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           <MapPin className="size-6 shrink-0"/>
           <span className="text-xs font-semibold">{pt?'Localização compartilhada · Ver no mapa':'Shared location · View map'}</span>
         </a>}
-        {sharedPostId&&!message.deletedAt&&<a href={'/?post='+sharedPostId}
-          onClick={event=>{
-            event.preventDefault();
-            window.dispatchEvent(new CustomEvent('uorqui:open-feed-post',{detail:sharedPostId}));
-          }} className="mb-1 flex min-h-12 items-center gap-2 rounded-[5px] border border-current/20 bg-current/5 px-3 text-sm font-medium hover:underline"
-          aria-label={pt?'Ver publicação compartilhada no feed':'View shared post in feed'}>
-          <Newspaper className="size-4 shrink-0"/>{pt?'Ver publicação no feed':'View post in feed'}
-        </a>}
+        {sharedPostId&&!message.deletedAt&&<div role="note"
+          className="mb-1 flex min-h-12 items-center gap-2 rounded-[5px] border border-current/20 bg-current/5 px-3 text-sm">
+          <Newspaper className="size-4 shrink-0"/>
+          <span>{pt?'Publicação antiga indisponível — o feed global foi encerrado.':'Older post unavailable — the global feed was retired.'}</span>
+        </div>}
         <p className="whitespace-pre-wrap break-words">
           {message.deletedAt
             ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
