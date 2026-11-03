@@ -1068,8 +1068,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         </form>:<div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
           activeChannel.kind!=='text'&&voiceTextExpanded&&'lg:flex-row')}>
         {activeChannel.kind!=='text'&&(
-          <div ref={voiceHostRef} className={cn('relative flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-border',
-            voiceTextExpanded?'h-[43%] shrink-0 sm:h-[46%] lg:h-full lg:w-[52%] lg:border-b-0 lg:border-r':'flex-1')}>
+          <div ref={voiceHostRef} className={cn('relative flex min-h-0 min-w-0 flex-col overflow-hidden',
+            voiceTextExpanded?'h-[43%] shrink-0 sm:h-[46%] lg:h-full lg:w-[52%]':'flex-1')}>
             {!voiceInline&&<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-sm text-muted-foreground">
               {activeChannel.kind==='meeting'?<Video className="size-9 text-primary"/>:<Headphones className="size-9 text-primary"/>}
               <p>{activeChannel.kind==='meeting'?(pt?'Entre na reunião com áudio e vídeo.':'Join the meeting with audio and video.'):(pt?'Entre e converse sem sair da comunidade.':'Join the conversation right inside your community.')}</p>
@@ -1079,6 +1079,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </div>}
           </div>
         )}
+        {activeChannel.kind!=='text'&&voiceTextExpanded&&<div aria-hidden="true"
+          className="h-[2px] w-full shrink-0 bg-foreground/35 lg:h-full lg:w-[2px]"/>}
         <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden',
           activeChannel.kind!=='text'&&!voiceTextExpanded?'shrink-0':'flex-1')}>
         {activeChannel.kind!=='text'&&<button type="button" onClick={()=>{setVoiceTextExpanded(v=>!v);setMediaPicker(null);}}
