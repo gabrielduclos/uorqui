@@ -19,12 +19,13 @@
 - **Ferramentas e primitivas de desenvolvimento:** `apps/api/src/auth/auth.cli.ts` é ponto de entrada da configuração da CLI de autenticação, mesmo não sendo chamado pela API HTTP.
 - **Backups e mídia legada:** nenhuma exclusão de dados Neon ou arquivos R2 foi realizada. Preservar as cópias de recuperação existentes até uma decisão explícita de retenção.
 
-## Pendências identificadas
+## Resolução das pendências — 03/11/2026
 
-1. **Traduções e textos históricos:** `UorquiPreferences.tsx` mantém chaves de telas demonstrativas e feed anterior; uma futura limpeza deve confrontar **cada chave** com todas as chamadas `t(...)` antes de apagá-la.
-2. **Textos legais:** `LegalPages.tsx` ainda contém referências ao feed. Alterar termos e políticas publicados exige revisão do conteúdo e do versionamento de aceite; não foram alterados automaticamente nesta auditoria.
-3. **Documentação histórica:** a descrição do feed nas notas do lançamento original e nas migrações é registro histórico legítimo. As páginas atuais de apresentação, roadmap e UI Kit devem indicar claramente o feed como **aposentado**, nunca ativo.
-4. **Validação em dispositivos:** reunir pelo menos dois usuários em navegadores/redes diferentes e testar câmera, microfone, alternância de quem fala, compartilhamento de tela, tela cheia e o PWA iOS/Android. Suporte a `getDisplayMedia` é específico do navegador.
+1. **Traduções concluídas:** revisão das referências nos módulos TypeScript/React em `apps/web/src`. Foram removidas **38 entradas** de tradução do antigo feed e de telas demonstrativas sem uso identificado, mantendo entradas ainda referenciadas. A chamada de cadastro ao feed foi substituída por convite a descobrir comunidades e conversar; português/inglês atualizados.
+2. **Textos legais atualizados:** os Termos de Uso e a Política de Privacidade em PT-BR/EN passaram a descrever o produto atual (Descobrir, mensageiro, comunidade, canais e reunião). A versão desses dois documentos e a validação de aceite **para novos cadastros** passaram a `2026-11-03`; a política de cookies, que não mudou, permanece na versão `2026-11-01`. O endpoint de status fornece a versão exigida e os testes de integração verificam versões válidas e rejeitam versões antigas no cadastro.
+3. **Aceites antigos preservados:** registros `account_legal_acceptances` de contas existentes não foram apagados, alterados nem falsamente migrados para a versão nova. **Não foi criada uma exigência retroativa de reaceite** para usuários já cadastrados. Uma revisão jurídica e uma eventual comunicação/reaceite para alterações materiais ainda devem ser avaliadas antes do beta aberto.
+4. **Documentação atualizada:** README, changelog, produto, arquitetura, roadmap, UI Kit e reuniões em dois idiomas distinguem o feed aposentado de recursos atuais. Histórico técnico legítimo (incluindo migrations) permanece preservado.
+5. **Validação em dispositivos ainda pendente:** testar reuniões com dois ou mais participantes, navegadores/redes diferentes, microfone, câmera, destaque, compartilhamento, tela cheia e PWA Android/iOS. O suporte a `getDisplayMedia` varia por navegador.
 
 ## Critérios de validação
 
