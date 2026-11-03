@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, MessageCircle, Search, Share2, X } from 'lucide-react';
+import { Check, MessageCircle, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -9,10 +9,10 @@ import { useUorquiPreferences } from './UorquiPreferences';
 
 type Peer={handle:string;displayName:string;avatarUrl:string|null};
 type Thread={id:string;peerHandle:string;peerName:string;peerAvatarUrl:string|null;canMessage:boolean};
-export type InternalShareSource=
-  |{kind:'post';postId:string;video:boolean}
-  |{kind:'message';messageId:string;conversationId:string;body:string;
-      attachment?:{id:string;name:string;type:string;size:number}|null};
+export type InternalShareSource={
+  kind:'message';messageId:string;conversationId:string;body:string;
+  attachment?:{id:string;name:string;type:string;size:number}|null;
+};
 type Recipient=Peer & {conversationId?:string;canMessage:boolean};
 
 function handleError(pt:boolean,status:number){
@@ -26,15 +26,11 @@ async function request(path:string,options?:RequestInit){
   return response;
 }
 const json=(data:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-const postUrl=(postId:string)=>window.location.origin+'/?post='+postId;
 
 /** Uses a per-destination authorized upload for private media; R2 files are never
  * shared by copying a source-conversation URL into another conversation. */
 async function sendToRecipient(source:InternalShareSource,targetId:string,clientId:string){
-  if(source.kind==='post'){
-    await request('/api/v1/dm/conversations/'+targetId+'/messages',
-      json({body:postUrl(source.postId),clientId}));
-  }else if(source.attachment){
+  if(source.attachment){
     const media='/media/dm/'+source.conversationId+'/'+source.attachment.id;
     const original=await request(media);
     const blob=await original.blob();
@@ -65,7 +61,6 @@ export function InternalShareDialog({source,onClose,onSent}:{source:InternalShar
   const [busy,setBusy]=useState('');
   const [error,setError]=useState('');
   const [completed,setCompleted]=useState<string[]>([]);
-  const [outboundBusy,setOutboundBusy]=useState(false);
   const [clientIds]=useState(()=>new Map<string,string>());
   useEffect(()=>{
     if(!source)return;
@@ -78,7 +73,7 @@ export function InternalShareDialog({source,onClose,onSent}:{source:InternalShar
       .catch(()=>{if(mounted)setError(pt?'Não foi possível carregar os contatos.':'Could not load contacts.');})
       .finally(()=>{if(mounted)setLoading(false);});
     return ()=>{mounted=false;};
-  },[source?.kind,source?.kind==='post'?source.postId:source?.messageId,pt]);
+  },[source?.messageId,pt]);
   useEffect(()=>{
     if(!source)return;
     const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!busy){event.preventDefault();onClose();}};
@@ -117,41 +112,16 @@ export function InternalShareDialog({source,onClose,onSent}:{source:InternalShar
       setError(handleError(pt,status));
     }finally{setBusy('');}
   }
-  async function external(){
-    if(source?.kind!=='post')return;
-    setOutboundBusy(true);setError('');
-    const url=postUrl(source.postId);
-    try{
-      if(navigator.share)await navigator.share({url});
-      else{await navigator.clipboard.writeText(url);}
-    }catch(e){
-      if((e as {name?:string}).name!=='AbortError')
-        setError(pt?'Não foi possível compartilhar o link.':'Could not share link.');
-    }finally{setOutboundBusy(false);}
-  }
-  async function copy(){
-    if(source?.kind!=='post')return;
-    setOutboundBusy(true);setError('');
-    try{await navigator.clipboard.writeText(postUrl(source.postId));}
-    catch{setError(pt?'Não foi possível copiar o link.':'Could not copy link.');}
-    finally{setOutboundBusy(false);}
-  }
   return createPortal(<div className="fixed inset-0 z-[170] flex items-end justify-center bg-black/60 p-0 backdrop-blur-[3px] sm:items-center sm:p-4"
     onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)onClose();}}>
     <section role="dialog" aria-modal="true" aria-label={pt?'Compartilhar no Uorqui':'Share on Uorqui'}
       className="flex max-h-[min(85dvh,680px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-card text-foreground shadow-2xl sm:rounded-2xl">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="min-w-0"><h2 className="font-semibold">{pt?'Compartilhar':'Share'}</h2>
-          <p className="text-xs text-muted-foreground">{source.kind==='post'
-            ?(source.video?(pt?'Vídeo do feed':'Feed video'):(pt?'Publicação do feed':'Feed post'))
-            :(pt?'Mensagem ou mídia do chat':'Chat message or media')}</p></div>
+          <p className="text-xs text-muted-foreground">{pt?'Mensagem ou mídia do chat':'Chat message or media'}</p></div>
         <button type="button" disabled={!!busy} aria-label={pt?'Fechar':'Close'} onClick={onClose}
           className="grid size-10 shrink-0 place-items-center rounded-lg hover:bg-muted"><X className="size-5"/></button>
       </header>
-      {source.kind==='post'&&<div className="grid grid-cols-2 gap-2 border-b border-border p-3">
-        <Button variant="outline" disabled={outboundBusy} onClick={()=>void external()}><Share2 className="size-4"/>{pt?'Outros apps':'Other apps'}</Button>
-        <Button variant="outline" disabled={outboundBusy} onClick={()=>void copy()}><Copy className="size-4"/>{pt?'Copiar link':'Copy link'}</Button>
-      </div>}
       <div className="px-4 pt-3"><label className="mb-2 block text-xs font-medium text-muted-foreground">{pt?'Compartilhar com contatos e conversas':'Share with contacts and chats'}</label>
         <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
           <Input value={search} onChange={e=>setSearch(e.target.value)} autoComplete="off" placeholder={pt?'Buscar contato ou conversa':'Search contacts or chats'}
