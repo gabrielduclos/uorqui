@@ -850,7 +850,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         {query.length >= 2 && <>
           <p className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{pt ? 'Pessoas' : 'People'} {searching ? '…' : ''}</p>
           {people.map(person => <button type="button" key={person.handle} disabled={busy} onClick={() => void startPerson(person.handle)}
-            className="flex min-h-16 w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-accent disabled:opacity-50">
+            className="flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-accent max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none">
             <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
             <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.displayName}</span>
               <span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
@@ -858,7 +858,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           </button>)}
         </>}
         {visibleThreads.map(thread => <button type="button" key={thread.id} onClick={() => openThread(thread.id)}
-          className={cn('flex min-h-[76px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-secondary/70',
+          className={cn('flex min-h-[76px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
             activeId === thread.id && mobileOpened && 'bg-secondary')}
           aria-current={activeId === thread.id && mobileOpened ? 'true' : undefined}>
           <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
