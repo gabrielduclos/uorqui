@@ -264,7 +264,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
           body: JSON.stringify(signup
             ? { name: name.trim(), email: email.trim(), password, callbackURL: verificationCallback(),
                 termsAccepted,privacyNoticeAcknowledged:privacyRead,
-                termsVersion:status.termsVersion??'2026-11-01',privacyVersion:status.privacyVersion??'2026-11-01',
+                termsVersion:status.termsVersion??'2026-11-03',privacyVersion:status.privacyVersion??'2026-11-03',
                 ...(token ? { captchaToken: token } : {}) }
             : { email: email.trim(), password }),
         },
@@ -392,7 +392,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
           {t("Identidade Uorqui")}
         </div>
         <h2 className="mt-3 text-[1.65rem] font-semibold tracking-tight sm:text-3xl">{account ? t('Sua conta') : view === 'welcome' ? t("Bem-vindo ao Uorqui") : view === 'register' ? t("Criar sua conta") : view === 'forgot' ? t('Recuperar acesso') : view === 'verify' ? t("Confirme seu e-mail") : view === 'reset' ? t('Definir nova senha') : t("Entrar")}</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? t('Seu perfil no Uorqui.') : view === 'welcome' ? t("Converse, compartilhe e participe das suas comunidades.") : view === 'register' ? t("Crie seu perfil para participar do feed e das comunidades.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? t('Seu perfil no Uorqui.') : view === 'welcome' ? t("Converse, compartilhe e participe das suas comunidades.") : view === 'register' ? t("Crie seu perfil para descobrir comunidades e conversar no Uorqui.") : view === 'verify' ? t("Verifique a caixa de entrada e o spam do endereço informado.") : t("Use seu e-mail para acessar sua conta.")}</p>
       </div>
       {!loading&&!account&&(view==='login'||view==='register')&&<div role="group" aria-label={t('Escolher forma de acesso')}
         className="mb-5 grid min-w-0 grid-cols-2 gap-1 rounded-lg bg-muted p-1">
@@ -499,7 +499,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
                   <input type="checkbox" checked={termsAccepted} onChange={e=>setTermsAccepted(e.target.checked)}
                     required className="mt-1 size-4 shrink-0 accent-primary"/>
                   <span>{t('Li e aceito os')} <a href="/termos" target="_blank" rel="noopener noreferrer"
-                    className="font-medium text-primary underline">{t('Termos de Uso')}</a> <span className="text-xs text-muted-foreground">(v{status.termsVersion??'2026-11-01'})</span>.</span>
+                    className="font-medium text-primary underline">{t('Termos de Uso')}</a> <span className="text-xs text-muted-foreground">(v{status.termsVersion??'2026-11-03'})</span>.</span>
                 </label>
                 <label className="flex cursor-pointer items-start gap-3">
                   <input type="checkbox" checked={privacyRead} onChange={e=>setPrivacyRead(e.target.checked)}
