@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, type MouseEvent } from 'react';
 
 /**
  * Render user-provided message text as plain text plus safe, clickable links.
@@ -44,11 +44,49 @@ export function splitMessageLinks(text:string):Array<{text:string;href?:string}>
   return result.length?result:[{text}];
 }
 
+const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+/** Only route well-formed same-origin Uorqui community/channel invitations
+ * through the already-mounted app. Unrelated links remain external. */
+export function internalChatLink(href:string):{type:'channel';communityId:string;channelId:string}|{type:'invite';url:string}|null{
+  try{
+    const url=new URL(href,window.location.origin);
+    if(url.origin!==window.location.origin)return null;
+    const communityId=url.searchParams.get('community');
+    const channelId=url.searchParams.get('channel');
+    if(url.pathname==='/'&&uuid.test(communityId??'')&&uuid.test(channelId??''))
+      return {type:'channel',communityId:communityId!,channelId:channelId!};
+    if(/^\/invite\/[0-9a-f-]{36}\/?$/i.test(url.pathname)&&
+      uuid.test(url.pathname.split('/')[2]??'')&&
+      (!channelId||uuid.test(channelId)))
+      return {type:'invite',url:url.pathname+url.search};
+  }catch{/* External or malformed link. */}
+  return null;
+}
+
+export function openInternalChatLink(event:MouseEvent<HTMLAnchorElement>,href:string){
+  if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return false;
+  const target=internalChatLink(href);
+  if(!target)return false;
+  event.preventDefault();event.stopPropagation();
+  if(target.type==='channel'){
+    window.dispatchEvent(new CustomEvent('uorqui:open-community-link',{
+      detail:{communityId:target.communityId,channelId:target.channelId}
+    }));
+  }else{
+    // The existing invite redemption flow watches popstate, including when
+    // the user is signed in. No full navigation or new tab is necessary.
+    window.history.pushState({uorquiInternalInvite:true},'',target.url);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+  return true;
+}
+
 export function MessageText({text}:{text:string}){
   return <>{splitMessageLinks(text).map((part,index)=>
     <Fragment key={index}>{part.href?
-      <a href={part.href} target="_blank" rel="noopener noreferrer nofollow ugc"
+      <a href={part.href} target={internalChatLink(part.href)?undefined:'_blank'} rel="noopener noreferrer nofollow ugc"
         className="break-all underline decoration-current underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
-        onClick={event=>event.stopPropagation()}>{part.text}</a>:part.text}</Fragment>
+        onClick={event=>{if(!openInternalChatLink(event,part.href!))event.stopPropagation();}}>{part.text}</a>:part.text}</Fragment>
   )}</>;
 }
