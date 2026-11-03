@@ -96,7 +96,7 @@ async function openEventStream(send) {
 const alice=visitor(),bob=visitor(),other=visitor(),anon=visitor();
 async function createUser(send,name,handle){
   const email=handle+'@example.invalid';
-  const sign=await send('/api/auth/sign-up/email','POST',{name,email,password:'correct-horse-battery-staple-demo',termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'});
+  const sign=await send('/api/auth/sign-up/email','POST',{name,email,password:'correct-horse-battery-staple-demo',termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-03',privacyVersion:'2026-11-03'});
   assert.equal(sign.status,200,JSON.stringify(sign.data));
   const onboard=await send('/api/v1/onboarding','POST',{handle,displayName:name});
   assert.equal(onboard.status,201,JSON.stringify(onboard.data));
