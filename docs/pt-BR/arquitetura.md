@@ -14,7 +14,7 @@ Começar com um **monólito modular**: uma API implantada com módulos e limites
 | --- | --- | --- |
 | Web/PWA | **React + TypeScript + Tailwind CSS no Cloudflare Workers Static Assets** | SPA distribuída por CDN, interface responsiva e gateway de API no mesmo domínio |
 | API | **Node.js + Fastify + TypeScript** | Endpoints HTTP, validação e autorização |
-| Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de usuários, publicações, comunidades, conversas e permissões |
+| Banco | **PostgreSQL hospedado na Neon** | Dados relacionais de contas, mensagens, comunidades, participação e permissões |
 | Acesso ao banco | **Drizzle ORM + Drizzle Kit** | Consultas SQL tipadas, schema e migrações versionadas |
 
 Essas tecnologias estão **implementadas no beta técnico atual**. A associação de `uorqui.app` ao Worker `main` foi confirmada na Cloudflare em 01/11/2026. A validação de PWA instalado e e-mails continua separada.
@@ -57,18 +57,24 @@ PostgreSQL e Drizzle armazenam **dados estruturados**, não os arquivos originai
 - Priorizar SQL e índices bem definidos antes de adicionar cache ou fila. Medir desempenho de consultas e conexões.
 
 
+## Tempo real, participação e mídia
+
+Eventos de comunidades usam PostgreSQL LISTEN/NOTIFY com SSE autenticado. Eventos de mensagem/voz/canal alcançam participantes atuais; a aprovação de ingresso emite evento direcionado à conta solicitante já conectada. A interface atualiza lista/detalhe e reconecta o SSE para incluir a comunidade. O stream não transporta corpos de mensagens privadas.
+
+Reuniões e salas de voz compartilham malha WebRTC P2P de até seis pessoas. A reunião tem tela cheia, destaque de quem fala, câmera própria em miniatura e compartilhamento de tela conforme suporte do navegador. O painel de texto inicia recolhido em voz/reunião. `getDisplayMedia` e o PWA exigem testes práticos. Ver [Reuniões](reunioes-video.md) e [Auditoria](auditoria-manutencao.md).
+
 ## Módulos e limites
 
-**Identidade e perfis:** contas, autenticação e relacionamentos. **Mensagens individuais:** conversas de duas pessoas e recibos. **Comunidades:** membros, papéis, canais e convites. **Feed:** posts, seguidores, classificação e permissões. **Mídia:** uploads, processamento, cotas e acesso assinado. **Voz:** salas, participantes e moderação. **Confiança e segurança:** denúncias, bloqueios, limites e auditoria. **Notificações:** estado de entrega e conteúdo adequado à privacidade.
+**Identidade e perfis:** contas, autenticação e relacionamentos. **Mensagens individuais:** conversas de duas pessoas e recibos. **Comunidades:** membros, solicitações de ingresso, papéis, canais e convites. **Descobrir:** atividade autorizada e recomendações públicas (sem feed global). **Mídia:** uploads, cotas e acesso autorizado. **Voz e reuniões:** WebRTC, participantes, destaque de fala e admissão. **Confiança e segurança:** denúncias, bloqueios, limites e auditoria. **Notificações:** estado de entrega e conteúdo adequado à privacidade.
 
 ## Entidades iniciais (rascunho)
 
-user, profile, follow, direct_conversation, direct_message, community, member, role, channel, channel_message, voice_room, presence, post, media_asset, comment, reaction, notification, report, moderation_action.
+user, profile, friendship, block, direct_conversation, direct_message, attachment, community, member, join_request, channel, channel_message, channel_reaction, voice_session, meeting_request, notification, report, moderation_action.
 
 ## Segurança obrigatória
 
 - Toda autorização de conteúdo e participação deve ser conferida **no servidor**, não apenas ocultada pela interface.
-- Nunca expor comunidades privadas por recomendação, miniatura, URL compartilhada de mídia, busca ou push.
+- Nunca expor comunidades privadas por recomendações no Descobrir, miniaturas, URL compartilhada de mídia, busca ou push.
 - Aplicar rate limits, validação de arquivos, estratégia de verificação de conteúdo, segredos seguros e auditoria.
 - Adotar URLs de mídia com duração curta quando necessário; credenciais e dados reais não entram no Git.
 - Definir retenção, exclusão/exportação, backups, testes de restauração e migrações.
