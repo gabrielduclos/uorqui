@@ -19,3 +19,9 @@ A central de notificações possui um botão **Ajustes** no canto superior direi
 A tela permite ativar/desativar individualmente sete categorias: mensagens privadas, mensagens de comunidades, curtidas, comentários, pedidos de amizade, amizades aceitas e novos seguidores. Também oferece **Ativar todas** e **Desativar todas**, além de um controle separado para conceder ou revogar push no dispositivo.
 
 As escolhas são persistidas por conta na tabela `notification_preferences`, aplicadas **no servidor** antes de qualquer envio push (inclusive mensagens privadas e de comunidades) e não ocultam atividades da central. Cada categoria começa ativada. A migração `0028_notification_preferences.sql` deve ser aplicada ao banco de produção somente após aprovação explícita.
+
+## Ícone das notificações no Android
+
+O ícone colorido do PWA permanece como `icon-192.png` no conteúdo da notificação. Para o pequeno símbolo da **barra de status do Android**, o service worker utiliza `notification-badge.png`: PNG de 72 × 72 px, branco com transparência, com o monograma U em um balão de conversa. A fonte vetorial é `notification-badge.svg`. Não usar o logotipo colorido como `badge`, pois o Android reduz esse recurso a uma silhueta monocromática.
+
+Após a publicação, reabra o PWA para atualizar o service worker e receba um novo push em um aparelho Android para conferir o resultado. A aparência final depende da versão do Android e do navegador.

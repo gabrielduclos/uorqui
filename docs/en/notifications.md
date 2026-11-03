@@ -19,3 +19,9 @@ A **Settings** button at the top right of the notification inbox opens a separat
 Users can independently enable/disable seven categories: direct messages, community messages, likes, comments, friend requests, accepted friend requests, and new followers. **Enable all** and **Disable all** are available, along with a separate device-level push permission control.
 
 Settings are stored per account in `notification_preferences` and **enforced on the server** before push sends (including direct and community messages). Disabling push does not hide an activity from the inbox. All categories default to enabled. Apply `0028_notification_preferences.sql` to production only after explicit approval.
+
+## Android notification status-bar icon
+
+The full notification retains the color PWA icon, `icon-192.png`. The small **Android status-bar glyph** uses `notification-badge.png` instead: a 72 × 72 px white-on-transparent PNG showing the U monogram inside a chat bubble. Its vector source is `notification-badge.svg`. Avoid using the colored launcher icon as the notification `badge`: Android converts it into a monochrome silhouette.
+
+After deployment, reopen the installed PWA to update its service worker and receive a new push on a physical Android device to verify the result. Exact appearance varies with Android and browser versions.
