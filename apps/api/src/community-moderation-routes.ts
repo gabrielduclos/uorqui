@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { channelGate,channelGateError,channelGateStatus } from './channel-password.js';
+import {publishCommunityEvent} from './community-events.js';
 
 type SessionReader=(request:FastifyRequest)=>Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -12,6 +13,9 @@ const messageParams={type:'object',required:['id','channelId','messageId'],addit
 const roleBody={type:'object',required:['role'],additionalProperties:false,properties:{role:{type:'string',enum:['admin','moderator','member']}}};
 const banBody={type:'object',required:['handle'],additionalProperties:false,properties:{handle,reason:{type:'string',maxLength:300}}};
 const channelBody={type:'object',required:['name'],additionalProperties:false,properties:{name:{type:'string',minLength:2,maxLength:64}}};
+const accessModeBody={type:'object',required:['accessMode'],additionalProperties:false,properties:{accessMode:{type:'string',enum:['open','restricted']}}};
+const memberAccessParams={type:'object',required:['id','handle','channelId'],additionalProperties:false,properties:{id:uuid,handle,channelId:uuid}};
+const memberAccessBody={type:'object',required:['allowed'],additionalProperties:false,properties:{allowed:{type:'boolean'}}};
 const editBody={type:'object',required:['body'],additionalProperties:false,properties:{body:{type:'string',minLength:1,maxLength:4000}}};
 const communitySettingsBody={type:'object',additionalProperties:false,minProperties:1,properties:{
   name:{type:'string',minLength:2,maxLength:120},
@@ -126,7 +130,10 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
       const [members,bans]=await Promise.all([
         getPool().query(
           'SELECT u.handle,CASE WHEN p.is_public=true OR u.id=$2 OR friends.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "displayName",'+
-          'cm.role,cm.joined_at AS "joinedAt" FROM community_members cm '+
+          'cm.role,cm.joined_at AS "joinedAt",COALESCE(('+ 
+          "SELECT json_agg(ag.channel_id) FROM community_channel_member_access ag "+ 
+          "JOIN community_channels ch ON ch.id=ag.channel_id AND ch.community_id=$1 AND ch.access_mode='restricted' "+ 
+          'WHERE ag.user_id=cm.user_id),\'[]\'::json) AS "restrictedChannelIds" FROM community_members cm '+
           'JOIN users u ON u.id=cm.user_id JOIN profiles p ON p.user_id=cm.user_id '+
           'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(cm.user_id,$2::uuid) AND friends.user_b_id=GREATEST(cm.user_id,$2::uuid) '+
           'WHERE cm.community_id=$1 ORDER BY cm.joined_at,u.handle LIMIT 500',[id,me]),
@@ -193,6 +200,7 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
         }
         await client.query('DELETE FROM community_members WHERE community_id=$1 AND user_id=$2',[id,other]);
         await client.query('DELETE FROM community_channel_password_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,other]);
+        await client.query('DELETE FROM community_channel_member_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,other]);
         await client.query('DELETE FROM community_voice_sessions WHERE user_id=$2 AND channel_id IN (SELECT id FROM community_channels WHERE community_id=$1)',[id,other]);
         await client.query('COMMIT');
         return reply.header('Cache-Control',noCache).send({handle:h,status:ban?'banned':'removed'});
@@ -236,6 +244,84 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
       if(typeof error==='object'&&error!==null&&'code' in error&&error.code==='23505')return reply.code(409).send({error:'CHANNEL_EXISTS'});
       request.log.error({err:error},'Rename channel');return reply.code(503).send({error:'Unavailable'});
     }
+  });
+
+
+  /** Restriction is independent of password and meeting admission. Changing
+   * from open to restricted immediately evicts unauthorized RTC participants. */
+  app.put('/api/v1/communities/:id/channels/:channelId/access',{
+    schema:{params:channelParams,body:accessModeBody}
+  },async(request,reply)=>{
+    if(!origin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,channelId}=request.params as {id:string;channelId:string};
+      const {accessMode}=request.body as {accessMode:'open'|'restricted'};
+      if((ranks[(await role(id,me))??'']??0)<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      const client=await getPool().connect();
+      try{
+        await client.query('BEGIN');
+        const changed=await client.query(
+          'UPDATE community_channels SET access_mode=$3 WHERE community_id=$1 AND id=$2 RETURNING id',
+          [id,channelId,accessMode]);
+        if(!changed.rowCount){await client.query('ROLLBACK');return reply.code(404).send({error:'CHANNEL_NOT_FOUND'});}
+        if(accessMode==='open'){
+          // Reopening clears manual grants to avoid inheriting unexpected access
+          // if an administrator later closes the channel again.
+          await client.query('DELETE FROM community_channel_member_access WHERE channel_id=$1',[channelId]);
+        }else{
+          await client.query(
+            'DELETE FROM community_voice_sessions v WHERE v.channel_id=$1 AND NOT EXISTS ('+
+            'SELECT 1 FROM community_members cm WHERE cm.community_id=$2 AND cm.user_id=v.user_id AND ('+
+            "cm.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access ag "+
+            'WHERE ag.channel_id=$1 AND ag.user_id=v.user_id)))',[channelId,id]);
+        }
+        await client.query('COMMIT');
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+      void publishCommunityEvent(id,null,'channel').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({accessMode});
+    }catch(error){request.log.error({err:error},'Update channel access mode');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  /** Owners/admins assign closed-channel access to existing community members. */
+  app.put('/api/v1/communities/:id/members/:handle/channels/:channelId/access',{
+    schema:{params:memberAccessParams,body:memberAccessBody}
+  },async(request,reply)=>{
+    if(!origin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,handle:targetHandle,channelId}=request.params as {id:string;handle:string;channelId:string};
+      const {allowed}=request.body as {allowed:boolean};
+      if((ranks[(await role(id,me))??'']??0)<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      const client=await getPool().connect();let targetId:string;
+      try{
+        await client.query('BEGIN');
+        const channel=await client.query(
+          "SELECT id FROM community_channels WHERE id=$1 AND community_id=$2 AND access_mode='restricted' FOR UPDATE",
+          [channelId,id]);
+        if(!channel.rowCount){await client.query('ROLLBACK');return reply.code(404).send({error:'RESTRICTED_CHANNEL_NOT_FOUND'});}
+        const target=await client.query(
+          'SELECT m.user_id,m.role FROM community_members m JOIN users u ON u.id=m.user_id '+
+          'WHERE m.community_id=$1 AND u.handle=$2',[id,targetHandle]);
+        if(!target.rowCount){await client.query('ROLLBACK');return reply.code(404).send({error:'MEMBER_NOT_FOUND'});}
+        targetId=target.rows[0].user_id as string;
+        if(['owner','admin'].includes(target.rows[0].role)){
+          await client.query('ROLLBACK');return reply.code(409).send({error:'IMPLICIT_CHANNEL_ACCESS'});
+        }
+        if(allowed){
+          await client.query(
+            'INSERT INTO community_channel_member_access(channel_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',
+            [channelId,targetId]);
+        }else{
+          await client.query('DELETE FROM community_channel_member_access WHERE channel_id=$1 AND user_id=$2',[channelId,targetId]);
+          await client.query('DELETE FROM community_voice_sessions WHERE channel_id=$1 AND user_id=$2',[channelId,targetId]);
+        }
+        await client.query('COMMIT');
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+      // All community clients refresh their own authorized channel list.
+      void publishCommunityEvent(id,null,'channel').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({handle:targetHandle,channelId,allowed});
+    }catch(error){request.log.error({err:error},'Set member channel access');return reply.code(503).send({error:'Unavailable'});}
   });
 
   app.delete('/api/v1/communities/:id/channels/:channelId',{schema:{params:channelParams}},async(request,reply)=>{
