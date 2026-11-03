@@ -190,16 +190,21 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         {!data?<SkeletonRows rows={4}/>:<div className="space-y-2">
           <h4 className="text-xs font-semibold">{pt?'Membros':'Members'} ({data.members.length})</h4>
           {data.members.map(person=><div key={person.handle} className="space-y-2 rounded-lg border border-border/70 p-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">{person.displayName.charAt(0).toUpperCase()}</div>
-              <div className="min-w-0 flex-1"><a href={'/@'+person.handle}
-                onClick={event=>{
-                  if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
-                  navigateToPublicProfile(event,person.handle);setOpen(false);
-                }}
-                className="block truncate rounded-sm text-xs font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{person.displayName}</a>
-                <p className="truncate text-[11px] text-muted-foreground">@{person.handle} · {person.role}</p></div>
-            </div>
+            <a href={'/@'+person.handle}
+              onClick={event=>{
+                if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+                navigateToPublicProfile(event,person.handle);
+                setOpen(false);
+              }}
+              aria-label={pt?'Ver perfil de '+person.displayName:'View profile of '+person.displayName}
+              className="flex min-h-12 min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring">
+              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">{person.displayName.charAt(0).toUpperCase()}</div>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">{person.displayName}</span>
+                <span className="block truncate text-xs text-muted-foreground">@{person.handle} · {person.role}</span>
+              </div>
+              <span className="shrink-0 text-[11px] font-medium text-primary">{pt?'Ver perfil':'View profile'}</span>
+            </a>
             {canAdmin&&role!==undefined&& !(['owner','admin'] as Role[]).includes(person.role)&&
               channels.some(ch=>ch.accessMode==='restricted')&&<details className="rounded-lg border border-border/70 p-2">
               <summary className="cursor-pointer text-xs font-medium text-primary">
