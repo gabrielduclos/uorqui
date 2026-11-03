@@ -1,14 +1,14 @@
-# Requisitos do produto — versão inicial
+# Requisitos do produto — beta técnico
 
 [Português](produto.md) · [English](../en/product.md)
 
-**Status:** direção aprovada em 02/11/2026, com **primeira implementação no código da `main`** (Descobrir, atividades autorizadas, navegação e onboarding). Publicação em produção e testes reais ainda pendentes; as seções históricas de feed permanecem como registro legado.
+**Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
 ## Decisão de produto
 
-A nova experiência é **centrada em comunidades**, sem feed público/global de posts nem modo imersivo de vídeos em sequência. A tela inicial será **Descobrir**, dedicada a recomendações de comunidades e atividades **das comunidades em que a pessoa já participa**. Texto, fotos, vídeos, áudio, arquivos e links continuam disponíveis em conversas e canais.
+O Uorqui é **centrado em comunidades**, sem feed global de publicações nem modo imersivo infinito de vídeos. A tela inicial é **Descobrir**, dedicada a recomendações de comunidades e atividades **das comunidades em que a pessoa já participa**. Texto, fotos, vídeos, áudio, arquivos e links continuam disponíveis em conversas e canais.
 
-Especificação de comportamento, privacidade, migração e métricas: [Descobrir substitui o feed](descobrir.md). Esta atualização **não removeu o feed do código nem os dados existentes**.
+Especificação de comportamento, privacidade, migração e métricas: [Descobrir substitui o feed](descobrir.md). A interface, API e schema do feed aposentado foram removidos com migração versionada e snapshots de recuperação. Ver [auditoria de manutenção](auditoria-manutencao.md).
 
 ## Navegação
 
@@ -88,7 +88,7 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - O acesso à mídia exige participação ativa na comunidade e mensagem não cancelada. A API verifica uploads e downloads individualmente, e os uploads só são aceitos com assinatura HMAC produzida pelo Worker.
 - A migração Drizzle `0018_community_message_attachments` adiciona campos de anexo às mensagens comunitárias e permite corpo vazio quando houver anexo. Deve estar aplicada na Neon antes de habilitar uploads em produção; as mensagens de texto existentes são preservadas.
 
-### Histórico do beta: implementação do feed (legado, substituição planejada)
+### Histórico do beta: implementação do feed (aposentado em 02/11/2026)
 
 > **Registro técnico do que foi implementado anteriormente.** Os itens abaixo não representam a experiência futura. Não apagar posts, mídias, tabelas, endpoints ou links existentes sem plano de migração, retenção e rollback. Ver [decisão Descobrir](descobrir.md).
 
@@ -120,8 +120,8 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 - O botão **Enviar** do chat individual adota os mesmos cantos discretos de **5 px** dos balões.
 - Ações de mensagem e galeria permitem compartilhar texto, fotos, vídeos, áudios e arquivos com **contatos (amigos)** ou **conversas existentes**. O seletor oferece busca, retorno visual de envio e não permite mensagens para conversas bloqueadas/restritas.
 - Mídias privadas são lidas somente após autorização e reenviadas como **novo anexo no destino**, com regras de upload e limites de 50 MB, sem reutilizar links privados da conversa de origem. Encaminhamento de texto utiliza a API com marcação de encaminhamento e idempotência por destinatário.
-- Compartilhar **publicações e vídeos do feed** envia um link interno autorizado para a conversa escolhida; o destinatário pode abrir a publicação no feed montado, sem recarregar a aplicação, sujeito às permissões atuais. O seletor também oferece copiar link e compartilhar via outros aplicativos. Conteúdo privado não é tornado público por meio do link.
-- No perfil do usuário, inclusive **mobile**, o botão **Sair da conta** fica visível no início da página e exige confirmação. A saída limpa os caches de sessão, mídia e feed.
+- **Comportamento aposentado:** não há mais compartilhamento de posts do feed. O `InternalShareDialog` atual encaminha apenas mensagens/mídias. Links de posts antigos recebidos no chat exibem um aviso informativo, em vez de tentar abrir uma tela inexistente.
+- No perfil do usuário, inclusive **mobile**, o botão **Sair da conta** fica visível no início da página e exige confirmação. A saída limpa os caches de sessão e mídia.
 
 ### Presença de salas e recuperação do acesso (novembro de 2026)
 
@@ -131,7 +131,7 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 
 ### Apresentação inicial e badges de comunidades
 
-- Na primeira entrada autenticada por conta, um **onboarding de quatro etapas** mostra, com a área real correspondente ao fundo: **Feed** (publicações, fotos e vídeos, no beta anterior; será substituído por Descobrir), **Mensagens** (conversas individuais), **Comunidades** (canais de texto e áudio) e **Foto de perfil** (escolher, recortar e salvar ou concluir sem foto). É possível pular a apresentação; a conclusão é memorizada por conta no dispositivo.
+- Na primeira entrada autenticada por conta, um **onboarding de quatro etapas** mostra, com a área real correspondente ao fundo: **Descobrir** (comunidades e atividades), **Mensagens** (conversas individuais), **Comunidades** (canais de texto e áudio) e **Foto de perfil** (escolher, recortar e salvar ou concluir sem foto). É possível pular a apresentação; a conclusão é memorizada por conta no dispositivo.
 - A foto do onboarding reutiliza o editor de recorte e o endpoint de mídia privada do perfil; pode ser trocada novamente no editor de Perfil.
 - Comunidades exibem **badges numéricos** nos canais de texto, nos ícones individuais de comunidade e na navegação principal mobile/desktop. Mensagens próprias e excluídas não contam; a leitura só é confirmada quando um canal de texto está aberto com as mensagens efetivamente carregadas. Um cursor de leitura por usuário e canal é persistido em PostgreSQL, funcionando entre dispositivos. A API autentica as leituras, exige associação à comunidade, valida origem e nunca retrocede a leitura.
 - Login e criação de conta usam layout mobile mais próximo das bordas, com links de recuperação e verificação realmente estilizados como links, compatíveis com temas claro e escuro.
@@ -140,13 +140,13 @@ O cartão de um participante mostra uma borda verde pulsante apenas quando um an
 
 - A lista principal de cada sala de voz exibe **nome, microfone ligado/desligado e áudio ligado/desligado**, sem foto de perfil. Uma pequena indicação de presença permanece ao lado do nome; o destaque de fala em tempo real só é apresentado quando a atividade é efetivamente conhecida.
 - Mensagens de canais, badges de não lidas e estados da lista de voz recebem **Server-Sent Events (SSE)** autenticados, usando o mesmo padrão empregado nas conversas individuais. O endpoint `GET /api/v1/communities/events` exige uma sessão, revalida a inscrição a cada cinco minutos e publica apenas IDs e tipo de alteração; o conteúdo continua sendo buscado em endpoints com verificação de associação. Um fallback de aproximadamente 30 segundos cobre desconexões.
-- O backend usa um único `LISTEN/NOTIFY` PostgreSQL por instância para distribuir mudanças de mensagem, canais e voz. A conexão de eventos não contém textos ou dados privados e é encerrada no shutdown da API.
+- O backend usa `LISTEN/NOTIFY` PostgreSQL por instância para distribuir mudanças de mensagens/canais/voz sem corpos privados. A aprovação de comunidade gera ainda um evento direcionado à conta solicitante, atualizando a lista e renovando o SSE sem recarregar a página.
 
 ### Reuniões por vídeo e canais com senha
 
-- **Sala de reunião** é um tipo de canal comunitário separado de texto e voz. Utiliza o WebRTC já existente, com mosaico responsivo de vídeos, microfone, câmera e limite inicial de seis pessoas. O chat de texto do canal permanece disponível.
+- **Sala de reunião** é um tipo de canal comunitário separado de texto e voz. Utiliza WebRTC para até seis pessoas. O chat de texto inicia recolhido nas salas de voz/reunião; vídeos destacam quem fala e há tela cheia com miniatura da própria câmera, seleção manual e compartilhamento de tela conforme suporte do navegador.
 - O organizador pode copiar um link direto da reunião ou enviar um convite pelo mensageiro individual do Uorqui. O link não ignora a privacidade da comunidade, o bloqueio entre contas nem o modo de aprovação de entrada da reunião.
 - O administrador configura cada reunião como **entrada direta** ou **entrada mediante aprovação**. Solicitações pendentes são verificadas e aprovadas no servidor; pedidos de ingresso nas comunidades e reuniões podem gerar avisos no centro de notificações e push conforme a preferência individual.
-- **Senha por canal:** donos e administradores podem proteger canais de texto, voz ou reunião, trocar a senha e removê-la. A senha não é salva em texto puro: usa salt aleatório e scrypt. Um desbloqueio cria autorização específica para aquele usuário/canal. A troca da senha revoga acessos anteriores. O servidor verifica as autorizações nas mensagens, anexos, notificações de mensagens, listas de participantes e sessões WebRTC; tentativas incorretas têm limite temporal.
+- **Senha por canal:** donos e administradores usam **Editar canal** no cabeçalho de canais de texto, voz ou reunião para proteger, trocar ou remover senha. A senha não é salva em texto puro: usa salt aleatório e scrypt. Um desbloqueio cria autorização específica para aquele usuário/canal. A troca da senha revoga acessos anteriores. O servidor verifica as autorizações nas mensagens, anexos, notificações de mensagens, listas de participantes e sessões WebRTC; tentativas incorretas têm limite temporal.
 - A proteção por senha não substitui a associação à comunidade, e administradores podem acessar os canais que gerenciam. Os arquivos de mídia antigos não são tornados públicos.
-- **Implantação:** as migrações 0030–0032 precisam ser aplicadas antes de liberar estas funções em produção. Não executar contra o banco ativo sem validar a aplicação, o backup e os testes de integração.
+- **Implantação:** as migrações `0030`–`0032` estão versionadas e constam no histórico de publicação do projeto. Confirmar estado real da API, backups e migrações separadamente do CI.
