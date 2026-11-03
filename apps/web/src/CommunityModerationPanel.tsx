@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Ban, Camera, Check, ChevronDown, ChevronUp, Shield, Trash2, UserMinus, X, LockKeyhole } from 'lucide-react';
+import { Dialog } from 'radix-ui';
+import { Ban, Camera, Check, Shield, Trash2, UserMinus, X, LockKeyhole } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SkeletonRows } from '@/components/ui/skeleton';
@@ -73,13 +74,36 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   };
   const requestBody=(v:unknown)=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)} as RequestInit);
 
-  return <section className="space-y-3 border-t border-border pt-3">
-    <button type="button" aria-expanded={open} onClick={()=>{setOpen(v=>!v);setError('');}}
-      className="flex min-h-10 w-full items-center gap-2 rounded-lg p-2 text-left text-sm font-medium text-primary hover:bg-secondary">
-      <Shield className="size-4"/><span className="min-w-0 flex-1">{pt?'Moderação':'Moderation'}</span>
-      {open?<ChevronUp className="size-4"/>:<ChevronDown className="size-4"/>}
-    </button>
-    {open&&<div className="space-y-4 rounded-xl border border-border bg-card/70 p-3">
+  return <Dialog.Root open={open} onOpenChange={next=>{
+    if(busy)return;
+    setOpen(next);setError('');setNotice('');setConfirm(null);
+  }}>
+    <Dialog.Trigger asChild>
+      <button type="button"
+        className="flex min-h-10 w-full items-center gap-2 rounded-lg p-2 text-left text-sm font-medium text-primary hover:bg-secondary">
+        <Shield className="size-4"/><span className="min-w-0 flex-1">{pt?'Moderação':'Moderation'}</span>
+      </button>
+    </Dialog.Trigger>
+    <Dialog.Portal>
+      <Dialog.Overlay className="fixed inset-0 z-[290] bg-black/70 backdrop-blur-[2px]"/>
+      <Dialog.Content aria-describedby={undefined}
+        onEscapeKeyDown={event=>{if(busy)event.preventDefault();}}
+        onPointerDownOutside={event=>{if(busy)event.preventDefault();}}
+        className="fixed inset-0 z-[300] flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-card text-card-foreground shadow-2xl outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(90dvh,850px)] sm:w-[min(92vw,850px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:border-border">
+        <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-4">
+          <Shield className="size-5 shrink-0 text-primary" aria-hidden="true"/>
+          <div className="min-w-0 flex-1">
+            <Dialog.Title className="truncate text-base font-semibold">{pt?'Moderação da comunidade':'Community moderation'}</Dialog.Title>
+            <p className="truncate text-xs text-muted-foreground">{name}</p>
+          </div>
+          <Dialog.Close asChild>
+            <Button type="button" variant="ghost" size="icon" disabled={busy}
+              aria-label={pt?'Fechar moderação':'Close moderation'}>
+              <X className="size-5"/>
+            </Button>
+          </Dialog.Close>
+        </header>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
       {error&&<p role="alert" className="text-xs text-destructive">{error}</p>}
       {notice&&<p role="status" className="text-xs text-primary">{notice}</p>}
       {confirm&&<div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 p-2">
@@ -250,6 +274,8 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
           </Button>
         </div>}
       </>}
-    </div>}
-  </section>;
+        </div>
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>;
 }
