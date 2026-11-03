@@ -177,9 +177,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
             const Icon = item.icon;
-            return <Button type="button" data-uorqui-tour-target={item.id} key={item.id} variant={area === item.id ? 'secondary' : 'ghost'} onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('h-11 justify-start gap-3 text-sm', area === item.id && 'text-primary')}
+            return <Button type="button" data-uorqui-tour-target={item.id} key={item.id} variant={area === item.id ? 'secondary' : 'ghost'} onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('h-12 justify-start gap-3 text-base', area === item.id && 'text-primary')}
               aria-label={item.id === 'conversations' && unreadMessageCount ? t(item.label) + ': ' + unreadMessageCount + (locale === 'pt-BR' ? ' mensagens não lidas' : ' unread messages') : t(item.label)}>
-              <Icon aria-hidden="true" className="size-4" />{t(item.label)}
+              <Icon aria-hidden="true" className="size-5" />{t(item.label)}
               {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
                 className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unreadLabel}</span>}
               {item.id === 'communities' && communityUnread.total>0 && <span aria-hidden="true"
@@ -188,8 +188,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             </Button>;
           })}
           {platformModerator&&<Button type="button" variant={area==='moderation'?'secondary':'ghost'}
-            onClick={()=>move('moderation')} className="h-11 justify-start gap-3 text-sm">
-            <ShieldCheck className="size-4"/>{locale==='pt-BR'?'Moderação':'Moderation'}
+            onClick={()=>move('moderation')} className="h-12 justify-start gap-3 text-base">
+            <ShieldCheck className="size-5"/>{locale==='pt-BR'?'Moderação':'Moderation'}
           </Button>}
         </nav>
         <div className="mt-auto space-y-3 border-t border-border p-3">
