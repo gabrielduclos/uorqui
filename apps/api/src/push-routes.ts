@@ -123,6 +123,23 @@ async function sendPush(subscription:Subscription,payload:object){
     return response.status;
   }finally{clearTimeout(timeout);}
 }
+/** A channel invitation is sent as a regular DM, so customize the
+ * existing DM push rather than sending a second notification. Only accept
+ * the Uorqui invitation message format with a same-origin channel link. */
+function channelInvitationTitle(body:string){
+  const match=/^(?:Venha para o canal |Join the channel )([^\r\n]{1,140})\r?\n(https?:\/\/[^\s]+)$/u.exec(body);
+  if(!match)return null;
+  try{
+    const link=new URL(match[2]);
+    const expected=new URL(process.env.WEB_ORIGIN??'http://localhost:5173');
+    if(link.origin!==expected.origin)return null;
+    const channel=link.searchParams.get('channel');
+    const valid=UUID.test(String(channel))&&
+      (link.pathname==='/'&&UUID.test(String(link.searchParams.get('community')))||
+       /^\/invite\/[0-9a-f-]{36}$/i.test(link.pathname));
+    return valid?match[1].slice(0,100):null;
+  }catch{return null;}
+}
 export async function pushDirectMessage(messageId:string){
   if(!enabled())return;
   const row=await getPool().query(
@@ -135,6 +152,7 @@ export async function pushDirectMessage(messageId:string){
     'WHERE m.id=$1 AND m.deleted_at IS NULL',[messageId]);
   if(!row.rowCount)return;
   const m=row.rows[0];
+  const channelInvitation=channelInvitationTitle(String(m.body??''));
   const subscriptions=await getPool().query<Subscription>(
     'SELECT s.endpoint,s.p256dh,s.auth,s.user_id FROM push_subscriptions s '+
     'LEFT JOIN notification_preferences np ON np.user_id=s.user_id '+
@@ -145,9 +163,39 @@ export async function pushDirectMessage(messageId:string){
     try{
       const status=await sendPush(sub,{kind:'dm',recipientId:m.recipient,conversationId:m.conversation_id,
         messageId:m.id,title:String(m.sender).slice(0,80),
-        body:m.attachment_type?'Novo anexo recebido':'Nova mensagem privada',proof});
+        body:channelInvitation?'Convite para o canal '+channelInvitation:
+          m.attachment_type?'Novo anexo recebido':'Nova mensagem privada',proof});
       if(status===404||status===410)await getPool().query('DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',[sub.endpoint,m.recipient]);
     }catch{/* Best effort: existing live inbox delivery remains authoritative. */}
+  }));
+}
+/** Notify the invitee when a community administrator sends a direct
+ * membership invitation. Does not notify the inviter or announce joins. */
+export async function pushCommunityInvite(recipientId:string,communityId:string,actorId:string){
+  if(!enabled())return;
+  const row=await getPool().query(
+    'SELECT c.name,COALESCE(p.display_name,u.handle) AS actor_name '+
+    'FROM communities c JOIN users u ON u.id=$3 LEFT JOIN profiles p ON p.user_id=u.id '+
+    'WHERE c.id=$2 AND EXISTS (SELECT 1 FROM community_join_requests q '+
+    "WHERE q.community_id=$2 AND q.user_id=$1 AND q.kind='invite' AND q.status='pending') "+
+    'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE '+
+    '(b.blocker_id=$1 AND b.blocked_id=$3) OR (b.blocker_id=$3 AND b.blocked_id=$1))',
+    [recipientId,communityId,actorId]);
+  if(!row.rowCount)return;
+  const invite=row.rows[0];
+  const subs=await getPool().query<Subscription>(
+    'SELECT s.endpoint,s.p256dh,s.auth,s.user_id FROM push_subscriptions s '+
+    'LEFT JOIN notification_preferences np ON np.user_id=s.user_id '+
+    'WHERE s.user_id=$1 AND COALESCE(np.community_request,true)=true '+
+    'ORDER BY s.updated_at DESC LIMIT 10',[recipientId]);
+  await Promise.allSettled(subs.rows.map(async sub=>{
+    try{
+      const status=await sendPush(sub,{kind:'community-invite',
+        recipientId,communityId, title:'Convite para comunidade',
+        body:(String(invite.actor_name)+' convidou você para '+String(invite.name)).slice(0,180)});
+      if(status===404||status===410)await getPool().query(
+        'DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',[sub.endpoint,recipientId]);
+    }catch{/* Best-effort delivery; invite remains visible in Communities. */}
   }));
 }
 export async function pushCommunityMessage(messageId:string){
