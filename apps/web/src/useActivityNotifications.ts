@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 export type ActivityNotification={
   id:string;kind:'friend_request'|'friend_accepted'|'community_join_request'|'meeting_join_request';
-  communityId?:string|null;
+  communityId?:string|null;communityName?:string|null;meetingName?:string|null;
   targetId:string;createdAt:string;readAt:string|null;actorHandle:string;actorName:string;actorAvatar:string|null;
 };
 export function useActivityNotifications(accountId:string){
