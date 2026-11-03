@@ -156,12 +156,14 @@ export const communityChannels = pgTable('community_channels', {
   kind: varchar('kind', { length: 8 }).notNull(),
   meetingJoinPolicy: varchar('meeting_join_policy', { length: 12 }).notNull().default('open'),
   passwordHash: text('password_hash'),
+  accessMode: varchar('access_mode', { length: 12 }).notNull().default('open'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
   uniqueIndex('community_channels_unique_name').on(table.communityId, table.name),
   index('community_channels_community_idx').on(table.communityId),
   check('community_channels_kind', sql`${table.kind} IN ('text', 'voice', 'meeting')`),
   check('community_meeting_policy',sql`${table.meetingJoinPolicy} IN ('open','approval')`),
+  check('community_channel_access_mode',sql`${table.accessMode} IN ('open','restricted')`),
 ]);
 
 /** A meeting invite/approval is distinct from community membership. */
@@ -176,6 +178,13 @@ export const meetingAccessRequests = pgTable('meeting_access_requests', {
   index('meeting_access_requests_status_idx').on(table.channelId,table.status),
   check('meeting_access_requests_status',sql`${table.status} IN ('pending','approved','declined')`),
 ]);
+
+/** Manual access list for a restricted channel; independent of passwords and meeting admission. */
+export const communityChannelMemberAccess = pgTable('community_channel_member_access', {
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id,{onDelete:'cascade'}),
+  userId: uuid('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  grantedAt: timestamp('granted_at',{withTimezone:true}).notNull().defaultNow(),
+}, t=>[primaryKey({columns:[t.channelId,t.userId]}),index('community_channel_member_access_user_idx').on(t.userId)]);
 
 /** Password grants are specific to the account and the protected channel. */
 export const communityChannelPasswordAccess = pgTable('community_channel_password_access', {
