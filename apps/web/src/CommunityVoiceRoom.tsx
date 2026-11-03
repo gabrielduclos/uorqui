@@ -725,16 +725,18 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const activeSpeakers=phase==='joined'?visiblePeers.filter(peer=>peer.speaking):[];
   const cameraEntries=Object.entries(cameras).filter(([id])=>
     id===selfSession.current?cameraOn:peers.some(peer=>peer.sessionId===id));
+  const remoteCameraAvailable=cameraEntries.some(([id])=>id!==selfSession.current);
   const speakingCamera=meeting&&phase==='joined'
     ?activeSpeakers.find(peer=>!peer.isSelf&&cameras[peer.sessionId])?.sessionId??
-      activeSpeakers.find(peer=>cameras[peer.sessionId]&&(!peer.isSelf||cameraOn))?.sessionId??null:null;
+      (!remoteCameraAvailable&&cameraOn&&activeSpeakers.some(peer=>peer.isSelf)?selfSession.current:null):null;
   useEffect(()=>{
     if(!speakingCamera)return;
     const timeout=window.setTimeout(()=>setSpotlightId(speakingCamera),350);
     return ()=>window.clearTimeout(timeout);
   },[speakingCamera]);
   const mainCameraId=(pinnedCamera&&cameraEntries.some(([id])=>id===pinnedCamera)?pinnedCamera:null)??
-    (spotlightId&&cameraEntries.some(([id])=>id===spotlightId)?spotlightId:null)??
+    (spotlightId&&(!remoteCameraAvailable||spotlightId!==selfSession.current)&&
+      cameraEntries.some(([id])=>id===spotlightId)?spotlightId:null)??
     (cameraEntries.find(([id])=>id!==selfSession.current)?.[0]??cameraEntries[0]?.[0]??null);
   const mainCamera=mainCameraId?cameras[mainCameraId]:null;
   const mainParticipant=peers.find(peer=>peer.sessionId===mainCameraId);
@@ -1000,7 +1002,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       </div>
       {(cameraEntries.length>1||Object.keys(screens).length>0)&&
         <div className="z-10 flex max-h-28 shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-black/90 p-2">
-          {cameraEntries.filter(([id])=>id!==mainCameraId).map(([id,stream])=>
+          {cameraEntries.filter(([id])=>id!==mainCameraId&&!(ownSmallCamera&&id===selfSession.current)).map(([id,stream])=>
             <button type="button" key={'thumb:'+id}
               onClick={()=>{setPinnedCamera(id);setPresentedScreenId(null);}}
               className={'relative aspect-video h-16 shrink-0 overflow-hidden rounded-lg border-2 '+(speaking.has(id)?'border-emerald-400':'border-white/25')}
