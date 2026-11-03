@@ -78,12 +78,20 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
         <Bell className="size-9"/><p className="text-sm">{pt?'Ainda não há notificações.':'No notifications yet.'}</p></div>:
       <div className="space-y-1">{items.map(item=>{
         const Icon=icons[item.kind]??Bell;
+        const isCommunityRequest=item.kind==='community_join_request'||item.kind==='meeting_join_request';
+        const destination=isCommunityRequest&&item.communityName
+          ?item.kind==='meeting_join_request'&&item.meetingName
+            ?item.communityName+' · '+item.meetingName:item.communityName
+          :null;
         return <div key={item.id} className={'flex min-h-18 flex-wrap items-center gap-2 rounded-xl border px-3 py-3 transition-colors hover:bg-secondary/70 '+(item.readAt?'border-transparent':'border-primary/20 bg-primary/5')}>
           <button type="button" onClick={()=>onOpen(item)}
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
-            aria-label={item.actorName+' '+verbs[item.kind]+(!item.readAt?(pt?', não lida':', unread'):'')}>
+            aria-label={item.actorName+' '+verbs[item.kind]+(destination?' · '+destination:'')+(!item.readAt?(pt?', não lida':', unread'):'')}>
             <UserAvatar name={item.actorName} image={item.actorAvatar} size="sm"/>
             <span className="min-w-0 flex-1"><span className="block text-sm"><strong>{item.actorName}</strong> {verbs[item.kind]}</span>
+              {destination&&<span className="mt-1 block truncate text-xs font-semibold text-primary" title={destination}>
+                <Users className="mr-1 inline size-3.5" aria-hidden="true"/>{destination}
+              </span>}
               <span className="mt-1 block text-xs text-muted-foreground">
                 {new Intl.DateTimeFormat(locale,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(item.createdAt))}
               </span></span>
