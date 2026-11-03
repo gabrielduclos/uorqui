@@ -224,3 +224,52 @@ test('voice: lost membership ends active RTC room access',async()=>{
   assert.equal((await friend(root+'/heartbeat','POST',{sessionId:s,muted:false})).status,410);
   assert.equal((await friend(root+'/sessions/'+s,'DELETE')).status,204,'safe cleanup after membership removal');
 });
+
+
+test('closed meeting and voice rooms require per-member permission, evicting revoked RTC sessions',async()=>{
+  const created=await owner('/api/v1/communities','POST',{
+    name:'Private RTC Channels',slug:'rtc-permission-suite',visibility:'public'
+  });
+  assert.equal(created.status,201,JSON.stringify(created.data));
+  const root='/api/v1/communities/'+created.data.id;
+  assert.equal((await friend(root+'/join','POST')).status,200);
+  assert.equal((await stranger(root+'/join','POST')).status,200);
+  const meeting=await owner(root+'/channels','POST',{
+    name:'restricted-meeting',kind:'meeting',accessMode:'restricted'
+  });
+  assert.equal(meeting.status,201,JSON.stringify(meeting.data));
+  const id=meeting.data.channel.id,basePath=root+'/channels/'+id,rtc=basePath+'/voice';
+  assert.ok(!(await friend(root)).data.channels.some(ch=>ch.id===id));
+  assert.equal((await friend(basePath+'/meeting')).status,404);
+  assert.equal((await friend(rtc+'/join','POST',{sessionId:crypto.randomUUID()})).status,403);
+  assert.equal((await stranger(basePath+'/meeting/requests','POST')).status,403);
+  const ownerSession=crypto.randomUUID();
+  assert.equal((await owner(rtc+'/join','POST',{sessionId:ownerSession})).status,200);
+  assert.ok(!(await friend(root+'/voice/presence')).data.rooms[id]);
+  const grant=root+'/members/voice_friend/channels/'+id+'/access';
+  assert.equal((await owner(grant,'PUT',{allowed:true})).status,200);
+  assert.ok((await friend(root)).data.channels.some(ch=>ch.id===id));
+  assert.equal((await friend(basePath+'/meeting')).status,200);
+  const sessionId=crypto.randomUUID();
+  assert.equal((await friend(rtc+'/join','POST',{sessionId})).status,200);
+  assert.equal((await friend(rtc+'/heartbeat','POST',{sessionId,muted:false})).status,200);
+  assert.equal((await owner(grant,'PUT',{allowed:false})).status,200);
+  assert.equal((await friend(rtc+'/state?sessionId='+sessionId)).status,403);
+  assert.equal((await friend(rtc+'/heartbeat','POST',{sessionId,muted:false})).status,410);
+  assert.equal((await friend(rtc+'/signal','POST',{
+    sessionId,recipientSessionId:ownerSession,kind:'candidate',payload:{candidate:'a'}
+  })).status,404);
+  assert.ok(!(await friend(root+'/voice/presence')).data.rooms[id]);
+  assert.equal((await owner(root+'/voice/presence')).data.rooms[id].length,1);
+
+  const voice=(await owner(root)).data.channels.find(x=>x.kind==='voice');
+  assert.ok(voice);
+  const voiceBase=root+'/channels/'+voice.id,voiceRtc=voiceBase+'/voice';
+  assert.equal((await owner(voiceBase+'/access','PUT',{accessMode:'restricted'})).status,200);
+  assert.equal((await friend(voiceRtc+'/join','POST',{sessionId:crypto.randomUUID()})).status,403);
+  assert.equal((await owner(root+'/members/voice_friend/channels/'+voice.id+'/access','PUT',{allowed:true})).status,200);
+  const voiceSession=crypto.randomUUID();
+  assert.equal((await friend(voiceRtc+'/join','POST',{sessionId:voiceSession})).status,200);
+  assert.equal((await owner(root+'/members/voice_friend/channels/'+voice.id+'/access','PUT',{allowed:false})).status,200);
+  assert.equal((await friend(voiceRtc+'/state?sessionId='+voiceSession)).status,403);
+});
