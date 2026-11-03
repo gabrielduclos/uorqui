@@ -7,6 +7,8 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 This is ongoing technical-beta work on `main`, **not a tagged release or proof of a successful live deployment**.
 
 ### Updated product and communities
+- Removed the redundant **Explore communities** rail and public search/list from Communities. That area now focuses on joined groups, pending invitations and creation; public discovery stays exclusively under **Discover**.
+- Chat channel-invitation links and link previews now open the destination through **in-app navigation**, without creating a new tab or reloading. Token-based invitations use the existing in-app join flow; channel invitation pushes also open their destination directly.
 - **Invite to channel** now lists only other members of the selected community, omits blocked users and respects profile visibility; invitations use direct channel links instead of creating general community invite links.
 - Migration `0034_channel_names_per_kind` applied to production Neon on 3 Nov 2026, with the per-community, per-kind name uniqueness index verified. Existing backups preserved; account limits prevented a fresh snapshot/branch.
 - Invite push goes to recipients only: channel invitations use the existing direct-message push with invite-specific body, and community join invitations notify the invitee alone.
