@@ -6,6 +6,7 @@ import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { VoiceActivityMonitor } from './VoiceActivityMonitor';
 import { playVoiceRoomCue, unlockVoiceRoomAudio } from './communityVoiceSounds';
+import { navigateToPublicProfile } from './publicProfileNavigation';
 
 export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;deafened:boolean;isSelf:boolean;speaking?:boolean};
 export type VoiceRoomTarget={communityId:string;channelId:string;communityName:string;channelName:string;kind:'voice'|'meeting'};
@@ -726,6 +727,14 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const cameraEntries=Object.entries(cameras).filter(([id])=>
     id===selfSession.current?cameraOn:peers.some(peer=>peer.sessionId===id));
   const remoteCameraAvailable=cameraEntries.some(([id])=>id!==selfSession.current);
+  const floatingSpeakerId=activeSpeakers.find(peer=>!peer.isSelf)?.sessionId??
+    (spotlightId&&spotlightId!==selfSession.current?spotlightId:
+      cameraEntries.find(([id])=>id!==selfSession.current)?.[0]??null);
+  const floatingSpeaker=floatingSpeakerId?peers.find(peer=>peer.sessionId===floatingSpeakerId):null;
+  const floatingSpeakerStream=floatingSpeaker&&cameraEntries.some(([id])=>id===floatingSpeaker.sessionId)
+    ?cameras[floatingSpeaker.sessionId]:null;
+  const floatingSpeakerActive=Boolean(floatingSpeaker&&speaking.has(floatingSpeaker.sessionId));
+  const floatingSelfStream=cameraOn&&selfSession.current?cameras[selfSession.current]:null;
   const speakingCamera=meeting&&phase==='joined'
     ?activeSpeakers.find(peer=>!peer.isSelf&&cameras[peer.sessionId])?.sessionId??
       (!remoteCameraAvailable&&cameraOn&&activeSpeakers.some(peer=>peer.isSelf)?selfSession.current:null):null;
@@ -756,7 +765,30 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   },[fullMeeting]);
   useEffect(()=>{if(mode==='floating')setFullMeeting(false);},[mode]);
   if(mode==='floating')return <section role="region" aria-label={meeting?(pt?'Reunião em andamento':'Ongoing meeting'):(pt?'Chamada de voz em andamento':'Ongoing voice call')}
-    className="inline-flex max-w-full overflow-hidden rounded-xl border border-primary/30 bg-card shadow-2xl">
+    className="inline-flex max-w-full flex-col overflow-hidden rounded-xl border border-primary/30 bg-card shadow-2xl">
+    {meeting&&phase==='joined'&&<div className="grid w-[min(320px,calc(100vw-1.5rem))] grid-cols-2 gap-1.5 px-2 pt-2">
+      <div className={'relative aspect-video min-w-0 overflow-hidden rounded-lg border bg-black/90 '+
+        (activeSpeakers.some(peer=>peer.isSelf)?'border-emerald-400':'border-border/60')}>
+        {floatingSelfStream?<MeetingVideo stream={floatingSelfStream}
+          label={pt?'Sua câmera':'Your camera'} mirror className="absolute inset-0 size-full object-cover"/>:
+          <div className="grid size-full place-items-center text-white/50"><VideoOff className="size-6"/></div>}
+        <span className="absolute inset-x-0 bottom-0 truncate bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
+          {pt?'Você':'You'}{!floatingSelfStream&&(pt?' · câmera desligada':' · camera off')}</span>
+      </div>
+      <div className={'relative aspect-video min-w-0 overflow-hidden rounded-lg border bg-black/90 '+
+        (floatingSpeakerActive?'border-emerald-400 ring-1 ring-emerald-400/60':'border-border/60')}>
+        {floatingSpeakerStream?<MeetingVideo stream={floatingSpeakerStream}
+          label={floatingSpeaker?.displayName??''} className="absolute inset-0 size-full object-cover"/>:
+          <div className="grid size-full place-items-center">
+            {floatingSpeaker?<UserAvatar name={floatingSpeaker.displayName} image={floatingSpeaker.avatarUrl} size="sm"/>:
+              <Users className="size-6 text-white/50"/>}
+          </div>}
+        <span className="absolute inset-x-0 bottom-0 flex min-w-0 items-center gap-1 bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
+          {floatingSpeakerActive&&<span className="size-1.5 shrink-0 animate-pulse rounded-full bg-emerald-400"/>}
+          <span className="truncate">{floatingSpeaker?.displayName??(pt?'Aguardando':'Waiting')}</span>
+        </span>
+      </div>
+    </div>}
     <div className="flex min-w-0 items-center gap-1 p-1.5">
       <button type="button" className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-accent"
         onClick={onRestore} aria-label={pt?'Voltar para a sala de voz':'Return to voice room'}>
@@ -898,7 +930,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
                 <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="sm"/>
               </div>
               <div className="min-w-0 max-w-full">
-                <p className="truncate text-sm font-semibold">{peer.displayName}</p>
+                <a href={'/@'+peer.handle} onClick={event=>navigateToPublicProfile(event,peer.handle)}
+                  className="block truncate rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{peer.displayName}</a>
                 <p className="truncate text-xs text-muted-foreground">{peer.isSelf?(pt?'Você':'You'):'@'+peer.handle}</p>
               </div>
               <div className="absolute right-1 top-1 flex items-center gap-1 sm:right-2 sm:top-2">
