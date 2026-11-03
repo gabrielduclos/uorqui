@@ -1,26 +1,37 @@
-# Reuniões com áudio e vídeo
+# Salas de voz e reuniões com áudio e vídeo
 
-O Uorqui oferece canais de **Reunião** nas comunidades, separados dos canais de texto e das salas de voz.
+Atualizado em **03/11/2026** para o beta técnico `0.1.0-beta.1`.
 
-## Utilização
-- Administradores podem criar um canal do tipo **Reunião (áudio e vídeo)** na lista de canais.
-- O participante entra por ação explícita e concede permissões de microfone e câmera. A câmera pode ser desligada/ligada durante a reunião; se o acesso à câmera falhar, ainda é possível conectar apenas com áudio.
-- O limite da implementação P2P atual é de **seis participantes**. A transmissão utiliza WebRTC; não existe gravação ou armazenamento de áudio e vídeo no backend.
-- Em tela pequena, a reunião ocupa a área principal, com chat de texto disponível para expandir. Controles de chamada continuam acessíveis.
-- O botão **Convidar** copia o link da reunião ou envia uma mensagem direta para um @usuário pelo mensageiro do Uorqui. Quando existe um link de convite comunitário válido, ele é reutilizado; administradores podem gerar um quando necessário. Convidados não integrantes precisam aceitar o convite e entrar na comunidade antes de acessar a sala.
+O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O usuário entra na chamada explicitamente; abrir a sala não ativa câmera ou microfone automaticamente.
 
-## Aprovação
-- Apenas administradores/proprietário da comunidade podem alternar a reunião entre **Entrada direta** e **Por aprovação**.
-- Na modalidade por aprovação, o servidor nega a conexão WebRTC a integrantes não aprovados. Uma solicitação de acesso é registrada; administradores podem aprovar ou recusar. A aprovação é registrada por usuário e canal, até que a política mude ou que o estado seja alterado.
-- Entrar na comunidade e entrar na reunião são permissões distintas. Um link de convite **não** ignora a aprovação da reunião.
-- Solicitações de entrada em comunidades sujeitas a aprovação e em reuniões geram notificações na central dos administradores e alertas push quando autorizados. O tipo pode ser desligado em **Notificações > Ajustes > Solicitações das comunidades e reuniões**.
-- Os endpoints validam autenticação, papel do usuário, bloqueios/banimentos aplicáveis, política de entrada e acesso ao canal.
+## Comportamento da interface
 
-## Infraestrutura e validação
-A API Fastify reutiliza a sinalização e sessões WebRTC existentes (Neon PostgreSQL). **Publicado no beta técnico em 02/11/2026.** As migrações `0030`–`0032` cobrem reuniões, admissão, notificações e proteção por senha. As 33 migrações constam em produção; os testes de integração do GitHub e os cinco testes de verificação em produção passaram. Isso não substitui testes de áudio/vídeo em aparelhos reais.
+- **Chat de texto recolhido por padrão** tanto nas salas de voz quanto nas reuniões, com controle para expandir e recolher sem desligar a chamada.
+- O conteúdo da sala e o painel de texto se adaptam ao espaço disponível em celular e desktop. Uma chamada ativa pode ser minimizada dentro do Uorqui sem desmontar o componente WebRTC.
+- Na reunião, cada participante pode ativar/desativar sua câmera e microfone. Caso a câmera falhe, é possível entrar apenas com áudio.
+- A **câmera de quem fala** recebe realce visual baseado na atividade de áudio. O modo **Tela cheia** usa a câmera em destaque como imagem principal e, quando disponível, a própria câmera como miniatura sobreposta, no estilo de videoconferência.
+- É possível **fixar outra câmera** manualmente, navegar pelas miniaturas e voltar ao destaque automático. A apresentação de tela pode ocupar a imagem principal.
+- O botão **Compartilhar tela** está disponível nas salas de voz e nas reuniões: usa `getDisplayMedia` e permite exibir a tela e a câmera simultaneamente. O botão fica indisponível quando o navegador não oferece essa API; em celulares e PWAs, a captura varia conforme o sistema e navegador.
+- Os controles de microfone, câmera, apresentação, encerramento e saída da tela cheia continuam acessíveis na visualização ampliada.
+- O botão **Convidar** copia um link ou envia um convite pelo chat 1:1 do Uorqui. Um link de convite para a comunidade não contorna as regras de acesso da reunião.
 
-**Limitações:** WebRTC P2P depende da conectividade de rede; relay TURN e permissões de câmera precisam ser testados em aparelhos iOS/Android e em redes diferentes. O PWA instalado pode ter limitações de captura em segundo plano.
+## Aprovação e segurança
 
-## Canais protegidos por senha
+- Proprietários e administradores escolhem **Entrada direta** ou **Por aprovação** em cada reunião.
+- No modo por aprovação, a API impede o ingresso WebRTC antes da autorização; o administrador pode aceitar ou recusar solicitações.
+- **Participação na comunidade**, **senha do canal** e **admissão da reunião** são checagens distintas e aplicadas no backend.
+- Solicitações para entrar em comunidades e reuniões geram avisos na central de notificações dos administradores e push quando autorizado.
+- Uma solicitação de comunidade aprovada emite evento SSE direcionado à conta solicitante: a lista e o detalhe são atualizados sem recarregar a página, e a assinatura é renovada para receber eventos da comunidade recém-ingressada.
 
-Proprietários e administradores podem definir, trocar ou remover a senha em **Moderação da comunidade > Gerenciar canais**, tanto para texto quanto para voz e reunião. A senha é armazenada como hash scrypt com salt; participantes desbloqueiam individualmente cada canal. A troca revoga liberações anteriores, e tentativas incorretas têm limite. Associação à comunidade e aprovação da reunião continuam obrigatórias independentemente da senha.
+## Administração dos canais
+
+- Em qualquer canal de texto, voz ou reunião, o botão **Editar canal** fica no cabeçalho apenas para proprietário/administradores.
+- Nesse menu, é possível renomear o canal, definir/trocar/remover senha com confirmação. **Excluir canal** continua na moderação da comunidade.
+- As senhas são armazenadas como hash scrypt com salt; a troca revoga desbloqueios anteriores. O servidor limita tentativas de senha incorreta.
+
+## Arquitetura e limites
+
+- WebRTC usa uma malha **P2P de até seis pessoas** com sinalização na API Fastify e sessões persistidas em Neon PostgreSQL; não há gravação da reunião pela aplicação.
+- O compartilhamento de tela e o vídeo dependem de suporte e permissões do navegador. TURN, redes distintas, iOS/Android e PWA instalado **ainda exigem testes práticos**.
+- As migrações versionadas `0030`–`0032` introduziram os canais de reunião, o controle de entrada e as senhas. Migrações históricas não devem ser apagadas só porque seus recursos foram aposentados.
+- CI de TypeScript, build e integração não substitui um teste real com dois ou mais aparelhos e redes diferentes.
