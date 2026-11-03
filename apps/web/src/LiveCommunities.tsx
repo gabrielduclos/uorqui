@@ -495,17 +495,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     if(id)await loadDetail(id);
   }
   async function act(run:()=>Promise<unknown>,success:string,id=selectedId,key='action'){
-    if(busy)return;
+    if(busy)return false;
     setBusy(true);setBusyAction(key);setError('');setNotice('');
-    try{await run();await refresh(id);setNotice(success);}
+    try{await run();await refresh(id);setNotice(success);return true;}
     catch(reason){
       const err=reason instanceof Error?reason.message:'';
       setError(err==='SLUG_TAKEN'?(pt?'Este endereço já está em uso.':'This address is taken.')
         :err==='REQUEST_COOLDOWN'?(pt?'Você precisa aguardar antes de tentar novamente.':'Please wait before retrying.')
-        :err==='CHANNEL_EXISTS'?(pt?'Já existe um canal com esse nome.':'Channel name already exists.')
+        :err==='CHANNEL_EXISTS'?(pt?'Já existe um canal desse tipo com esse nome.':'A channel of this type already has that name.')
         :err==='COMMUNITY_LIMIT'?(pt?'Limite de comunidades criadas atingido.':'Community creation limit reached.')
         :err==='OWNER_CANNOT_LEAVE'?(pt?'O proprietário não pode sair sem transferir a comunidade.':'Owners cannot leave without transferring ownership.')
         :(pt?'Não foi possível concluir a operação.':'Could not complete this operation.'));
+      return false;
     }finally{setBusy(false);setBusyAction(null);}
   }
 
@@ -576,7 +577,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         (pt?'Senha do canal removida.':'Channel password removed.'));
     }catch(reason){
       const code=reason instanceof Error?reason.message:'';
-      setChannelSettingsError(code==='CHANNEL_EXISTS'?(pt?'Já existe um canal com esse nome.':'Channel name already exists.'):
+      setChannelSettingsError(code==='CHANNEL_EXISTS'?(pt?'Já existe um canal desse tipo com esse nome.':'A channel of this type already has that name.'):
         code==='ADMIN_REQUIRED'||code==='Forbidden'?(pt?'Você não tem permissão para editar este canal.':'You cannot edit this channel.'):
         (pt?'Não foi possível salvar as alterações.':'Could not save changes.'));
     }finally{setChannelSettingsBusy(null);}
@@ -602,9 +603,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   async function createChannel(event:FormEvent){
     event.preventDefault();
     if(!selectedId||!newChannelName.trim())return;
-    await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind,accessMode:newChannelAccessMode})),
+    const created=await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind,accessMode:newChannelAccessMode})),
       pt?'Canal criado.':'Channel created.',selectedId,'createChannel');
-    setNewChannelOpen(false);setNewChannelName('');setNewChannelAccessMode('open');
+    if(created){setNewChannelOpen(false);setNewChannelName('');setNewChannelAccessMode('open');}
   }
   async function invite(event:FormEvent){
     event.preventDefault();
@@ -948,6 +949,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                     <option value="restricted">{pt?'Fechado — somente autorizados':'Closed — authorized members only'}</option>
                   </select>
                 </label>
+                <p className="text-xs text-muted-foreground">{pt?
+                  'Canais de texto, voz e reunião podem compartilhar o nome. No mesmo tipo, o nome deve ser único.':
+                  'Text, voice and meeting channels may share a name. Names must be unique within each type.'}</p>
                 <Button size="sm" type="submit" loading={busyAction==='createChannel'} disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
               </form>}
               <form className="space-y-2 pt-2" onSubmit={event=>void invite(event)}>
