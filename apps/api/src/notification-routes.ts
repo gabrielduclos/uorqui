@@ -88,6 +88,22 @@ export function registerNotificationRoutes(app:FastifyInstance,readSession:Sessi
       return reply.header('Cache-Control',noCache).send({read:true});
     }catch(error){request.log.error({err:error},'Mark notification read');return reply.code(503).send({error:'Notifications unavailable'});}
   });
+  // Removing an inbox item does not cancel the underlying friendship or
+  // community request, and can only affect the signed-in recipient's records.
+  app.delete('/api/v1/notifications/:id',{schema:{params:{type:'object',required:['id'],additionalProperties:false,
+    properties:{id:{type:'string',format:'uuid'}}}}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const userId=await me(request);if(!userId)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      const result=await getPool().query<{read_at:Date|null}>(
+        'DELETE FROM activity_notifications WHERE id=$1 AND recipient_id=$2 RETURNING read_at',[id,userId]);
+      if(!result.rowCount)return reply.code(404).send({error:'Notification unavailable'});
+      await publishDmUserEvent(userId,'notification').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({removed:true,wasUnread:result.rows[0].read_at===null});
+    }catch(error){request.log.error({err:error},'Delete notification');return reply.code(503).send({error:'Notification deletion unavailable'});}
+  });
+
   app.post('/api/v1/notifications/read-all',async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
     try{
