@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom';
 import { Dialog } from 'radix-ui';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, LockKeyholeOpen, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Pencil, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Hash, Headphones, LockKeyhole, LockKeyholeOpen, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Pencil, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -51,8 +51,8 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,onExploreDiscover,initialCommunityId,unreadChannels,unreadCommunities,unreadLocations,active}:{
-  myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;onExploreDiscover?:()=>void;initialCommunityId?:string|null;
+export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,unreadChannels,unreadCommunities,unreadLocations,active}:{
+  myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
   unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
@@ -89,8 +89,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [voiceRooms,setVoiceRooms]=useState<Record<string,CommunityVoiceParticipant[]>>({});
   const [voicePresenceLoading,setVoicePresenceLoading]=useState(false);
   const [voicePresenceFailed,setVoicePresenceFailed]=useState(false);
-  const [discovery,setDiscovery]=useState(false);
-  const [query,setQuery]=useState('');
   const [createOpen,setCreateOpen]=useState(false);
   const [createName,setCreateName]=useState('');
   const [createSlug,setCreateSlug]=useState('');
@@ -249,14 +247,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       if(externalSelection.current)return;
       if(initialCommunityId&&groups.some(g=>g.id===initialCommunityId&&g.myRole)){
         setSelectedId(initialCommunityId);
-        setDiscovery(false);
+        
       }else{
         // Restore only a community this account still belongs to.
         let remembered:string|null=null;
         try{remembered=localStorage.getItem(lastCommunityKey);}catch{}
         const chosen=groups.find(group=>group.id===remembered&&group.myRole)??groups.find(group=>group.myRole);
         setSelectedId(chosen?.id??null);
-        setDiscovery(false);
+        
       }
     }).catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar as comunidades.':'Could not load communities.');}});
     return ()=>{active=false;};
@@ -304,7 +302,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       externalSelection.current=true;
       requestedChannel.current=selectedChannel?{communityId:target.communityId,channelId:selectedChannel}:null;
       setSelectedId(target.communityId);
-      setDiscovery(false);setCreateOpen(false);setError('');setNotice('');
+      setCreateOpen(false);setError('');setNotice('');
       setChannelOpen(Boolean(selectedChannel));
       if(selectedChannel){
         setChannelId(selectedChannel);
@@ -508,12 +506,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
 
   function selectCommunity(id:string){
     requestedChannel.current=null;
-    closeChannel();setSelectedId(id);setDiscovery(false);setCreateOpen(false);
+    closeChannel();setSelectedId(id);setCreateOpen(false);
     setError('');setNotice('');
   }
   function openUnread(location:UnreadLocation){
     requestedChannel.current={communityId:location.communityId,channelId:location.channelId};
-    setSelectedId(location.communityId);setDiscovery(false);setCreateOpen(false);
+    setSelectedId(location.communityId);setCreateOpen(false);
     setChannelId(location.channelId);setChannelOpen(true);setVoiceMinimized(true);
     setError('');setNotice('');
     if(location.channelKind!=='text' && voicePhase==='idle'){
@@ -738,15 +736,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   }
 
   const owned=list.filter(group=>group.myRole);
-  const available=list.filter(group=>group.visibility!=='private'||group.myRole||group.requestKind==='invite');
-  const matches=available.filter(group=>(group.name+' '+group.slug).toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const homeGroups=[...owned,...list.filter(group=>!group.myRole&&group.requestKind==='invite'&&group.requestStatus==='pending')];
   const visibilityLabel=(v:Visibility)=>v==='public'?(pt?'Pública':'Public'):v==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Privada':'Private');
   const communityIcon=(group:Community)=>group.name.trim().charAt(0).toUpperCase()||'C';
   const communityAvatar=(group:Community,classes:string)=>group.avatarUrl?
     <img src={group.avatarUrl} alt="" className={classes+' block min-h-0 min-w-0 object-cover'}/>:
     <span aria-hidden="true">{communityIcon(group)}</span>;
 
-  const voiceInline=Boolean(activeVoiceRoom&&active&&channelOpen&&!voiceMinimized&&!discovery&&
+  const voiceInline=Boolean(activeVoiceRoom&&active&&channelOpen&&!voiceMinimized&&!createOpen&&
     community?.id===activeVoiceRoom.communityId&&activeChannel?.id===activeVoiceRoom.channelId&&
     activeChannel?.kind!=='text');
 
@@ -754,22 +751,17 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     <nav data-uorqui-community-rail aria-label={pt?'Minhas comunidades':'My communities'}
       className={cn('relative z-20 w-16 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-card/95 py-4',
         channelOpen?'hidden md:flex':'flex')}>
-      <button type="button" onClick={()=>{closeChannel();setDiscovery(true);setCreateOpen(false);}}
-        title={pt?'Explorar comunidades':'Explore communities'} aria-label={pt?'Explorar comunidades':'Explore communities'}
-        className={cn('grid size-11 shrink-0 place-items-center rounded-2xl border border-border text-primary hover:bg-secondary',discovery&&'bg-secondary ring-2 ring-primary/50')}>
-        <Compass className="size-5"/></button>
-      <div className="h-px w-8 shrink-0 bg-border"/>
       {owned.map(group=><button type="button" key={group.id} title={group.name}
         aria-label={group.name+(unreadCommunities[group.id]?' · '+unreadCommunities[group.id]+(pt?' mensagens não lidas':' unread messages'):'')}
-        aria-current={selectedId===group.id&&!discovery?'page':undefined}
-        onClick={()=>selectCommunity(group.id)} className={cn('relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!discovery&&'ring-2 ring-primary')}>
+        aria-current={selectedId===group.id&&!createOpen?'page':undefined}
+        onClick={()=>selectCommunity(group.id)} className={cn('relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-base font-semibold text-primary hover:bg-primary/25',selectedId===group.id&&!createOpen&&'ring-2 ring-primary')}>
         <span className="grid size-full place-items-center overflow-hidden rounded-2xl">{communityAvatar(group,'size-full rounded-2xl')}</span>
         {!!unreadCommunities[group.id]&&<span aria-hidden="true"
           className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-card bg-destructive px-1 text-[10px] font-bold text-white">
           {unreadCommunities[group.id]>99?'99+':unreadCommunities[group.id]}
         </span>}
       </button>)}
-      <button type="button" onClick={()=>{closeChannel();setDiscovery(true);setCreateOpen(true);}}
+      <button type="button" onClick={()=>{closeChannel();setSelectedId(null);setCreateOpen(true);}}
         aria-label={pt?'Criar comunidade':'Create community'} title={pt?'Criar comunidade':'Create community'}
         className="grid size-11 shrink-0 place-items-center rounded-2xl border border-dashed border-primary/60 text-primary hover:bg-secondary">
         <Plus className="size-5"/>
@@ -778,9 +770,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
 
     <section aria-label={pt?'Comunidades e canais':'Communities and channels'}
       className={cn('h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/25 md:flex md:w-72 md:shrink-0',channelOpen?'hidden':'flex')}>
-      {discovery||!selectedId?<div className="flex h-full min-h-0 flex-col">
+      {createOpen||!selectedId?<div className="flex h-full min-h-0 flex-col">
         <div className="shrink-0 space-y-3 border-b border-border bg-card/95 p-4">
-          <h2 className="text-base font-semibold">{createOpen?(pt?'Criar comunidade':'Create community'):(pt?'Explorar comunidades':'Explore communities')}</h2>
+          <h2 className="text-base font-semibold">{createOpen?(pt?'Criar comunidade':'Create community'):(pt?'Minhas comunidades':'My communities')}</h2>
           <Button className="w-full" size="sm" variant={createOpen?'outline':'secondary'}
             onClick={()=>{setCreateOpen(v=>!v);setError('');}}>{createOpen?<X className="size-4"/>:<Plus className="size-4"/>}
             {createOpen?(pt?'Fechar formulário':'Close form'):(pt?'Nova comunidade':'New community')}</Button>
@@ -997,10 +989,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
                 name={community.name} description={community.description} visibility={community.visibility} avatarUrl={community.avatarUrl}
                 channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}
-                onDeleted={async()=>{closeChannel();setDetail(null);setSelectedId(null);setDiscovery(true);await loadList();}}/>}
+                onDeleted={async()=>{closeChannel();setDetail(null);setSelectedId(null);await loadList();}}/>}
             {community.myRole!=='owner'&&<Button variant="ghost" size="sm" className="w-full text-muted-foreground"
               loading={busyAction==='leaveCommunity'} disabled={busy} onClick={()=>void act(async()=>{
-                await api('/api/v1/communities/'+community.id+'/membership',{method:'DELETE'});closeChannel();setDiscovery(true);setSelectedId(null);setDetail(null);
+                await api('/api/v1/communities/'+community.id+'/membership',{method:'DELETE'});closeChannel();setSelectedId(null);setDetail(null);
               },pt?'Você saiu da comunidade.':'You left the community.',null,'leaveCommunity')}>{pt?'Sair da comunidade':'Leave community'}</Button>}
           </>}
         </div>
@@ -1009,7 +1001,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
 
     <section aria-label={pt?'Conteúdo da comunidade':'Community content'}
       className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden',channelOpen?'flex':'hidden md:flex')}>
-      {community&&memberView(community)&&activeChannel&&!discovery?<>
+      {community&&memberView(community)&&activeChannel&&!createOpen?<>
         <header data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-3 backdrop-blur sm:px-4">
           <Button type="button" size="icon" variant="ghost"
             className={activeChannel.kind!=='text'?'shrink-0':'shrink-0 md:hidden'}
@@ -1259,7 +1251,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             // Restore both the main navigation and the selected voice room.
             // The community view stays mounted while the call floats over other tabs.
             onRestoreNavigation?.();
-            setSelectedId(activeVoiceRoom.communityId);setDiscovery(false);
+            setSelectedId(activeVoiceRoom.communityId);
             setChannelId(activeVoiceRoom.channelId);setChannelOpen(true);
             setVoiceMinimized(false);
           }}
