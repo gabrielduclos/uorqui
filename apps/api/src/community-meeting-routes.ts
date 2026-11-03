@@ -24,6 +24,8 @@ export function registerCommunityMeetingRoutes(app:FastifyInstance,session:Sessi
       "WHERE ch.id=$2 AND ch.community_id=$1 AND ch.kind='meeting' "+
       "AND (ch.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS "+
       "(SELECT 1 FROM community_channel_password_access access WHERE access.channel_id=ch.id AND access.user_id=$3)) "+
+      "AND (ch.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS "+
+      "(SELECT 1 FROM community_channel_member_access access WHERE access.channel_id=ch.id AND access.user_id=$3)) "+
       "AND NOT EXISTS "+
       '(SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=$3)',
       [id,channelId,userId]);
