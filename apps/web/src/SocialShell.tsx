@@ -230,7 +230,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             <div hidden={area!=='communities'} className="h-full min-h-0">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
-                onExploreDiscover={()=>move('discover')} initialCommunityId={invitedCommunityId}
+                initialCommunityId={invitedCommunityId}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
             </div>
