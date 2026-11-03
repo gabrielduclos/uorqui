@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import {publishCommunityEvent,publishCommunityMembershipForUser,subscribeCommunityEvents} from './community-events.js';
 import { channelGate, channelGateError, channelGateStatus, hashChannelPassword, verifyChannelPassword } from './channel-password.js';
 import {recordCommunityRequest} from './activity-notifications.js';
-import {pushCommunityMessage} from './push-routes.js';
+import {pushCommunityMessage,pushCommunityInvite} from './push-routes.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{user:{id:string}}|null>;
 const uuid={type:'string',format:'uuid'} as const;
@@ -439,6 +439,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'ON CONFLICT(community_id,user_id) DO UPDATE SET kind=\'invite\',status=\'pending\',created_at=now(),updated_at=now()',
         [id,target]);
       void publishCommunityMembershipForUser(id,target as string).catch(()=>{});
+      void pushCommunityInvite(target as string,id,me).catch(error=>request.log.warn({err:error},'Community invitation push'));
       return reply.code(201).header('Cache-Control',noCache).send({status:'invited'});
     }catch(error){request.log.error({err:error},'Invite community member');return reply.code(503).send({error:'Unavailable'});}
   });
