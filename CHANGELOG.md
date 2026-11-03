@@ -7,6 +7,7 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 This is ongoing technical-beta work on `main`, **not a tagged release or proof of a successful live deployment**.
 
 ### Updated product and communities
+- Direct conversation rows now have **subtle inset dividers** between items, independent of the voice/video and text-panel separator.
 - Notifications now include an **X** for per-item persistent deletion, updating the list and unread badge without cancelling friendship or join requests. In voice/meeting rooms a distinct divider separates audio/video and text when both are open (vertical on desktop, horizontal on phones); unintended DM list separators were removed.
 - Community/meeting join-request notifications now identify the community (and meeting when available) in-app and in push. Moderation member identities have a larger profile-opening target and the public profile overlays the dialog. Community home participant names remain plain text; profile links stay within channels and moderation.
 - Desktop conversation rows now use clearer continuous separators between items.
