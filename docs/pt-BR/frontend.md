@@ -4,7 +4,7 @@
 
 ## Estado do documento
 
-O beta técnico já contém **mensageiro real, comunidades reais, feed híbrido legado e salas de voz**. As telas demonstrativas citadas na documentação inicial não representam mais o estado do aplicativo. A direção aprovada em **02/11/2026**, detalhada em [Descobrir](descobrir.md), **teve sua implementação inicial adicionada ao front-end na `main`, com validação em produção ainda pendente**.
+O beta técnico contém **mensageiro 1:1 real, Descobrir, comunidades, salas de voz e reuniões em vídeo**. O feed global foi aposentado em 02/11/2026. A direção atual está em [Descobrir](descobrir.md), e a [auditoria de manutenção](auditoria-manutencao.md) foi realizada em 03/11. Deploy e testes práticos ainda exigem confirmação separada.
 
 ## Objetivo
 
@@ -14,7 +14,7 @@ Interface mobile-first para **descobrir comunidades, participar de canais/salas 
 
 - **Descobrir (início):** atividades reais dos canais e salas de voz das comunidades do usuário; busca e comunidades públicas recomendadas. Sem posts, feed infinito, filtro «Para você/Seguindo» ou modo vertical de vídeos.
 - **Mensagens:** conversas individuais 1:1, histórico, anexos, reações e estados de entrega/leitura.
-- **Comunidades:** espaços do usuário, canais de texto, salas de voz e ferramentas de administração/moderação.
+- **Comunidades:** espaços do usuário, canais de texto, voz, reuniões em vídeo, senhas por canal e moderação. Nas salas de voz/reunião, o texto inicia recolhido e pode ser expandido.
 - **Perfil, notificações e configurações:** acessíveis sem ocupar obrigatoriamente uma aba principal. A privacidade do perfil continua independente de comunidades.
 
 Em Descobrir, atalhos levam à comunidade e ao canal exato, sem ingressar automaticamente na chamada ou marcar mensagens como lidas. O usuário sem comunidades vê busca, recomendações públicas e estados vazios honestos. Privacidade e contagens são verificadas pela API.
@@ -28,13 +28,13 @@ Em Descobrir, atalhos levam à comunidade e ao canal exato, sem ingressar automa
 - Skeleton nos carregamentos iniciais e spinners em ações dependentes da API. Atualizações em segundo plano não apagam dados já exibidos.
 - Atividades, presenças, badges e recomendações não devem ser simulados como reais.
 
-## Migração da interface atual
+## Estado da migração e próxima validação
 
-1. Construir Descobrir e ajustar menu, links internos e onboarding para **Descobrir · Mensagens · Comunidades**.
-2. Reutilizar as APIs e eventos autenticados de comunidades/voz para atividade; projetar os novos endpoints somente se necessário, sempre com controle de acesso no servidor.
-3. Revisar dependências do feed no perfil, notificações, roteamento, compartilhamento e deep links antigos.
-4. Descontinuar o acesso global aos posts e modo vídeos depois da migração, **sem apagar dados** e sem interromper o compartilhamento de mídias em chats/canais.
-5. Validar desktop, iPhone Safari/PWA, Android/PWA, Light/Dark e PT/EN.
+1. **Concluído:** substituir o feed global por Descobrir e atualizar navegação, links internos e onboarding.
+2. **Concluído:** reutilizar atividades autorizadas e eventos SSE, inclusive aprovação direcionada à conta. As permissões continuam verificadas no servidor.
+3. **Concluído na auditoria de 03/11:** retirar controles de compartilhamento do feed sem uso e corrigir o destino de links antigos de publicações.
+4. **Preservado:** histórico de migrações Drizzle e mídias de recuperação; não excluir dados de produção por inferência de uso no front-end.
+5. **Pendente:** validar desktop, iPhone Safari/PWA, Android/PWA, Light/Dark e PT/EN, incluindo captura de tela WebRTC e tela cheia da reunião.
 
 ## Validação e isolamento
 
