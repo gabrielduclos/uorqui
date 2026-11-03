@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
@@ -19,14 +20,36 @@ async function req<T>(url:string,init?:RequestInit):Promise<T>{
   if(!r.ok){const error=await r.json().catch(()=>null) as {error?:string}|null;throw Error(error?.error??'HTTP_'+r.status);}
   return r.status===204?undefined as T:r.json() as Promise<T>;
 }
-function ScreenTile({stream,label}:{stream:MediaStream;label:string}){
+function ScreenTile({stream,label,active=false,kind='screen',pt=false}:{
+  stream:MediaStream;label:string;active?:boolean;kind?:'camera'|'screen';pt?:boolean;
+}){
   const el=useRef<HTMLVideoElement|null>(null);
   useEffect(()=>{const video=el.current;if(!video)return;video.srcObject=stream;void video.play().catch(()=>{});
     return ()=>{video.pause();video.srcObject=null;};},[stream]);
-  return <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-black">
-    <video ref={el} autoPlay playsInline muted className="aspect-video w-full object-contain" aria-label={label}/>
-    <p className="truncate bg-card px-3 py-2 text-xs font-medium">{label}</p>
+  return <div className={'relative min-w-0 overflow-hidden rounded-xl border bg-black transition-[border-color,box-shadow] '+
+    (active?'border-emerald-400 ring-2 ring-emerald-500 shadow-[0_0_18px_rgba(16,185,129,0.35)]':'border-border')}>
+    <video ref={el} autoPlay playsInline muted
+      className={'aspect-video w-full '+(kind==='camera'?'object-cover':'object-contain')} aria-label={label}/>
+    <div className="flex min-w-0 items-center justify-between gap-2 bg-card px-3 py-2">
+      <p className="min-w-0 truncate text-xs font-medium">{label}</p>
+      {active&&<span role="status" className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-500">
+        <span className="size-2 animate-pulse rounded-full bg-emerald-500"/>
+        {pt?'Falando':'Speaking'}
+      </span>}
+    </div>
   </div>;
+}
+function MeetingVideo({stream,label,className,mirror=false}:{
+  stream:MediaStream;label:string;className?:string;mirror?:boolean;
+}){
+  const ref=useRef<HTMLVideoElement|null>(null);
+  useEffect(()=>{
+    const video=ref.current;if(!video)return;
+    video.srcObject=stream;void video.play().catch(()=>{});
+    return ()=>{video.pause();video.srcObject=null;};
+  },[stream]);
+  return <video ref={ref} muted autoPlay playsInline aria-label={label}
+    className={className+' '+(mirror?'scale-x-[-1]':'')}/>;
 }
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
@@ -44,6 +67,9 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [deafened,setDeafened]=useState(false);
   const [connections,setConnections]=useState<Record<string,RTCPeerConnectionState>>({});
   const [speaking,setSpeaking]=useState<Set<string>>(()=>new Set());
+  const [spotlightId,setSpotlightId]=useState<string|null>(null);
+  const [pinnedCamera,setPinnedCamera]=useState<string|null>(null);
+  const [fullMeeting,setFullMeeting]=useState(false);
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
   const [micInterrupted,setMicInterrupted]=useState(false);
@@ -117,7 +143,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     timers.current=[];
     for(const pc of pcMap.current.values())pc.close();
     pcMap.current.clear();candidateQueue.current.clear();knownPeers.current.clear();
-    voiceMonitor.current?.dispose();voiceMonitor.current=null;recentPeers.current=[];setSpeaking(new Set());
+    voiceMonitor.current?.dispose();voiceMonitor.current=null;recentPeers.current=[];setSpeaking(new Set());setSpotlightId(null);setPinnedCamera(null);setFullMeeting(false);
     for(const el of audioMap.current.values()){el.pause();el.srcObject=null;el.remove();}
     audioMap.current.clear();local.current?.getTracks().forEach(track=>{track.onmute=null;track.onunmute=null;track.onended=null;track.stop();});local.current=null;
     cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;deafenedRef.current=false;priorMuteRef.current=false;
@@ -208,8 +234,27 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       if(!running.current)return;
       if(event.track.kind==='video'){
         const media=event.streams[0]??new MediaStream([event.track]);
-        const display=()=>{if(running.current){if(meeting)setCameras(old=>({...old,[id]:media}));else setScreens(old=>({...old,[id]:media}));}};
-        const hide=()=>{const update=(old:Record<string,MediaStream>)=>{if(!(id in old))return old;const next={...old};delete next[id];return next;};if(meeting)setCameras(update);else setScreens(update);};
+        const display=()=>{
+          if(!running.current)return;
+          // Camera uses the same stream as microphone; screen capture uses
+          // its own video-only stream. Both can now be shown at the same time.
+          const isCamera=meeting&&media.getAudioTracks().length>0;
+          const move=(previous:Record<string,MediaStream>)=>{
+            if(previous[id]?.id!==media.id)return previous;
+            const next={...previous};delete next[id];return next;
+          };
+          if(isCamera){setCameras(old=>({...old,[id]:media}));setScreens(move);}
+          else{setScreens(old=>({...old,[id]:media}));setCameras(move);}
+        };
+        const hide=()=>{
+          const remove=(previous:Record<string,MediaStream>)=>{
+            if(previous[id]?.id!==media.id)return previous;
+            const next={...previous};delete next[id];return next;
+          };
+          setCameras(remove);setScreens(remove);
+          media.removeEventListener('addtrack',display);
+        };
+        media.addEventListener('addtrack',display);
         event.track.onunmute=display;event.track.onmute=hide;event.track.onended=hide;
         display();return;
       }
@@ -223,6 +268,10 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       }
       const media=event.streams[0]??new MediaStream([event.track]);
       element.srcObject=media;
+      if(meeting&&media.getVideoTracks().length){
+        setCameras(old=>({...old,[id]:media}));
+        setScreens(old=>old[id]?.id===media.id?Object.fromEntries(Object.entries(old).filter(([key])=>key!==id)):old);
+      }
       voiceMonitor.current?.add(id,media);
       void element.play().catch(()=>{if(running.current)setAudioBlocked(true);});
     };
@@ -673,6 +722,29 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
 
   const count=phase==='joined'?peers.length:0;
   const activeSpeakers=phase==='joined'?visiblePeers.filter(peer=>peer.speaking):[];
+  const cameraEntries=Object.entries(cameras).filter(([id])=>
+    id===selfSession.current?cameraOn:peers.some(peer=>peer.sessionId===id));
+  const speakingCamera=meeting&&phase==='joined'
+    ?activeSpeakers.find(peer=>!peer.isSelf&&cameras[peer.sessionId])?.sessionId??
+      activeSpeakers.find(peer=>cameras[peer.sessionId]&&(!peer.isSelf||cameraOn))?.sessionId??null:null;
+  useEffect(()=>{
+    if(!speakingCamera)return;
+    const timeout=window.setTimeout(()=>setSpotlightId(speakingCamera),350);
+    return ()=>window.clearTimeout(timeout);
+  },[speakingCamera]);
+  const mainCameraId=(pinnedCamera&&cameraEntries.some(([id])=>id===pinnedCamera)?pinnedCamera:null)??
+    (spotlightId&&cameraEntries.some(([id])=>id===spotlightId)?spotlightId:null)??
+    (cameraEntries.find(([id])=>id!==selfSession.current)?.[0]??cameraEntries[0]?.[0]??null);
+  const mainCamera=mainCameraId?cameras[mainCameraId]:null;
+  const mainParticipant=peers.find(peer=>peer.sessionId===mainCameraId);
+  const ownSmallCamera=selfSession.current&&cameraOn&&selfSession.current!==mainCameraId?cameras[selfSession.current]:null;
+  useEffect(()=>{
+    if(!fullMeeting)return;
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setFullMeeting(false);setPinnedCamera(null);}};
+    document.addEventListener('keydown',escape);
+    return()=>document.removeEventListener('keydown',escape);
+  },[fullMeeting]);
+  useEffect(()=>{if(mode==='floating')setFullMeeting(false);},[mode]);
   if(mode==='floating')return <section role="region" aria-label={meeting?(pt?'Reunião em andamento':'Ongoing meeting'):(pt?'Chamada de voz em andamento':'Ongoing voice call')}
     className="inline-flex max-w-full overflow-hidden rounded-xl border border-primary/30 bg-card shadow-2xl">
     <div className="flex min-w-0 items-center gap-1 p-1.5">
@@ -768,8 +840,23 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         <span>{pt?'O sistema interrompeu o microfone, mas a sala permanece aberta.':'System microphone capture was interrupted; the room remains open.'}</span>
         <Button size="sm" variant="outline" onClick={()=>void restoreMic()}><Mic className="size-4"/>{pt?'Reativar microfone':'Restore microphone'}</Button>
       </div>}
-      {meeting&&phase==='joined'&&Object.keys(cameras).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-2 gap-2 sm:grid-cols-3">
-        {Object.entries(cameras).filter(([id])=>id===selfSession.current?cameraOn:true).map(([id,stream])=><ScreenTile key={'camera:'+id} stream={stream} label={id===selfSession.current?(pt?'Sua câmera':'Your camera'):(peers.find(p=>p.sessionId===id)?.displayName??'')}/>)}
+      {meeting&&phase==='joined'&&<div className="mx-auto mt-3 w-full max-w-5xl space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-muted-foreground">{pt?'Câmeras da reunião':'Meeting cameras'}</p>
+          <Button type="button" size="sm" variant="outline" onClick={()=>setFullMeeting(true)}>
+            <Maximize2 className="size-4"/>{pt?'Tela cheia':'Full screen'}
+          </Button>
+        </div>
+        {cameraEntries.length>0?<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {cameraEntries.map(([id,stream])=><button type="button" key={'camera:'+id}
+            className="min-w-0 rounded-xl text-left" onClick={()=>setPinnedCamera(previous=>previous===id?null:id)}
+            aria-pressed={pinnedCamera===id} title={pt?'Toque para destacar esta câmera':'Select this camera'}>
+            <ScreenTile stream={stream} pt={pt} kind="camera"
+              active={speaking.has(id)}
+              label={id===selfSession.current?(pt?'Sua câmera':'Your camera'):(peers.find(p=>p.sessionId===id)?.displayName??'')}/>
+            {pinnedCamera===id&&<span className="mt-1 block text-center text-[11px] text-primary">{pt?'Fixada':'Pinned'}</span>}
+          </button>)}
+        </div>:<p className="text-xs text-muted-foreground">{pt?'Nenhuma câmera ativada. Você ainda pode conversar por áudio.':'No cameras enabled. Audio is still available.'}</p>}
       </div>}
       {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-1 gap-2 sm:grid-cols-2">
         {Object.entries(screens).map(([id,stream])=><ScreenTile key={id} stream={stream} label={id===selfSession.current?
@@ -845,14 +932,14 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
             title={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}>
             {deafened?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
           </button>
-          {!meeting&&<button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
+          <button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
             className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-40 '+(sharing?'border-primary/60 bg-primary/15 text-primary':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={sharing?(pt?'Parar compartilhamento de tela':'Stop screen sharing'):(pt?'Compartilhar tela':'Share screen')}
             title={('getDisplayMedia' in (navigator.mediaDevices??{}))?(sharing?(pt?'Parar apresentação':'Stop presenting'):(pt?'Compartilhar tela':'Share screen')):
               (pt?'Não disponível neste navegador':'Unavailable in this browser')}>
             {screenBusy?<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"/>:
               sharing?<MonitorOff className="size-5"/>:<MonitorUp className="size-5"/>}
-          </button>}
+          </button>
           {audioBlocked&&!deafened&&<Button variant="outline" className="min-h-11 rounded-xl" onClick={enableAudio}>
             <Volume2 className="size-4"/>{pt?'Ativar som':'Enable sound'}</Button>}
           <button type="button" onClick={leaveRoom}
