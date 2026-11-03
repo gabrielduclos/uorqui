@@ -75,6 +75,16 @@ test('persistent communities: discover, create, join, channels and real messages
   const add=await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'text'});
   assert.equal(add.status,201);
   assert.equal((await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'text'})).status,409);
+  const sameNameVoice=await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'voice'});
+  assert.equal(sameNameVoice.status,201,'voice channel may share its name with a text channel');
+  const sameNameMeeting=await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'meeting'});
+  assert.equal(sameNameMeeting.status,201,'meeting may share its name with text and voice channels');
+  assert.equal((await owner('/api/v1/communities/'+id+'/channels','POST',{name:'projetos',kind:'voice'})).status,409,
+    'same-kind names must still be unique');
+  assert.equal((await owner('/api/v1/communities/'+id+'/channels/'+voice.id,'PATCH',{name:'projetos'})).status,409,
+    'renaming to a duplicate within the same kind must fail');
+  assert.equal((await owner('/api/v1/communities/'+id+'/channels/'+voice.id,'PATCH',{name:'geral'})).status,200,
+    'renaming to a name used only by another kind must succeed');
   // Password-protected channels require a per-account server-side grant.
   const lockedChannel=add.data.channel.id;
   const protectedPath='/api/v1/communities/'+id+'/channels/'+lockedChannel;
