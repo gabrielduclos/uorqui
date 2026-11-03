@@ -958,7 +958,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         </div>
         <div className="hidden text-xs text-muted-foreground sm:block">{count}/6</div>
       </div>
-    </div]}
+    </div>}
   </section>
   {meeting&&phase==='joined'&&fullMeeting&&createPortal(
     <section role="dialog" aria-modal="true" aria-label={pt?'Reunião em tela cheia':'Fullscreen meeting'}
