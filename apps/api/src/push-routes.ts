@@ -182,9 +182,13 @@ export async function pushActivityNotification(notificationId:string){
   if(!enabled())return;
   const row=await getPool().query(
     'SELECT n.id,n.kind,n.recipient_id,n.actor_id,u.handle,'+
-    'COALESCE(p.display_name,u.handle) AS actor_name '+
+    'COALESCE(p.display_name,u.handle) AS actor_name,c.name AS community_name,ch.name AS meeting_name '+
     'FROM activity_notifications n JOIN users u ON u.id=n.actor_id '+
     'LEFT JOIN profiles p ON p.user_id=n.actor_id '+
+    'LEFT JOIN community_channels ch ON ch.id=n.target_id AND n.kind=\'meeting_join_request\' '+
+    'LEFT JOIN communities c ON c.id=CASE '+
+      "WHEN n.kind='community_join_request' THEN n.target_id "+
+      "WHEN n.kind='meeting_join_request' THEN ch.community_id ELSE NULL END "+
     'LEFT JOIN notification_preferences np ON np.user_id=n.recipient_id '+
     'WHERE n.id=$1 AND n.read_at IS NULL '+
     'AND COALESCE(CASE n.kind '+
@@ -209,7 +213,9 @@ export async function pushActivityNotification(notificationId:string){
     try{
       const status=await sendPush(sub,{kind:'activity',recipientId:n.recipient_id,
         notificationId:n.id,title:String(n.actor_name).slice(0,80),
-        body:verb[n.kind]??'Nova atividade no Uorqui'});
+        body:((verb[n.kind]??'Nova atividade no Uorqui')+
+          (n.community_name?' · '+String(n.community_name):'')+
+          (n.kind==='meeting_join_request'&&n.meeting_name?' · '+String(n.meeting_name):'')).slice(0,180)});
       if(status===404||status===410)await getPool().query('DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',[sub.endpoint,n.recipient_id]);
     }catch{/* Push is best-effort; the in-app notification remains persisted. */}
   }));
