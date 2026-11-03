@@ -13,7 +13,9 @@ type Community={
 };
 type Recent={
   communityId:string;communityName:string;channelId:string;channelName:string;
-  channelKind:'text'|'voice';createdAt:string;preview:string;
+  channelKind:'text'|'voice'|'meeting';createdAt:string;preview:string;
+  activityKind:'message'|'reaction';actorName:string|null;attachmentType:string|null;
+  reactionEmoji:string|null;messageAuthorName:string|null;
 };
 type Voice={
   communityId:string;communityName:string;channelId:string;channelName:string;participantCount:number;
@@ -102,6 +104,28 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
     const date=new Date(value);
     return Number.isNaN(date.getTime())?'':date.toLocaleString(locale,{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
   };
+  const summarize=(item:Recent)=>{
+    const who=item.actorName||(pt?'Alguém':'Someone');
+    if(item.activityKind==='reaction'){
+      const target=item.messageAuthorName
+        ?(pt?' à mensagem de '+item.messageAuthorName:' to '+item.messageAuthorName+"'s message")
+        :(pt?' a uma mensagem':' to a message');
+      return who+(pt?' reagiu ':' reacted ')+(item.reactionEmoji??'👍')+target;
+    }
+    const text=(item.preview??'').trim();
+    const mime=item.attachmentType??'';
+    if(mime==='image/gif'||/^https:\/\/media\.giphy\.com\/media\/[A-Za-z0-9]+\/giphy\.gif$/i.test(text))
+      return who+(pt?' enviou um GIF':' sent a GIF');
+    if(mime.startsWith('image/'))return who+(pt?' enviou uma foto':' sent a photo');
+    if(mime.startsWith('video/'))return who+(pt?' enviou um vídeo':' sent a video');
+    if(mime.startsWith('audio/'))return who+(pt?' enviou um áudio':' sent an audio message');
+    if(mime)return who+(pt?' enviou um arquivo':' sent a file');
+    if(/\b(?:https?:\/\/|www\.)/i.test(text))return who+(pt?' enviou um link':' sent a link');
+    if(text&&/^[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\u20E3\s]+$/u.test(text))
+      return who+(pt?' enviou um emoji: ':' sent an emoji: ')+text;
+    if(text)return who+': '+text;
+    return who+(pt?' enviou uma mensagem':' sent a message');
+  };
   const avatar=(item:Community)=><div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-primary/15 font-bold text-primary">
     {item.avatarUrl?<img src={item.avatarUrl} alt="" className="size-full object-cover"/>:item.name.charAt(0).toUpperCase()}
   </div>;
@@ -153,13 +177,13 @@ export default function DiscoverHome({active,unreadLocations,onOpenCommunity}:{
           {activity.recent.filter(item=>!activeVoiceChannels.has(item.channelId)).slice(0,Math.max(3,8-activity.rooms.length)).map(item=><button type="button" key={'recent:'+item.channelId}
             onClick={()=>onOpenCommunity(item.communityId,item.channelId)}
             className="flex min-h-24 min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-secondary text-primary">{item.channelKind==='voice'?<Headphones className="size-5"/>:<Hash className="size-5"/>}</span>
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-secondary text-primary">{item.channelKind==='voice'||item.channelKind==='meeting'?<Headphones className="size-5"/>:<Hash className="size-5"/>}</span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2"><strong className="truncate text-sm">{item.channelName}</strong>
                 {!!unreadByChannel.get(item.channelId)&&<span className="rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">{unreadByChannel.get(item.channelId)}</span>}
               </span>
               <span className="block truncate text-xs text-muted-foreground">{item.communityName}</span>
-              <span className="mt-1 block truncate text-xs text-muted-foreground">{item.preview|| (pt?'Nova mídia no canal':'New media in channel')} · {timestamp(item.createdAt)}</span>
+              <span className="mt-1 block truncate text-xs text-muted-foreground">{summarize(item)} · {timestamp(item.createdAt)}</span>
             </span><ArrowRight className="size-4 shrink-0 text-muted-foreground"/>
           </button>)}
         </div>}
