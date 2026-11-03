@@ -75,6 +75,8 @@ test('Auth + social profile local integration', async () => {
   assert.equal(status.data.publicRegistration, false);
   assert.equal(status.data.registrationAvailable, true);
   assert.equal(status.data.emailVerificationRequired, false);
+  assert.equal(status.data.termsVersion, '2026-11-03');
+  assert.equal(status.data.privacyVersion, '2026-11-03');
   assert.equal(status.data.developmentRegistrationEnabled, true);
 
   const blocked = await send('/api/v1/me', { useCookie: false });
@@ -87,13 +89,13 @@ test('Auth + social profile local integration', async () => {
   assert.equal(withoutAgreement.data.error,'LEGAL_ACCEPTANCE_REQUIRED');
   const wrongVersion = await send('/api/auth/sign-up/email', {
     method:'POST',body:{name:'Wrong Version',email:'wrong-version@example.invalid',password:'correct-horse-battery-staple-demo',
-      termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2020-01-01',privacyVersion:'2026-11-01'},
+      termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2020-01-01',privacyVersion:'2026-11-03'},
   });
   assert.equal(wrongVersion.response.status,400);
   const tooShortSignup = await send('/api/auth/sign-up/email', {
     method: 'POST',
     body: {name:'Short Password', email:'short-password@example.invalid', password:'Short7!',
-      termsAccepted:true, privacyNoticeAcknowledged:true, termsVersion:'2026-11-01', privacyVersion:'2026-11-01'},
+      termsAccepted:true, privacyNoticeAcknowledged:true, termsVersion:'2026-11-03', privacyVersion:'2026-11-03'},
   });
   assert.equal(tooShortSignup.response.status, 400, 'seven-character password must be rejected');
   const signup = await send('/api/auth/sign-up/email', {
@@ -102,7 +104,7 @@ test('Auth + social profile local integration', async () => {
       name: 'Uorqui Test',
       email: 'uorqui-test@example.invalid',
       password: 'Eight8!!',
-    termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-01',privacyVersion:'2026-11-01'},
+    termsAccepted:true,privacyNoticeAcknowledged:true,termsVersion:'2026-11-03',privacyVersion:'2026-11-03'},
   });
   assert.equal(signup.response.status, 200, JSON.stringify(signup.data));
   assert.ok(cookie, 'sign-up should set a cookie');
@@ -113,8 +115,8 @@ test('Auth + social profile local integration', async () => {
       'SELECT a.terms_version,a.privacy_version,a.accepted_at FROM account_legal_acceptances a JOIN "user" u ON u.id=a.user_id WHERE u.email=$1',
       ['uorqui-test@example.invalid']);
     assert.equal(accepted.rows.length,1,'accepted legal versions must be persisted');
-    assert.equal(accepted.rows[0].terms_version,'2026-11-01');
-    assert.equal(accepted.rows[0].privacy_version,'2026-11-01');
+    assert.equal(accepted.rows[0].terms_version,'2026-11-03');
+    assert.equal(accepted.rows[0].privacy_version,'2026-11-03');
     assert.ok(accepted.rows[0].accepted_at);
   }finally{await client.end();}
 
