@@ -106,10 +106,18 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       response.once('close',finish);
       unsubscribe=await subscribeCommunityEvents(
         groups.rows.map((r:{community_id:string})=>r.community_id),me,
-        event=>write('event: community-update\ndata: '+JSON.stringify({
-          kind:event.kind,communityId:event.communityId,channelId:event.channelId,
-          ...(event.recipientId?{membershipChanged:true}:{})
-        })+'\n\n'));
+        event=>{
+          const send=()=>write('event: community-update\\ndata: '+JSON.stringify({
+            kind:event.kind,communityId:event.communityId,channelId:event.channelId,
+            ...(event.recipientId?{membershipChanged:true}:{})
+          })+'\\n\\n');
+          // A joined user may not see a closed channel. No IDs or activity
+          // for inaccessible channels should leak through the SSE stream.
+          if(event.channelId){
+            void channelGate(event.communityId,event.channelId,me)
+              .then(gate=>{if(gate==='allowed')send();}).catch(()=>{});
+          }else send();
+        });
       if(response.destroyed){finish();return;}
       write('retry: 2000\n\n');
       write('event: ready\ndata: {}\n\n');
@@ -423,6 +431,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       if(!role)return reply.code(204).send();
       await getPool().query('DELETE FROM community_members WHERE community_id=$1 AND user_id=$2',[id,me]);
       await getPool().query('DELETE FROM community_channel_password_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,me]);
+      await getPool().query('DELETE FROM community_channel_member_access gr USING community_channels ch WHERE gr.channel_id=ch.id AND ch.community_id=$1 AND gr.user_id=$2',[id,me]);
       void publishCommunityMembershipForUser(id,me).catch(()=>{});
       void publishCommunityEvent(id,null,'membership').catch(()=>{});
       return reply.code(204).send();
