@@ -14,6 +14,8 @@ This is ongoing technical-beta work on `main`, **not a tagged release or proof o
 - Owners/admins edit channel name/password from text/voice/meeting headers; channel deletion stays in moderation.
 
 ### Maintenance
+- Translation audit removed 38 unused former feed/demo entries; active registration copy and English translation now describe Discover and communities.
+- Revised PT/EN Terms and Privacy Notice for the current app; **new registrations** acknowledge version `2026-11-03`. Historical account acceptances remain untouched, and the unchanged Cookie Policy retains `2026-11-01`. Existing users are not forced to re-consent.
 - Removed unreachable global-feed post-sharing controls from the DM sharing dialog and replaced broken historical post navigation with a retired-content notice.
 - Removed unused shadcn Sheet/Tabs source components; retained versioned database migrations and recovery media.
 - Reconciled bilingual product/architecture/meeting/UI documentation and recorded the [November 3 code audit](docs/en/maintenance-audit.md).
