@@ -19,7 +19,8 @@ const groupBody={type:'object',required:['name','slug','visibility'],additionalP
   description:{type:'string',maxLength:500}
 }};
 const channelBody={type:'object',required:['name','kind'],additionalProperties:false,properties:{
-  name:{type:'string',minLength:2,maxLength:64},kind:{type:'string',enum:['text','voice','meeting']}
+  name:{type:'string',minLength:2,maxLength:64},kind:{type:'string',enum:['text','voice','meeting']},
+  accessMode:{type:'string',enum:['open','restricted']}
 }};
 const attachmentSchema={type:'object',additionalProperties:false,required:['id','name','type','size'],properties:{
   id:uuid,name:{type:'string',minLength:1,maxLength:180},type:{type:'string',maxLength:100},
@@ -143,6 +144,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
         'JOIN community_channels ch ON ch.community_id=c.id '+
         "AND (ch.password_hash IS NULL OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
+        "AND (ch.access_mode='open' OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access access_grant WHERE access_grant.channel_id=ch.id AND access_grant.user_id=$1)) "+
         'JOIN LATERAL (SELECT m.body,m.created_at FROM community_messages m '+
         'WHERE m.channel_id=ch.id AND m.deleted_at IS NULL '+
         "AND m.created_at>now()-interval '14 days' "+
@@ -160,6 +162,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'FROM community_members mine JOIN communities c ON c.id=mine.community_id '+
         'JOIN community_channels ch ON ch.community_id=c.id AND ch.kind IN (\'voice\',\'meeting\') '+
         "AND (ch.password_hash IS NULL OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
+        "AND (ch.access_mode='open' OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access access_grant WHERE access_grant.channel_id=ch.id AND access_grant.user_id=$1)) "+
         'JOIN community_voice_sessions voice ON voice.channel_id=ch.id '+
         "AND voice.last_seen_at>now()-interval '180 seconds' "+
         'JOIN community_members participant ON participant.community_id=c.id AND participant.user_id=voice.user_id '+
@@ -220,6 +223,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'LEFT JOIN community_messages msg ON msg.channel_id=ch.id AND msg.author_id<>$1 '+
         'AND msg.deleted_at IS NULL AND msg.created_at>GREATEST(m.joined_at,COALESCE(rd.last_read_at,m.joined_at)) '+
         "WHERE (ch.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=ch.id AND gr.user_id=$1)) "+
+        "AND (ch.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access access_grant WHERE access_grant.channel_id=ch.id AND access_grant.user_id=$1)) "+
         "GROUP BY ch.community_id,ch.id,c.name ORDER BY c.name,ch.name",[me]);
       const channels:Record<string,number>={},communities:Record<string,number>={};
       const locations:Array<{communityId:string;communityName:string;channelId:string;channelName:string;channelKind:string;count:number}>=[];
@@ -269,9 +273,11 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       let channels:unknown[]=[],pendingRequests:unknown[]=[];
       if(data.myRole){
         const result=await getPool().query(
-          'SELECT id,name,kind,created_at AS "createdAt",password_hash IS NOT NULL AS "hasPassword",'+
+          'SELECT id,name,kind,created_at AS "createdAt",access_mode AS "accessMode",password_hash IS NOT NULL AS "hasPassword",'+
           "(password_hash IS NULL OR $2::boolean OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) AS \"unlocked\" "+
-          'FROM community_channels WHERE community_id=$1 ORDER BY created_at,id',[id,manager(data.myRole),me]);
+          "FROM community_channels WHERE community_id=$1 AND (access_mode='open' OR $2::boolean OR EXISTS "+
+          '(SELECT 1 FROM community_channel_member_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) '+
+          'ORDER BY created_at,id',[id,manager(data.myRole),me]);
         channels=result.rows;
         if(manager(data.myRole)){
           const waiting=await getPool().query(
@@ -429,14 +435,14 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!manager(await membership(id,me)))return reply.code(403).send({error:'Forbidden'});
-      const {name,kind}=request.body as {name:string;kind:'text'|'voice'|'meeting'};
+      const {name,kind,accessMode='open'}=request.body as {name:string;kind:'text'|'voice'|'meeting';accessMode?:'open'|'restricted'};
       const normalized=name.trim();
       if(normalized.length<2)return reply.code(400).send({error:'Invalid channel name'});
       const c=await getPool().query('SELECT COUNT(*)::int AS n FROM community_channels WHERE community_id=$1',[id]);
       if(Number(c.rows[0].n)>=50)return reply.code(409).send({error:'CHANNEL_LIMIT'});
       const result=await getPool().query(
-        'INSERT INTO community_channels(community_id,name,kind) VALUES($1,$2,$3) RETURNING id,name,kind',
-        [id,normalized,kind]);
+        'INSERT INTO community_channels(community_id,name,kind,access_mode) VALUES($1,$2,$3,$4) RETURNING id,name,kind,access_mode AS "accessMode"',
+        [id,normalized,kind,accessMode]);
       void publishCommunityEvent(id,result.rows[0].id,'channel').catch(()=>{});
       return reply.code(201).header('Cache-Control',noCache).send({channel:result.rows[0]});
     }catch(error){
@@ -484,6 +490,8 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
       if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const gate=await channelGate(id,channelId,me);
+      if(gate==='permission_required'||gate==='not_found')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
       const {password}=request.body as {password:string};
       if(Buffer.byteLength(password,'utf8')>256)return reply.code(400).send({error:'INVALID_PASSWORD'});
       const row=await getPool().query('SELECT password_hash FROM community_channels WHERE community_id=$1 AND id=$2',[id,channelId]);
