@@ -243,6 +243,7 @@ export const communityMessageReactions = pgTable('community_message_reactions', 
 }, table => [
   primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
   index('community_message_reactions_user_idx').on(table.userId),
+  index('community_message_reactions_created_idx').on(table.createdAt),
 ]);
 
 /** Approval requests and invites do not grant access until accepted. */
