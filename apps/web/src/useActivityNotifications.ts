@@ -46,11 +46,22 @@ export function useActivityNotifications(accountId:string){
       if(!already)setUnread(old=>Math.max(0,old-1));
     }catch{void refresh();}
   },[items,refresh]);
+  const remove=useCallback(async(id:string)=>{
+    const res=await fetch('/api/v1/notifications/'+encodeURIComponent(id),{
+      method:'DELETE',credentials:'same-origin'
+    });
+    if(!res.ok)throw Error('UNAVAILABLE');
+    const result=await res.json() as {removed:boolean;wasUnread:boolean};
+    // Ignore any older list fetch that started before this deletion.
+    seq.current++;
+    setItems(old=>old.filter(item=>item.id!==id));
+    if(result.wasUnread)setUnread(old=>Math.max(0,old-1));
+  },[]);
   const markAllRead=useCallback(async()=>{
     const res=await fetch('/api/v1/notifications/read-all',{method:'POST',credentials:'same-origin'});
     if(!res.ok)throw Error('UNAVAILABLE');
     setUnread(0);
     setItems(old=>old.map(n=>({...n,readAt:n.readAt??new Date().toISOString()})));
   },[]);
-  return {items,unread,loading,error,refresh,markRead,markAllRead};
+  return {items,unread,loading,error,refresh,markRead,markAllRead,remove};
 }
