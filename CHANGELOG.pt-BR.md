@@ -7,6 +7,7 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 Evolução do beta técnico na `main`, **sem criar tag e sem comprovar deploy da última versão em produção**.
 
 ### Produto e comunidades
+- A moderação da comunidade agora abre em **dialog responsivo**: tela completa no celular e janela centralizada no desktop, com foco controlado, rolagem interna e fechamento sem interromper ações pendentes.
 - O feed global e o modo de vídeos antigo deram lugar a **Descobrir**, com recomendações, busca e atividades autorizadas; aposentadoria e snapshots de recuperação foram documentados.
 - Reuniões com áudio/vídeo, links ou convites via mensagem individual, controle de entrada, compartilhamento de tela, destaque de quem fala e tela cheia com câmera própria em miniatura.
 - O painel de texto das salas de voz e reuniões inicia **recolhido**, com expansão sem desconectar.
