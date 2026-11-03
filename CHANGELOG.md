@@ -7,9 +7,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 This is ongoing technical-beta work on `main`, **not a tagged release or proof of a successful live deployment**.
 
 ### Updated product and communities
+- **Invite to channel** now lists only other members of the selected community, omits blocked users and respects profile visibility; invitations use direct channel links instead of creating general community invite links.
+- Migration `0034_channel_names_per_kind` applied to production Neon on 3 Nov 2026, with the per-community, per-kind name uniqueness index verified. Existing backups preserved; account limits prevented a fresh snapshot/branch.
+- Invite push goes to recipients only: channel invitations use the existing direct-message push with invite-specific body, and community join invitations notify the invitee alone.
 - Channel headers now offer **Invite**: select a friend and send a direct message containing the direct link to a text, voice or meeting channel. Reusable community invitation links are used when available; channel passwords and permissions still apply.
 - **Discover** displays actor-aware summaries for GIFs, photos, video, audio, files, links, emojis, regular messages and reactions without displaying raw GIF URLs or technical filenames.
-- Channels of different types may **share the same name**, while name uniqueness remains enforced per community and type. Versioned migration `0034_channel_names_per_kind` replaces the index safely and adds a reaction recency index; it still needs to be applied to production.
+- Channels of different types may **share the same name**, while name uniqueness remains enforced per community and type. Versioned migration `0034_channel_names_per_kind` replaces the index safely and adds a reaction recency index, both applied to production.
 - Direct conversation rows now have **subtle inset dividers** between items, independent of the voice/video and text-panel separator.
 - Notifications now include an **X** for per-item persistent deletion, updating the list and unread badge without cancelling friendship or join requests. In voice/meeting rooms a distinct divider separates audio/video and text when both are open (vertical on desktop, horizontal on phones); unintended DM list separators were removed.
 - Community/meeting join-request notifications now identify the community (and meeting when available) in-app and in push. Moderation member identities have a larger profile-opening target and the public profile overlays the dialog. Community home participant names remain plain text; profile links stay within channels and moderation.
