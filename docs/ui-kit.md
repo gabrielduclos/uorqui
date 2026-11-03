@@ -7,6 +7,6 @@ As especificações atuais estão em:
 - [Português](./pt-BR/ui-kit.md)
 - [English](./en/ui-kit.md)
 
-O mensageiro real deve respeitar a especificação visual desses documentos. O UI Kit foi definido antes da integração do chat no PostgreSQL; não troque o layout ao conectar dados reais. Os componentes demonstrativos em `apps/web/src/Demo*.tsx` permanecem referências de interface, mas não devem ser tratados como envio real de mídias nem persistência de reações.
+O mensageiro e os canais reais usam componentes React persistidos na API. As antigas telas `Demo*.tsx` foram removidas; consulte `LiveDirectChat`, `DirectMessageBubble`, `LiveMessageComposer`, `LiveCommunities` e `CommunityVoiceRoom` como implementações atuais. Consulte também a [auditoria de manutenção](./pt-BR/auditoria-manutencao.md).
 
 As APIs e as limitações atuais do chat estão documentadas em [Mensageiro](./pt-BR/mensageiro.md).
