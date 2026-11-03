@@ -13,7 +13,7 @@ Definir a linguagem visual compartilhada do Uorqui para **Descobrir, mensagens i
 - Atalhos de atividade abrem o contexto exato, sem conectar o microfone automaticamente ou marcar mensagens como lidas.
 - Estados vazios úteis para novos usuários; nunca inventar membros, atividade ou conversas.
 - Navegação principal: **Descobrir · Mensagens · Comunidades**; Perfil, notificações e ajustes continuam acessíveis.
-- **Implementação inicial adicionada ao código** (tela Descobrir e navegação); validação visual em dispositivos e deploy ainda pendentes. O feed do beta é legado. Ver [decisão](descobrir.md).
+- Descobrir está implementado, e o feed global do beta foi aposentado; a aceitação visual em dispositivos ainda está pendente. Ver [decisão](descobrir.md).
 
 ## Identidade da marca
 
@@ -60,10 +60,11 @@ Use classes Tailwind semânticas, não cores fixas que só funcionem no dark. Ve
 | Card, Badge, Separator, ScrollArea | Estrutura e superfícies |
 | Avatar | Foto ou iniciais |
 | PreferencesControls | Troca de idioma por bandeira e tema no cabeçalho |
-| DemoMessageComposer | Texto expansível, anexo horizontal pelo +, emoji à direita, áudio/envio no mesmo botão |
-| DemoChatBubble | Balão retangular, resposta, reação e menu dentro da tela sobre conversa desfocada |
-| DemoAudioPlayer, DemoMediaViewer | Áudio e visualização de fotos/vídeos |
-| DemoImageEditor | Desenhos e formas em fotos antes de enviar e no visualizador |
+| LiveMessageComposer | Texto expansível, anexos, emojis e notas de voz |
+| DirectMessageBubble | Status, respostas, reações e menu de ações que respeita o viewport |
+| ChatAudioPlayer, ChatMediaViewer | Player de áudio e visualização de fotos/vídeos |
+| ChatImageEditor | Anotações e desenhos em fotos antes de enviar |
+| LiveCommunities, CommunityVoiceRoom | Canais responsivos, voz/reunião, texto recolhível e tela compartilhada |
 
 O mensageiro 1:1 **já está conectado** à API e ao Neon. Os canais de texto comunitários também usam API e Neon; as salas de voz integram WebRTC P2P para grupos pequenos, com autorização pelo backend; dependerão de TURN para redes restritivas. O layout do chat real deve manter paridade com este UI Kit; funções que dependem de novas APIs não podem fingir persistência.
 
@@ -81,14 +82,15 @@ O mensageiro 1:1 **já está conectado** à API e ao Neon. Os canais de texto co
 - apps/web/src/UorquiPreferences.tsx — estado de idioma e tema
 - apps/web/src/PreferencesControls.tsx — controles no cabeçalho
 - apps/web/src/components/ui/ — componentes reutilizáveis
-- apps/web/src/Demo*.tsx — componentes do chat
+- apps/web/src/LiveDirectChat.tsx, DirectMessageBubble.tsx, LiveMessageComposer.tsx — mensageiro real
+- apps/web/src/LiveCommunities.tsx, CommunityVoiceRoom.tsx — comunidades e reuniões
 
 A cada mudança, conferir dark/light × português/inglês × desktop/mobile, acessibilidade e documentação.
 
 ## Contrato obrigatório do chat real
 
 - `LiveDirectChat` é responsável pela lista, cabeçalho fixo, rolagem, mensagens e recebimento de eventos. A área de mensagens usa a **largura disponível do desktop** e rolagem somente no painel.
-- `DirectMessageBubble` usa **cantos retos** (`rounded-none`) como identidade visual dos balões de conversa, cores semânticas, resposta por swipe e menu com blur limitado ao painel da conversa, sem sair do viewport.
+- `DirectMessageBubble` usa **cantos suavemente arredondados** como identidade visual atual dos balões, cores semânticas, resposta por swipe e menu com ações dentro do viewport.
 - `LiveMessageComposer` preserva a ordem **+ anexos | texto expansível | emoji | mic/enviar**, com menu de anexo horizontal e seletor de emojis à direita. Um único botão mostra microfone quando o campo está vazio e envio quando há texto.
 - O texto enviado é persistido na API; cada novo balão aparece imediatamente com spinner sem bloquear o compositor e permite reenviar com o mesmo identificador se falhar. O horário de envio permanece junto ao texto de cada balão; os estados Enviando/Enviada/Recebida/Lida são exibidos uma única vez em uma linha neutra, centralizada, como mensagem do sistema ao final de cada bloco consecutivo de mensagens próprias, com horário da última atualização do estado. Um bloco só indica Lida ou Recebida quando todas as mensagens não excluídas atingiram esse estado. O spinner de envio e a ação de reenvio continuam no próprio balão. O campo de entrada possui borda e fundo semânticos de alto contraste em Light e Dark. O indicador visual “Ao vivo” não é exibido (a sincronização continua ativa). **Áudios e anexos** ainda dependem de endpoints específicos. **Responder** salva uma referência real à mensagem original, com prévia no balão, inclusive após edição ou exclusão da origem. **Editar, excluir para todos, encaminhar e reagir** estão ligados ao backend, com autorizações e persistência. Reações são atualizadas de modo otimista e revertidas em caso de erro. A lista de conversas aberta e visível confirma **Recebida** sem marcar **Lida**. Controles sem backend ficam desabilitados e identificados; não enviar conteúdo apenas na interface local.
 - A lista de conversas **não pode confirmar leitura**. Apenas uma conversa aberta, com janela e painel visíveis, pode emitir confirmação.
