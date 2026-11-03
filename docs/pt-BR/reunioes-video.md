@@ -26,7 +26,8 @@ O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O 
 ## Administração dos canais
 
 - Em qualquer canal de texto, voz ou reunião, o botão **Editar canal** fica no cabeçalho apenas para proprietário/administradores.
-- Nesse menu, é possível renomear o canal, definir/trocar/remover senha com confirmação. **Excluir canal** continua na moderação da comunidade.
+- Nesse menu, é possível renomear o canal, definir/trocar/remover senha com confirmação e escolher **Aberto** ou **Fechado por permissão**. Em **Moderação → Membros**, o proprietário e administradores escolhem quem pode acessar cada canal fechado. **Excluir canal** continua na moderação da comunidade.
+- Permissão individual, senha e admissão da reunião são verificações diferentes; revogar um acesso fechado desconecta o participante da sala. Consulte [Permissões de canais](permissoes-canais.md).
 - As senhas são armazenadas como hash scrypt com salt; a troca revoga desbloqueios anteriores. O servidor limita tentativas de senha incorreta.
 
 ## Arquitetura e limites
