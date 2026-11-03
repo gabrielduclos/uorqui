@@ -25,7 +25,8 @@ Uorqui has **text**, **voice**, and **meeting** community channels. Joining a ca
 
 ## Channel administration
 
-- Owners/admins can use **Edit channel** in the header of text, voice or meeting channels to rename or set/change/remove its password.
+- Owners/admins can use **Edit channel** in the header of text, voice or meeting channels to rename, set/change/remove passwords and select **Open** or **Closed / permission-only**.
+- In **Moderation → Members**, owners/admins select which closed channels each person can access. Channel permission, password and meeting admission remain independent. Revoking closed-channel access disconnects active RTC sessions; see [Channel permissions](channel-permissions.md).
 - **Delete channel** remains under community moderation.
 - Passwords use salted scrypt hashes; rotation revokes previous grants, and incorrect attempts are rate-limited.
 
