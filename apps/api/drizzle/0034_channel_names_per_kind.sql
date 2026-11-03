@@ -6,3 +6,6 @@ CREATE UNIQUE INDEX "community_channels_unique_kind_name"
   ON "community_channels" ("community_id","kind","name");
 --> statement-breakpoint
 DROP INDEX "community_channels_unique_name";
+--> statement-breakpoint
+CREATE INDEX "community_message_reactions_created_idx"
+  ON "community_message_reactions" ("created_at");
