@@ -11,7 +11,8 @@ This is ongoing technical-beta work on `main`, **not a tagged release or proof o
 - Added meeting channels with audio/video, invite links/DM invitations, per-room admission approval, screen sharing, active-speaker camera highlighting and fullscreen with own-camera picture-in-picture.
 - Voice rooms and meetings now start with their text-chat panel **collapsed**; members can expand it without ending the call.
 - Community join approvals deliver account-targeted SSE events and update the applicant's memberships without a page reload.
-- Owners/admins edit channel name/password from text/voice/meeting headers; channel deletion stays in moderation.
+- Owners/admins edit channel names, passwords and **open/closed access mode** from the channel header; channel deletion stays in moderation.
+- **Per-member closed-channel grants** under Moderation → Members. API filters content, Discover, push, media, presence and WebRTC; revocation ends ongoing calls. Versioned migration `0033_restricted_channel_members` requires application and verification on the target database before activation.
 
 ### Maintenance
 - Translation audit removed 38 unused former feed/demo entries; active registration copy and English translation now describe Discover and communities.
