@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, MessageSquareText, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, LockKeyholeOpen, MessageSquareText, Mic, MicOff, Flag, Pencil, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -114,6 +114,26 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [unlockPassword,setUnlockPassword]=useState('');
   const [unlockBusy,setUnlockBusy]=useState(false);
   const [unlockError,setUnlockError]=useState('');
+  const [channelSettingsOpen,setChannelSettingsOpen]=useState(false);
+  const [channelSettingsName,setChannelSettingsName]=useState('');
+  const [channelSettingsPassword,setChannelSettingsPassword]=useState('');
+  const [channelSettingsBusy,setChannelSettingsBusy]=useState<'name'|'password'|'remove'|null>(null);
+  const [channelSettingsError,setChannelSettingsError]=useState('');
+  const [channelRemoveConfirm,setChannelRemoveConfirm]=useState(false);
+  const channelSettingsRef=useRef<HTMLDivElement|null>(null);
+  useEffect(()=>{
+    setChannelSettingsOpen(false);setChannelSettingsName('');setChannelSettingsPassword('');
+    setChannelSettingsError('');setChannelRemoveConfirm(false);
+  },[selectedId,channelId]);
+  useEffect(()=>{
+    if(!channelSettingsOpen)return;
+    const dismiss=(event:PointerEvent)=>{
+      if(channelSettingsRef.current&&!channelSettingsRef.current.contains(event.target as Node))setChannelSettingsOpen(false);
+    };
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setChannelSettingsOpen(false);};
+    document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',escape);
+    return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape);};
+  },[channelSettingsOpen]);
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
   const [pendingMessages,setPendingMessages]=useState<PendingMessage[]>([]);
@@ -420,6 +440,31 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         code==='INVALID_CHANNEL_PASSWORD'?(pt?'Senha incorreta.':'Incorrect password.'):
         (pt?'Não foi possível desbloquear o canal.':'Could not unlock the channel.'));
     }finally{setUnlockBusy(false);}
+  }
+  async function updateChannelSettings(operation:'name'|'password'|'remove'){
+    if(!selectedId||!activeChannel||!community||!manage(community)||channelSettingsBusy)return;
+    const name=channelSettingsName.trim();
+    if(operation==='name'&&(name.length<2||name.length>64||name===activeChannel.name))return;
+    if(operation==='password'&&(channelSettingsPassword.length<8||channelSettingsPassword.length>72))return;
+    setChannelSettingsBusy(operation);setChannelSettingsError('');
+    try{
+      const endpoint='/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id;
+      await api(endpoint+(operation==='name'?'':'/password'),{
+        method:operation==='name'?'PATCH':'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(operation==='name'?{name}:{password:operation==='remove'?null:channelSettingsPassword})
+      });
+      await loadDetail(selectedId);
+      setChannelSettingsPassword('');setChannelRemoveConfirm(false);setChannelSettingsOpen(false);
+      setNotice(operation==='name'?(pt?'Nome do canal atualizado.':'Channel name updated.'):
+        operation==='password'?(pt?'Senha do canal atualizada.':'Channel password updated.'):
+        (pt?'Senha do canal removida.':'Channel password removed.'));
+    }catch(reason){
+      const code=reason instanceof Error?reason.message:'';
+      setChannelSettingsError(code==='CHANNEL_EXISTS'?(pt?'Já existe um canal com esse nome.':'Channel name already exists.'):
+        code==='ADMIN_REQUIRED'||code==='Forbidden'?(pt?'Você não tem permissão para editar este canal.':'You cannot edit this channel.'):
+        (pt?'Não foi possível salvar as alterações.':'Could not save changes.'));
+    }finally{setChannelSettingsBusy(null);}
   }
   async function createChannel(event:FormEvent){
     event.preventDefault();
@@ -821,8 +866,70 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             aria-label={pt?'Voltar aos canais':'Back to channels'} onClick={closeChannel}>
             <ArrowLeft className="size-5"/></Button>
           {activeChannel.kind==='meeting'?<Video className="size-5 text-muted-foreground"/>:activeChannel.kind==='voice'?<Volume2 className="size-5 text-muted-foreground"/>:<Hash className="size-5 text-muted-foreground"/>}
-          <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{activeChannel.name}</h2>
-            <p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
+          <div className="min-w-0 flex-1"><h2 className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold">
+            <span className="truncate">{activeChannel.name}</span>
+            {activeChannel.hasPassword&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?'Canal protegido':'Protected channel'}/>}
+          </h2><p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
+          {manage(community)&&<div ref={channelSettingsRef} className="relative ml-auto shrink-0">
+            <Button type="button" size="sm" variant="ghost" className="gap-2 px-2 sm:px-3"
+              aria-expanded={channelSettingsOpen} aria-controls="uorqui-channel-settings"
+              aria-label={pt?'Editar nome e senha do canal':'Edit channel name and password'}
+              onClick={()=>{
+                setChannelSettingsOpen(old=>!old);setChannelSettingsName(activeChannel.name);
+                setChannelSettingsPassword('');setChannelSettingsError('');setChannelRemoveConfirm(false);
+              }}>
+              <Pencil className="size-4"/><span className="hidden sm:inline">{pt?'Editar canal':'Edit channel'}</span>
+            </Button>
+            {channelSettingsOpen&&<div id="uorqui-channel-settings" role="group"
+              aria-label={pt?'Configurações do canal':'Channel settings'}
+              className="absolute right-0 top-[calc(100%+0.75rem)] z-50 max-h-[calc(100dvh-6rem)] w-[calc(100vw-2rem)] max-w-[22rem] space-y-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-xl sm:w-80">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold">{pt?'Editar canal':'Edit channel'}</h3>
+                <Button type="button" size="icon" variant="ghost" aria-label={pt?'Fechar':'Close'}
+                  onClick={()=>setChannelSettingsOpen(false)}><X className="size-4"/></Button>
+              </div>
+              {channelSettingsError&&<p role="alert" className="text-xs text-destructive">{channelSettingsError}</p>}
+              <form className="space-y-2" onSubmit={event=>{event.preventDefault();void updateChannelSettings('name');}}>
+                <label htmlFor="uorqui-channel-name" className="block text-xs font-medium">{pt?'Nome do canal':'Channel name'}</label>
+                <Input id="uorqui-channel-name" type="text" required minLength={2} maxLength={64}
+                  className="h-10 text-base" value={channelSettingsName}
+                  onChange={event=>setChannelSettingsName(event.target.value)} disabled={channelSettingsBusy!==null}/>
+                <Button type="submit" size="sm" className="w-full" loading={channelSettingsBusy==='name'}
+                  disabled={channelSettingsBusy!==null||channelSettingsName.trim().length<2||
+                    channelSettingsName.trim()===activeChannel.name}>
+                  <Check className="size-4"/>{pt?'Salvar nome':'Save name'}</Button>
+              </form>
+              <form className="space-y-2 border-t border-border pt-3"
+                onSubmit={event=>{event.preventDefault();void updateChannelSettings('password');}}>
+                <label htmlFor="uorqui-channel-password" className="block text-xs font-medium">
+                  {activeChannel.hasPassword?(pt?'Alterar senha':'Change password'):(pt?'Definir senha':'Set password')}
+                </label>
+                <Input id="uorqui-channel-password" type="password" autoComplete="new-password"
+                  required minLength={8} maxLength={72} className="h-10 text-base"
+                  placeholder={pt?'Mínimo de 8 caracteres':'At least 8 characters'}
+                  value={channelSettingsPassword} onChange={event=>setChannelSettingsPassword(event.target.value)}
+                  disabled={channelSettingsBusy!==null}/>
+                <Button type="submit" size="sm" className="w-full" loading={channelSettingsBusy==='password'}
+                  disabled={channelSettingsBusy!==null||channelSettingsPassword.length<8}>
+                  <LockKeyhole className="size-4"/>{activeChannel.hasPassword?(pt?'Alterar senha':'Change password'):(pt?'Proteger canal':'Protect channel')}</Button>
+              </form>
+              {activeChannel.hasPassword&&<div className="space-y-2 border-t border-border pt-3">
+                {channelRemoveConfirm&&<p className="text-xs text-muted-foreground">
+                  {pt?'O canal ficará acessível sem senha. Confirme para continuar.':
+                    'The channel will become accessible without a password. Confirm to continue.'}</p>}
+                <Button type="button" size="sm" className="w-full" variant="outline"
+                  loading={channelSettingsBusy==='remove'} disabled={channelSettingsBusy!==null}
+                  onClick={()=>channelRemoveConfirm?void updateChannelSettings('remove'):setChannelRemoveConfirm(true)}>
+                  <LockKeyholeOpen className="size-4"/>
+                  {channelRemoveConfirm?(pt?'Confirmar remoção':'Confirm removal'):(pt?'Remover senha':'Remove password')}
+                </Button>
+                {channelRemoveConfirm&&<Button type="button" size="sm" variant="ghost" className="w-full"
+                  onClick={()=>setChannelRemoveConfirm(false)} disabled={channelSettingsBusy!==null}>
+                  {pt?'Cancelar':'Cancel'}
+                </Button>}
+              </div>}
+            </div>}
+          </div>}
         </header>
         {channelLocked?<form className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 py-8 text-center" onSubmit={event=>void unlockChannel(event)}>
           <span className="grid size-14 place-items-center rounded-2xl bg-primary/10"><LockKeyhole className="size-7 text-primary"/></span>
