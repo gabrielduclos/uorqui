@@ -857,8 +857,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <UserPlus className="size-4 shrink-0 text-muted-foreground"/>
           </button>)}
         </>}
-        {visibleThreads.map(thread => <button type="button" key={thread.id} onClick={() => openThread(thread.id)}
-          className={cn('flex min-h-[76px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+        {visibleThreads.map((thread,index) => <button type="button" key={thread.id} onClick={() => openThread(thread.id)}
+          className={cn('relative flex min-h-[76px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+            index<visibleThreads.length-1 && "after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0 after:h-px after:bg-border/50",
             activeId === thread.id && mobileOpened && 'bg-secondary')}
           aria-current={activeId === thread.id && mobileOpened ? 'true' : undefined}>
           <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
