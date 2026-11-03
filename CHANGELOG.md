@@ -2,6 +2,24 @@
 
 The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for its application workspace manifests. The suffix `-beta.N` marks a **pre-release**, not a stable or generally available product.
 
+## [Unreleased] — changes through 2026-11-03
+
+This is ongoing technical-beta work on `main`, **not a tagged release or proof of a successful live deployment**.
+
+### Updated product and communities
+- Replaced the old global posts/feed and immersive video browsing with **Discover** (community recommendations, search and authorized live activity); the feed retirement and recovery snapshots are documented separately.
+- Added meeting channels with audio/video, invite links/DM invitations, per-room admission approval, screen sharing, active-speaker camera highlighting and fullscreen with own-camera picture-in-picture.
+- Voice rooms and meetings now start with their text-chat panel **collapsed**; members can expand it without ending the call.
+- Community join approvals deliver account-targeted SSE events and update the applicant's memberships without a page reload.
+- Owners/admins edit channel name/password from text/voice/meeting headers; channel deletion stays in moderation.
+
+### Maintenance
+- Removed unreachable global-feed post-sharing controls from the DM sharing dialog and replaced broken historical post navigation with a retired-content notice.
+- Removed unused shadcn Sheet/Tabs source components; retained versioned database migrations and recovery media.
+- Reconciled bilingual product/architecture/meeting/UI documentation and recorded the [November 3 code audit](docs/en/maintenance-audit.md).
+
+**Pending:** multi-device meeting and screen-sharing tests, iOS/Android installed-PWA checks, push and email E2E, and independently confirmed production deployment.
+
 ## [0.1.0-beta.1] — 2026-11-01
 
 **First technical beta for controlled testing.** This describes implemented code and automated checks, **not** certification of all browser/device flows.
