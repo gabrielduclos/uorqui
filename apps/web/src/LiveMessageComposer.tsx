@@ -307,7 +307,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
       <button type="button" aria-label={pt ? 'Adicionar anexo' : 'Add attachment'}
         aria-expanded={attachmentsOpen} aria-haspopup="dialog"
         onClick={() => { setAttachmentsOpen(v => !v); setEmojiOpen(false); }}
-        className="grid size-11 place-items-center text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+        className="grid size-11 lg:size-12 place-items-center text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
         <Plus className={cn('size-6 transition-transform',attachmentsOpen && 'rotate-45')} />
       </button>
       {attachmentsOpen && <div role="dialog" aria-label={pt ? 'Adicionar à conversa' : 'Add to chat'}
@@ -381,7 +381,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
       <button type="button" aria-label={pt ? 'Abrir lista de emojis' : 'Open emoji picker'}
         aria-expanded={emojiOpen} aria-haspopup="dialog"
         onClick={() => { setEmojiOpen(v => !v); setAttachmentsOpen(false); }}
-        className="grid size-11 place-items-center text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+        className="grid size-11 lg:size-12 place-items-center text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
         <Smile className="size-5"/>
       </button>
       {emojiOpen && <div role="dialog" aria-label={pt ? 'Emojis' : 'Emojis'}
@@ -406,15 +406,15 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     </div>
     {onGif&&<button type="button" onClick={onGif} aria-expanded={gifOpen}
         aria-label={pt?'Selecionar GIF':'Choose GIF'}
-        className={cn('grid h-11 shrink-0 place-items-center rounded-lg px-1.5 text-[11px] font-bold text-muted-foreground hover:bg-accent',gifOpen&&'text-primary')}>GIF</button>}
+        className={cn('grid h-11 lg:h-12 shrink-0 place-items-center rounded-lg px-1.5 text-[11px] font-bold text-muted-foreground hover:bg-accent',gifOpen&&'text-primary')}>GIF</button>}
     {canSend
       ? <button type="submit" aria-label={pt ? 'Enviar mensagem' : 'Send message'}
-        className="grid size-11 shrink-0 place-items-center rounded-[5px] bg-primary text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        className="grid size-11 lg:size-12 shrink-0 place-items-center rounded-[5px] bg-primary text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         <Send className="size-5"/>
       </button>
       : <button type="button" onClick={()=>void toggleRecording()} disabled={sending || editing || (!!pending && recording==='idle') || pendingPhotos.length>0}
         aria-label={recording!=='idle'?(pt?'Finalizar gravação':'Finish recording'):(pt?'Gravar áudio':'Record voice note')}
-        className={cn('grid size-11 shrink-0 place-items-center',recording!=='idle'?'bg-destructive text-destructive-foreground':'text-muted-foreground',sending && 'opacity-40')}>
+        className={cn('grid size-11 lg:size-12 shrink-0 place-items-center',recording!=='idle'?'bg-destructive text-destructive-foreground':'text-muted-foreground',sending && 'opacity-40')}>
         {recording!=='idle'?<Square className="size-4" fill="currentColor"/>:<Mic className="size-5"/>}
       </button>}
   </form>;
