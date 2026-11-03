@@ -14,11 +14,13 @@ Uorqui brings together three connected experiences:
 
 - **Direct messages:** private 1:1 text conversations, replies, reactions, media attachments, message status, background push and SSE-driven updates. No conventional private group chats.
 - **Discover:** a home screen without global posts, featuring recommended public communities, search and activity from communities a user has joined. Obsolete global feed UI, API, and PostgreSQL tables were retired November 2, 2026.
-- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, configurable meeting admission, join-request push notifications and optional password-protected channels.
+- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, admission approval, request notifications and optional password-protected channels. Voice/meeting text chat starts collapsed; meetings support screen sharing, active-speaker highlighting and fullscreen camera/PiP view.
 
 The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
 
 > **Global feed retired November 2, 2026:** the new Discover experience replaces public posts. The API and Worker deployment passed live smoke checks, and the legacy feed tables were removed from production Neon after verified snapshot backups. Four older feed media files are retained in R2 for recovery; do not delete them without a verified copy. Read the [Discover decision](docs/en/discover.md).
+
+Community approvals refresh the applicant's community list through account-targeted SSE without reloading. Community owners/admins edit channel names and passwords from the channel header; deletion remains under moderation. See [Meetings](docs/en/video-meetings.md).
 
 ## Beta status
 
@@ -59,6 +61,8 @@ This beta version is defined in the npm workspace manifests and shown beside the
 | Features and goals | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
 | Discovery decision | [Discover](docs/en/discover.md) | [Descobrir](docs/pt-BR/descobrir.md) |
 | Roadmap | [Roadmap](docs/en/roadmap.md) | [Roadmap](docs/pt-BR/roadmap.md) |
+| Code audit & cleanup | [November 3 audit](docs/en/maintenance-audit.md) | [Auditoria de 03/11](docs/pt-BR/auditoria-manutencao.md) |
+| Voice and meetings | [Meetings](docs/en/video-meetings.md) | [Reuniões](docs/pt-BR/reunioes-video.md) |
 | UI design system | [UI kit](docs/en/ui-kit.md) | [UI kit](docs/pt-BR/ui-kit.md) |
 | Domain migration | [Portuguese runbook](docs/pt-BR/migracao-dominio-uorqui-app.md) | [Plano de migração](docs/pt-BR/migracao-dominio-uorqui-app.md) |
 | Contributing | [Contributing](CONTRIBUTING.md) | [Contribuindo](CONTRIBUTING.pt-BR.md) |
