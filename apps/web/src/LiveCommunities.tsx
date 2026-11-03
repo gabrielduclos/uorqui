@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { Dialog } from 'radix-ui';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, LockKeyholeOpen, MessageSquareText, Mic, MicOff, Flag, Pencil, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, LockKeyholeOpen, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Pencil, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -97,6 +98,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [createDescription,setCreateDescription]=useState('');
   const [createVisibility,setCreateVisibility]=useState<Visibility>('public');
   const [inviteLink,setInviteLink]=useState<{id:string;expiresAt:string}|null>(null);
+  const [channelInviteOpen,setChannelInviteOpen]=useState(false);
+  const [channelInviteContacts,setChannelInviteContacts]=useState<{handle:string;displayName:string;avatarUrl:string|null}[]>([]);
+  const [channelInviteFilter,setChannelInviteFilter]=useState('');
+  const [channelInviteLoading,setChannelInviteLoading]=useState(false);
+  const [channelInviteSending,setChannelInviteSending]=useState<string|null>(null);
+  const [channelInviteError,setChannelInviteError]=useState('');
+  const [channelInviteSuccess,setChannelInviteSuccess]=useState('');
   const [shareBusy,setShareBusy]=useState(false);
   const [shareNotice,setShareNotice]=useState('');
   const [shareOpen,setShareOpen]=useState(false);
@@ -111,6 +119,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       setShareToast(null);setShareCopyState('idle');shareToastTimer.current=null;
     },3500);
   }
+  useEffect(()=>{
+    if(!channelInviteOpen)return;
+    const controller=new AbortController();
+    setChannelInviteLoading(true);setChannelInviteError('');setChannelInviteSuccess('');
+    void api<{friends:{handle:string;displayName:string;avatarUrl:string|null}[]}>('/api/v1/friends',{signal:controller.signal})
+      .then(data=>{if(!controller.signal.aborted)setChannelInviteContacts(data.friends??[]);})
+      .catch(()=>{if(!controller.signal.aborted)setChannelInviteError(pt?'Não foi possível carregar seus contatos.':'Could not load your contacts.');})
+      .finally(()=>{if(!controller.signal.aborted)setChannelInviteLoading(false);});
+    return()=>controller.abort();
+  },[channelInviteOpen,pt]);
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
@@ -358,7 +376,38 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       showShareToast('error',pt?'Não foi possível copiar o link.':'Could not copy the link.');
     }
   }
-  const closeChannel=()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  async function inviteContactToChannel(handle:string){
+    if(channelInviteSending||!selectedId||!channelId||!activeChannel||!community?.myRole)return;
+    setChannelInviteSending(handle);setChannelInviteError('');setChannelInviteSuccess('');
+    try{
+      // A community invite token also works for contacts who are not yet members.
+      // Existing members open the channel directly. Password and closed-channel
+      // grants remain enforced by the API for every recipient.
+      let link=new URL('/',window.location.origin);
+      link.searchParams.set('community',selectedId);link.searchParams.set('channel',channelId);
+      try{
+        const shared=await api<{link:{id:string}|null}>('/api/v1/communities/'+selectedId+'/share');
+        let token=shared.link?.id;
+        if(!token&&manage(community)){
+          const created=await api<{link:{id:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
+          token=created.link.id;
+        }
+        if(token)link=new URL('/invite/'+encodeURIComponent(token)+'?channel='+encodeURIComponent(channelId),window.location.origin);
+      }catch{/* Existing members can still use the direct channel link. */}
+      const target=await api<{id:string}>('/api/v1/dm/conversations',body({handle}));
+      await api('/api/v1/dm/conversations/'+target.id+'/messages',body({
+        clientId:crypto.randomUUID(),
+        body:(pt?'Venha para o canal ':'Join the channel ')+
+          (activeChannel.kind==='text'?'#':activeChannel.kind==='meeting'?'📹 ':'🔊 ')+
+          activeChannel.name+' · '+community.name+'\n'+link.toString()
+      }));
+      setChannelInviteSuccess(pt?'Convite enviado para @'+handle+' no chat.':'Invitation sent to @'+handle+' in chat.');
+    }catch{
+      setChannelInviteError(pt?'Não foi possível enviar a mensagem. Confira as permissões de conversa.':
+        'Could not send the message. Check direct-message permissions.');
+    }finally{setChannelInviteSending(null);}
+  }
+  const closeChannel=()=>{setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||!activeChannel||!community?.myRole||(activeChannel.hasPassword&&!activeChannel.unlocked)){
@@ -971,7 +1020,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <span className="truncate">{activeChannel.name}</span>
             {(activeChannel.hasPassword||activeChannel.accessMode==='restricted')&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?(activeChannel.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(activeChannel.accessMode==='restricted'?'Closed channel':'Password-protected channel')}/>} 
           </h2><p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
-          {manage(community)&&<div ref={channelSettingsRef} className="relative ml-auto shrink-0">
+          <Button type="button" size="sm" variant="ghost" className="shrink-0 gap-2 px-2 sm:px-3"
+            aria-label={pt?'Convidar contato para o canal':'Invite contact to channel'}
+            onClick={()=>{setChannelSettingsOpen(false);setChannelInviteFilter('');setChannelInviteOpen(true);}}>
+            <UserPlus className="size-4"/><span className="hidden sm:inline">{pt?'Convidar':'Invite'}</span>
+          </Button>
+          {manage(community)&&<div ref={channelSettingsRef} className="relative shrink-0">
             <Button type="button" size="sm" variant="ghost" className="gap-2 px-2 sm:px-3"
               aria-expanded={channelSettingsOpen} aria-controls="uorqui-channel-settings"
               aria-label={pt?'Editar nome, acesso e senha do canal':'Edit channel name, access and password'}
@@ -1211,6 +1265,62 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           }}
           onLeave={()=>{setActiveVoiceRoom(null);setVoiceParticipants([]);setVoicePhase('idle');}}/>
       </VoicePortalShell>,document.body)}
+    <Dialog.Root open={channelInviteOpen} onOpenChange={next=>{
+      if(channelInviteSending)return;
+      setChannelInviteOpen(next);
+      if(!next){setChannelInviteFilter('');setChannelInviteError('');setChannelInviteSuccess('');}
+    }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[310] bg-black/65"/>
+        <Dialog.Content aria-describedby={undefined}
+          className="fixed left-1/2 top-1/2 z-[315] flex max-h-[min(85dvh,650px)] w-[min(92vw,470px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl outline-none">
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border p-4">
+            <div className="min-w-0">
+              <Dialog.Title className="text-base font-semibold">{pt?'Convidar para o canal':'Invite to channel'}</Dialog.Title>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {activeChannel?.name} · {community?.name}
+              </p>
+            </div>
+            <Dialog.Close asChild><Button variant="ghost" size="icon" disabled={!!channelInviteSending}
+              aria-label={pt?'Fechar':'Close'}><X className="size-5"/></Button></Dialog.Close>
+          </div>
+          <div className="min-h-0 space-y-3 overflow-y-auto overscroll-contain p-4">
+            <p className="text-sm text-muted-foreground">{pt?
+              'Escolha um contato para enviar uma mensagem privada com o link direto do canal.':
+              'Choose a contact to send a direct message containing the channel link.'}</p>
+            {activeChannel?.accessMode==='restricted'&&<p className="text-xs text-muted-foreground">
+              {pt?'Canais fechados exigem autorização do administrador.':'Restricted channels require admin authorization.'}
+            </p>}
+            {activeChannel?.hasPassword&&<p className="text-xs text-muted-foreground">
+              {pt?'O destinatário precisará da senha para acessar.':'The recipient will need the channel password.'}
+            </p>}
+            <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground"/>
+              <Input value={channelInviteFilter} onChange={event=>setChannelInviteFilter(event.target.value)}
+                className="h-10 pl-9 text-base" placeholder={pt?'Pesquisar contato':'Search contact'}/>
+            </div>
+            {channelInviteError&&<p role="alert" className="text-xs text-destructive">{channelInviteError}</p>}
+            {channelInviteSuccess&&<p role="status" className="text-xs text-primary">{channelInviteSuccess}</p>}
+            {channelInviteLoading?<SkeletonRows rows={3}/>:channelInviteContacts.length===0?
+              <p className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+                {pt?'Nenhum contato disponível. Adicione amigos para convidá-los.':'No contacts yet. Add friends to invite them.'}
+              </p>:<div className="space-y-1">
+              {channelInviteContacts.filter(person=>(person.displayName+' '+person.handle).toLocaleLowerCase(locale)
+                .includes(channelInviteFilter.trim().toLocaleLowerCase(locale))).map(person=>
+                <div key={person.handle} className="flex min-h-14 items-center gap-2 rounded-xl px-2 hover:bg-secondary/70">
+                  <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{person.displayName}</p>
+                    <p className="truncate text-xs text-muted-foreground">@{person.handle}</p></div>
+                  <Button type="button" size="sm" variant="outline" disabled={!!channelInviteSending}
+                    loading={channelInviteSending===person.handle}
+                    onClick={()=>void inviteContactToChannel(person.handle)}>
+                    <MessageCircle className="size-4"/>{pt?'Enviar':'Send'}
+                  </Button>
+                </div>)}
+              </div>}
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
     <ContentReportDialog target={reportMessageId?{targetKind:'community_message',targetId:reportMessageId}:null}
       locale={locale} onClose={()=>setReportMessageId(null)}/>
     {shareToast&&createPortal(
