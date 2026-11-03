@@ -194,7 +194,30 @@ test('approval community requires a manager to accept join requests',async()=>{
   assert.equal((await outsider('/api/v1/communities/'+id+'/requests/comm_member/approve','POST')).status,403);
   const detail=await owner('/api/v1/communities/'+id);
   assert.ok(detail.data.pendingRequests.some(p=>p.handle==='comm_member'));
-  assert.equal((await owner('/api/v1/communities/'+id+'/requests/comm_member/approve','POST')).status,200);
+  // The applicant is not yet a member and must still receive the targeted
+  // approval event on an already-open SSE connection.
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),10000);
+  try{
+    const stream=await fetch(base+'/api/v1/communities/events',{
+      headers:{cookie:member.cookie(),accept:'text/event-stream'},signal:controller.signal
+    });
+    assert.equal(stream.status,200);
+    const reader=stream.body.getReader(),decoder=new TextDecoder();
+    let payload='';
+    async function receive(marker){
+      while(!payload.includes(marker)){
+        const chunk=await reader.read();
+        if(chunk.done)throw Error('Community stream ended before '+marker);
+        payload+=decoder.decode(chunk.value,{stream:true});
+      }
+    }
+    await receive('event: ready');
+    assert.equal((await owner('/api/v1/communities/'+id+'/requests/comm_member/approve','POST')).status,200);
+    await receive('"membershipChanged":true');
+    assert.ok(payload.includes('"communityId":"'+id+'"'));
+    assert.ok(!payload.includes('recipientId'),'the recipient account id stays server-side');
+  }finally{controller.abort();clearTimeout(timer);}
   const approved=await member('/api/v1/communities/'+id);
   assert.equal(approved.data.community.myRole,'member');
   assert.equal((await owner('/api/v1/communities/'+id+'/requests/comm_member/approve','POST')).status,404);
