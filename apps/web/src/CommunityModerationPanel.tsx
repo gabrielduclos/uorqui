@@ -8,9 +8,9 @@ import { useUorquiPreferences } from './UorquiPreferences';
 
 type Role='owner'|'admin'|'moderator'|'member';
 type Visibility='public'|'approval'|'private';
-type Member={handle:string;displayName:string;role:Role;joinedAt:string};
+type Member={handle:string;displayName:string;role:Role;joinedAt:string;restrictedChannelIds?:string[]};
 type BanEntry={handle:string;reason:string|null;bannedAt:string};
-type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';hasPassword?:boolean};
+type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';hasPassword?:boolean;accessMode?:'open'|'restricted'};
 type Data={members:Member[];bans:BanEntry[];myRole:Role};
 const weight:Record<Role,number>={owner:4,admin:3,moderator:2,member:1};
 const api=async(path:string,init?:RequestInit)=>{
@@ -146,6 +146,33 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
               <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{person.displayName}</p>
                 <p className="truncate text-[11px] text-muted-foreground">@{person.handle} · {person.role}</p></div>
             </div>
+            {canAdmin&&role!==undefined&& !(['owner','admin'] as Role[]).includes(person.role)&&
+              channels.some(ch=>ch.accessMode==='restricted')&&<details className="rounded-lg border border-border/70 p-2">
+              <summary className="cursor-pointer text-xs font-medium text-primary">
+                {pt?'Acesso aos canais fechados':'Closed channel access'}
+                {' · '}{channels.filter(ch=>ch.accessMode==='restricted'&&(person.restrictedChannelIds??[]).includes(ch.id)).length}
+                {' / '}{channels.filter(ch=>ch.accessMode==='restricted').length}
+              </summary>
+              <p className="my-2 text-xs text-muted-foreground">
+                {pt?'Selecione os canais que este membro pode visualizar e acessar.':'Select the channels this member can see and access.'}
+              </p>
+              <div className="space-y-2">
+                {channels.filter(ch=>ch.accessMode==='restricted').map(ch=><label key={ch.id}
+                  className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-1 text-xs hover:bg-secondary">
+                  <input type="checkbox" className="size-4 shrink-0 accent-primary"
+                    checked={(person.restrictedChannelIds??[]).includes(ch.id)} disabled={busy}
+                    onChange={event=>void action('channel:access:'+person.handle+':'+ch.id,
+                      ()=>api(base+'/members/'+encodeURIComponent(person.handle)+'/channels/'+ch.id+'/access',{
+                        method:'PUT',headers:{'Content-Type':'application/json'},
+                        body:JSON.stringify({allowed:event.target.checked})
+                      }),pt?'Permissão atualizada.':'Access updated.')}/>
+                  <span className="min-w-0 flex-1 truncate">
+                    {ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}
+                  </span>
+                  {busyKey==='channel:access:'+person.handle+':'+ch.id&&<Spinner className="size-4"/>}
+                </label>)}
+              </div>
+            </details>}
             {weight[role]>weight[person.role]&&<div className="flex flex-wrap items-center gap-2">
               {opts(person).length>0&&<select aria-label={pt?'Alterar cargo de '+person.handle:'Change role of '+person.handle}
                 className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-1 text-xs"
@@ -194,7 +221,8 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         {canAdmin&&<div className="space-y-2 border-t border-border pt-3">
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
           {channels.map(ch=><div key={ch.id} className="space-y-2 rounded-lg border border-border/70 p-2">
-            <p className="flex items-center gap-1.5 truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}</p>
+            <p className="flex items-center gap-1.5 truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}{ch.accessMode==='restricted'&&
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{pt?'Fechado':'Closed'}</span>}</p>
             <Button size="sm" variant="outline" className="h-9" disabled={busy} loading={busyKey==='channel:delete:'+ch.id}
               onClick={()=>request('channel:delete:'+ch.id,
                 ()=>api(base+'/channels/'+ch.id,{method:'DELETE'}),pt?'Canal excluído.':'Channel deleted.',
