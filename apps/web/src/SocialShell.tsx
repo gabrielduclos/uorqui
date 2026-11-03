@@ -245,7 +245,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
               items={activity.items} unread={activity.unread} loading={activity.loading}
               error={activity.error} onRefresh={()=>void activity.refresh()}
-              onReadAll={activity.markAllRead} onOpen={openActivity}/>}
+              onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>}
             {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
