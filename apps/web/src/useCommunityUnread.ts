@@ -50,11 +50,17 @@ export function useCommunityUnread(){
       source.addEventListener('community-update',event=>{
         try{
           const data=JSON.parse((event as MessageEvent<string>).data) as {
-            kind:'message'|'voice'|'channel'|'membership';communityId:string;channelId:string|null
+            kind:'message'|'voice'|'channel'|'membership';communityId:string;channelId:string|null;
+            membershipChanged?:boolean;
           };
           if(!data||typeof data.communityId!=='string')return;
           window.dispatchEvent(new CustomEvent('uorqui:community-event',{detail:data}));
           if(data.kind!=='voice')void refresh();
+          if(data.kind==='membership'&&data.membershipChanged===true){
+            // The membership snapshot was taken when the SSE opened. Reconnect
+            // after approval so new community messages arrive without a reload.
+            source?.close();source=null;connect();
+          }
         }catch{/* Ignore invalid notifications. */}
       });
       source.addEventListener('ready',()=>{
