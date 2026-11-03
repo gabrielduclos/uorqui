@@ -791,9 +791,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           {!loading&&!owned.length&&!createOpen&&<section className="mb-4 space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
             <h3 className="text-sm font-semibold">{pt?'Comece por uma comunidade':'Start with a community'}</h3>
             <p className="text-xs leading-5 text-muted-foreground">{pt?'Encontre uma comunidade para participar ou crie a sua.':'Find a community to join or create your own.'}</p>
-            <Button type="button" size="sm" className="w-full" onClick={onExploreDiscover}>
-              <Compass className="size-4"/>{pt?'Explorar comunidades':'Explore communities'}
-            </Button>
+            <p className="text-xs text-muted-foreground">{pt?'Para encontrar comunidades públicas, use a aba Descobrir.':'Find public communities in the Discover tab.'}</p>
           </section>}
           {createOpen?<form onSubmit={event=>void create(event)} className="space-y-3">
             <label className="block text-xs font-medium">{pt?'Nome':'Name'}
@@ -815,17 +813,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <Button type="submit" className="w-full" loading={busyAction==='create'} disabled={busy||createName.trim().length<2||!allowedSlug.test(createSlug)}>
               <Plus className="size-4"/>{pt?'Criar comunidade':'Create community'}</Button>
           </form>:<div className="space-y-2">
-            <div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground"/>
-              <Input value={query} onChange={e=>setQuery(e.target.value)} className="h-10 pl-9 text-base" placeholder={pt?'Buscar comunidade':'Search communities'}/></div>
-            {loading&&<SkeletonRows className="p-3" rows={5}/>}
-            {matches.map(group=><button type="button" key={group.id} onClick={()=>selectCommunity(group.id)}
-              className="flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-secondary">
+            {loading&&<SkeletonRows className="p-3" rows={4}/>}
+            {homeGroups.map(group=><button type="button" key={group.id} onClick={()=>selectCommunity(group.id)}
+              className="flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring">
               <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-primary/15 font-bold text-primary">{communityAvatar(group,'size-full rounded-xl')}</div>
               <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{group.name}</strong>
-                <span className="block truncate text-xs text-muted-foreground">{visibilityLabel(group.visibility)} · {group.memberCount} {pt?'membros':'members'}</span>
-                {group.description&&<span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{group.description}</span>}</span>
+                <span className="block truncate text-xs text-muted-foreground">{group.requestKind==='invite'&&group.requestStatus==='pending'?(pt?'Convite recebido':'Invitation received'):
+                  visibilityLabel(group.visibility)+' · '+group.memberCount+' '+(pt?'membros':'members')}</span>
+              </span>
             </button>)}
-            {!loading&&!matches.length&&<p className="p-5 text-center text-sm text-muted-foreground">{pt?'Nenhuma comunidade encontrada.':'No communities found.'}</p>}
+            {!loading&&!homeGroups.length&&<p className="p-4 text-center text-sm text-muted-foreground">
+              {pt?'Você ainda não participa de comunidades. Encontre novas na aba Descobrir.':'You have not joined any communities yet. Find them in the Discover tab.'}
+            </p>}
           </div>}
         </div>
       </div>:<>
@@ -1231,9 +1230,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{!owned.length
             ?(pt?'Encontre uma comunidade para conversar, participar de canais e entrar em chamadas.':'Find a community to chat, join channels and take part in calls.')
             :(pt?'Selecione uma comunidade e um canal para começar.':'Choose a community and channel to get started.')}</p>
-          {!owned.length&&<Button className="mt-4 gap-2" onClick={onExploreDiscover}>
-            <Compass className="size-4"/>{pt?'Explorar comunidades':'Explore communities'}
-          </Button>}
+          {!owned.length&&<p className="mt-3 text-xs text-muted-foreground">
+            {pt?'Encontre novas comunidades na aba Descobrir.':'Find new communities in the Discover tab.'}
+          </p>}
           <Button className="mt-4 md:hidden" variant="outline" onClick={closeChannel}>{pt?'Voltar':'Back'}</Button>
         </div>
       </div>}
