@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useUorquiPreferences } from './UorquiPreferences';
+import { navigateToPublicProfile } from './publicProfileNavigation';
 
 type Role='owner'|'admin'|'moderator'|'member';
 type Visibility='public'|'approval'|'private';
@@ -191,7 +192,8 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
           {data.members.map(person=><div key={person.handle} className="space-y-2 rounded-lg border border-border/70 p-2">
             <div className="flex min-w-0 items-center gap-2">
               <div className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">{person.displayName.charAt(0).toUpperCase()}</div>
-              <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{person.displayName}</p>
+              <div className="min-w-0 flex-1"><a href={'/@'+person.handle} onClick={event=>navigateToPublicProfile(event,person.handle)}
+                className="block truncate rounded-sm text-xs font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{person.displayName}</a>
                 <p className="truncate text-[11px] text-muted-foreground">@{person.handle} · {person.role}</p></div>
             </div>
             {canAdmin&&role!==undefined&& !(['owner','admin'] as Role[]).includes(person.role)&&
