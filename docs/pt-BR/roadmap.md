@@ -2,7 +2,7 @@
 
 [Português](roadmap.md) · [English](../en/roadmap.md)
 
-**Status:** roadmap do **beta técnico `0.1.0-beta.1`** e da mudança de direção aprovada em **02/11/2026**. Itens marcados indicam implementação ou teste CI, não publicação comprovada nem validação em aparelhos reais. O feed existente é legado; **Descobrir** ainda precisa ser desenvolvido. Ver [decisão](descobrir.md).
+**Status:** roadmap do **beta técnico `0.1.0-beta.1`** e da mudança de direção aprovada em **02/11/2026**. Itens marcados indicam implementação ou teste CI, não publicação comprovada nem validação em aparelhos reais. O feed global foi aposentado em 02/11/2026; **Descobrir já está implementado**, com testes reais ainda pendentes. Ver [decisão](descobrir.md) e [auditoria](auditoria-manutencao.md).
 
 ## Fase 0 — Descoberta e fundação
 
@@ -56,20 +56,22 @@
 ## v0.3 — Histórico do beta: feed híbrido (legado)
 
 - [x] Implementar feed híbrido com texto, imagens, carrosséis e vídeos — **já existente, mas fora da visão futura**.
-- [x] Implementar navegação imersiva por vídeos — **já existente, mas descontinuação planejada**.
+- [x] Implementar navegação imersiva por vídeos — **entrega histórica, agora aposentada**.
 
 Esses itens documentam entregas passadas, **não** a próxima prioridade de desenvolvimento.
 
-## Próxima etapa — Descobrir (antes do piloto)
+## Etapa entregue — Descobrir (antes do piloto)
 
 - [x] Substituir a tela inicial do feed por **Descobrir**, com busca e recomendações de comunidades públicas (código na `main`; validação de deploy pendente).
 - [x] Mostrar atividades recentes e salas de voz ativas **das comunidades do usuário**, com contagens fundamentadas e autorização no servidor.
 - [x] Acesso direto ao canal/sala correto sem entrar automaticamente em chamada, marcar como lido ou expor conteúdo privado.
 - [x] Implementar estado vazio para contas sem comunidades, sem listas artificiais de posts/atividade (validação manual pendente).
 - [x] Ajustar a navegação, onboarding, perfil público, busca e textos da nova tela em PT-BR/EN, usando os tokens Light/Dark (auditoria acessibilidade/dispositivos pendente).
-- [ ] Revisar notificações, links internos e links antigos de posts; definir compatibilidade e transição.
-- [ ] Retirar o acesso ao feed global, criação de posts e modo de vídeos após revisar dependências, **sem apagar dados, tabelas ou mídias automaticamente**.
-- [ ] Documentar retenção/exportação, migrations versionadas, rollback e validação no desktop, Android e iOS/PWA.
+- [x] Tratar links antigos de publicações nas mensagens sem abrir uma tela inexistente e remover o compartilhamento do feed sem uso (03/11).
+- [ ] Concluir auditoria de notificações e deep links nos PWAs instalados.
+- [x] Aposentar navegação do feed global, criação de posts, modo vídeos e API/schema antigos (02/11; snapshots Neon e mídias R2 preservados conforme documentação).
+- [x] Registrar migrações históricas, backups e escopo inicial da limpeza na auditoria de manutenção.
+- [ ] Concluir política de retenção/exportação e testes de aceitação no desktop, Android e iOS/PWA.
 - [ ] Testar a nova jornada **comunidade recomendada → ingresso → canal/voz → mensagem individual** com usuários reais.
 
 **Critério:** Descobrir é útil mesmo sem comunidades inscritas e respeita privacidade, atividade real e participação efetiva.
@@ -93,7 +95,7 @@ Esses itens documentam entregas passadas, **não** a próxima prioridade de dese
 
 ## Decisões pendentes
 
-Prioridades, licenças de dependências, custos e cotas, política de migração/retenção do feed legado, processo de moderação, qualidade do TURN e validação da mudança de domínio. SSE, WebRTC e R2 já têm implementação inicial.
+Prioridades, licenças de dependências, custos e cotas, política de retenção dos backups do feed legado, processo de moderação, qualidade do TURN e validação do PWA/domínio. SSE, WebRTC e R2 já têm implementação inicial.
 
 ### Comunidades (trabalho incremental)
 
@@ -107,3 +109,6 @@ Prioridades, licenças de dependências, custos e cotas, política de migração
 - [ ] Ampliar denúncias para apelações, trilha completa, antispam e permissões específicas por canal
 - [x] Anexos no canal usando R2; continuar otimizando mídia e custos
 - [x] Implementar PWA e Web Push para canais; validar entrega em iOS/Android instalados
+- [x] Reuniões com câmera, tela compartilhada, detecção da fala, modo tela cheia e miniatura da câmera própria; chat de texto começa recolhido
+- [x] Edição de nome/senha no cabeçalho de canais de texto, voz e reunião; solicitação de comunidade atualizada por SSE direcionado ao usuário aprovado
+- [ ] Testar reunião real com duas ou mais pessoas, diferentes navegadores/redes, compartilhamento de tela e modo tela cheia
