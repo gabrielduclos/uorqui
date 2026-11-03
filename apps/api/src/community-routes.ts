@@ -107,10 +107,10 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       unsubscribe=await subscribeCommunityEvents(
         groups.rows.map((r:{community_id:string})=>r.community_id),me,
         event=>{
-          const send=()=>write('event: community-update\\ndata: '+JSON.stringify({
+          const send=()=>write('event: community-update\ndata: '+JSON.stringify({
             kind:event.kind,communityId:event.communityId,channelId:event.channelId,
             ...(event.recipientId?{membershipChanged:true}:{})
-          })+'\\n\\n');
+          })+'\n\n');
           // A joined user may not see a closed channel. No IDs or activity
           // for inaccessible channels should leak through the SSE stream.
           if(event.channelId){
