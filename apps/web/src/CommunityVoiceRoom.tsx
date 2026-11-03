@@ -926,39 +926,39 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         </div>
         <div className="flex flex-1 items-center justify-center gap-2 sm:flex-initial">
           <button type="button" onClick={toggleMute} disabled={deafened}
-            className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-60 '+(muted?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
+            className={'grid size-11 lg:size-12 place-items-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-60 '+(muted?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}
             title={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}>
             {muted?<MicOff className="size-5"/>:<Mic className="size-5"/>}
           </button>
           {meeting&&<button type="button" onClick={()=>void toggleCamera()} disabled={cameraBusy}
-             className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-50 '+(!cameraOn?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
+             className={'grid size-11 lg:size-12 place-items-center rounded-xl border transition-colors disabled:opacity-50 '+(!cameraOn?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
              aria-label={cameraOn?(pt?'Desativar câmera':'Turn camera off'):(pt?'Ativar câmera':'Turn camera on')} title={cameraOn?(pt?'Desativar câmera':'Turn camera off'):(pt?'Ativar câmera':'Turn camera on')}>
              {cameraOn?<Video className="size-5"/>:<VideoOff className="size-5"/>}
            </button>}
           <button type="button" onClick={toggleDeafen}
-            className={'grid size-11 place-items-center rounded-xl border transition-colors '+(deafened?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
+            className={'grid size-11 lg:size-12 place-items-center rounded-xl border transition-colors '+(deafened?'border-destructive/35 bg-destructive/10 text-destructive':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}
             title={deafened?(pt?'Ativar áudio':'Undeafen'):(pt?'Desativar áudio e microfone':'Deafen')}>
             {deafened?<VolumeX className="size-5"/>:<Volume2 className="size-5"/>}
           </button>
           <button type="button" disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))} onClick={()=>void toggleScreenShare()}
-            className={'grid size-11 place-items-center rounded-xl border transition-colors disabled:opacity-40 '+(sharing?'border-primary/60 bg-primary/15 text-primary':'border-border bg-secondary hover:bg-secondary/70')}
+            className={'grid size-11 lg:size-12 place-items-center rounded-xl border transition-colors disabled:opacity-40 '+(sharing?'border-primary/60 bg-primary/15 text-primary':'border-border bg-secondary hover:bg-secondary/70')}
             aria-label={sharing?(pt?'Parar compartilhamento de tela':'Stop screen sharing'):(pt?'Compartilhar tela':'Share screen')}
             title={('getDisplayMedia' in (navigator.mediaDevices??{}))?(sharing?(pt?'Parar apresentação':'Stop presenting'):(pt?'Compartilhar tela':'Share screen')):
               (pt?'Não disponível neste navegador':'Unavailable in this browser')}>
             {screenBusy?<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"/>:
               sharing?<MonitorOff className="size-5"/>:<MonitorUp className="size-5"/>}
           </button>
-          {audioBlocked&&!deafened&&<Button variant="outline" className="min-h-11 rounded-xl" onClick={enableAudio}>
+          {audioBlocked&&!deafened&&<Button variant="outline" className="h-11 lg:h-12 rounded-xl" onClick={enableAudio}>
             <Volume2 className="size-4"/>{pt?'Ativar som':'Enable sound'}</Button>}
           <button type="button" onClick={leaveRoom}
-            className="flex min-h-11 items-center gap-2 rounded-xl bg-destructive px-4 font-semibold text-destructive-foreground hover:bg-destructive/90"
+            className="flex h-11 lg:h-12 items-center gap-2 rounded-xl bg-destructive px-4 font-semibold text-destructive-foreground hover:bg-destructive/90"
             aria-label={pt?'Desconectar da sala':'Disconnect from room'} title={pt?'Desconectar':'Disconnect'}>
             <PhoneOff className="size-5"/><span className="text-sm">{pt?'Sair':'Leave'}</span>
           </button>
         </div>
-        <div className="hidden text-xs text-muted-foreground sm:block">{count}/6</div>
+        <div className="hidden h-11 items-center text-xs text-muted-foreground sm:flex lg:h-12">{count}/6</div>
       </div>
     </div>}
   </section>
