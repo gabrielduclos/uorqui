@@ -55,12 +55,15 @@ export function registerNotificationRoutes(app:FastifyInstance,readSession:Sessi
         getPool().query(
           'SELECT n.id,n.kind,n.target_id AS "targetId",n.created_at AS "createdAt",n.read_at AS "readAt",'+
           'u.handle AS "actorHandle",COALESCE(p.display_name,u.handle) AS "actorName",'+
-           'CASE WHEN n.kind=\'meeting_join_request\' THEN ch.community_id ELSE NULL END AS "communityId",'+
+           'c.id AS "communityId",c.name AS "communityName",ch.name AS "meetingName",'+
           'CASE WHEN p.is_public=true OR EXISTS (SELECT 1 FROM user_friendships f WHERE f.status=\'accepted\' '+
           'AND ((f.user_a_id=$1 AND f.user_b_id=n.actor_id) OR (f.user_b_id=$1 AND f.user_a_id=n.actor_id))) '+
           'THEN p.avatar_url ELSE NULL END AS "actorAvatar" '+
           'FROM activity_notifications n JOIN users u ON u.id=n.actor_id LEFT JOIN profiles p ON p.user_id=n.actor_id '+
            'LEFT JOIN community_channels ch ON ch.id=n.target_id AND n.kind=\'meeting_join_request\' '+
+           'LEFT JOIN communities c ON c.id=CASE '+
+             "WHEN n.kind='community_join_request' THEN n.target_id "+
+             "WHEN n.kind='meeting_join_request' THEN ch.community_id ELSE NULL END "+
           'WHERE n.recipient_id=$1 AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE '+
           '(b.blocker_id=$1 AND b.blocked_id=n.actor_id) OR (b.blocked_id=$1 AND b.blocker_id=n.actor_id)) '+
           'ORDER BY n.created_at DESC,n.id DESC LIMIT 80',[id]),
