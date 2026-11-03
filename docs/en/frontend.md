@@ -4,7 +4,7 @@
 
 ## Document status
 
-The technical beta already includes **real direct messaging, real communities, a legacy hybrid post feed and voice rooms**. Early documentation about demo-only screens no longer reflects the current application. The direction approved **November 2, 2026**, detailed in [Discover](discover.md), **has an initial implementation in the frontend on `main`, pending production verification**.
+The technical beta now includes **real 1:1 messaging, Discover, communities, voice rooms and video meetings**. The global post feed was retired November 2, 2026. The active direction is detailed in [Discover](discover.md); a code [maintenance audit](maintenance-audit.md) was completed November 3. Deployment and device-level testing require separate verification.
 
 ## Goal
 
@@ -14,7 +14,7 @@ Build a mobile-first interface for **discovering communities, participating in t
 
 - **Discover (home):** real channel and voice-room activity from joined communities, search and recommended public communities. No post feed, endless scrolling, “For you/Following” filter or vertical short-video mode.
 - **Messages:** private 1:1 chats, history, media, reactions, and delivery/read states.
-- **Communities:** joined spaces, text channels, voice rooms, administration and moderation.
+- **Communities:** joined spaces, text channels, voice rooms, video meetings, per-channel passwords and moderation. Voice/meeting text starts collapsed, with an accessible expand control.
 - **Profile, notifications and settings:** remain accessible without requiring dedicated primary tabs. Profile privacy remains independent from community membership.
 
 Discover shortcuts navigate to the correct community/channel without joining a voice call automatically or prematurely marking messages read. New users without memberships see search, public recommendations and honest empty states. The API grounds all counts and enforces access controls.
@@ -28,13 +28,13 @@ Discover shortcuts navigate to the correct community/channel without joining a v
 - Skeletons for initial loads and per-action spinners for backend work. Background refresh must preserve visible content.
 - Do not simulate presence, counts, badges or recommended communities as real data.
 
-## Migration of the existing frontend
+## Migration status and next validation
 
-1. Build Discover and update navigation, internal links and onboarding to **Discover · Messages · Communities**.
-2. Reuse authenticated community/voice APIs and events for activity; design extra endpoints only when necessary and enforce server-side authorization.
-3. Audit feed dependencies in profiles, notifications, routing, sharing and old post deep links.
-4. Retire global post feed and immersive video access only after migration, **without deleting data** or breaking message/channel media sharing.
-5. Verify desktop, iPhone Safari/PWA, Android/PWA, Light/Dark and PT/EN.
+1. **Completed:** replace the global feed with Discover and update navigation, internal links and onboarding.
+2. **Completed:** reuse authorized community activity, SSE notifications and account-targeted approval events. Always enforce authorization on the server.
+3. **Completed in the November 3 audit:** remove unreachable feed-sharing controls and replace broken legacy post navigation with a historical-content notice.
+4. **Retained:** historical Drizzle migrations and recovery media; do not delete production data based on unused UI code.
+5. **Pending:** verify desktop, iPhone Safari/PWA, Android/PWA, Light/Dark and PT/EN, including WebRTC screen capture and fullscreen meeting layout.
 
 ## Quality gates and isolation
 
