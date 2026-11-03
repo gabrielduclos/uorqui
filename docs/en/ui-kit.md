@@ -13,7 +13,7 @@ The shared visual foundation for Uorqui's **Discover, direct messaging and commu
 - Activity shortcuts open the exact channel/room, without auto-connecting the microphone or acknowledging unread messages.
 - Helpful empty states for new users; no invented membership, activity or messages.
 - Primary navigation: **Discover · Messages · Communities**; Profile, notifications and settings remain accessible.
-- **Initial implementation committed to code** (Discover page and navigation), pending visual testing on devices and deployment verification. The beta feed is legacy. See the [decision](discover.md).
+- Discover is implemented and the global beta feed has been retired. Cross-device visual acceptance is still pending. See the [decision](discover.md).
 
 ## Theme design
 
@@ -52,12 +52,13 @@ Use semantic Tailwind classes instead of hardcoded dark-only colors. Component s
 | Card, Badge, Separator, ScrollArea | Surfaces and structure |
 | Avatar | Identity and fallback initials |
 | PreferencesControls | Theme and language header switchers |
-| DemoMessageComposer | Expandable input, horizontal + attachments, right-side emoji, shared mic/send button |
-| DemoChatBubble | Rectangular message, reply, reactions, clipped-safe context menu over blurred conversation |
-| DemoAudioPlayer, DemoMediaViewer | Audio and shared image/video viewer |
-| DemoImageEditor | Draw and mark up images before sending and in the viewer |
+| LiveMessageComposer | Expandable input, attachments, emoji and voice notes |
+| DirectMessageBubble | Sent/received states, reply, reactions and a viewport-safe action menu |
+| ChatAudioPlayer, ChatMediaViewer | Voice playback and image/video viewer |
+| ChatImageEditor | Drawing/markup before sending a photo |
+| LiveCommunities, CommunityVoiceRoom | Responsive channels, voice/meeting controls, collapsible text, screen sharing |
 
-The one-to-one messenger **is connected** to the API and Neon. Community channels still use local previews. The live chat must retain this UI Kit; unimplemented backend actions must never simulate persistence.
+The one-to-one messenger and community text channels **use persisted API/Neon data**. Meeting audio/video uses WebRTC; never simulate remote participants or persist a preview as a real message.
 
 ## Languages
 
@@ -73,14 +74,15 @@ The one-to-one messenger **is connected** to the API and Neon. Community channel
 - apps/web/src/UorquiPreferences.tsx — theme and language state
 - apps/web/src/PreferencesControls.tsx — header controls
 - apps/web/src/components/ui/ — reusable primitives
-- apps/web/src/Demo*.tsx — messaging examples
+- apps/web/src/LiveDirectChat.tsx, DirectMessageBubble.tsx, LiveMessageComposer.tsx — actual messenger
+- apps/web/src/LiveCommunities.tsx, CommunityVoiceRoom.tsx — communities and meetings
 
 When changing UI, review dark/light × Portuguese/English × desktop/mobile, update this document and ensure keyboard and assistive technology support.
 
 ## Required contract for the live messenger
 
 - `LiveDirectChat` handles inbox, fixed conversation header, scroll, messages, and realtime updates. The message surface fills available desktop width and only the message panel scrolls.
-- `DirectMessageBubble` uses **square corners** (`rounded-none`) as the Uorqui chat identity, semantic palette, swipe-to-reply and a viewport-safe context menu with blur restricted to the conversation.
+- `DirectMessageBubble` uses **gently rounded corners** as the current Uorqui chat identity, semantic palette, swipe-to-reply and a viewport-safe context menu.
 - `LiveMessageComposer` preserves **+ attachments | expanding text | emoji | shared mic/send** with a horizontal attachment menu and right-side emoji picker.
 - Text messages persist through the API and appear instantly with an in-bubble spinner, retrying with the same client ID on failure while leaving the composer available. Each bubble retains its inline message timestamp. Sending/Sent/Received/Read appears once in a neutral centered system-style line after each consecutive block of outgoing messages, with the status update time; a block only reads Read or Received once every non-deleted message reaches that state. The optimistic spinner and retry control remain inside individual bubbles. The composer has distinct semantic border/background contrast in Light/Dark. No “Live” badge appears, while realtime sync remains enabled. Audio and attachments still need dedicated endpoints; structured replies reference the original message via an authenticated API and show a preview, including deleted source placeholders; unsupported actions remain visibly disabled, not simulated locally. Editing, deleting for both participants, forwarding and reactions have authenticated, persistent endpoints. Reactions update optimistically and roll back on error; a focused, visible inbox acknowledges Received without marking Read.
 - Browsing the inbox **must never mark a conversation read**; only an opened, visible conversation with a focused browser window may acknowledge messages.
@@ -89,7 +91,7 @@ When changing UI, review dark/light × Portuguese/English × desktop/mobile, upd
 
 ## Live messenger updates — cancellation, reactions and unread count
 
-- Actual chat bubbles retain the **square-corner** identity (`rounded-none`).
+- Actual chat bubbles retain their **gently rounded** identity.
 - Reply previews are clickable, navigate to and temporarily highlight the source, fetching `?around=id` when outside the latest window.
 - **Cancel message** replaces delete: available only for own unread messages, permanently removes the message without a placeholder; the API atomically rejects cancellation after read (HTTP 409).
 - Reactions remain attached to the original message as compact optimistic chips; they never create separate timeline bubbles. Recent reactions appear in the inbox preview for **both participants**. The reactor sees **“You reacted ❤️ to a message”** without an unread count; the message author sees **“Alex reacted ❤️ to your message”** with an unread notification until the conversation is read.
