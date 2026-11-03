@@ -191,6 +191,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
   const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
   const community=detail?.community??null;
+  // A revoked grant removes a closed room from the authorized channel list.
+  // Unmount its WebRTC component rather than keeping a stale floating call.
+  useEffect(()=>{
+    if(!activeVoiceRoom||!detail||selectedId!==activeVoiceRoom.communityId)return;
+    if(detail.channels.some(ch=>ch.id===activeVoiceRoom.channelId))return;
+    setActiveVoiceRoom(null);setVoiceParticipants([]);setVoiceMinimized(true);
+    setNotice(pt?'Você não tem mais acesso a esta sala.':'You no longer have access to this room.');
+  },[detail,activeVoiceRoom,selectedId,pt]);
   const renderedMessages=[...messages,...pendingMessages.filter(p=>p.channelId===channelId&&!messages.some(m=>m.clientId===p.clientId))];
 
   const loadList=useCallback(async()=>{
@@ -806,7 +814,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                 aria-label={ch.name+(unreadChannels[ch.id]?' · '+unreadChannels[ch.id]+(pt?' não lidas':' unread'):'')}
                 onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');setUnlockPassword('');setUnlockError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
-                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>{ch.hasPassword&&<LockKeyhole aria-label={pt?'Canal protegido':'Protected channel'} className="size-3.5 shrink-0 text-primary"/>}
+                <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>{(ch.hasPassword||ch.accessMode==='restricted')&&<LockKeyhole aria-label={pt?(ch.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(ch.accessMode==='restricted'?'Closed channel':'Password-protected channel')} className="size-3.5 shrink-0 text-primary"/>}
                 {!!unreadChannels[ch.id]&&<span aria-hidden="true"
                   className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                   {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
@@ -822,7 +830,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                     }}
                     className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
                     {ch.kind==='meeting'?<Video className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>:<Volume2 className={cn('size-4 shrink-0',occupants.length?'text-emerald-500':'text-muted-foreground')}/>}
-                    <span className="min-w-0 flex-1 truncate">{ch.name}</span>{ch.hasPassword&&<LockKeyhole aria-label={pt?'Canal protegido':'Protected channel'} className="size-3.5 shrink-0 text-primary"/>}
+                    <span className="min-w-0 flex-1 truncate">{ch.name}</span>{(ch.hasPassword||ch.accessMode==='restricted')&&<LockKeyhole aria-label={pt?(ch.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(ch.accessMode==='restricted'?'Closed channel':'Password-protected channel')} className="size-3.5 shrink-0 text-primary"/>}
                     {!!unreadChannels[ch.id]&&<span aria-label={unreadChannels[ch.id]+(pt?' mensagens não lidas':' unread messages')}
                       className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                       {unreadChannels[ch.id]>99?'99+':unreadChannels[ch.id]}</span>}
@@ -942,7 +950,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           {activeChannel.kind==='meeting'?<Video className="size-5 text-muted-foreground"/>:activeChannel.kind==='voice'?<Volume2 className="size-5 text-muted-foreground"/>:<Hash className="size-5 text-muted-foreground"/>}
           <div className="min-w-0 flex-1"><h2 className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold">
             <span className="truncate">{activeChannel.name}</span>
-            {activeChannel.hasPassword&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?'Canal protegido':'Protected channel'}/>}
+            {(activeChannel.hasPassword||activeChannel.accessMode==='restricted')&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?(activeChannel.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(activeChannel.accessMode==='restricted'?'Closed channel':'Password-protected channel')}/>} 
           </h2><p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
           {manage(community)&&<div ref={channelSettingsRef} className="relative ml-auto shrink-0">
             <Button type="button" size="sm" variant="ghost" className="gap-2 px-2 sm:px-3"
