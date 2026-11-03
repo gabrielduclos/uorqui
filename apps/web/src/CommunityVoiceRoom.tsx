@@ -69,6 +69,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [speaking,setSpeaking]=useState<Set<string>>(()=>new Set());
   const [spotlightId,setSpotlightId]=useState<string|null>(null);
   const [pinnedCamera,setPinnedCamera]=useState<string|null>(null);
+  const [presentedScreenId,setPresentedScreenId]=useState<string|null>(null);
   const [fullMeeting,setFullMeeting]=useState(false);
   const [error,setError]=useState('');
   const [audioBlocked,setAudioBlocked]=useState(false);
@@ -143,7 +144,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     timers.current=[];
     for(const pc of pcMap.current.values())pc.close();
     pcMap.current.clear();candidateQueue.current.clear();knownPeers.current.clear();
-    voiceMonitor.current?.dispose();voiceMonitor.current=null;recentPeers.current=[];setSpeaking(new Set());setSpotlightId(null);setPinnedCamera(null);setFullMeeting(false);
+    voiceMonitor.current?.dispose();voiceMonitor.current=null;recentPeers.current=[];setSpeaking(new Set());setSpotlightId(null);setPinnedCamera(null);setPresentedScreenId(null);setFullMeeting(false);
     for(const el of audioMap.current.values()){el.pause();el.srcObject=null;el.remove();}
     audioMap.current.clear();local.current?.getTracks().forEach(track=>{track.onmute=null;track.onunmute=null;track.onended=null;track.stop();});local.current=null;
     cursor.current='0';ownJoinedAt.current='';mutedRef.current=false;deafenedRef.current=false;priorMuteRef.current=false;
@@ -738,6 +739,13 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const mainCamera=mainCameraId?cameras[mainCameraId]:null;
   const mainParticipant=peers.find(peer=>peer.sessionId===mainCameraId);
   const ownSmallCamera=selfSession.current&&cameraOn&&selfSession.current!==mainCameraId?cameras[selfSession.current]:null;
+  const featuredScreenId=presentedScreenId&&screens[presentedScreenId]?presentedScreenId:Object.keys(screens)[0]??null;
+  const showScreen=Boolean(featuredScreenId)&&!pinnedCamera;
+  const stageStream=showScreen&&featuredScreenId?screens[featuredScreenId]:mainCamera;
+  const stageTitle=showScreen
+    ?featuredScreenId===selfSession.current?(pt?'Sua tela':'Your screen'):
+      (pt?'Tela de ':'Screen from ')+(peers.find(peer=>peer.sessionId===featuredScreenId)?.displayName??'')
+    :mainParticipant?.displayName??(pt?'Aguardando câmeras':'Waiting for cameras');
   useEffect(()=>{
     if(!fullMeeting)return;
     const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setFullMeeting(false);setPinnedCamera(null);}};
@@ -774,7 +782,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     </div>
   </section>;
   const remoteReady=peers.filter(p=>!p.isSelf&&connections[p.sessionId]==='connected').length;
-  return <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+  return <><section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 sm:px-5 sm:py-4">
       <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -950,6 +958,93 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         </div>
         <div className="hidden text-xs text-muted-foreground sm:block">{count}/6</div>
       </div>
-    </div>}
-  </section>;
+    </div]}
+  </section>
+  {meeting&&phase==='joined'&&fullMeeting&&createPortal(
+    <section role="dialog" aria-modal="true" aria-label={pt?'Reunião em tela cheia':'Fullscreen meeting'}
+      className="fixed inset-0 z-[300] flex h-[100dvh] w-full flex-col overflow-hidden bg-black text-white">
+      <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 bg-black/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold">{channelName}</h2>
+          <p className="truncate text-xs text-white/65">{count} {pt?'participantes':'participants'}</p>
+        </div>
+        <Button variant="outline" size="sm" type="button"
+          className="min-h-10 border-white/30 bg-black/50 text-white hover:bg-white/15"
+          onClick={()=>{setFullMeeting(false);setPinnedCamera(null);setPresentedScreenId(null);}}>
+          <Minimize2 className="size-4"/>{pt?'Sair da tela cheia':'Exit fullscreen'}
+        </Button>
+      </div>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-neutral-950">
+        {stageStream?
+          <MeetingVideo stream={stageStream} label={stageTitle}
+            mirror={!showScreen&&mainCameraId===selfSession.current}
+            className={'h-full w-full '+(showScreen?'object-contain':'object-cover')}/>:
+          <div className="flex flex-col items-center gap-3 text-center text-white/70">
+            <VideoOff className="size-12"/><p className="text-sm">{pt?'Aguardando alguém ativar a câmera':'Waiting for a camera'}</p>
+          </div>}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent p-3">
+          <span className="max-w-[65%] truncate rounded-lg bg-black/50 px-3 py-1.5 text-sm font-semibold">{stageTitle}</span>
+          {!showScreen&&!!mainCameraId&&speaking.has(mainCameraId)&&
+            <span className="flex items-center gap-2 rounded-lg bg-emerald-600/85 px-3 py-1.5 text-xs font-semibold">
+              <span className="size-2 animate-pulse rounded-full bg-white"/>
+              {pt?'Falando agora':'Speaking now'}
+            </span>}
+        </div>
+        {ownSmallCamera&&<button type="button" className="absolute bottom-3 right-3 z-10 aspect-[3/4] w-[25%] max-w-36 overflow-hidden rounded-xl border-2 border-white/70 bg-neutral-900 shadow-xl sm:w-28"
+          title={pt?'Destacar minha câmera':'Focus my camera'}
+          onClick={()=>{setPinnedCamera(selfSession.current);setPresentedScreenId(null);}}>
+          <MeetingVideo stream={ownSmallCamera} label={pt?'Sua câmera':'Your camera'} mirror
+            className="size-full object-cover"/>
+          <span className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-1 text-left text-xs">{pt?'Você':'You'}</span>
+        </button>}
+      </div>
+      {(cameraEntries.length>1||Object.keys(screens).length>0)&&
+        <div className="z-10 flex max-h-28 shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-black/90 p-2">
+          {cameraEntries.filter(([id])=>id!==mainCameraId).map(([id,stream])=>
+            <button type="button" key={'thumb:'+id}
+              onClick={()=>{setPinnedCamera(id);setPresentedScreenId(null);}}
+              className={'relative aspect-video h-16 shrink-0 overflow-hidden rounded-lg border-2 '+(speaking.has(id)?'border-emerald-400':'border-white/25')}
+              aria-label={(pt?'Destacar câmera de ':'Focus camera of ')+(peers.find(peer=>peer.sessionId===id)?.displayName??'')}>
+              <MeetingVideo stream={stream} label={peers.find(peer=>peer.sessionId===id)?.displayName??''} className="size-full object-cover"/>
+              <span className="absolute inset-x-0 bottom-0 truncate bg-black/70 px-1 py-0.5 text-[10px]">{peers.find(peer=>peer.sessionId===id)?.displayName??''}</span>
+            </button>)}
+          {Object.entries(screens).map(([id,stream])=>
+            <button type="button" key={'screen:'+id}
+              onClick={()=>{setPinnedCamera(null);setPresentedScreenId(id);}}
+              className={'relative aspect-video h-16 shrink-0 overflow-hidden rounded-lg border-2 '+(showScreen&&featuredScreenId===id?'border-primary':'border-white/25')}
+              aria-label={(pt?'Ver tela de ':'View screen from ')+(peers.find(peer=>peer.sessionId===id)?.displayName??'')}>
+              <MeetingVideo stream={stream} label={pt?'Tela compartilhada':'Shared screen'} className="size-full object-contain"/>
+              <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 truncate bg-black/70 px-1 py-0.5 text-[10px]">
+                <MonitorUp className="size-3"/>{pt?'Tela':'Screen'}
+              </span>
+            </button>)}
+          {pinnedCamera&&<button type="button" className="flex h-16 shrink-0 items-center gap-1 rounded-lg border border-white/30 px-3 text-xs"
+            onClick={()=>{setPinnedCamera(null);setPresentedScreenId(null);}}>
+            <Mic className="size-4"/>{pt?'Automático':'Auto'}
+          </button>}
+        </div>}
+      <div className="z-10 flex shrink-0 items-center justify-center gap-3 border-t border-white/15 bg-black/95 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <button type="button" onClick={toggleMute} disabled={deafened}
+          className={'grid size-12 place-items-center rounded-full '+(muted?'bg-red-600':'bg-neutral-700')}
+          aria-label={muted?(pt?'Ativar microfone':'Unmute microphone'):(pt?'Silenciar microfone':'Mute microphone')}>
+          {muted?<MicOff className="size-5"/>:<Mic className="size-5"/>}
+        </button>
+        <button type="button" onClick={()=>void toggleCamera()} disabled={cameraBusy}
+          className={'grid size-12 place-items-center rounded-full '+(cameraOn?'bg-neutral-700':'bg-red-600')}
+          aria-label={cameraOn?(pt?'Desligar câmera':'Turn camera off'):(pt?'Ligar câmera':'Turn camera on')}>
+          {cameraOn?<Video className="size-5"/>:<VideoOff className="size-5"/>}
+        </button>
+        <button type="button" onClick={()=>void toggleScreenShare()} disabled={screenBusy||!('getDisplayMedia' in (navigator.mediaDevices??{}))}
+          className={'grid size-12 place-items-center rounded-full disabled:opacity-40 '+(sharing?'bg-primary':'bg-neutral-700')}
+          aria-label={sharing?(pt?'Parar compartilhamento':'Stop sharing'):(pt?'Compartilhar tela':'Share screen')}>
+          {sharing?<MonitorOff className="size-5"/>:<MonitorUp className="size-5"/>}
+        </button>
+        <button type="button" onClick={()=>{leaveRoom();setFullMeeting(false);}}
+          className="grid size-12 place-items-center rounded-full bg-red-600"
+          aria-label={pt?'Sair da reunião':'Leave meeting'}>
+          <PhoneOff className="size-5"/>
+        </button>
+      </div>
+    </section>,document.body)}
+  </>;
 }
