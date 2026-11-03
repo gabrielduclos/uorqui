@@ -7,6 +7,8 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 Evolução do beta técnico na `main`, **sem criar tag e sem comprovar deploy da última versão em produção**.
 
 ### Produto e comunidades
+- Removido o **Explorar comunidades** interno da aba Comunidades (ícone bússola, pesquisa e lista pública). A área agora mostra apenas comunidades participadas, convites pendentes e criação; a descoberta de novas comunidades fica exclusivamente na aba **Descobrir**.
+- Links de convite para canais enviados nos chats e prévias abrem a comunidade e o canal por **navegação interna**, sem nova aba ou recarregamento. Convites por token usam o fluxo existente de entrada no próprio app; tocar no push do convite direto também abre o canal.
 - O seletor **Convidar para o canal** agora mostra exclusivamente outros participantes da comunidade atual, excluindo contas bloqueadas e respeitando a privacidade de nomes/fotos; o convite usa link direto sem gerar convite geral da comunidade.
 - Migração `0034_channel_names_per_kind` aplicada no Neon de produção (3 nov. 2026), com verificação do novo índice exclusivo por comunidade, tipo e nome; backups existentes preservados, mas limite do Neon impediu criar um novo snapshot/branch.
 - Push de convite apenas ao destinatário: mensagens privadas de convite usam o push normal do chat com texto específico, e convites de entrada na comunidade notificam somente a pessoa convidada.
