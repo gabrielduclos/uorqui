@@ -99,3 +99,15 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 - Authenticated API: `GET /api/v1/blocks`, `POST /api/v1/blocks`, `DELETE /api/v1/blocks/:handle` with origin validation for writes.
 - Previously downloaded images and publicly hosted external images cannot be revoked retroactively. Only Worker-controlled R2 authorization can guarantee live access revocation.
 - `0010_user_blocks` introduces the table; migrate Neon production before deploying the corresponding API and Worker.
+
+## Performance, cache and recovery (2026-11-04)
+
+- **Cache-first:** the inbox and latest 120 messages per conversation use account-scoped IndexedDB. The API remains authoritative; cached data is only shown after authentication and is cleared after successful logout.
+- **Durable outbox:** messages and Files are stored in IndexedDB before network delivery. The sender stays active while the account shell is mounted, including when leaving the DM screen. Transient failures receive up to eight attempts with backoff, and permanent failures expose manual retry. The stable `clientId` provides server idempotency.
+- **Realtime:** unread badges and chat share one authenticated SSE connection. Compact message events are rendered immediately; receipt and history changes without complete details are reconciled through the API. Concurrent inbox requests are deduplicated.
+- **Fallback:** with a healthy SSE stream, no periodic inbox/history download runs. On disconnection, visible pages reconcile over HTTP approximately every 12–15 seconds.
+- **Private media:** retains in-memory only, bounded to 48 MB, 24 items, and three parallel downloads; never stored in the shared service worker or CDN. Large items use the authenticated fetch path without aggressive prefetch.
+- **Infrastructure:** Neon is in `aws-sa-east-1` (São Paulo), while Render is in Oregon. DM notification broadcasting now uses a single PostgreSQL round trip for both recipients, but physical cross-region latency remains. No production database or service migration without a rollback/backup and secrets plan; Render currently offers no São Paulo service region.
+- **Validation:** run typecheck/build and isolated integration tests, then test across two real devices: offline/online, media delivery, account switching, logout, disconnected SSE, concurrent sends and resumption. CI cannot prove Brazilian end-to-end latency.
+
+**Limits:** browsers can suspend JavaScript; the outbox does not guarantee background delivery while the PWA is terminated. Server authorization and cancellation rules remain authoritative.
