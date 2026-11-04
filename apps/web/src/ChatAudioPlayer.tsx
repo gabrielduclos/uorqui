@@ -61,7 +61,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
   return <div className="mt-1 flex w-full max-w-[340px] min-w-[min(280px,100%)] flex-col gap-2 border border-border bg-card px-3 py-2.5 text-foreground shadow-sm" aria-label="Mensagem de áudio">
     <audio ref={player} src={src} preload="metadata"
       onLoadedMetadata={event => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0); event.currentTarget.playbackRate = rate; setLoading(false); }}
-      onWaiting={()=>{if(requestedCache||playing)setLoading(true);}} onCanPlay={()=>setLoading(false)
+      onWaiting={()=>{if(requestedCache||playing)setLoading(true);}} onCanPlay={()=>setLoading(false)}
       onDurationChange={event => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }}
       onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)}
       onPlay={() => setPlaying(true)}
