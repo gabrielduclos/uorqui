@@ -157,8 +157,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const draftBeforeEdit = useRef('');
   const threadRequest = useRef(0);
   const roomRequest = useRef(0);
-  const lastThreadFallback = useRef(0);
-  const lastMessageFallback = useRef(0);
+  const lastThreadFallback = useRef(Date.now());
+  const lastMessageFallback = useRef(Date.now());
   const scrollBox = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -209,6 +209,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     const result = await loadDmInboxNetwork<Conversation>(myId);
     if (version !== threadRequest.current) return result.conversations;
     saveDmInbox(myId, result.conversations);
+    lastThreadFallback.current = Date.now();
     setThreads(result.conversations);
     window.dispatchEvent(new CustomEvent('uorqui:dm-unread-count', {
       detail: result.conversations.reduce((total, thread) => total + (thread.archived ? 0 : Math.max(0, thread.unreadCount)), 0),
@@ -230,7 +231,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     });
     const interval = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      if (!dmStreamConnected() && Date.now() - lastThreadFallback.current >= 12_000) {
+      if ((!dmStreamConnected() && Date.now() - lastThreadFallback.current >= 12_000) ||
+          Date.now() - lastThreadFallback.current >= 120_000) {
         lastThreadFallback.current = Date.now();
         void loadThreads().catch(() => {});
       }
@@ -333,12 +335,17 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setMessages(previous => {
       // Retain explicitly loaded older history while refreshing the newest 100.
       const earliest = result.messages[0]?.createdAt;
-      const older = earliest ? previous.filter(message => message.createdAt < earliest) : [];
-      const next = [...older, ...result.messages].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+      const latest = result.messages.at(-1)?.createdAt;
+      const receivedIds = new Set(result.messages.map(message => message.id));
+      // Preserve newer realtime messages that arrived while HTTP was in flight.
+      const retained = previous.filter(message => !receivedIds.has(message.id) &&
+        ((earliest && message.createdAt < earliest) || (latest && message.createdAt >= latest)));
+      const next = [...retained, ...result.messages].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
       saveDmRoom(myId, id, next);
       return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
     });
     setPendingMessages(previous => previous.filter(p => p.conversationId !== id || !result.messages.some(m => m.clientId === p.clientId)));
+    lastMessageFallback.current = Date.now();
     setMessagesLoading(false);
   }, [myId]);
 
@@ -357,7 +364,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     });
     const timer = window.setInterval(() => {
       if (!alive || document.visibilityState !== 'visible') return;
-      if (!dmStreamConnected() && Date.now() - lastMessageFallback.current >= 12_000) {
+      if ((!dmStreamConnected() && Date.now() - lastMessageFallback.current >= 12_000) ||
+          Date.now() - lastMessageFallback.current >= 120_000) {
         lastMessageFallback.current = Date.now();
         void loadMessages(activeId).catch(() => {});
       }
