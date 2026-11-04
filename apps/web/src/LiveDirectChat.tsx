@@ -671,7 +671,11 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id, { method:'DELETE' });
       if(message.attachment)invalidateChatMedia('/media/dm/'+id+'/'+message.attachment.id);
       setCancelTarget(null);
-      setMessages(previous => previous.filter(item => item.id !== message.id));
+      setMessages(previous => {
+        const next = previous.filter(item => item.id !== message.id);
+        saveDmRoom(myId, id, next);
+        return next;
+      });
       if (editing?.id === message.id) cancelEdit();
       if (replySource?.id === message.id) setReplySource(null);
       await Promise.all([loadMessages(id),loadThreads()]);
