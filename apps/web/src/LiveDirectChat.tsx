@@ -87,18 +87,13 @@ function messageReceipt(message: Message): MessageReceipt {
   return { state: 'sent', updatedAt: message.editedAt ?? message.createdAt };
 }
 
-/** Each visible status line represents only messages with exactly the same state. */
+/** Group outgoing messages by delivery state, but display only confirmed reads. */
 function statusForOutgoingBlock(messages: Message[], pt: boolean): BlockReceipt | null {
-  if (!messages.length) return null;
-  const state = messageReceipt(messages[0]).state;
+  // The only visible delivery receipt is a confirmed read of the current revision.
+  if (!messages.length || messageReceipt(messages[0]).state !== 'read') return null;
   const updatedAt = messages.map(message => messageReceipt(message).updatedAt)
     .reduce((latest, value) => Date.parse(value) > Date.parse(latest) ? value : latest);
-  const many = messages.length > 1;
-  const label = pt
-    ? ({ failed: 'Falha no envio', sending: 'Enviando', sent: many ? 'Enviadas' : 'Enviada',
-        received: many ? 'Recebidas' : 'Recebida', read: many ? 'Lidas' : 'Lida' } as const)[state]
-    : ({ failed: 'Send failed', sending: 'Sending', sent: 'Sent', received: 'Received', read: 'Read' } as const)[state];
-  return { label, updatedAt };
+  return { label: pt ? 'Lida' : 'Read', updatedAt };
 }
 
 export default function LiveDirectChat({ myId, initialHandle, initialConversationId, onStarted, onMobileOpenChange }: {
@@ -1027,13 +1022,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                       if (pending) void retryDmMessage(myId, pending.clientId).catch(() => submitPending(pending));
                     }}/>
                   {status && <div role="note" className="flex justify-center py-0.5">
-                    <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1.5 rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
-                      {message.pendingStatus==='sending'&&<Spinner className="size-3.5"/>}
-                      <span>{status.label}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{pt ? 'Atualizado às' : 'Updated at'}</span>
-                      <time dateTime={status.updatedAt}>{formatTime(status.updatedAt, locale)}</time>
-                    </span>
+                    <time dateTime={status.updatedAt} className="inline-flex rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
+                      {status.label}
+                    </time>
                   </div>}
                 </div>;
               })}

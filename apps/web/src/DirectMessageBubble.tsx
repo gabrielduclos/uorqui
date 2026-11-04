@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Download, FileText, Flag, Forward, LoaderCircle, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Flag, Forward, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { MessageText } from './MessageText';
 import { LinkPreview } from './LinkPreview';
@@ -224,12 +224,9 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap align-baseline text-[10px] opacity-80', mine ? 'text-primary-foreground' : 'text-muted-foreground')}>
             {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}
             <time dateTime={message.createdAt}>{timeLabel}</time>
-            {mine && !message.deletedAt && (
-              message.pendingStatus === 'sending' ? <LoaderCircle aria-label={pt ? 'Enviando' : 'Sending'} className="size-3 animate-spin"/>
-              : message.pendingStatus === 'failed' ? <button type="button" onClick={() => onRetry(message)}
-                  className="rounded border border-current px-1 font-semibold underline" aria-label={pt ? 'Falha ao enviar. Tentar novamente' : 'Failed to send. Retry'}>{pt ? 'Reenviar' : 'Retry'}</button>
-              : null
-            )}
+            {mine && !message.deletedAt && message.pendingStatus === 'failed' &&
+              <button type="button" onClick={() => onRetry(message)}
+                className="rounded border border-current px-1 font-semibold underline" aria-label={pt ? 'Falha ao enviar. Tentar novamente' : 'Failed to send. Retry'}>{pt ? 'Reenviar' : 'Retry'}</button>}
           </span>
         </p>
         {!message.deletedAt&&!locationMessage&&!sharedPostId&&message.body&&
