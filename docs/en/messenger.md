@@ -30,14 +30,34 @@ Direct messages use Better Auth, Neon PostgreSQL, `direct_conversations`, and `d
 All routes require a valid session; message endpoints validate membership. Writes require the expected Origin. Only public profiles are discoverable, but previously established conversations are unaffected by visibility changes.
 
 
-### Real-time synchronization (SSE)
+### Real-time synchronization (SSE) — before and after optimization
 
-- `GET /api/v1/dm/events` provides SSE over the existing Better Auth cookie session; no URL auth tokens.
-- The browser maintains an EventSource while visible and reconnects automatically. `message`, `read`, `received`, `update`, and `conversation` notifications trigger immediate authorized list/history fetching. **Global badge delivery:** once an unread message is included in the navigation badge's successful conversation fetch, the connected client acknowledges `/received` regardless of the current app area; it **never calls `/read`** or clears unread count. Edited content receives a new delivery acknowledgement.
-- One process-wide PostgreSQL `LISTEN uorqui_dm_events` connection handles `NOTIFY` events across Fastify instances. A direct Neon connection is needed for session-scoped LISTEN; set `DATABASE_DIRECT_URL` when necessary.
-- SSE contains only event type and conversation ID, never message text. All actual content is fetched through participant-authorized APIs.
-- 15-second heartbeat, 5-minute maximum stream lifetime for session revalidation, disconnect while the page is hidden.
-- Safety polling remains at around 25–30 seconds when SSE is connected and resumes the existing 3/4-second cadence if the stream fails. This does **not** include offline push notifications.
+**Real-time updates already existed before November 4, 2026.** Uorqui already used `GET /api/v1/dm/events`, browser `EventSource`, and PostgreSQL `LISTEN/NOTIFY`. The optimization **did not introduce SSE**: it reduced the work required to turn each event into a visible message.
+
+| Area | Before November 4, 2026 | Current implementation |
+| --- | --- | --- |
+| Incoming message | The event carried `kind` and `conversationId`; the browser fetched the latest history again over HTTP. | A `message` event may include a compact message projection, which is immediately rendered in an open conversation. |
+| Connections | Chat and global unread count used separate `EventSource` instances. | `dmEventStream.ts` shares one `EventSource` across chat and unread badge. |
+| Inbox refresh | Independent consumers could request the same inbox simultaneously. | `loadDmInboxNetwork` deduplicates concurrent inbox requests and invalidates results on updates. |
+| Safety reconciliation | Relatively frequent HTTP polling continued even with healthy SSE. | Approximately every 120 s with healthy SSE; roughly every 12–15 s if disconnected while the page is visible. |
+| Edits, reactions, receipts | Events signaled changes and triggered HTTP reads. | Incomplete event types still reconcile through the authenticated API. |
+
+**Current message flow:**
+
+1. An authenticated route enforces permissions, persists the message, and publishes a conversation event. The API uses one SQL round trip to notify both participants.
+2. Each Fastify process maintains a PostgreSQL `LISTEN uorqui_dm_events` session and forwards relevant events only to authenticated subscribers. `LISTEN` needs a session-capable Neon connection (`DATABASE_DIRECT_URL` when needed), not transaction pooling.
+3. If the compact payload is present, the visible conversation inserts the message directly in React state and the local snapshot without waiting for another `GET /messages`. Otherwise it fetches authorized history.
+4. The conversation list and unread badge reconcile via deduplicated authenticated requests. Receipt, edit, reaction and cancellation events still use the API where complete details are unavailable.
+5. After reconnecting, regaining focus or reaching a safety interval, the client reconciles with the authoritative server while preserving newer events received during an in-flight HTTP request.
+
+**Connection security and limitations:**
+
+- SSE authenticates through the existing Better Auth cookie, with no credentials embedded in the URL. Only user-authorized subscribers receive their events. **An authenticated SSE event can now contain message content**; the former claim that events contain only `kind` and `conversationId` is outdated.
+- A heartbeat is emitted every 15 seconds; streams are renewed about every 5 minutes to revalidate sessions and closed while the page is hidden. The browser reconnects automatically.
+- Compact payloads are omitted if the notification exceeds its size cap; the client falls back to the authorized API. SSE is **not Web Push** and cannot guarantee closed-app notification delivery. Uorqui continues using SSE, not WebSocket.
+- A successful badge refresh can acknowledge a message as **Received** without marking it **Read**. Read acknowledgement requires the conversation to be visible and focused at its latest content; background events and cached data do not themselves mark messages as read.
+
+Primary code: `apps/api/src/dm-events.ts`, `apps/api/src/direct-message-routes.ts`, `apps/web/src/dmEventStream.ts`, `apps/web/src/LiveDirectChat.tsx`, and `apps/web/src/useUnreadDirectMessages.ts`.
 
 ### Database rollout
 Migration `0003_live_direct_messages` adds unique `client_id` and `read_at` to direct messages. Migration `0004_dm_actions` adds `delivered_at`, `edited_at`, `deleted_at`, `forwarded_from_id`, and `direct_message_reactions`. Migration `0005_dm_replies` adds a nullable, self-referencing `reply_to_id` to real DMs. Migration `0006_dm_reaction_notifications` adds `notified_at` and `read_at` to reactions; older reactions do not generate retroactive alerts. Apply **before deploying** the API/frontend.
@@ -81,7 +101,7 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 
 - Attachment menu shows **Gallery, Camera, File and Location** only. Record video from the Camera submenu, not a duplicated top-level picker.
 - Hide technical filenames in bubbles, attachment staging, fullscreen media and conversation preview. Use localized **Photo, Video, Audio, PDF document** labels; keep the original filename only as download metadata.
-- Chat media is cached in **bounded tab memory** using shared object URLs: **90 MiB total**, **50 MiB per media**, **36 entries**, **10-minute lifetime**, deduplicated authorized requests. Images prefetch when their bubble mounts, audio enters the cache on playback, and opened videos are cached for repeat viewing. No persistent cache, Service Worker, IndexedDB or localStorage. Every initial request checks Worker access and blobs are cleared on logout/account change and invalidated when messages are canceled.
+- Current private-media cache stays **in tab memory only**: **48 MiB total**, **12 MiB per item**, **24 entries**, **45-minute maximum age**, and **3 parallel downloads**, with request deduplication. Images load on demand, audio when needed, and videos when opened. Oversized files bypass the Blob cache and use the authenticated route. Never persist received private media in IndexedDB, Service Worker, Cache Storage or localStorage. Access still requires Worker authorization, and logout/account changes clear temporary media. **The IndexedDB cache below stores DM message snapshots and outgoing commands; it is not a persistent cache for downloaded private media.**
 - Audio player uses Light/Dark semantic high-contrast colors, distinct primary Play/Pause button, legible slider and playback speed.
 - Locations open **Google Maps** without API key. Previously sent OpenStreetMap coordinates are displayed with a Google Maps link, without changing or losing historical messages.
 ### Friend requests and privacy-gated messages
@@ -102,11 +122,13 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 
 ## Performance, cache and recovery (2026-11-04)
 
+This upgrade addresses reports that the social messenger felt slower than the older **Uorqui-chat** product. **The key improvement is avoiding a complete HTTP history reload after each SSE event—not enabling real time, which was already present.** The legacy product and its infrastructure are separate and were not modified.
+
 - **Cache-first:** the inbox and latest 120 messages per conversation use account-scoped IndexedDB. The API remains authoritative; cached data is only shown after authentication and is cleared after successful logout.
 - **Durable outbox:** messages and Files are stored in IndexedDB before network delivery. The sender stays active while the account shell is mounted, including when leaving the DM screen. Transient failures receive up to eight attempts with backoff, and permanent failures expose manual retry. The stable `clientId` provides server idempotency.
-- **Realtime:** unread badges and chat share one authenticated SSE connection. Compact message events are rendered immediately; receipt and history changes without complete details are reconciled through the API. Concurrent inbox requests are deduplicated.
+- **Realtime:** unread badges and chat share one authenticated SSE connection. Compact message events are rendered immediately in visible conversations; receipt, reaction and history changes without complete details are reconciled through the API. Concurrent inbox requests are deduplicated. **See the before/after SSE table above.**
 - **Fallback:** with a healthy SSE stream, only a low-frequency safety reconciliation runs every ~120 seconds. On disconnection, visible pages reconcile over HTTP approximately every 12–15 seconds.
-- **Private media:** retains in-memory only, bounded to 48 MB, 24 items, and three parallel downloads; never stored in the shared service worker or CDN. Large items use the authenticated fetch path without aggressive prefetch.
+- **Private media:** retains in-memory only, bounded to 48 MiB overall, 12 MiB per item, 24 entries, a 45-minute maximum age, and three parallel downloads; never stored in the shared service worker or CDN. Large items use the authenticated fetch path without aggressive prefetch.
 - **Infrastructure:** Neon is in `aws-sa-east-1` (São Paulo), while Render is in Oregon. DM notification broadcasting now uses a single PostgreSQL round trip for both recipients, but physical cross-region latency remains. No production database or service migration without a rollback/backup and secrets plan; Render currently offers no São Paulo service region.
 - **Validation:** run typecheck/build and isolated integration tests, then test across two real devices: offline/online, media delivery, account switching, logout, disconnected SSE, concurrent sends and resumption. CI cannot prove Brazilian end-to-end latency.
 
