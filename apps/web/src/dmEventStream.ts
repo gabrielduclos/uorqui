@@ -74,7 +74,8 @@ let inboxTask: Promise<{ conversations: unknown[] }> | null = null;
 let inboxResult: { conversations: unknown[] } | null = null;
 let inboxAt = 0;
 let inboxAccount = '';
-export function invalidateDmInbox(): void { inboxAt = 0; inboxResult = null; inboxTask = null; inboxAccount = ''; }
+export function invalidateDmInbox(): void { inboxAt = 0; inboxResult = null; }
+export function resetDmInboxSession(): void { inboxAt = 0; inboxResult = null; inboxTask = null; inboxAccount = ''; }
 export async function loadDmInboxNetwork<T>(accountId: string): Promise<{ conversations: T[] }> {
   if (inboxAccount !== accountId) { inboxTask = null; inboxResult = null; inboxAt = 0; inboxAccount = accountId; }
   if (inboxResult && Date.now() - inboxAt < 500) return inboxResult as { conversations: T[] };
