@@ -95,12 +95,12 @@ export async function publishDmConversationEvent(conversationId: string, kind: D
     ? JSON.stringify(message) : null;
   await getPool().query(
     `SELECT pg_notify($1, json_build_object(
-      'userId', participant.recipient, 'conversationId', $2, 'kind', $3,
+      'userId', participant.recipient, 'conversationId', $2::text, 'kind', $3::text,
       'message', $4::jsonb
     )::text)
     FROM direct_conversations c
     CROSS JOIN LATERAL unnest(ARRAY[c.participant_a_id, c.participant_b_id]) participant(recipient)
-    WHERE c.id=$2`,
+    WHERE c.id=$2::uuid`,
     [CHANNEL, conversationId, kind, compactMessage],
   );
 }
