@@ -1,6 +1,6 @@
 import { Spinner } from '@/components/ui/spinner';
 import { SkeletonRows } from '@/components/ui/skeleton';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
@@ -479,33 +479,38 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 
   // The Uorqui-chat behavior: start at the latest message, preserve scroll when
   // reading older ones, and show a downward arrow for messages arriving below.
-  const renderedMessages: Message[] = [...messages, ...pendingMessages.filter(p => p.conversationId === activeId && !messages.some(m => m.clientId === p.clientId))]
-    .filter(message => !message.deletedAt) // Old tombstones never occupy a chat row.
-    .sort((a,b) => a.createdAt.localeCompare(b.createdAt))
-    .map(message => Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)
-      ? optimisticReaction(message, reactionOverrides[message.id]) : message);
-  const blockReceipts = new Map<string, BlockReceipt>();
-  let outgoingBlock: Message[] = [];
-  function endBlock() {
-    if (!outgoingBlock.length) return;
-    const status = statusForOutgoingBlock(outgoingBlock, pt);
-    if (status) blockReceipts.set(outgoingBlock[outgoingBlock.length - 1].id, status);
-    outgoingBlock = [];
-  }
-  renderedMessages.forEach(message => {
-    if (message.authorId !== myId) { endBlock(); return; }
-    const previous = outgoingBlock[outgoingBlock.length - 1];
-    // Never mix read, received, sent or pending messages in one system status.
-    // An edited message also starts a fresh receipt block, even next to
-    // another message that happens to have the same state.
-    if (previous && (messageReceipt(previous).state !== messageReceipt(message).state ||
-        !!previous.editedAt || !!message.editedAt)) endBlock();
-    outgoingBlock.push(message);
-  });
-  endBlock();
-  const mediaItems=renderedMessages.filter((message):message is Message & {attachment:NonNullable<Message['attachment']>} =>
-    !!message.attachment && !message.deletedAt &&
-    (message.attachment.type.startsWith('image/') || message.attachment.type.startsWith('video/')));
+  const renderedMessages = useMemo<Message[]>(() =>
+    [...messages, ...pendingMessages.filter(p => p.conversationId === activeId &&
+      !messages.some(m => m.clientId === p.clientId))]
+      .filter(message => !message.deletedAt)
+      .sort((a,b) => a.createdAt.localeCompare(b.createdAt))
+      .map(message => Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)
+        ? optimisticReaction(message, reactionOverrides[message.id]) : message),
+  [messages, pendingMessages, activeId, reactionOverrides]);
+  const blockReceipts = useMemo(() => {
+    const receipts = new Map<string, BlockReceipt>();
+    let outgoingBlock: Message[] = [];
+    function endBlock() {
+      if (!outgoingBlock.length) return;
+      const status = statusForOutgoingBlock(outgoingBlock, pt);
+      if (status) receipts.set(outgoingBlock[outgoingBlock.length - 1].id, status);
+      outgoingBlock = [];
+    }
+    renderedMessages.forEach(message => {
+      if (message.authorId !== myId) { endBlock(); return; }
+      const previous = outgoingBlock[outgoingBlock.length - 1];
+      if (previous && (messageReceipt(previous).state !== messageReceipt(message).state ||
+          !!previous.editedAt || !!message.editedAt)) endBlock();
+      outgoingBlock.push(message);
+    });
+    endBlock();
+    return receipts;
+  }, [renderedMessages, myId, pt]);
+  const mediaItems = useMemo(() => renderedMessages.filter(
+    (message): message is Message & { attachment: NonNullable<Message['attachment']> } =>
+      !!message.attachment && !message.deletedAt &&
+      (message.attachment.type.startsWith('image/') || message.attachment.type.startsWith('video/'))
+  ), [renderedMessages]);
   const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
     if (!activeId || messagesLoading || !scrollBox.current ||
