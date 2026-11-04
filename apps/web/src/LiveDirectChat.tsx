@@ -115,6 +115,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpened, setMobileOpened] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState('');
@@ -491,59 +493,52 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   }, [activeId, messages, threads, messagesLoading, atBottom, mobileOpened, visibilityTick, isConversationVisible, myId, loadMessages, loadThreads]);
 
   useEffect(() => {
-    let stream: EventSource | null = null;
-    let disposed = false;
-    const updateConnected = (connected: boolean) => {
-      realtimeConnected.current = connected;
-      if (disposed) return;
-    };
     const onReady = () => {
+      invalidateDmInbox();
       void loadThreads().catch(() => {});
       if (activeIdRef.current && isConversationVisible(activeIdRef.current))
         void loadMessages(activeIdRef.current).catch(() => {});
     };
-    const onDmUpdate = (event: Event) => {
-      try {
-        const data = JSON.parse((event as MessageEvent<string>).data) as { conversationId?: string; kind?: string };
-        if (data.kind === 'friendship-update') { clearProfileImageCache(); void loadThreads().catch(() => {}); return; }
-        if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind ?? '')) return;
-        const conversationId = data.conversationId;
-        const isOpen = isConversationVisible(conversationId);
-        void loadThreads().then(next => {
-          if (data.kind !== 'message' || isConversationVisible(conversationId)) return;
-          const peer = next.find(thread => thread.id === conversationId);
-          if (peer && peer.lastAuthorId !== myId) setIncoming({
-            id: peer.id, name: peer.peerName,
-            preview: peer.lastBody ?? (pt ? 'Nova mensagem' : 'New message'),
-          });
-        }).catch(() => {});
-        if (isOpen) void loadMessages(conversationId).catch(() => {});
-      } catch { /* malformed event cannot change state */ }
-    };
-    const connect = () => {
-      if (disposed || document.visibilityState === 'hidden' || stream || typeof EventSource === 'undefined') return;
-      stream = new EventSource('/api/v1/dm/events', { withCredentials: true });
-      stream.addEventListener('ready', onReady);
-      stream.addEventListener('dm-update', onDmUpdate);
-      stream.onopen = () => updateConnected(true);
-      stream.onerror = () => updateConnected(false);
-    };
-    const disconnect = () => {
-      updateConnected(false);
-      if (!stream) return;
-      stream.removeEventListener('ready', onReady);
-      stream.removeEventListener('dm-update', onDmUpdate);
-      stream.close();
-      stream = null;
-    };
-    const visibility = () => {
-      if (document.visibilityState === 'hidden') { disconnect(); return; }
-      connect(); onReady();
-    };
-    document.addEventListener('visibilitychange', visibility);
+    const unsubscribe = subscribeDmStream(data => {
+      if (data.kind === 'ready') { onReady(); return; }
+      if (data.kind === 'friendship-update') {
+        clearProfileImageCache(); invalidateDmInbox();
+        void loadThreads().catch(() => {}); return;
+      }
+      if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind)) return;
+      const conversationId = data.conversationId;
+      const isOpen = isConversationVisible(conversationId);
+      // Project a new message at once rather than waiting for an entire HTTP page.
+      if (data.kind === 'message' && data.message?.id && isOpen) {
+        const message: Message = { ...data.message, reactions: [], myReaction: null,
+          replyTo: data.message.replyToId
+            ? (messagesRef.current.find(item => item.id === data.message?.replyToId)
+              ? { ...messagesRef.current.find(item => item.id === data.message?.replyToId)!, deleted: false }
+              : null) : null };
+        setMessages(previous => {
+          if (previous.some(item => item.id === message.id)) return previous;
+          const updated = [...previous, message].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+          saveDmRoom(myId, conversationId, updated);
+          return updated;
+        });
+        setMessagesLoading(false);
+      }
+      invalidateDmInbox();
+      void loadThreads().then(next => {
+        if (data.kind !== 'message' || isConversationVisible(conversationId)) return;
+        const peer = next.find(thread => thread.id === conversationId);
+        if (peer && peer.lastAuthorId !== myId) setIncoming({
+          id: peer.id, name: peer.peerName,
+          preview: peer.lastBody ?? (pt ? 'Nova mensagem' : 'New message'),
+        });
+      }).catch(() => {});
+      // Rich events are already rendered; other mutations still require an
+      // authoritative read because the event carries no complete receipt state.
+      if (isOpen && (data.kind !== 'message' || !data.message?.id))
+        void loadMessages(conversationId).catch(() => {});
+    });
     window.addEventListener('uorqui:friends-updated', onReady);
-    connect();
-    return () => { disposed = true; document.removeEventListener('visibilitychange', visibility); window.removeEventListener('uorqui:friends-updated', onReady); disconnect(); };
+    return () => { unsubscribe(); window.removeEventListener('uorqui:friends-updated', onReady); };
   }, [loadThreads, loadMessages, isConversationVisible, myId, pt]);
   // Delivery is not reading: receiving an inbox update never clears the unread badge.
   const receiving = useRef(new Set<string>());
