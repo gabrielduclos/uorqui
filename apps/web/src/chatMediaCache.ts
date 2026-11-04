@@ -6,11 +6,20 @@ import { useEffect, useSyncExternalStore } from 'react';
  * The first fetch always passes the Worker's per-message membership check.
  */
 const PRIVATE_MEDIA_URL = /^(?:\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}|\/media\/community-attachment\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36})$/i;
-const LIMIT_BYTES = 90 * 1024 * 1024;
-const MAX_ITEM_BYTES = 50 * 1024 * 1024;
-const MAX_ITEMS = 36;
-const MAX_AGE_MS = 10 * 60 * 1000;
+const LIMIT_BYTES = 48 * 1024 * 1024;
+const MAX_ITEM_BYTES = 12 * 1024 * 1024;
+const MAX_ITEMS = 24;
+const MAX_AGE_MS = 45 * 60 * 1000;
 const RETRY_MS = 12_000;
+const MAX_PARALLEL_MEDIA = 3;
+let downloading = 0;
+const downloadQueue: Array<() => void> = [];
+async function withMediaSlot<T>(task: () => Promise<T>): Promise<T> {
+  if (downloading >= MAX_PARALLEL_MEDIA) await new Promise<void>(resolve => downloadQueue.push(resolve));
+  downloading++;
+  try { return await task(); }
+  finally { downloading--; downloadQueue.shift()?.(); }
+}
 
 type Item = {
   blobUrl: string | null;
@@ -74,14 +83,18 @@ export async function ensureChatMediaCached(url: string): Promise<string | null>
   entries.set(url,item);
   const task=(async()=>{
     try {
-      const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:abort.signal});
-      if(!response.ok)throw Error('Not authorized to access DM media');
-      const kind=(response.headers.get('content-type')??'').split(';')[0].toLowerCase();
-      if(!/^(image|audio|video)\//.test(kind))throw Error('Unexpected media content');
-      const length=Number(response.headers.get('content-length')??0);
-      if(length>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
-      const blob=await response.blob();
-      if(blob.size>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
+      const blob=await withMediaSlot(async () => {
+        if (abort.signal.aborted) throw Error('Media request canceled');
+        const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:abort.signal});
+        if(!response.ok)throw Error('Not authorized to access DM media');
+        const kind=(response.headers.get('content-type')??'').split(';')[0].toLowerCase();
+        if(!/^(image|audio|video)\//.test(kind))throw Error('Unexpected media content');
+        const length=Number(response.headers.get('content-length')??0);
+        if(length>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
+        const bytes=await response.blob();
+        if(bytes.size>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
+        return bytes;
+      });
       if(entries.get(url)!==item || abort.signal.aborted)return null;
       item.blobUrl=URL.createObjectURL(blob);
       item.size=blob.size;
