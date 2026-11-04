@@ -116,3 +116,15 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 - Endpoints autenticados: `GET /api/v1/blocks` (lista privativa), `POST /api/v1/blocks` (handle; idempotente) e `DELETE /api/v1/blocks/:handle` (idempotente). Escritas verificam Origin; transação revoga a amizade e registra o bloqueio.
 - Limitação: uma foto já copiada ou disponibilizada externamente não pode ser apagada retroativamente pelo bloqueio. URLs externas cadastradas pelo usuário não estão sob controle do R2.
 - Migração Drizzle `0010_user_blocks` cria `user_blocks`. **Aplicar em Neon antes do deploy da versão que usa essa tabela**.
+
+## Desempenho, cache e recuperação (04/11/2026)
+
+- **Cache-first:** a inbox e as últimas 120 mensagens por conversa usam IndexedDB isolado pelo ID da conta. A API continua a fonte oficial; o cache só aparece depois da autenticação e é apagado no logout bem-sucedido.
+- **Fila de saída:** mensagens e arquivos são gravados no IndexedDB antes da requisição. O serviço de envio permanece ativo enquanto a conta estiver aberta, inclusive ao sair da tela de conversas. Falhas de rede e erros temporários usam até oito tentativas e backoff; falhas permanentes exibem reenvio manual. O `clientId` estável evita duplicações no servidor.
+- **Realtime:** o badge e o chat compartilham uma conexão SSE. Eventos compactos projetam mensagens recebidas diretamente na tela; alterações de recibos e histórico sem dados completos usam a API para reconciliar. Requisições de inbox simultâneas são deduplicadas.
+- **Fallback:** com SSE saudável não se faz download periódico de histórico/inbox. Quando a conexão falha, a sincronização HTTP recupera o estado a cada ~12–15 s enquanto a página está visível.
+- **Mídia privada:** mantém apenas cache temporário na memória, limitado a 48 MB, 24 itens e três downloads simultâneos. Dados privados **não** são mantidos em cache compartilhado do Service Worker ou CDN. Conteúdo fora dos limites é servido pelas rotas autorizadas, sem pré-carregamento agressivo.
+- **Banco/infra:** Neon (`aws-sa-east-1`, São Paulo) e API Render (Oregon) estão em regiões diferentes. A publicação de eventos DM foi reduzida para uma única consulta SQL para ambos destinatários, mas a latência física da API persiste. Não mover a base ou trocar URLs de produção sem validar backups, configuração de segredos, compatibilidade, reversão e um teste real em ambos os serviços. A lista atual de regiões do Render não inclui São Paulo.
+- **Validação:** executar typecheck/build e testes de integração, depois testar em dois dispositivos: offline/online, envio de mídia, troca de contas, logout, stream desconectado, envio simultâneo e retomada de chat. CI não mede a latência fim a fim no Brasil.
+
+**Limites:** a fila roda quando a aplicação pode executar JavaScript; navegador/PWA suspenso pelo sistema operacional não garante envio em background. Mensagens canceladas e permissões continuam sob autorização do servidor.
