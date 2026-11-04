@@ -30,6 +30,8 @@ type Conversation = {
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
 type PendingMessage = Message & { clientId: string; pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
+type ConfirmedInboxPreview = { pending: PendingMessage; serverCreatedAt: string | null };
+type PreviewConversation = Conversation & { optimisticStatus?: PendingMessage['pendingStatus'] };
 type IncomingNotice = { id: string; name: string; preview: string };
 function optimisticReaction(message: Message, next: string | null): Message {
   const prior = message.myReaction;
@@ -113,6 +115,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  // Keep a just-confirmed preview until the authoritative inbox catches up.
+  const [confirmedInboxPreviews, setConfirmedInboxPreviews] = useState<ConfirmedInboxPreview[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -206,6 +210,13 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     saveDmInbox(myId, result.conversations);
     lastThreadFallback.current = Date.now();
     setThreads(result.conversations);
+    setConfirmedInboxPreviews(previous => previous.filter(({ pending, serverCreatedAt }) => {
+      const canonical = result.conversations.find(thread => thread.id === pending.conversationId);
+      if (!canonical || !serverCreatedAt) return false;
+      // Don't drop the optimistic preview if an older in-flight inbox request
+      // completed before the newly-sent message became visible there.
+      return !canonical.lastAt || Date.parse(canonical.lastAt) < Date.parse(serverCreatedAt);
+    }));
     window.dispatchEvent(new CustomEvent('uorqui:dm-unread-count', {
       detail: result.conversations.reduce((total, thread) => total + (thread.archived ? 0 : Math.max(0, thread.unreadCount)), 0),
     }));
@@ -395,6 +406,13 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       const update = (event as CustomEvent<DmOutboxUpdate>).detail;
       if (!update || update.accountId !== myId) return;
       if (update.state === 'sent') {
+        const createdAt = update.message && typeof update.message === 'object' &&
+          'createdAt' in update.message && typeof update.message.createdAt === 'string'
+          ? update.message.createdAt : null;
+        setConfirmedInboxPreviews(previous => [
+          ...previous.filter(item => item.pending.clientId !== update.clientId),
+          { pending: { ...update.pending, pendingStatus: 'sending' }, serverCreatedAt: createdAt },
+        ].slice(-50));
         if (update.message && typeof update.message === 'object' &&
             'id' in update.message && typeof update.message.id === 'string' &&
             activeIdRef.current === update.conversationId) {
@@ -850,9 +868,36 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     finally{setConversationBusy(false);}
   }
 
+  // Overlay the durable outbox on top of the server inbox rather than editing
+  // canonical snapshots. New sends move their conversation to the top instantly,
+  // and SSE/poll refreshes cannot erase a pending or failed local preview.
+  const previewThreads = useMemo<PreviewConversation[]>(() => {
+    const latest = new Map<string, PendingMessage>();
+    for (const pending of [...confirmedInboxPreviews.map(item => item.pending), ...pendingMessages]) {
+      const previous = latest.get(pending.conversationId);
+      if (!previous || pending.createdAt > previous.createdAt ||
+        (pending.createdAt === previous.createdAt && pending.clientId > previous.clientId)) {
+        latest.set(pending.conversationId, pending);
+      }
+    }
+    const display = threads.map(thread => {
+      const pending = latest.get(thread.id);
+      if (!pending) return thread;
+      const serverActivity = Math.max(Date.parse(thread.lastAt ?? '') || 0, Date.parse(thread.lastReactionAt ?? '') || 0);
+      if (serverActivity > (Date.parse(pending.createdAt) || 0)) return thread;
+      return {
+        ...thread, lastBody: pending.body, lastAttachmentType: pending.attachment?.type ?? null,
+        lastAt: pending.createdAt, lastAuthorId: myId, lastDeleted: false,
+        optimisticStatus: pending.pendingStatus,
+      };
+    });
+    return display.sort((a, b) =>
+      Math.max(Date.parse(b.lastAt ?? '') || 0, Date.parse(b.lastReactionAt ?? '') || 0) -
+      Math.max(Date.parse(a.lastAt ?? '') || 0, Date.parse(a.lastReactionAt ?? '') || 0));
+  }, [threads, pendingMessages, confirmedInboxPreviews, myId]);
   const active = threads.find(c => c.id === activeId);
   const query = search.trim().toLocaleLowerCase(locale);
-  const visibleThreads = threads.filter(c =>
+  const visibleThreads = previewThreads.filter(c =>
     (filter === 'archived' ? c.archived : !c.archived && (filter === 'all' || c.unreadCount > 0)) &&
     (c.peerName + ' ' + c.peerHandle).toLocaleLowerCase(locale).includes(query));
   const unreadThreads = threads.filter(c => !c.archived && c.unreadCount > 0).length;
@@ -931,6 +976,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
               <time className="shrink-0 text-[10px] text-muted-foreground">{formatTime(thread.lastReactionAt && (!thread.lastAt || thread.lastReactionAt > thread.lastAt) ? thread.lastReactionAt : thread.lastAt, locale)}</time></span>
             <span className="mt-1 flex items-center justify-between gap-2">
               <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', thread.unreadCount > 0 && 'font-medium text-foreground/75')}>
+                {thread.optimisticStatus === 'failed' && <span className="font-medium text-destructive">{pt ? 'Falha no envio · ' : 'Failed to send · '}</span>}
                 {thread.lastReactionEmoji && thread.lastReactionAt && (!thread.lastAt || thread.lastReactionAt > thread.lastAt)
                   ? (thread.lastReactionAuthorId === myId
                       ? (pt ? 'Você reagiu ' + thread.lastReactionEmoji + ' à mensagem' : 'You reacted ' + thread.lastReactionEmoji + ' to a message')

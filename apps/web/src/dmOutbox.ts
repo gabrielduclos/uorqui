@@ -5,6 +5,7 @@ export type DmOutboxUpdate = {
   clientId: string;
   conversationId: string;
   state: 'queued' | 'sending' | 'sent' | 'failed';
+  pending: DmPending;
   message?: unknown;
 };
 const activeAccounts = new Set<string>();
@@ -15,7 +16,7 @@ const keyFor = (accountId: string, clientId: string) => accountId + ':' + client
 function announce(command: DmCommand, state: DmOutboxUpdate['state'], message?: unknown) {
   window.dispatchEvent(new CustomEvent<DmOutboxUpdate>('uorqui:dm-outbox', {
     detail: { accountId: command.accountId, clientId: command.pending.clientId,
-      conversationId: command.pending.conversationId, state, message },
+      conversationId: command.pending.conversationId, state, pending: command.pending, message },
   }));
 }
 function schedule(accountId: string, delay = 2500) {
