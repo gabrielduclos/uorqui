@@ -10,6 +10,7 @@ export function useUnreadDirectMessages(accountId: string) {
     let mounted = true;
     let sequence = 0;
     let lastRefresh = Date.now();
+    let receivedFromServer = false;
     const acknowledging = new Set<string>();
     const acknowledged = new Set<string>();
     type Thread = { id: string; unreadCount: number; archived?: boolean; pendingReceivedAt?: string | null };
@@ -34,6 +35,7 @@ export function useUnreadDirectMessages(accountId: string) {
         const count = payload.conversations.reduce((sum, thread) =>
           sum + (thread.archived ? 0 : Math.max(0, Number(thread.unreadCount) || 0)), 0);
         setUnread(count);
+        receivedFromServer = true;
         lastRefresh = Date.now();
         for (const thread of payload.conversations) {
           if (!thread.archived && thread.unreadCount > 0 && thread.pendingReceivedAt)
@@ -42,7 +44,7 @@ export function useUnreadDirectMessages(accountId: string) {
       } catch { /* keep last valid badge */ }
     }
     void readDmInbox<Thread>(accountId).then(cached => {
-      if (mounted && sequence === 0 && cached.length) setUnread(cached.reduce((sum, thread) =>
+      if (mounted && !receivedFromServer && cached.length) setUnread(cached.reduce((sum, thread) =>
         sum + (thread.archived ? 0 : Math.max(0, Number(thread.unreadCount) || 0)), 0));
     });
     const local = (event: Event) => {
