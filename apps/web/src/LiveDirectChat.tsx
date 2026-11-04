@@ -12,6 +12,9 @@ import { InternalShareDialog } from './InternalShareDialog';
 import { ContentReportDialog } from './ContentReportDialog';
 import { FriendsPanel } from './FriendsPanel';
 import { clearProfileImageCache } from './profileImageCache';
+import { clearDmConversation, listDmCommands, peekDmInbox, peekDmRoom, readDmInbox, readDmRoom, saveDmInbox, saveDmRoom } from './dmCache';
+import { enqueueDmMessage, retryDmMessage, type DmOutboxUpdate } from './dmOutbox';
+import { dmStreamConnected, invalidateDmInbox, loadDmInboxNetwork, subscribeDmStream } from './dmEventStream';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -104,7 +107,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 }) {
   const { locale } = useUorquiPreferences();
   const pt = locale === 'pt-BR';
-  const [threads, setThreads] = useState<Conversation[]>([]);
+  const [threads, setThreads] = useState<Conversation[]>(() => peekDmInbox<Conversation>(myId));
   const [people, setPeople] = useState<Person[]>([]);
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'conversations' | 'contacts'>('conversations');
@@ -116,7 +119,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => peekDmInbox<Conversation>(myId).length === 0);
   const [error, setError] = useState('');
   const [searching, setSearching] = useState(false);
   const [chatError, setChatError] = useState('');
@@ -150,7 +153,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [blockedHandles,setBlockedHandles]=useState<string[]>([]);
   const conversationMenuRef=useRef<HTMLDivElement>(null);
   const draftBeforeEdit = useRef('');
-  const realtimeConnected = useRef(false);
+  const threadRequest = useRef(0);
+  const roomRequest = useRef(0);
   const lastThreadFallback = useRef(0);
   const lastMessageFallback = useRef(0);
   const scrollBox = useRef<HTMLDivElement>(null);
@@ -199,7 +203,10 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   }, []);
 
   const loadThreads = useCallback(async () => {
-    const result = await api<{ conversations: Conversation[] }>('/api/v1/dm/conversations');
+    const version = ++threadRequest.current;
+    const result = await loadDmInboxNetwork<Conversation>(myId);
+    if (version !== threadRequest.current) return result.conversations;
+    saveDmInbox(myId, result.conversations);
     setThreads(result.conversations);
     window.dispatchEvent(new CustomEvent('uorqui:dm-unread-count', {
       detail: result.conversations.reduce((total, thread) => total + (thread.archived ? 0 : Math.max(0, thread.unreadCount)), 0),
@@ -207,22 +214,27 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setError('');
     setLoading(false);
     return result.conversations;
-  }, []);
+  }, [myId]);
 
   useEffect(() => {
     let mounted = true;
+    void readDmInbox<Conversation>(myId).then(cached => {
+      if (!mounted || !cached.length) return;
+      setThreads(previous => previous.length ? previous : cached);
+      setLoading(false);
+    }).catch(() => {});
     void loadThreads().catch(() => {
       if (mounted) { setLoading(false); setError(pt ? 'Não foi possível carregar suas conversas.' : 'Could not load your conversations.'); }
     });
     const interval = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      if (!realtimeConnected.current || Date.now() - lastThreadFallback.current >= 25_000) {
+      if (!dmStreamConnected() && Date.now() - lastThreadFallback.current >= 12_000) {
         lastThreadFallback.current = Date.now();
         void loadThreads().catch(() => {});
       }
     }, 4000);
     return () => { mounted = false; window.clearInterval(interval); };
-  }, [loadThreads, pt]);
+  }, [loadThreads, pt, myId]);
 
   useEffect(() => {
     const q = search.trim();
@@ -244,11 +256,12 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setActiveId(id);
     try{navigator.serviceWorker?.controller?.postMessage({type:'uorqui:clear-dm-push',conversationId:id});}catch{}
     setMobileOpened(true);
-    setMessages([]);
+    const cached = peekDmRoom(myId, id);
+    setMessages(cached);
     setJumpTarget(null);
     setHighlightId(null);
     if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
-    setMessagesLoading(true);
+    setMessagesLoading(!cached.length);
     setAtBottom(true);
     setNewBelow(0);
     atBottomRef.current = true;
@@ -261,7 +274,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice('');
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
-  }, []);
+  }, [myId]);
   useEffect(()=>{
     if(initialConversationId&&/^[0-9a-f-]{36}$/i.test(initialConversationId))openThread(initialConversationId);
   },[initialConversationId,openThread]);
@@ -312,34 +325,43 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   // Fetching is strictly read-only. Never acknowledge in this function.
   const loadMessages = useCallback(async (id: string) => {
     if (activeIdRef.current !== id) return;
+    const version = ++roomRequest.current;
     const result = await api<{ messages: Message[] }>('/api/v1/dm/conversations/' + id + '/messages');
-    if (activeIdRef.current !== id) return;
+    if (activeIdRef.current !== id || version !== roomRequest.current) return;
     setMessages(previous => {
       // Retain explicitly loaded older history while refreshing the newest 100.
       const earliest = result.messages[0]?.createdAt;
       const older = earliest ? previous.filter(message => message.createdAt < earliest) : [];
       const next = [...older, ...result.messages].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+      saveDmRoom(myId, id, next);
       return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
     });
     setPendingMessages(previous => previous.filter(p => p.conversationId !== id || !result.messages.some(m => m.clientId === p.clientId)));
     setMessagesLoading(false);
-  }, []);
+  }, [myId]);
 
   useEffect(() => {
     if (!activeId) return;
     let alive = true;
+    const existing = peekDmRoom(myId, activeId);
+    void readDmRoom(myId, activeId).then(cached => {
+      if (!alive || activeIdRef.current !== activeId || !cached.length) return;
+      setMessages(previous => previous.length ? previous : cached);
+      setMessagesLoading(false);
+    }).catch(() => {});
+    if (existing.length) setMessagesLoading(false);
     void loadMessages(activeId).catch(() => {
       if (alive) { setMessagesLoading(false); setChatError(pt ? 'Falha ao carregar mensagens.' : 'Could not load messages.'); }
     });
     const timer = window.setInterval(() => {
       if (!alive || document.visibilityState !== 'visible') return;
-      if (!realtimeConnected.current || Date.now() - lastMessageFallback.current >= 25_000) {
+      if (!dmStreamConnected() && Date.now() - lastMessageFallback.current >= 12_000) {
         lastMessageFallback.current = Date.now();
         void loadMessages(activeId).catch(() => {});
       }
     }, 3000);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [activeId, loadMessages, pt]);
+  }, [activeId, loadMessages, pt, myId]);
 
   const jumpToLast = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const node = scrollBox.current;
