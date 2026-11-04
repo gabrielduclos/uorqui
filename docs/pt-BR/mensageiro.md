@@ -30,15 +30,34 @@ O mensageiro individual usa autenticação Better Auth, PostgreSQL no Neon e as 
 
 
 
-### Sincronização em tempo real (SSE)
+### Sincronização em tempo real (SSE) — antes e depois da otimização
 
-- A API oferece `GET /api/v1/dm/events` com SSE e a sessão Better Auth existente, sem tokens no URL.
-- O navegador mantém uma conexão enquanto a aba está visível, com reconexão automática. Notificações `message`, `read`, `received`, `update` e `conversation` provocam a atualização imediata do histórico e da lista de conversas.
-- Um listener PostgreSQL `LISTEN uorqui_dm_events` por processo recebe `NOTIFY` enviado pelas rotas Fastify. Uma ligação direta ao Neon é necessária para `LISTEN`; definir `DATABASE_DIRECT_URL` quando a URL principal usar PgBouncer.
-- O SSE transmite apenas o tipo de mudança e o ID da conversa. O texto continua acessível apenas pelas rotas autenticadas, com checagem de participação.
-- Heartbeat a cada 15 segundos, desconexão e nova validação de sessão a cada 5 minutos. A conexão é fechada com a aba oculta.
-- O cliente conserva polling de segurança a cada 25 a 30 segundos enquanto conectado e retorna a 3/4 segundos se o stream falhar. Notificações Web Push em segundo plano estão implementadas, mas devem ser validadas em PWAs instalados no iOS e Android; a entrega não é garantida.
+**O tempo real já existia antes de 04/11/2026.** O Uorqui já recebia eventos via `GET /api/v1/dm/events`, `EventSource` e PostgreSQL `LISTEN/NOTIFY`. A otimização **não introduziu SSE**: reduziu o trabalho necessário para transformar cada evento em uma atualização visível.
 
+| Aspecto | Antes de 04/11/2026 | Implementação atual |
+| --- | --- | --- |
+| Chegada de nova mensagem | Evento com `kind` e `conversationId`; o cliente buscava novamente o histórico via HTTP. | Evento `message` pode incluir uma projeção compacta da mensagem para renderização imediata na conversa aberta. |
+| Conexões | Chat e contador global de não lidas mantinham `EventSource` separados. | `dmEventStream.ts` compartilha um `EventSource` entre chat e badge. |
+| Lista de conversas | Vários consumidores podiam consultar a mesma lista simultaneamente. | `loadDmInboxNetwork` deduplica requisições concorrentes e invalida a lista após mudanças. |
+| Sincronização de segurança | Consultas periódicas relativamente frequentes, mesmo com o stream saudável. | Reconciliação de segurança aproximadamente a cada 120 s com SSE saudável; cerca de 12–15 s se desconectado e com a página visível. |
+| Edições, reações e recibos | Evento sinalizava mudança e acionava nova consulta. | Continuam sendo reconciliados pela API quando o evento não transporta os dados completos. |
+
+**Fluxo de mensagem atual:**
+
+1. A rota autenticada valida as permissões, persiste a mensagem e publica o evento de conversa; a API usa uma consulta SQL para notificar os dois participantes.
+2. O listener PostgreSQL `LISTEN uorqui_dm_events` da instância Fastify distribui o evento apenas aos assinantes autenticados. Para `LISTEN`, usar conexão de sessão direta ao Neon (`DATABASE_DIRECT_URL` quando necessário), não a conexão em modo transaction pooling.
+3. Quando o payload compacto é incluído, a conversa aberta insere a mensagem imediatamente na interface e no cache local, sem aguardar um novo `GET /messages`. Se os dados não estiverem disponíveis, o cliente busca o histórico autorizado.
+4. A lista de conversas e os contadores de não lidas são sincronizados por consultas autenticadas deduplicadas; eventos de recibo, edição, reação e cancelamento exigem reconciliação quando necessário.
+5. Ao reconectar, voltar ao foco ou atingir o intervalo de segurança, o cliente reconcilia com o servidor, que permanece a **fonte autoritativa**. A reconciliação preserva mensagens recebidas enquanto a requisição HTTP estava em andamento.
+
+**Conexão, privacidade e limitações:**
+
+- SSE usa o cookie de sessão Better Auth, sem tokens na URL; o backend valida a identidade e restringe assinaturas a cada usuário. O conteúdo da mensagem **pode trafegar no evento autenticado** — já não é correto afirmar que o SSE envia somente `kind` e `conversationId`.
+- O fluxo envia heartbeat a cada 15 s, encerra a conexão após cerca de 5 min para revalidar sessão, fecha com a página oculta e usa reconexão automática ao voltar.
+- O payload compacto pode ser omitido quando ultrapassa o limite de tamanho do evento; nesse caso o cliente usa a API. O fluxo SSE é distinto de **Web Push** e não garante entrega de notificações com o aplicativo fechado. SSE não foi substituído por WebSocket.
+- Receber uma mensagem e mostrá-la no badge pode confirmar **Recebida** sem marcá-la como **Lida**. Leitura requer conversa visível, em foco e posicionada no conteúdo mais recente. Eventos ou cache local não executam leitura por si mesmos.
+
+Código principal: `apps/api/src/dm-events.ts`, `apps/api/src/direct-message-routes.ts`, `apps/web/src/dmEventStream.ts`, `apps/web/src/LiveDirectChat.tsx` e `apps/web/src/useUnreadDirectMessages.ts`.
 
 ### Contrato da interface real (não regredir)
 
@@ -96,7 +115,7 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 
 - O modal de anexos apresenta **Galeria, Câmera, Arquivo e Localização**. O vídeo é gravado pelo submenu da Câmera; não existe outro botão Vídeo.
 - Nomes técnicos de fotos, vídeos, gravações e documentos **não aparecem** nos balões, na prévia de envio, no visualizador ou na lista. A interface usa rótulos traduzidos como **Foto, Vídeo, Áudio, Documento PDF**; o nome real permanece apenas no metadado para salvar o arquivo.
-- Mídias do chat possuem **cache em memória da aba** com URL Blob compartilhada entre balão e visualizador, limite agregado **90 MiB**, **50 MiB por item**, **36 itens**, tempo de vida **10 min** e deduplicação de requisições. Imagens carregam sob demanda na interface; áudio é buscado para cache quando o usuário inicia a reprodução; vídeos são armazenados ao abrir o visualizador. Nunca gravar no service worker, Cache Storage, IndexedDB ou localStorage. O primeiro acesso sempre passa pela autorização privada do Worker; logout/troca de conta limpa URLs Blob e requisições em andamento. Cancelar uma mensagem invalida seu objeto em cache.
+- O cache atual de mídia privada é **somente em memória da aba**: **48 MiB no total**, **12 MiB por item**, **24 entradas**, **45 minutos** de idade máxima e até **3 downloads paralelos**, com deduplicação. Imagens podem ser carregadas sob demanda, áudios sob ação do usuário e vídeos ao abrir. Arquivos maiores contornam o cache de Blob e seguem pela rota autenticada. **Não** persistir mídia privada no IndexedDB, Service Worker, Cache Storage ou localStorage. Todo acesso continua sujeito à autorização do Worker; logout/troca de conta limpa o cache da sessão, e cancelamento invalida a mídia. O **IndexedDB descrito abaixo é usado para metadados/histórico de mensagens e fila de envio**, não para manter cópias persistentes das mídias recebidas.
 - Player de áudio usa cores semânticas **bg-card/text-foreground** e botão **bg-primary/text-primary-foreground**, trilha em cor primária e texto de tempo/velocidade com alto contraste em Light e Dark.
 - Localização agora abre **Google Maps** (`https://www.google.com/maps?q=latitude,longitude`), sem chave API. Cartões antigos do OpenStreetMap continuam reconhecidos e também passam a abrir o Google Maps. O aplicativo pede permissão somente quando a pessoa seleciona Localização, nunca em segundo plano.
 ### Amizades e mensagens por visibilidade do perfil
@@ -119,11 +138,13 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 
 ## Desempenho, cache e recuperação (04/11/2026)
 
+Esta evolução foi motivada pela percepção de maior demora no mensageiro social em comparação ao produto legado **Uorqui-chat**. **O principal ganho é evitar refazer toda a consulta HTTP após cada evento SSE, não a ativação de tempo real (que já existia).** O mensageiro legado permanece independente e não foi alterado.
+
 - **Cache-first:** a inbox e as últimas 120 mensagens por conversa usam IndexedDB isolado pelo ID da conta. A API continua a fonte oficial; o cache só aparece depois da autenticação e é apagado no logout bem-sucedido.
 - **Fila de saída:** mensagens e arquivos são gravados no IndexedDB antes da requisição. O serviço de envio permanece ativo enquanto a conta estiver aberta, inclusive ao sair da tela de conversas. Falhas de rede e erros temporários usam até oito tentativas e backoff; falhas permanentes exibem reenvio manual. O `clientId` estável evita duplicações no servidor.
-- **Realtime:** o badge e o chat compartilham uma conexão SSE. Eventos compactos projetam mensagens recebidas diretamente na tela; alterações de recibos e histórico sem dados completos usam a API para reconciliar. Requisições de inbox simultâneas são deduplicadas.
+- **Realtime:** o badge e o chat compartilham uma conexão SSE. Eventos compactos projetam mensagens recebidas diretamente na conversa visível; alterações de recibos, reações e histórico sem dados completos usam a API para reconciliar. Requisições simultâneas da lista são deduplicadas. **Ver quadro Antes/Depois na seção de SSE acima**.
 - **Fallback:** com SSE saudável existe apenas uma reconciliação de segurança a cada ~120 s. Quando a conexão falha, a sincronização HTTP recupera o estado a cada ~12–15 s enquanto a página está visível.
-- **Mídia privada:** mantém apenas cache temporário na memória, limitado a 48 MB, 24 itens e três downloads simultâneos. Dados privados **não** são mantidos em cache compartilhado do Service Worker ou CDN. Conteúdo fora dos limites é servido pelas rotas autorizadas, sem pré-carregamento agressivo.
+- **Mídia privada:** mantém apenas cache temporário na memória, limitado a 48 MiB, 12 MiB por item, 24 entradas, 45 minutos e três downloads simultâneos. Dados privados **não** são mantidos em cache compartilhado do Service Worker ou CDN. Conteúdo fora dos limites é servido pelas rotas autorizadas, sem pré-carregamento agressivo.
 - **Banco/infra:** Neon (`aws-sa-east-1`, São Paulo) e API Render (Oregon) estão em regiões diferentes. A publicação de eventos DM foi reduzida para uma única consulta SQL para ambos destinatários, mas a latência física da API persiste. Não mover a base ou trocar URLs de produção sem validar backups, configuração de segredos, compatibilidade, reversão e um teste real em ambos os serviços. A lista atual de regiões do Render não inclui São Paulo.
 - **Validação:** executar typecheck/build e testes de integração, depois testar em dois dispositivos: offline/online, envio de mídia, troca de contas, logout, stream desconectado, envio simultâneo e retomada de chat. CI não mede a latência fim a fim no Brasil.
 
