@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 
 type Conversation = {
   id: string; peerHandle: string; peerName: string; peerAvatarUrl: string | null;
-  lastBody: string | null; lastAttachmentType?: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
+  lastBody: string | null; lastAttachmentType?: string | null; lastReplyToId?: string | null; lastAt: string | null; lastAuthorId: string | null; lastDeleted: boolean; unreadCount: number;
   unreadReactionCount: number; lastReactionEmoji: string | null; lastReactionAt: string | null; lastReactionMessageId: string | null; lastReactionAuthorId: string | null;
   pendingReceivedAt: string | null; canMessage: boolean; archived: boolean;
 };
@@ -115,6 +115,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  const pendingMessagesRef = useRef(pendingMessages);
+  pendingMessagesRef.current = pendingMessages;
   // Keep a just-confirmed preview until the authoritative inbox catches up.
   const [confirmedInboxPreviews, setConfirmedInboxPreviews] = useState<ConfirmedInboxPreview[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -411,14 +413,26 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           ? update.message.createdAt : null;
         setConfirmedInboxPreviews(previous => [
           ...previous.filter(item => item.pending.clientId !== update.clientId),
-          { pending: { ...update.pending, pendingStatus: 'sending' }, serverCreatedAt: createdAt },
+          { pending: { ...update.pending, pendingStatus: 'sending' as const }, serverCreatedAt: createdAt },
         ].slice(-50));
         if (update.message && typeof update.message === 'object' &&
             'id' in update.message && typeof update.message.id === 'string' &&
             activeIdRef.current === update.conversationId) {
-          const confirmed = { ...(update.message as Message), reactions: [], myReaction: null };
+          // The send response has replyToId but may omit the expanded replyTo.
+          // Keep the optimistic quoted-message card until HTTP reconciliation.
+          const confirmed: Message = {
+            ...(update.message as Message), reactions: [], myReaction: null,
+            replyTo: (update.message as Message).replyTo ?? update.pending.replyTo ?? null,
+          };
           setMessages(previous => {
-            if (previous.some(item => item.id === confirmed.id)) return previous;
+            const existing = previous.find(item => item.id === confirmed.id);
+            if (existing) {
+              if (existing.replyTo || !confirmed.replyTo) return previous;
+              const next = previous.map(item => item.id === confirmed.id
+                ? { ...item, replyTo: confirmed.replyTo } : item);
+              saveDmRoom(myId, update.conversationId, next);
+              return next;
+            }
             const next = [...previous, confirmed].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
             saveDmRoom(myId, update.conversationId, next);
             return next;
@@ -593,13 +607,26 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       const isOpen = isConversationVisible(conversationId);
       // Project a new message at once rather than waiting for an entire HTTP page.
       if (data.kind === 'message' && data.message?.id && isOpen) {
-        const message: Message = { ...data.message, reactions: [], myReaction: null,
-          replyTo: data.message.replyToId
-            ? (messagesRef.current.find(item => item.id === data.message?.replyToId)
-              ? { ...messagesRef.current.find(item => item.id === data.message?.replyToId)!, deleted: false }
-              : null) : null };
+        const source = data.message.replyToId
+          ? messagesRef.current.find(item => item.id === data.message?.replyToId) : null;
+        const matchingPending = pendingMessagesRef.current.find(item =>
+          item.conversationId === conversationId && item.clientId === data.message?.clientId);
+        const replyTo = data.message.replyToId
+          ? (matchingPending?.replyTo ?? (source
+            ? { id: source.id, body: source.body ||
+                (source.attachment ? attachmentLabel(source.attachment.type, locale) : ''),
+                authorId: source.authorId, deleted: !!source.deletedAt }
+            : null)) : null;
+        const message: Message = { ...data.message, reactions: [], myReaction: null, replyTo };
         setMessages(previous => {
-          if (previous.some(item => item.id === message.id)) return previous;
+          const existing = previous.find(item => item.id === message.id);
+          if (existing) {
+            if (existing.replyTo || !message.replyTo) return previous;
+            const updated = previous.map(item => item.id === message.id
+              ? { ...item, replyTo: message.replyTo } : item);
+            saveDmRoom(myId, conversationId, updated);
+            return updated;
+          }
           const updated = [...previous, message].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
           saveDmRoom(myId, conversationId, updated);
           return updated;
@@ -622,7 +649,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     });
     window.addEventListener('uorqui:friends-updated', onReady);
     return () => { unsubscribe(); window.removeEventListener('uorqui:friends-updated', onReady); };
-  }, [loadThreads, loadMessages, isConversationVisible, myId, pt]);
+  }, [loadThreads, loadMessages, isConversationVisible, myId, pt, locale]);
   // Delivery is not reading: receiving an inbox update never clears the unread badge.
   const receiving = useRef(new Set<string>());
   const receivedIds = useRef(new Set<string>());
@@ -727,6 +754,13 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       });
     }
   }
+  // Preserve a usable quote even when replying to media without text.
+  function optimisticReplyReference(source: Message | null): Message['replyTo'] {
+    if (!source) return null;
+    return { id: source.id, authorId: source.authorId,
+      body: source.body || (source.attachment ? attachmentLabel(source.attachment.type, locale) : ''),
+      deleted: !!source.deletedAt };
+  }
   async function submitPending(pending: PendingMessage) {
     try {
       await enqueueDmMessage(myId, pending, pendingFiles.current.get(pending.clientId));
@@ -762,7 +796,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
       attachment:{id:clientId,name:file.name,type:mime,size:file.size},attachmentUrl:previewUrl,
       replyToId:replySource?.id??null,
-      replyTo:replySource ? {id:replySource.id,body:replySource.body || (replySource.attachment ? attachmentLabel(replySource.attachment.type,locale) : ''),authorId:replySource.authorId,deleted:false} : null,
+      replyTo:optimisticReplyReference(replySource),
     };
     setPendingMessages(prev=>[...prev,pending]);
     setReplySource(null);
@@ -782,7 +816,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       createdAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
       forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:createdAt,
       replyToId:replySource?.id??null,
-      replyTo:replySource?{id:replySource.id,body:replySource.body,authorId:replySource.authorId,deleted:false}:null,
+      replyTo:optimisticReplyReference(replySource),
     };
     setPendingMessages(prev=>[...prev,pending]);setReplySource(null);
     jumpToLast('smooth');void submitPending(pending);
@@ -811,7 +845,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       createdAt:sentAt,readAt:null,deliveredAt:null,editedAt:null,deletedAt:null,
       forwarded:false,reactions:[],myReaction:null,pendingStatus:'sending',statusUpdatedAt:sentAt,
       replyToId:replySource?.id??null,
-      replyTo:replySource ? {id:replySource.id,body:replySource.body,authorId:replySource.authorId,deleted:false} : null,
+      replyTo:optimisticReplyReference(replySource),
     };
     setPendingMessages(prev => [...prev,pending]);
     setDraft(''); setReplySource(null);
@@ -887,6 +921,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       if (serverActivity > (Date.parse(pending.createdAt) || 0)) return thread;
       return {
         ...thread, lastBody: pending.body, lastAttachmentType: pending.attachment?.type ?? null,
+        lastReplyToId: pending.replyToId ?? null,
         lastAt: pending.createdAt, lastAuthorId: myId, lastDeleted: false,
         optimisticStatus: pending.pendingStatus,
       };
@@ -983,7 +1018,11 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                       : (pt ? thread.peerName + ' reagiu ' + thread.lastReactionEmoji + ' à sua mensagem' : thread.peerName + ' reacted ' + thread.lastReactionEmoji + ' to your message'))
                   : thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message')
                   : (thread.lastBody || thread.lastAttachmentType)
-                    ? (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : '')
+                    ? (thread.lastReplyToId
+                        ? (thread.lastAuthorId === myId
+                          ? (pt ? 'Você respondeu: ' : 'You replied: ')
+                          : (pt ? thread.peerName + ' respondeu: ' : thread.peerName + ' replied: '))
+                        : (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : ''))
                       + (thread.lastBody || attachmentLabel(thread.lastAttachmentType,locale))
                     : '@' + thread.peerHandle}
               </span>
