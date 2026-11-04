@@ -156,3 +156,5 @@ Esta evolução foi motivada pela percepção de maior demora no mensageiro soci
 
 
 **Indicador de carregamento (04/11/2026):** o spinner fica **somente nas mídias** enquanto são carregadas ou preparadas para exibição (imagens, vídeos e metadados/buffering de áudios), tanto nas mensagens individuais quanto nos canais de comunidades e visualizadores. Balões de texto, estados intermediários de envio/leitura e cartões de arquivos prontos **não** exibem spinner. Em falhas de mídia, o indicador deixa de girar.
+
+Balões com anexos ainda pendentes de upload exibem um spinner discreto com “Enviando mídia”; o indicador desaparece ao confirmar o envio ou falhar, sem reaparecer nos balões de texto.
