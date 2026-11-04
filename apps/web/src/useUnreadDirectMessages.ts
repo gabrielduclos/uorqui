@@ -9,6 +9,7 @@ export function useUnreadDirectMessages(accountId: string) {
   useEffect(() => {
     let mounted = true;
     let sequence = 0;
+    let lastRefresh = Date.now();
     const acknowledging = new Set<string>();
     const acknowledged = new Set<string>();
     type Thread = { id: string; unreadCount: number; archived?: boolean; pendingReceivedAt?: string | null };
@@ -33,6 +34,7 @@ export function useUnreadDirectMessages(accountId: string) {
         const count = payload.conversations.reduce((sum, thread) =>
           sum + (thread.archived ? 0 : Math.max(0, Number(thread.unreadCount) || 0)), 0);
         setUnread(count);
+        lastRefresh = Date.now();
         for (const thread of payload.conversations) {
           if (!thread.archived && thread.unreadCount > 0 && thread.pendingReceivedAt)
             void acknowledgeDelivery(thread.id, thread.pendingReceivedAt);
@@ -60,7 +62,7 @@ export function useUnreadDirectMessages(accountId: string) {
     document.addEventListener('visibilitychange', onVisibility);
     // Healthy SSE requires no periodic inbox download; the fallback covers broken streams.
     const interval = window.setInterval(() => {
-      if (!dmStreamConnected()) onFocus();
+      if (!dmStreamConnected() || Date.now() - lastRefresh >= 120_000) onFocus();
     }, 15000);
     void refresh();
     return () => {
