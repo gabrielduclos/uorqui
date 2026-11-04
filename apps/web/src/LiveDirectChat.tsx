@@ -330,6 +330,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const loadMessages = useCallback(async (id: string) => {
     if (activeIdRef.current !== id) return;
     const version = ++roomRequest.current;
+    const requestedAt = Date.now();
     const result = await api<{ messages: Message[] }>('/api/v1/dm/conversations/' + id + '/messages');
     if (activeIdRef.current !== id || version !== roomRequest.current) return;
     setMessages(previous => {
@@ -339,7 +340,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       const receivedIds = new Set(result.messages.map(message => message.id));
       // Preserve newer realtime messages that arrived while HTTP was in flight.
       const retained = previous.filter(message => !receivedIds.has(message.id) &&
-        ((earliest && message.createdAt < earliest) || (latest && message.createdAt >= latest)));
+        ((earliest && message.createdAt < earliest) || (latest && Date.parse(message.createdAt) >= requestedAt)));
       const next = [...retained, ...result.messages].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
       saveDmRoom(myId, id, next);
       return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
