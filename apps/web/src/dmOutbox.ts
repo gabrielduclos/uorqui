@@ -90,7 +90,8 @@ export async function flushDmOutbox(accountId: string): Promise<void> {
   const now = Date.now();
   const ready = commands.filter(command => command.state === 'queued' &&
     command.nextAttemptAt <= now && !processing.has(keyFor(accountId, command.pending.clientId)));
-  for (const command of ready.slice(0, 2)) void process(command);
+  const activeCount = [...processing].filter(key => key.startsWith(accountId + ':')).length;
+  for (const command of ready.slice(0, Math.max(0, 2 - activeCount))) void process(command);
   const nextDue = commands.filter(command => command.state === 'queued' && command.nextAttemptAt > now)
     .reduce((min, command) => Math.min(min, command.nextAttemptAt), Infinity);
   if (Number.isFinite(nextDue)) schedule(accountId, Math.max(200, nextDue - Date.now()));
