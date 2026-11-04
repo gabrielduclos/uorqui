@@ -51,7 +51,7 @@ export function CommunityMessageAttachment({attachment,src,locale}:{attachment:C
           <a href={src} download={attachment.name} className="grid size-10 place-items-center" aria-label={pt?'Salvar imagem':'Save image'}><Download className="size-5"/></a>
           <button type="button" className="grid size-10 place-items-center" onClick={()=>setExpanded(false)} aria-label={pt?'Fechar':'Close'}><X className="size-6"/></button>
         </div>
-        <div className="min-h-0 flex-1"><ZoomableChatImage src={visible} alt={attachmentLabel(type,locale)} locale={locale}/></div>
+        <div className="min-h-0 flex-1"><ZoomableChatImage src={visible || src} alt={attachmentLabel(type,locale)} locale={locale}/></div>
       </div>,document.body)}
   </div>;
 }
