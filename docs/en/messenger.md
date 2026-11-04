@@ -140,3 +140,5 @@ This upgrade addresses reports that the social messenger felt slower than the ol
 
 
 **Media loading indicator (2026-11-04):** a spinner appears **only on media** while its content or metadata buffers/loads (images, videos and audio), across direct messages, community channels and media viewers. Plain-text bubbles, delivery/read status rows and ready-to-download file cards **do not** show a spinner. Media failures stop the loading animation.
+
+Outgoing attachment bubbles still pending upload display a small “Uploading media” spinner. It disappears on confirmation or failure and never appears on text-only messages.
