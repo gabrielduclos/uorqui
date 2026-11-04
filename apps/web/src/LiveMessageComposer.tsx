@@ -349,7 +349,6 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     <div className="relative shrink-0">
       <button type="button" aria-label={pt ? 'Abrir lista de emojis' : 'Open emoji picker'}
         aria-expanded={emojiOpen} aria-haspopup="dialog"
-        // Pointer activation must not blur the composer (and dismiss its mobile keyboard).
         onPointerDown={event => event.preventDefault()}
         onClick={() => { setEmojiOpen(v => !v); setAttachmentsOpen(false); }}
         className="grid size-11 lg:size-12 place-items-center text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
