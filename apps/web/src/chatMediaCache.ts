@@ -34,7 +34,12 @@ const entries = new Map<string, Item>();
 const listeners = new Set<() => void>();
 const notify = () => { for (const fn of listeners) fn(); };
 const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
-const snapshot = (src: string | null | undefined) => src && PRIVATE_MEDIA_URL.test(src) ? entries.get(src)?.blobUrl ?? null : src ?? null;
+const snapshot = (src: string | null | undefined) => {
+  if (!src || !PRIVATE_MEDIA_URL.test(src)) return src ?? null;
+  const item = entries.get(src);
+  // Unsupported or oversized media must still load via the authorized URL.
+  return item?.blobUrl ?? (item?.failedAt ? src : null);
+};
 
 function remove(url: string) {
   const item=entries.get(url);
