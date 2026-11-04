@@ -9,7 +9,7 @@ import { StartupSplash } from './StartupSplash';
 import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
-import { clearProfileImageCache } from './profileImageCache';
+import { clearProfileImageCache, setProfileImageCacheAccount } from './profileImageCache';
 import { clearChatMediaCache } from './chatMediaCache';
 import { deactivatePush } from './useSocialPush';
 import EmailVerificationResult from './EmailVerificationResult';
@@ -130,7 +130,13 @@ function AppContent() {
     void (async () => {
       try {
         const response = await fetch('/api/v1/me', { credentials: 'same-origin', signal: controller.signal });
-        if (response.ok && !controller.signal.aborted) setAccount(await response.json() as Account);
+        if (response.ok && !controller.signal.aborted) {
+          const verified = await response.json() as Account;
+          if (!controller.signal.aborted) {
+            setProfileImageCacheAccount(verified.user.id);
+            setAccount(verified);
+          }
+        }
       } catch { /* Landing handles unavailable API and login errors. */ }
       finally { window.clearTimeout(timeout); if (mounted) setLoading(false); }
     })();
@@ -184,7 +190,9 @@ function AppContent() {
     return ()=>{active=false;};
   },[account?.profile,inviteToken]);
   const onAuthenticated = useCallback((next: Account) => {
-    clearChatMediaCache();setAccount(next);
+    setProfileImageCacheAccount(next.user.id);
+    clearChatMediaCache();
+    setAccount(next);
   }, []);
   const signOut = useCallback(async () => {
     // Revoke the authenticated subscription before ending the session.
@@ -196,7 +204,8 @@ function AppContent() {
       body: '{}',
     });
     if (!response.ok) throw new Error('Logout failed');
-    clearProfileImageCache();
+    await clearProfileImageCache();
+    setProfileImageCacheAccount(null);
     clearChatMediaCache();
     setAccount(null);
     setInvitedCommunity(null);
