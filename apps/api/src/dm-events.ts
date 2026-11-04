@@ -86,17 +86,23 @@ export async function subscribeDmEvents(userId: string, callback: Subscriber): P
 }
 
 export async function publishDmConversationEvent(conversationId: string, kind: DmEventKind, message?: Record<string, unknown>): Promise<void> {
-  // Server-derived participants only; caller never supplies recipient IDs.
-  const members = await getPool().query<{ participant_a_id: string; participant_b_id: string }>(
-    'SELECT participant_a_id, participant_b_id FROM direct_conversations WHERE id=$1', [conversationId]);
-  if (!members.rows.length) return;
-  for (const userId of [members.rows[0].participant_a_id, members.rows[0].participant_b_id]) {
-    await getPool().query('SELECT pg_notify($1, $2)', [
-      CHANNEL, Buffer.byteLength(JSON.stringify({ userId, conversationId, kind, message }), 'utf8') < 7500
-        ? JSON.stringify({ userId, conversationId, kind, message } satisfies DmEvent)
-        : JSON.stringify({ userId, conversationId, kind } satisfies DmEvent),
-    ]);
-  }
+  // One SQL round trip for membership lookup and both authenticated notifications.
+  // The API and Neon may run in different regions: avoid sequential Pg queries.
+  const testPayload = JSON.stringify({
+    userId: '00000000-0000-0000-0000-000000000000', conversationId, kind, message,
+  });
+  const compactMessage = message && Buffer.byteLength(testPayload, 'utf8') < 7500
+    ? JSON.stringify(message) : null;
+  await getPool().query(
+    `SELECT pg_notify($1, json_build_object(
+      'userId', participant.recipient, 'conversationId', $2, 'kind', $3,
+      'message', $4::jsonb
+    )::text)
+    FROM direct_conversations c
+    CROSS JOIN LATERAL unnest(ARRAY[c.participant_a_id, c.participant_b_id]) participant(recipient)
+    WHERE c.id=$2`,
+    [CHANNEL, conversationId, kind, compactMessage],
+  );
 }
 
 export async function closeDmEvents(): Promise<void> {
