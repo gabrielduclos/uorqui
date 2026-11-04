@@ -18,7 +18,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
   const [duration, setDuration] = useState(0);
   const [rate, setRate] = useState<Rate>(1);
   const [error, setError] = useState(false);
-  const [loading,setLoading]=useState(true);
+  const [loading,setLoading]=useState(false);
   const [requestedCache,setRequestedCache] = useState(false);
   const cachedSrc=useCachedChatMedia(src,requestedCache);
 
@@ -27,7 +27,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
     setCurrentTime(0);
     setDuration(0);
     setError(false);
-    setLoading(true);
+    setLoading(false);
     setRequestedCache(false);
     if (player.current) {
       player.current.src=src;
@@ -61,7 +61,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
   return <div className="mt-1 flex w-full max-w-[340px] min-w-[min(280px,100%)] flex-col gap-2 border border-border bg-card px-3 py-2.5 text-foreground shadow-sm" aria-label="Mensagem de áudio">
     <audio ref={player} src={src} preload="metadata"
       onLoadedMetadata={event => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0); event.currentTarget.playbackRate = rate; setLoading(false); }}
-      onWaiting={()=>setLoading(true)} onCanPlay={()=>setLoading(false)}
+      onWaiting={()=>{if(requestedCache||playing)setLoading(true);}} onCanPlay={()=>setLoading(false)
       onDurationChange={event => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }}
       onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)}
       onPlay={() => setPlaying(true)}
