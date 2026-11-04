@@ -1,5 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 
 type Position = { x: number; y: number };
 type Zoom = Position & { scale: number };
@@ -25,6 +26,8 @@ export function ZoomableChatImage({ src, alt, locale = 'pt-BR' }: {
   const lastTap = useRef<{ at: number; point: Position } | null>(null);
   const current = useRef<Zoom>(INITIAL);
   const [zoom, setZoom] = useState<Zoom>(INITIAL);
+  const [loadedSrc,setLoadedSrc]=useState<string|null>(null);
+  const [failedSrc,setFailedSrc]=useState<string|null>(null);
   const pt = locale === 'pt-BR';
 
   function limit(value: Zoom): Zoom {
@@ -131,9 +134,14 @@ export function ZoomableChatImage({ src, alt, locale = 'pt-BR' }: {
       style={{ touchAction: 'none', cursor: zoom.scale > 1 ? 'grab' : 'zoom-in' }}
       onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
       <img ref={image} src={src} alt={alt} draggable={false}
+        onLoad={()=>setLoadedSrc(src)} onError={()=>setFailedSrc(src)}
         className="max-h-full max-w-full select-none object-contain"
         style={{ transform: 'translate3d(' + zoom.x + 'px,' + zoom.y + 'px,0) scale(' + zoom.scale + ')', transformOrigin: 'center', userSelect: 'none', pointerEvents: 'none' }} />
     </div>
+    {loadedSrc!==src&&failedSrc!==src&&
+      <span role="status" aria-label={pt?'Carregando imagem':'Loading image'} className="pointer-events-none absolute inset-0 grid place-items-center">
+        <Spinner className="size-7 text-primary"/>
+      </span>}
     <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-md border border-white/20 bg-black/75 p-1 text-white">
       <button type="button" onClick={() => zoomAt(zoom.scale / 1.5)} disabled={zoom.scale <= 1}
         aria-label={pt ? 'Diminuir zoom' : 'Zoom out'} className="grid size-9 place-items-center disabled:opacity-40"><ZoomOut className="size-4" /></button>

@@ -153,3 +153,6 @@ Esta evolução foi motivada pela percepção de maior demora no mensageiro soci
 
 
 **Respostas otimistas (04/11/2026):** responder com texto ou anexo insere imediatamente o novo balão com a prévia da mensagem original, incluindo rótulos para mídia sem legenda. Essa referência é preservada durante eventos SSE e a confirmação da fila, até a reconciliação pelo histórico autorizado; falhas mantêm **Reenviar**. Na lista de conversas, respostas são identificadas como **“Você respondeu: …”** ou **“Fulano respondeu: …”** tanto antes quanto depois da confirmação, usando o campo `lastReplyToId` na consulta de conversas. Nenhuma migração de banco é necessária.
+
+
+**Indicador de carregamento (04/11/2026):** o spinner fica **somente nas mídias** enquanto são carregadas ou preparadas para exibição (imagens, vídeos e metadados/buffering de áudios), tanto nas mensagens individuais quanto nos canais de comunidades e visualizadores. Balões de texto, estados intermediários de envio/leitura e cartões de arquivos prontos **não** exibem spinner. Em falhas de mídia, o indicador deixa de girar.

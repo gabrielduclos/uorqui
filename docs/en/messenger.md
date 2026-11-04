@@ -137,3 +137,6 @@ This upgrade addresses reports that the social messenger felt slower than the ol
 
 
 **Optimistic replies (2026-11-04):** sending a reply with text or a file immediately renders a bubble with the referenced message preview, using localized media labels if the source has no body. SSE events and outbox acknowledgements preserve that reply preview until authenticated history reconciliation; failures keep **Retry**. The conversation list labels replies **“You replied: …”** or **“Name replied: …”** before and after confirmation via the `lastReplyToId` projection, without a database migration.
+
+
+**Media loading indicator (2026-11-04):** a spinner appears **only on media** while its content or metadata buffers/loads (images, videos and audio), across direct messages, community channels and media viewers. Plain-text bubbles, delivery/read status rows and ready-to-download file cards **do not** show a spinner. Media failures stop the loading animation.

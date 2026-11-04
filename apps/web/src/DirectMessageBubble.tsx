@@ -3,6 +3,7 @@ import { motion, useDragControls, useMotionValue, useTransform } from 'motion/re
 import { createPortal } from 'react-dom';
 import { Copy, Download, FileText, Flag, Forward, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
+import { Spinner } from '@/components/ui/spinner';
 import { MessageText } from './MessageText';
 import { LinkPreview } from './LinkPreview';
 import { attachmentLabel } from './chatAttachmentLabels';
@@ -98,6 +99,12 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   const cachedSrc=useCachedChatMedia(assetUrl,isImage && imageNearViewport);
   const visibleSrc=cachedSrc || assetUrl || undefined;
   const mediaLabel=attachmentLabel(asset?.type,locale);
+  const [loadedImageSrc,setLoadedImageSrc]=useState<string|null>(null);
+  const [failedImageSrc,setFailedImageSrc]=useState<string|null>(null);
+  const [loadedVideoSrc,setLoadedVideoSrc]=useState<string|null>(null);
+  const [failedVideoSrc,setFailedVideoSrc]=useState<string|null>(null);
+  const loadingImage=!!visibleSrc && loadedImageSrc!==visibleSrc && failedImageSrc!==visibleSrc;
+  const loadingVideo=!!visibleSrc && loadedVideoSrc!==visibleSrc && failedVideoSrc!==visibleSrc;
   const time = new Date(message.createdAt);
   const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
   // Old OpenStreetMap shares remain readable, but now always open Google Maps.
@@ -187,17 +194,30 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0">
           {isImage ? <button ref={imageRef} type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
             aria-label={pt ? 'Ampliar imagem' : 'Open image'}
-            className="block max-w-full focus-visible:outline-2 focus-visible:outline-current">
+            className="relative block max-w-full focus-visible:outline-2 focus-visible:outline-current">
             {cachedSrc || !assetUrl.startsWith('/media/dm/')
               ? <img src={visibleSrc} alt={mediaLabel} loading="lazy" decoding="async"
-                className="max-h-[360px] w-auto max-w-full object-contain" />
-              : <span role="status" aria-label={pt?'Carregando foto':'Loading photo'}
-                className="block h-36 w-44 animate-pulse bg-muted" />}
+                  onLoad={()=>setLoadedImageSrc(visibleSrc ?? null)}
+                  onError={()=>setFailedImageSrc(visibleSrc ?? null)}
+                  className="max-h-[360px] w-auto max-w-full object-contain" />
+              : <span className="block h-36 w-44 bg-muted/30" />}
+            {loadingImage && <span role="status" aria-label={pt?'Carregando foto':'Loading photo'}
+                className="absolute inset-0 grid min-h-36 min-w-44 place-items-center bg-muted/60">
+                <Spinner className="size-5"/>
+              </span>}
+            {failedImageSrc===visibleSrc && <span className="block p-2 text-xs">{pt?'Não foi possível carregar a foto.':'Photo unavailable.'}</span>}
           </button> : isVideo ? <button type="button" onClick={() => onOpenMedia?.(message.id)}
               aria-label={pt?'Abrir vídeo':'Open video'}
-              className="relative block max-w-full bg-black focus-visible:outline-2 focus-visible:outline-current">
-              <video src={visibleSrc} muted playsInline preload="metadata" className="pointer-events-none max-h-[320px] max-w-full"/>
-              <span className="absolute inset-0 grid place-items-center bg-black/20"><Play className="size-10 text-white" fill="currentColor"/></span>
+              className="relative block min-h-36 min-w-44 max-w-full bg-black focus-visible:outline-2 focus-visible:outline-current">
+              <video src={visibleSrc} muted playsInline preload="metadata"
+                onLoadedMetadata={()=>setLoadedVideoSrc(visibleSrc ?? null)}
+                onError={()=>setFailedVideoSrc(visibleSrc ?? null)}
+                className="pointer-events-none max-h-[320px] max-w-full"/>
+              <span className="absolute inset-0 grid place-items-center bg-black/20">
+                {loadingVideo ? <span role="status" aria-label={pt?'Carregando vídeo':'Loading video'}><Spinner className="size-6 text-white"/></span>
+                  : failedVideoSrc===visibleSrc ? <span className="p-2 text-xs text-white">{pt?'Vídeo indisponível':'Video unavailable'}</span>
+                  : <Play className="size-10 text-white" fill="currentColor"/>}
+              </span>
             </button> : isAudio ? <ChatAudioPlayer src={assetUrl}/> :
             <a href={assetUrl} download={asset.name}
               className="flex min-w-0 items-center gap-2 border border-current/20 px-2 py-2 hover:underline">

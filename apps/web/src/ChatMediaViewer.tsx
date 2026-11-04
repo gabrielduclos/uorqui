@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Pencil, Share2, X } from 'lucide-react';
 import { ChatImageEditor } from './ChatImageEditor';
+import { Spinner } from '@/components/ui/spinner';
 import { ZoomableChatImage } from './ZoomableChatImage';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { useCachedChatMedia } from './chatMediaCache';
@@ -53,6 +54,8 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
   const cached=useCachedChatMedia(url,!!selectedId && !!active);
   const [videoPlaying,setVideoPlaying]=useState(false);
   const [videoSrc,setVideoSrc]=useState<string | null>(null);
+  const [videoReadySrc,setVideoReadySrc]=useState<string | null>(null);
+  const [videoFailedSrc,setVideoFailedSrc]=useState<string | null>(null);
   useEffect(()=>{setVideoPlaying(false);setVideoSrc(url);},[url]);
   useEffect(()=>{if(cached && !videoPlaying)setVideoSrc(cached);},[cached,videoPlaying]);
   if(!active || !selectedId || !url || typeof document==='undefined')return null;
@@ -89,11 +92,19 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
           <button type="button" onClick={()=>{if(index>0)onSelect(items[index-1].id);}} disabled={index<=0}
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"
             aria-label={pt?'Mídia anterior':'Previous media'}><ChevronLeft className="size-6"/></button>
-          <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center">
+          <div className="relative flex h-full min-h-0 min-w-0 flex-1 items-center justify-center">
             {image?<ZoomableChatImage key={active.id} src={cached || url} alt={displayedName} locale={locale} />:
-              <video key={active.id} src={videoSrc || url} controls playsInline preload="metadata"
-                onPlay={()=>setVideoPlaying(true)} onPause={()=>setVideoPlaying(false)}
-                className="max-h-[76dvh] max-w-full" aria-label={displayedName}/>}
+              <>
+                <video key={active.id} src={videoSrc || url} controls playsInline preload="metadata"
+                  onLoadedMetadata={()=>setVideoReadySrc(videoSrc || url)}
+                  onError={()=>setVideoFailedSrc(videoSrc || url)}
+                  onPlay={()=>setVideoPlaying(true)} onPause={()=>setVideoPlaying(false)}
+                  className="max-h-[76dvh] max-w-full" aria-label={displayedName}/>
+                {videoReadySrc!==(videoSrc || url)&&videoFailedSrc!==(videoSrc || url)&&
+                  <span role="status" aria-label={pt?'Carregando vídeo':'Loading video'} className="pointer-events-none absolute inset-0 grid place-items-center">
+                    <Spinner className="size-7"/>
+                  </span>}
+              </>}
           </div>
           <button type="button" onClick={()=>{if(index<items.length-1)onSelect(items[index+1].id);}} disabled={index>=items.length-1}
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"

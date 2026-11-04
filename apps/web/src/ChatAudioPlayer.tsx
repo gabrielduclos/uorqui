@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 import { useCachedChatMedia } from './chatMediaCache';
 
 const RATES = [1, 1.5, 2] as const;
@@ -17,6 +18,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
   const [duration, setDuration] = useState(0);
   const [rate, setRate] = useState<Rate>(1);
   const [error, setError] = useState(false);
+  const [loading,setLoading]=useState(true);
   const [requestedCache,setRequestedCache] = useState(false);
   const cachedSrc=useCachedChatMedia(src,requestedCache);
 
@@ -25,6 +27,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
     setCurrentTime(0);
     setDuration(0);
     setError(false);
+    setLoading(true);
     setRequestedCache(false);
     if (player.current) {
       player.current.src=src;
@@ -42,6 +45,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
     if (!audio) return;
     if (!audio.paused) { audio.pause(); return; }
     setRequestedCache(true);
+    setLoading(true);
     // Do not interrupt playing audio when cache fetch finishes. Reuse the
     // completed private Blob URL on the next explicit Play gesture.
     if(cachedSrc && audio.getAttribute('src')!==cachedSrc){
@@ -50,22 +54,24 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
       audio.load();
       if(Number.isFinite(resumeAt) && resumeAt>0)audio.currentTime=resumeAt;
     }
-    try { await audio.play(); setError(false); }
-    catch { setError(true); setPlaying(false); }
+    try { await audio.play(); setError(false); setLoading(false); }
+    catch { setError(true); setPlaying(false); setLoading(false); }
   }
 
   return <div className="mt-1 flex w-full max-w-[340px] min-w-[min(280px,100%)] flex-col gap-2 border border-border bg-card px-3 py-2.5 text-foreground shadow-sm" aria-label="Mensagem de áudio">
     <audio ref={player} src={src} preload="metadata"
-      onLoadedMetadata={event => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0); event.currentTarget.playbackRate = rate; }}
+      onLoadedMetadata={event => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0); event.currentTarget.playbackRate = rate; setLoading(false); }}
+      onWaiting={()=>setLoading(true)} onCanPlay={()=>setLoading(false)}
       onDurationChange={event => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }}
       onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
       onEnded={() => setPlaying(false)}
-      onError={() => { setError(true); setPlaying(false); }} />
+      onError={() => { setError(true); setPlaying(false); setLoading(false); }} />
     <div className="flex min-w-0 items-center gap-2">
       <button type="button" onClick={() => void toggle()} aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'} className="grid size-10 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground shadow-sm hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-        {playing ? <Pause className="size-4" fill="currentColor" /> : <Play className="size-4" fill="currentColor" />}
+        {loading && !error ? <span role="status" aria-label="Carregando áudio"><Spinner className="size-4"/></span> :
+         playing ? <Pause className="size-4" fill="currentColor" /> : <Play className="size-4" fill="currentColor" />}
       </button>
       <div className="min-w-0 flex-1">
         <input type="range" min={0} max={Math.max(duration, 0.1)} step={0.1} value={Math.min(currentTime, duration || 0)}
