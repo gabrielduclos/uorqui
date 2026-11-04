@@ -73,18 +73,21 @@ export function dmStreamConnected(): boolean {
 let inboxTask: Promise<{ conversations: unknown[] }> | null = null;
 let inboxResult: { conversations: unknown[] } | null = null;
 let inboxAt = 0;
-export function invalidateDmInbox(): void { inboxAt = 0; inboxResult = null; }
-export async function loadDmInboxNetwork<T>(): Promise<{ conversations: T[] }> {
+let inboxAccount = '';
+export function invalidateDmInbox(): void { inboxAt = 0; inboxResult = null; inboxTask = null; inboxAccount = ''; }
+export async function loadDmInboxNetwork<T>(accountId: string): Promise<{ conversations: T[] }> {
+  if (inboxAccount !== accountId) { inboxTask = null; inboxResult = null; inboxAt = 0; inboxAccount = accountId; }
   if (inboxResult && Date.now() - inboxAt < 500) return inboxResult as { conversations: T[] };
   if (inboxTask) return inboxTask as Promise<{ conversations: T[] }>;
-  inboxTask = fetch('/api/v1/dm/conversations', { credentials: 'same-origin', cache: 'no-store' })
+  const expectedAccount = accountId;
+  const task = fetch('/api/v1/dm/conversations', { credentials: 'same-origin', cache: 'no-store' })
     .then(async response => {
       if (!response.ok) throw Error('HTTP_' + response.status);
       const result = await response.json() as { conversations: unknown[] };
       if (!Array.isArray(result.conversations)) throw Error('Invalid inbox');
-      inboxResult = result;
-      inboxAt = Date.now();
+      if (inboxAccount === expectedAccount) { inboxResult = result; inboxAt = Date.now(); }
       return result;
-    }).finally(() => { inboxTask = null; });
-  return inboxTask as Promise<{ conversations: T[] }>;
+    }).finally(() => { if (inboxTask === task) inboxTask = null; });
+  inboxTask = task;
+  return task as Promise<{ conversations: T[] }>;
 }
