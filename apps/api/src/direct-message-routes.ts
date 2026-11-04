@@ -299,7 +299,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       const q='INSERT INTO direct_messages(conversation_id,author_id,body,client_id,reply_to_id,attachment_id,attachment_name,attachment_type,attachment_size) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9 WHERE '+mayPostSql+' ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
       const r=await getPool().query(q,[id,me,text,clientId,replyToId??null,attachment?.id??null,attachment?.name??null,attachment?.type??null,attachment?.size??null]);
       if(r.rowCount){
-        await publishDmConversationEvent(id,'message').catch(error=>request.log.warn({err:error},'DM notification failed'));
+        await publishDmConversationEvent(id,'message',r.rows[0]).catch(error=>request.log.warn({err:error},'DM notification failed'));
         void pushDirectMessage(r.rows[0].id).catch(error=>request.log.warn({err:error},'DM push unavailable'));
         return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
       }
@@ -428,7 +428,7 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         'ON CONFLICT(client_id) DO NOTHING RETURNING '+messageColumns;
       const r=await getPool().query(q,[targetConversationId,me,clientId,messageId,id]);
       if(r.rowCount){
-        await publishDmConversationEvent(targetConversationId,'message').catch(error=>request.log.warn({err:error},'DM forward notification failed'));
+        await publishDmConversationEvent(targetConversationId,'message',r.rows[0]).catch(error=>request.log.warn({err:error},'DM forward notification failed'));
         void pushDirectMessage(r.rows[0].id).catch(error=>request.log.warn({err:error},'Forward push unavailable'));
         return reply.code(201).header('Cache-Control',noCache).send({message:r.rows[0]});
       }

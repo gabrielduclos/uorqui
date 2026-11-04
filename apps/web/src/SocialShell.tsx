@@ -20,6 +20,10 @@ import LiveCommunities from './LiveCommunities';
 import DiscoverHome from './DiscoverHome';
 import ModerationPanel from './ModerationPanel';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
+import { startDmOutbox } from './dmOutbox';
+import { clearDmAccount } from './dmCache';
+import { resetDmInboxSession } from './dmEventStream';
+import { clearChatMediaCache } from './chatMediaCache';
 import {useCommunityUnread} from './useCommunityUnread';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
@@ -65,7 +69,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     return ()=>controller.abort();
   },[account.user.id]);
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
-  const unreadMessageCount = useUnreadDirectMessages();
+  const unreadMessageCount = useUnreadDirectMessages(account.user.id);
+  useEffect(() => startDmOutbox(account.user.id), [account.user.id]);
   const communityUnread = useCommunityUnread();
   const activity = useActivityNotifications(account.user.id);
   const communityUnreadLabel=communityUnread.total>99?'99+':String(communityUnread.total);
@@ -156,7 +161,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     if (loggingOut) return;
     setLoggingOut(true);
     setLogoutError('');
-    try { await onLogout(); }
+    try { await onLogout(); resetDmInboxSession(); clearChatMediaCache(); await clearDmAccount(account.user.id); }
     catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 

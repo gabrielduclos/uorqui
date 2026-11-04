@@ -1,6 +1,6 @@
 import { Spinner } from '@/components/ui/spinner';
 import { SkeletonRows } from '@/components/ui/skeleton';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
@@ -12,6 +12,9 @@ import { InternalShareDialog } from './InternalShareDialog';
 import { ContentReportDialog } from './ContentReportDialog';
 import { FriendsPanel } from './FriendsPanel';
 import { clearProfileImageCache } from './profileImageCache';
+import { clearDmConversation, listDmCommands, peekDmInbox, peekDmRoom, readDmInbox, readDmRoom, saveDmInbox, saveDmRoom } from './dmCache';
+import { enqueueDmMessage, retryDmMessage, type DmOutboxUpdate } from './dmOutbox';
+import { dmStreamConnected, invalidateDmInbox, loadDmInboxNetwork, subscribeDmStream } from './dmEventStream';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
@@ -104,7 +107,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 }) {
   const { locale } = useUorquiPreferences();
   const pt = locale === 'pt-BR';
-  const [threads, setThreads] = useState<Conversation[]>([]);
+  const [threads, setThreads] = useState<Conversation[]>(() => peekDmInbox<Conversation>(myId));
   const [people, setPeople] = useState<Person[]>([]);
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'conversations' | 'contacts'>('conversations');
@@ -112,11 +115,13 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpened, setMobileOpened] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => peekDmInbox<Conversation>(myId).length === 0);
   const [error, setError] = useState('');
   const [searching, setSearching] = useState(false);
   const [chatError, setChatError] = useState('');
@@ -150,9 +155,10 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [blockedHandles,setBlockedHandles]=useState<string[]>([]);
   const conversationMenuRef=useRef<HTMLDivElement>(null);
   const draftBeforeEdit = useRef('');
-  const realtimeConnected = useRef(false);
-  const lastThreadFallback = useRef(0);
-  const lastMessageFallback = useRef(0);
+  const threadRequest = useRef(0);
+  const roomRequest = useRef(0);
+  const lastThreadFallback = useRef(Date.now());
+  const lastMessageFallback = useRef(Date.now());
   const scrollBox = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -199,7 +205,11 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   }, []);
 
   const loadThreads = useCallback(async () => {
-    const result = await api<{ conversations: Conversation[] }>('/api/v1/dm/conversations');
+    const version = ++threadRequest.current;
+    const result = await loadDmInboxNetwork<Conversation>(myId);
+    if (version !== threadRequest.current) return result.conversations;
+    saveDmInbox(myId, result.conversations);
+    lastThreadFallback.current = Date.now();
     setThreads(result.conversations);
     window.dispatchEvent(new CustomEvent('uorqui:dm-unread-count', {
       detail: result.conversations.reduce((total, thread) => total + (thread.archived ? 0 : Math.max(0, thread.unreadCount)), 0),
@@ -207,22 +217,28 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setError('');
     setLoading(false);
     return result.conversations;
-  }, []);
+  }, [myId]);
 
   useEffect(() => {
     let mounted = true;
+    void readDmInbox<Conversation>(myId).then(cached => {
+      if (!mounted || !cached.length) return;
+      setThreads(previous => previous.length ? previous : cached);
+      setLoading(false);
+    }).catch(() => {});
     void loadThreads().catch(() => {
       if (mounted) { setLoading(false); setError(pt ? 'Não foi possível carregar suas conversas.' : 'Could not load your conversations.'); }
     });
     const interval = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      if (!realtimeConnected.current || Date.now() - lastThreadFallback.current >= 25_000) {
+      if ((!dmStreamConnected() && Date.now() - lastThreadFallback.current >= 12_000) ||
+          Date.now() - lastThreadFallback.current >= 120_000) {
         lastThreadFallback.current = Date.now();
         void loadThreads().catch(() => {});
       }
     }, 4000);
     return () => { mounted = false; window.clearInterval(interval); };
-  }, [loadThreads, pt]);
+  }, [loadThreads, pt, myId]);
 
   useEffect(() => {
     const q = search.trim();
@@ -244,11 +260,12 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setActiveId(id);
     try{navigator.serviceWorker?.controller?.postMessage({type:'uorqui:clear-dm-push',conversationId:id});}catch{}
     setMobileOpened(true);
-    setMessages([]);
+    const cached = peekDmRoom(myId, id);
+    setMessages(cached);
     setJumpTarget(null);
     setHighlightId(null);
     if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
-    setMessagesLoading(true);
+    setMessagesLoading(!cached.length);
     setAtBottom(true);
     setNewBelow(0);
     atBottomRef.current = true;
@@ -261,7 +278,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setEditing(null); setCancelTarget(null); setForwardTarget(null); setActionNotice('');
     // Keep a draft for the selected conversation only until it is closed.
     setDraft('');
-  }, []);
+  }, [myId]);
   useEffect(()=>{
     if(initialConversationId&&/^[0-9a-f-]{36}$/i.test(initialConversationId))openThread(initialConversationId);
   },[initialConversationId,openThread]);
@@ -312,34 +329,106 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   // Fetching is strictly read-only. Never acknowledge in this function.
   const loadMessages = useCallback(async (id: string) => {
     if (activeIdRef.current !== id) return;
+    const version = ++roomRequest.current;
+    const requestedAt = Date.now();
     const result = await api<{ messages: Message[] }>('/api/v1/dm/conversations/' + id + '/messages');
-    if (activeIdRef.current !== id) return;
+    if (activeIdRef.current !== id || version !== roomRequest.current) return;
     setMessages(previous => {
       // Retain explicitly loaded older history while refreshing the newest 100.
       const earliest = result.messages[0]?.createdAt;
-      const older = earliest ? previous.filter(message => message.createdAt < earliest) : [];
-      const next = [...older, ...result.messages].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+      const latest = result.messages.at(-1)?.createdAt;
+      const receivedIds = new Set(result.messages.map(message => message.id));
+      // Preserve newer realtime messages that arrived while HTTP was in flight.
+      const retained = previous.filter(message => !receivedIds.has(message.id) &&
+        ((earliest && message.createdAt < earliest) || (latest && Date.parse(message.createdAt) >= requestedAt)));
+      const next = [...retained, ...result.messages].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+      saveDmRoom(myId, id, next);
       return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
     });
     setPendingMessages(previous => previous.filter(p => p.conversationId !== id || !result.messages.some(m => m.clientId === p.clientId)));
+    lastMessageFallback.current = Date.now();
     setMessagesLoading(false);
-  }, []);
+  }, [myId]);
 
   useEffect(() => {
     if (!activeId) return;
     let alive = true;
+    const existing = peekDmRoom(myId, activeId);
+    void readDmRoom(myId, activeId).then(cached => {
+      if (!alive || activeIdRef.current !== activeId || !cached.length) return;
+      setMessages(previous => previous.length ? previous : cached);
+      setMessagesLoading(false);
+    }).catch(() => {});
+    if (existing.length) setMessagesLoading(false);
     void loadMessages(activeId).catch(() => {
       if (alive) { setMessagesLoading(false); setChatError(pt ? 'Falha ao carregar mensagens.' : 'Could not load messages.'); }
     });
     const timer = window.setInterval(() => {
       if (!alive || document.visibilityState !== 'visible') return;
-      if (!realtimeConnected.current || Date.now() - lastMessageFallback.current >= 25_000) {
+      if ((!dmStreamConnected() && Date.now() - lastMessageFallback.current >= 12_000) ||
+          Date.now() - lastMessageFallback.current >= 120_000) {
         lastMessageFallback.current = Date.now();
         void loadMessages(activeId).catch(() => {});
       }
     }, 3000);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [activeId, loadMessages, pt]);
+  }, [activeId, loadMessages, pt, myId]);
+
+  useEffect(() => {
+    let mounted = true;
+    void listDmCommands(myId).then(commands => {
+      if (!mounted) return;
+      const restored: PendingMessage[] = commands.map(command => {
+        const pending = { ...command.pending,
+          pendingStatus: command.state === 'failed' ? 'failed' as const : 'sending' as const };
+        if (command.file && pending.attachment) {
+          const url = URL.createObjectURL(command.file);
+          const old = pendingBlobUrls.current.get(pending.clientId);
+          if (old) URL.revokeObjectURL(old);
+          pendingBlobUrls.current.set(pending.clientId, url);
+          pendingFiles.current.set(pending.clientId, command.file);
+          pending.attachmentUrl = url;
+        }
+        return pending;
+      });
+      setPendingMessages(previous => {
+        const known = new Set(previous.map(item => item.clientId));
+        return [...previous, ...restored.filter(item => !known.has(item.clientId))];
+      });
+    }).catch(() => {});
+    const onOutbox = (event: Event) => {
+      const update = (event as CustomEvent<DmOutboxUpdate>).detail;
+      if (!update || update.accountId !== myId) return;
+      if (update.state === 'sent') {
+        if (update.message && typeof update.message === 'object' &&
+            'id' in update.message && typeof update.message.id === 'string' &&
+            activeIdRef.current === update.conversationId) {
+          const confirmed = { ...(update.message as Message), reactions: [], myReaction: null };
+          setMessages(previous => {
+            if (previous.some(item => item.id === confirmed.id)) return previous;
+            const next = [...previous, confirmed].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+            saveDmRoom(myId, update.conversationId, next);
+            return next;
+          });
+        } else if (activeIdRef.current === update.conversationId) {
+          void loadMessages(update.conversationId).catch(() => {});
+        }
+        setPendingMessages(previous => previous.filter(item => item.clientId !== update.clientId));
+        pendingFiles.current.delete(update.clientId);
+        const url = pendingBlobUrls.current.get(update.clientId);
+        if (url) { pendingBlobUrls.current.delete(update.clientId); URL.revokeObjectURL(url); }
+        invalidateDmInbox();
+        void loadThreads().catch(() => {});
+        return;
+      }
+      setPendingMessages(previous => previous.map(item =>
+        item.clientId === update.clientId
+          ? { ...item, pendingStatus: update.state === 'failed' ? 'failed' : 'sending',
+            statusUpdatedAt: new Date().toISOString() } : item));
+    };
+    window.addEventListener('uorqui:dm-outbox', onOutbox);
+    return () => { mounted = false; window.removeEventListener('uorqui:dm-outbox', onOutbox); };
+  }, [myId, loadThreads, loadMessages]);
 
   const jumpToLast = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const node = scrollBox.current;
@@ -399,33 +488,38 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 
   // The Uorqui-chat behavior: start at the latest message, preserve scroll when
   // reading older ones, and show a downward arrow for messages arriving below.
-  const renderedMessages: Message[] = [...messages, ...pendingMessages.filter(p => p.conversationId === activeId && !messages.some(m => m.clientId === p.clientId))]
-    .filter(message => !message.deletedAt) // Old tombstones never occupy a chat row.
-    .sort((a,b) => a.createdAt.localeCompare(b.createdAt))
-    .map(message => Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)
-      ? optimisticReaction(message, reactionOverrides[message.id]) : message);
-  const blockReceipts = new Map<string, BlockReceipt>();
-  let outgoingBlock: Message[] = [];
-  function endBlock() {
-    if (!outgoingBlock.length) return;
-    const status = statusForOutgoingBlock(outgoingBlock, pt);
-    if (status) blockReceipts.set(outgoingBlock[outgoingBlock.length - 1].id, status);
-    outgoingBlock = [];
-  }
-  renderedMessages.forEach(message => {
-    if (message.authorId !== myId) { endBlock(); return; }
-    const previous = outgoingBlock[outgoingBlock.length - 1];
-    // Never mix read, received, sent or pending messages in one system status.
-    // An edited message also starts a fresh receipt block, even next to
-    // another message that happens to have the same state.
-    if (previous && (messageReceipt(previous).state !== messageReceipt(message).state ||
-        !!previous.editedAt || !!message.editedAt)) endBlock();
-    outgoingBlock.push(message);
-  });
-  endBlock();
-  const mediaItems=renderedMessages.filter((message):message is Message & {attachment:NonNullable<Message['attachment']>} =>
-    !!message.attachment && !message.deletedAt &&
-    (message.attachment.type.startsWith('image/') || message.attachment.type.startsWith('video/')));
+  const renderedMessages = useMemo<Message[]>(() =>
+    [...messages, ...pendingMessages.filter(p => p.conversationId === activeId &&
+      !messages.some(m => m.clientId === p.clientId))]
+      .filter(message => !message.deletedAt)
+      .sort((a,b) => a.createdAt.localeCompare(b.createdAt))
+      .map(message => Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)
+        ? optimisticReaction(message, reactionOverrides[message.id]) : message),
+  [messages, pendingMessages, activeId, reactionOverrides]);
+  const blockReceipts = useMemo(() => {
+    const receipts = new Map<string, BlockReceipt>();
+    let outgoingBlock: Message[] = [];
+    function endBlock() {
+      if (!outgoingBlock.length) return;
+      const status = statusForOutgoingBlock(outgoingBlock, pt);
+      if (status) receipts.set(outgoingBlock[outgoingBlock.length - 1].id, status);
+      outgoingBlock = [];
+    }
+    renderedMessages.forEach(message => {
+      if (message.authorId !== myId) { endBlock(); return; }
+      const previous = outgoingBlock[outgoingBlock.length - 1];
+      if (previous && (messageReceipt(previous).state !== messageReceipt(message).state ||
+          !!previous.editedAt || !!message.editedAt)) endBlock();
+      outgoingBlock.push(message);
+    });
+    endBlock();
+    return receipts;
+  }, [renderedMessages, myId, pt]);
+  const mediaItems = useMemo(() => renderedMessages.filter(
+    (message): message is Message & { attachment: NonNullable<Message['attachment']> } =>
+      !!message.attachment && !message.deletedAt &&
+      (message.attachment.type.startsWith('image/') || message.attachment.type.startsWith('video/'))
+  ), [renderedMessages]);
   const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
     if (!activeId || messagesLoading || !scrollBox.current ||
@@ -469,59 +563,52 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   }, [activeId, messages, threads, messagesLoading, atBottom, mobileOpened, visibilityTick, isConversationVisible, myId, loadMessages, loadThreads]);
 
   useEffect(() => {
-    let stream: EventSource | null = null;
-    let disposed = false;
-    const updateConnected = (connected: boolean) => {
-      realtimeConnected.current = connected;
-      if (disposed) return;
-    };
     const onReady = () => {
+      invalidateDmInbox();
       void loadThreads().catch(() => {});
       if (activeIdRef.current && isConversationVisible(activeIdRef.current))
         void loadMessages(activeIdRef.current).catch(() => {});
     };
-    const onDmUpdate = (event: Event) => {
-      try {
-        const data = JSON.parse((event as MessageEvent<string>).data) as { conversationId?: string; kind?: string };
-        if (data.kind === 'friendship-update') { clearProfileImageCache(); void loadThreads().catch(() => {}); return; }
-        if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind ?? '')) return;
-        const conversationId = data.conversationId;
-        const isOpen = isConversationVisible(conversationId);
-        void loadThreads().then(next => {
-          if (data.kind !== 'message' || isConversationVisible(conversationId)) return;
-          const peer = next.find(thread => thread.id === conversationId);
-          if (peer && peer.lastAuthorId !== myId) setIncoming({
-            id: peer.id, name: peer.peerName,
-            preview: peer.lastBody ?? (pt ? 'Nova mensagem' : 'New message'),
-          });
-        }).catch(() => {});
-        if (isOpen) void loadMessages(conversationId).catch(() => {});
-      } catch { /* malformed event cannot change state */ }
-    };
-    const connect = () => {
-      if (disposed || document.visibilityState === 'hidden' || stream || typeof EventSource === 'undefined') return;
-      stream = new EventSource('/api/v1/dm/events', { withCredentials: true });
-      stream.addEventListener('ready', onReady);
-      stream.addEventListener('dm-update', onDmUpdate);
-      stream.onopen = () => updateConnected(true);
-      stream.onerror = () => updateConnected(false);
-    };
-    const disconnect = () => {
-      updateConnected(false);
-      if (!stream) return;
-      stream.removeEventListener('ready', onReady);
-      stream.removeEventListener('dm-update', onDmUpdate);
-      stream.close();
-      stream = null;
-    };
-    const visibility = () => {
-      if (document.visibilityState === 'hidden') { disconnect(); return; }
-      connect(); onReady();
-    };
-    document.addEventListener('visibilitychange', visibility);
+    const unsubscribe = subscribeDmStream(data => {
+      if (data.kind === 'ready') { onReady(); return; }
+      if (data.kind === 'friendship-update') {
+        clearProfileImageCache(); invalidateDmInbox();
+        void loadThreads().catch(() => {}); return;
+      }
+      if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind)) return;
+      const conversationId = data.conversationId;
+      const isOpen = isConversationVisible(conversationId);
+      // Project a new message at once rather than waiting for an entire HTTP page.
+      if (data.kind === 'message' && data.message?.id && isOpen) {
+        const message: Message = { ...data.message, reactions: [], myReaction: null,
+          replyTo: data.message.replyToId
+            ? (messagesRef.current.find(item => item.id === data.message?.replyToId)
+              ? { ...messagesRef.current.find(item => item.id === data.message?.replyToId)!, deleted: false }
+              : null) : null };
+        setMessages(previous => {
+          if (previous.some(item => item.id === message.id)) return previous;
+          const updated = [...previous, message].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+          saveDmRoom(myId, conversationId, updated);
+          return updated;
+        });
+        setMessagesLoading(false);
+      }
+      invalidateDmInbox();
+      void loadThreads().then(next => {
+        if (data.kind !== 'message' || isConversationVisible(conversationId)) return;
+        const peer = next.find(thread => thread.id === conversationId);
+        if (peer && peer.lastAuthorId !== myId) setIncoming({
+          id: peer.id, name: peer.peerName,
+          preview: peer.lastBody ?? (pt ? 'Nova mensagem' : 'New message'),
+        });
+      }).catch(() => {});
+      // Rich events are already rendered; other mutations still require an
+      // authoritative read because the event carries no complete receipt state.
+      if (isOpen && (data.kind !== 'message' || !data.message?.id))
+        void loadMessages(conversationId).catch(() => {});
+    });
     window.addEventListener('uorqui:friends-updated', onReady);
-    connect();
-    return () => { disposed = true; document.removeEventListener('visibilitychange', visibility); window.removeEventListener('uorqui:friends-updated', onReady); disconnect(); };
+    return () => { unsubscribe(); window.removeEventListener('uorqui:friends-updated', onReady); };
   }, [loadThreads, loadMessages, isConversationVisible, myId, pt]);
   // Delivery is not reading: receiving an inbox update never clears the unread badge.
   const receiving = useRef(new Set<string>());
@@ -585,7 +672,11 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       await api('/api/v1/dm/conversations/' + id + '/messages/' + message.id, { method:'DELETE' });
       if(message.attachment)invalidateChatMedia('/media/dm/'+id+'/'+message.attachment.id);
       setCancelTarget(null);
-      setMessages(previous => previous.filter(item => item.id !== message.id));
+      setMessages(previous => {
+        const next = previous.filter(item => item.id !== message.id);
+        saveDmRoom(myId, id, next);
+        return next;
+      });
       if (editing?.id === message.id) cancelEdit();
       if (replySource?.id === message.id) setReplySource(null);
       await Promise.all([loadMessages(id),loadThreads()]);
@@ -624,37 +715,12 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     }
   }
   async function submitPending(pending: PendingMessage) {
-    setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'sending',statusUpdatedAt:new Date().toISOString()} : p));
     try {
-      if (pending.attachment) {
-        const file = pendingFiles.current.get(pending.clientId);
-        if (!file) throw new Error('MISSING_FILE');
-        const response = await fetch('/api/media/dm/' + pending.conversationId,{
-          method:'POST',credentials:'same-origin',cache:'no-store',
-          headers:{
-            'Content-Type':pending.attachment.type,
-            'x-uorqui-client-id':pending.clientId,
-            'x-uorqui-filename':encodeURIComponent(pending.attachment.name),
-            ...(pending.body ? {'x-uorqui-caption':encodeURIComponent(pending.body)} : {}),
-            ...(pending.replyToId ? {'x-uorqui-reply-to-id':pending.replyToId} : {}),
-          },
-          body:file,
-        });
-        if (!response.ok) throw new Error('UPLOAD_' + response.status);
-      } else {
-        await api('/api/v1/dm/conversations/' + pending.conversationId + '/messages', {
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({body:pending.body,clientId:pending.clientId,...(pending.replyToId ? {replyToId:pending.replyToId} : {})}),
-        });
-      }
-      if (activeIdRef.current === pending.conversationId) await loadMessages(pending.conversationId);
-      void loadThreads().catch(() => {});
-      setPendingMessages(prev => prev.filter(p => p.clientId !== pending.clientId));
-      pendingFiles.current.delete(pending.clientId);
-      const localUrl=pendingBlobUrls.current.get(pending.clientId);
-      if(localUrl) { pendingBlobUrls.current.delete(pending.clientId); URL.revokeObjectURL(localUrl); }
+      await enqueueDmMessage(myId, pending, pendingFiles.current.get(pending.clientId));
     } catch {
-      setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed',statusUpdatedAt:new Date().toISOString()} : p));
+      setPendingMessages(previous => previous.map(item => item.clientId === pending.clientId
+        ? { ...item, pendingStatus: 'failed', statusUpdatedAt: new Date().toISOString() } : item));
+      setChatError(pt ? 'Não foi possível salvar o envio no dispositivo.' : 'Could not save the message on this device.');
     }
   }
   function sendAttachment(file: File, caption: string) {
@@ -764,6 +830,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     try{
       await api('/api/v1/dm/conversations/'+encodeURIComponent(thread.id),{method:'DELETE'});
       clearChatMediaCache();
+      await clearDmConversation(myId, thread.id);
+      invalidateDmInbox();
       setPendingMessages(previous=>previous.filter(p=>p.conversationId!==thread.id));
       closeThread();setFilter('all');
       await loadThreads();
@@ -956,7 +1024,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                     onReact={(message, emoji) => void react(message, emoji)}
                     onRetry={message => {
                       const pending = pendingMessages.find(p => p.clientId === message.clientId);
-                      if (pending) void submitPending(pending);
+                      if (pending) void retryDmMessage(myId, pending.clientId).catch(() => submitPending(pending));
                     }}/>
                   {status && <div role="note" className="flex justify-center py-0.5">
                     <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1.5 rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">

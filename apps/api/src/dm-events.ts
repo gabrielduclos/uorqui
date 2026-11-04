@@ -4,7 +4,7 @@ import { getPool } from './db/client.js';
 const { Client } = pg;
 const CHANNEL = 'uorqui_dm_events';
 export type DmEventKind = 'message' | 'read' | 'conversation' | 'update' | 'received' | 'friendship-update' | 'notification';
-export type DmEvent = { userId: string; conversationId: string; kind: DmEventKind };
+export type DmEvent = { userId: string; conversationId: string; kind: DmEventKind; message?: Record<string, unknown> };
 type Subscriber = (event: Omit<DmEvent, 'userId'>) => void;
 
 // One dedicated PostgreSQL LISTEN connection per API process (never one per browser).
@@ -48,7 +48,7 @@ async function ensureListener(): Promise<void> {
               typeof event.conversationId !== 'string' ||
               !['message', 'read', 'conversation', 'update', 'received', 'friendship-update', 'notification'].includes(event.kind)) return;
           for (const subscriber of subscribers.get(event.userId) ?? []) {
-            try { subscriber({ kind: event.kind, conversationId: event.conversationId }); }
+            try { subscriber({ kind: event.kind, conversationId: event.conversationId, message: event.message }); }
             catch { /* ignore disconnected browser writer */ }
           }
         } catch { /* discard untrusted notification payloads */ }
@@ -85,16 +85,24 @@ export async function subscribeDmEvents(userId: string, callback: Subscriber): P
   };
 }
 
-export async function publishDmConversationEvent(conversationId: string, kind: DmEventKind): Promise<void> {
-  // Server-derived participants only; caller never supplies recipient IDs.
-  const members = await getPool().query<{ participant_a_id: string; participant_b_id: string }>(
-    'SELECT participant_a_id, participant_b_id FROM direct_conversations WHERE id=$1', [conversationId]);
-  if (!members.rows.length) return;
-  for (const userId of [members.rows[0].participant_a_id, members.rows[0].participant_b_id]) {
-    await getPool().query('SELECT pg_notify($1, $2)', [
-      CHANNEL, JSON.stringify({ userId, conversationId, kind } satisfies DmEvent),
-    ]);
-  }
+export async function publishDmConversationEvent(conversationId: string, kind: DmEventKind, message?: Record<string, unknown>): Promise<void> {
+  // One SQL round trip for membership lookup and both authenticated notifications.
+  // The API and Neon may run in different regions: avoid sequential Pg queries.
+  const testPayload = JSON.stringify({
+    userId: '00000000-0000-0000-0000-000000000000', conversationId, kind, message,
+  });
+  const compactMessage = message && Buffer.byteLength(testPayload, 'utf8') < 7500
+    ? JSON.stringify(message) : null;
+  await getPool().query(
+    `SELECT pg_notify($1, json_build_object(
+      'userId', participant.recipient, 'conversationId', $2::text, 'kind', $3::text,
+      'message', $4::jsonb
+    )::text)
+    FROM direct_conversations c
+    CROSS JOIN LATERAL unnest(ARRAY[c.participant_a_id, c.participant_b_id]) participant(recipient)
+    WHERE c.id=$2::uuid`,
+    [CHANNEL, conversationId, kind, compactMessage],
+  );
 }
 
 export async function closeDmEvents(): Promise<void> {
