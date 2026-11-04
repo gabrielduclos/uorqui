@@ -263,6 +263,6 @@ function load(url: string) {
 /** One Blob URL shared by the profile, header and conversation list. */
 export function useCachedProfileImage(url: string | null | undefined): string | null {
   const src=useSyncExternalStore(subscribe,()=>cachedUrl(url),()=>null);
-  useEffect(()=>{if(url)load(url);},[url]);
+  useEffect(()=>{if(url && !src)load(url);},[url,src]);
   return src;
 }
