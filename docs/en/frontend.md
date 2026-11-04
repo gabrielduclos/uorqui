@@ -19,6 +19,13 @@ Build a mobile-first interface for **discovering communities, participating in t
 
 Discover shortcuts navigate to the correct community/channel without joining a voice call automatically or prematurely marking messages read. New users without memberships see search, public recommendations and honest empty states. The API grounds all counts and enforces access controls.
 
+## Resume the last visited module
+
+- Once authenticated, reopen the last main module visited by the same account **on this browser/device**: Communities, Messages, Discover, Notifications, Profile, or Moderation (only when authorized).
+- The preference uses account-ID-scoped `localStorage`; on a new device or when storage is unavailable, Communities remains the default. No database migration or cross-device syncing is needed.
+- Explicit deep links to messages, notifications and communities, invitation links and push destinations **override** the stored selection. Unauthorized moderation falls back to Communities.
+- Automatic onboarding steps do not overwrite the last selected module; the initial tour may still finish on Communities.
+
 ## UI system
 
 - Prefer reusable **shadcn/ui (New York/Radix)** components and semantic **Tailwind CSS v4** tokens in `apps/web/src/styles.css`.

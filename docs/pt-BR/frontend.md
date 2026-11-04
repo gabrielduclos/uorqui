@@ -19,6 +19,13 @@ Interface mobile-first para **descobrir comunidades, participar de canais/salas 
 
 Em Descobrir, atalhos levam à comunidade e ao canal exato, sem ingressar automaticamente na chamada ou marcar mensagens como lidas. O usuário sem comunidades vê busca, recomendações públicas e estados vazios honestos. Privacidade e contagens são verificadas pela API.
 
+## Retomar a última área acessada
+
+- Depois de autenticar, a aplicação reabre a última área principal visitada pela mesma conta **neste navegador/dispositivo**: Comunidades, Conversas, Descobrir, Notificações, Perfil ou Moderação (somente com permissão).
+- A preferência é salva no `localStorage` com chave vinculada ao ID do usuário; em um dispositivo novo ou sem armazenamento disponível, a área padrão é Comunidades. Não requer alteração do banco ou sincronização entre dispositivos.
+- Links diretos de conversas, notificações e comunidades, convites recebidos e destinos de push **têm prioridade** sobre a preferência salva. Falta de acesso à Moderação retorna para Comunidades.
+- As etapas automáticas do onboarding não substituem a última área escolhida; o onboarding inicial continua podendo terminar em Comunidades.
+
 ## Design system
 
 - Preferir os componentes reutilizáveis **shadcn/ui (New York/Radix)** e tokens semânticos **Tailwind CSS v4** em `apps/web/src/styles.css`.

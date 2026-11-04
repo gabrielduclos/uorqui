@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Bell, Compass, LogOut, MessageCircle, ShieldCheck, Users,
@@ -36,6 +36,19 @@ export type SignedInAccount = {
 };
 type Area = 'discover' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
 
+// Remember the last main app module per account on this device. Direct links
+// and invitations remain authoritative over the restored selection.
+const rememberedAreas: readonly Area[] = ['discover', 'conversations', 'communities', 'notifications', 'profile', 'moderation'];
+const lastAreaKey = (userId: string) => 'uorqui:last-area:v1:' + userId;
+function readLastArea(userId: string): Area {
+  try {
+    const value = localStorage.getItem(lastAreaKey(userId));
+    return rememberedAreas.find(area => area === value) ?? 'communities';
+  } catch {
+    return 'communities';
+  }
+}
+
 const navigation = [
   { id: 'communities', label: 'Comunidades', icon: Users },
   { id: 'conversations', label: 'Conversas', icon: MessageCircle },
@@ -58,14 +71,23 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 }) {
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
-  const [area, setArea] = useState<Area>('communities');
-  const [platformModerator,setPlatformModerator]=useState(false);
+  const [area, setArea] = useState<Area>(() => readLastArea(account.user.id));
+  const areaAccountId = useRef(account.user.id);
+  const [platformModerator,setPlatformModerator]=useState<boolean | null>(null);
   useEffect(()=>{
     const controller=new AbortController();
     void fetch('/api/v1/moderation/access',{credentials:'same-origin',cache:'no-store',signal:controller.signal})
       .then(async response=>response.ok?response.json() as Promise<{moderator:boolean}>:{moderator:false})
-      .then(result=>{if(!controller.signal.aborted)setPlatformModerator(result.moderator===true);})
-      .catch(()=>{if(!controller.signal.aborted)setPlatformModerator(false);});
+      .then(result=>{
+        if(controller.signal.aborted)return;
+        setPlatformModerator(result.moderator===true);
+        if(!result.moderator)setArea(previous=>previous==='moderation'?'communities':previous);
+      })
+      .catch(()=>{
+        if(controller.signal.aborted)return;
+        setPlatformModerator(false);
+        setArea(previous=>previous==='moderation'?'communities':previous);
+      });
     return ()=>controller.abort();
   },[account.user.id]);
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
@@ -80,6 +102,19 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     try{return localStorage.getItem(onboardingStorageKey(account.user.id))!=='done';}catch{return true;}
   });
   useEffect(()=>{if(deferOnboarding)setTourVisible(false);},[deferOnboarding]);
+  useEffect(() => {
+    // The shell can survive a session change. Never write one account's module
+    // into another account's preference.
+    if (areaAccountId.current !== account.user.id) {
+      areaAccountId.current = account.user.id;
+      setArea(readLastArea(account.user.id));
+      return;
+    }
+    // Tour steps navigate automatically and must not overwrite this preference.
+    if (tourVisible) return;
+    try { localStorage.setItem(lastAreaKey(account.user.id), area); }
+    catch { /* Private browsing or blocked storage: keep normal navigation. */ }
+  }, [area, account.user.id, tourVisible]);
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
@@ -251,6 +286,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               items={activity.items} unread={activity.unread} loading={activity.loading}
               error={activity.error} onRefresh={()=>void activity.refresh()}
               onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>}
+            {area === 'moderation' && platformModerator === null && <div className="grid h-full place-items-center"><Spinner /></div>}
             {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">

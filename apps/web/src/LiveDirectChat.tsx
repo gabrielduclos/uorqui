@@ -1023,7 +1023,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                     }}/>
                   {status && <div role="note" className="flex justify-center py-0.5">
                     <time dateTime={status.updatedAt} className="inline-flex rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
-                      {status.label}
+                      {status.label} {pt ? 'às' : 'at'} {formatTime(status.updatedAt, locale)}
                     </time>
                   </div>}
                 </div>;
