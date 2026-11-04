@@ -365,6 +365,62 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     return () => { alive = false; window.clearInterval(timer); };
   }, [activeId, loadMessages, pt, myId]);
 
+  useEffect(() => {
+    let mounted = true;
+    void listDmCommands(myId).then(commands => {
+      if (!mounted) return;
+      const restored: PendingMessage[] = commands.map(command => {
+        const pending = { ...command.pending,
+          pendingStatus: command.state === 'failed' ? 'failed' as const : 'sending' as const };
+        if (command.file && pending.attachment) {
+          const url = URL.createObjectURL(command.file);
+          const old = pendingBlobUrls.current.get(pending.clientId);
+          if (old) URL.revokeObjectURL(old);
+          pendingBlobUrls.current.set(pending.clientId, url);
+          pendingFiles.current.set(pending.clientId, command.file);
+          pending.attachmentUrl = url;
+        }
+        return pending;
+      });
+      setPendingMessages(previous => {
+        const known = new Set(previous.map(item => item.clientId));
+        return [...previous, ...restored.filter(item => !known.has(item.clientId))];
+      });
+    }).catch(() => {});
+    const onOutbox = (event: Event) => {
+      const update = (event as CustomEvent<DmOutboxUpdate>).detail;
+      if (!update || update.accountId !== myId) return;
+      if (update.state === 'sent') {
+        if (update.message && typeof update.message === 'object' &&
+            'id' in update.message && typeof update.message.id === 'string' &&
+            activeIdRef.current === update.conversationId) {
+          const confirmed = { ...(update.message as Message), reactions: [], myReaction: null };
+          setMessages(previous => {
+            if (previous.some(item => item.id === confirmed.id)) return previous;
+            const next = [...previous, confirmed].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+            saveDmRoom(myId, update.conversationId, next);
+            return next;
+          });
+        } else if (activeIdRef.current === update.conversationId) {
+          void loadMessages(update.conversationId).catch(() => {});
+        }
+        setPendingMessages(previous => previous.filter(item => item.clientId !== update.clientId));
+        pendingFiles.current.delete(update.clientId);
+        const url = pendingBlobUrls.current.get(update.clientId);
+        if (url) { pendingBlobUrls.current.delete(update.clientId); URL.revokeObjectURL(url); }
+        invalidateDmInbox();
+        void loadThreads().catch(() => {});
+        return;
+      }
+      setPendingMessages(previous => previous.map(item =>
+        item.clientId === update.clientId
+          ? { ...item, pendingStatus: update.state === 'failed' ? 'failed' : 'sending',
+            statusUpdatedAt: new Date().toISOString() } : item));
+    };
+    window.addEventListener('uorqui:dm-outbox', onOutbox);
+    return () => { mounted = false; window.removeEventListener('uorqui:dm-outbox', onOutbox); };
+  }, [myId, loadThreads, loadMessages]);
+
   const jumpToLast = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const node = scrollBox.current;
     if (!node) return;
@@ -641,37 +697,12 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     }
   }
   async function submitPending(pending: PendingMessage) {
-    setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'sending',statusUpdatedAt:new Date().toISOString()} : p));
     try {
-      if (pending.attachment) {
-        const file = pendingFiles.current.get(pending.clientId);
-        if (!file) throw new Error('MISSING_FILE');
-        const response = await fetch('/api/media/dm/' + pending.conversationId,{
-          method:'POST',credentials:'same-origin',cache:'no-store',
-          headers:{
-            'Content-Type':pending.attachment.type,
-            'x-uorqui-client-id':pending.clientId,
-            'x-uorqui-filename':encodeURIComponent(pending.attachment.name),
-            ...(pending.body ? {'x-uorqui-caption':encodeURIComponent(pending.body)} : {}),
-            ...(pending.replyToId ? {'x-uorqui-reply-to-id':pending.replyToId} : {}),
-          },
-          body:file,
-        });
-        if (!response.ok) throw new Error('UPLOAD_' + response.status);
-      } else {
-        await api('/api/v1/dm/conversations/' + pending.conversationId + '/messages', {
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({body:pending.body,clientId:pending.clientId,...(pending.replyToId ? {replyToId:pending.replyToId} : {})}),
-        });
-      }
-      if (activeIdRef.current === pending.conversationId) await loadMessages(pending.conversationId);
-      void loadThreads().catch(() => {});
-      setPendingMessages(prev => prev.filter(p => p.clientId !== pending.clientId));
-      pendingFiles.current.delete(pending.clientId);
-      const localUrl=pendingBlobUrls.current.get(pending.clientId);
-      if(localUrl) { pendingBlobUrls.current.delete(pending.clientId); URL.revokeObjectURL(localUrl); }
+      await enqueueDmMessage(myId, pending, pendingFiles.current.get(pending.clientId));
     } catch {
-      setPendingMessages(prev => prev.map(p => p.clientId === pending.clientId ? {...p,pendingStatus:'failed',statusUpdatedAt:new Date().toISOString()} : p));
+      setPendingMessages(previous => previous.map(item => item.clientId === pending.clientId
+        ? { ...item, pendingStatus: 'failed', statusUpdatedAt: new Date().toISOString() } : item));
+      setChatError(pt ? 'Não foi possível salvar o envio no dispositivo.' : 'Could not save the message on this device.');
     }
   }
   function sendAttachment(file: File, caption: string) {
@@ -781,6 +812,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     try{
       await api('/api/v1/dm/conversations/'+encodeURIComponent(thread.id),{method:'DELETE'});
       clearChatMediaCache();
+      await clearDmConversation(myId, thread.id);
+      invalidateDmInbox();
       setPendingMessages(previous=>previous.filter(p=>p.conversationId!==thread.id));
       closeThread();setFilter('all');
       await loadThreads();
@@ -973,7 +1006,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                     onReact={(message, emoji) => void react(message, emoji)}
                     onRetry={message => {
                       const pending = pendingMessages.find(p => p.clientId === message.clientId);
-                      if (pending) void submitPending(pending);
+                      if (pending) void retryDmMessage(myId, pending.clientId).catch(() => submitPending(pending));
                     }}/>
                   {status && <div role="note" className="flex justify-center py-0.5">
                     <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1.5 rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
