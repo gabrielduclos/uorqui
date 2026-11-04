@@ -32,6 +32,7 @@ Discover shortcuts navigate to the correct community/channel without joining a v
 - Use **Motion** for brief transitions; respect `prefers-reduced-motion`.
 - Shared components are in `apps/web/src/components/ui/`; the [UI Kit](ui-kit.md) is **documentation only**.
 - Fixed headers, keyboard-safe mobile navigation and iOS safe areas, accessible focus/tap controls, PT/EN localization and Light/Dark themes.
+- In direct and channel message composers, opening the emoji picker **must not open the soft keyboard** if it is closed. If the text field is already focused and the keyboard is open, tapping, selecting, or closing the picker **must not blur the field or dismiss the keyboard**. Selecting an emoji inserts the character without forcing focus; physical keyboard navigation stays available.
 - Skeletons for initial loads and per-action spinners for backend work. Background refresh must preserve visible content.
 - Do not simulate presence, counts, badges or recommended communities as real data.
 

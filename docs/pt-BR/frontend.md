@@ -32,6 +32,7 @@ Em Descobrir, atalhos levam à comunidade e ao canal exato, sem ingressar automa
 - **Motion** para transições curtas, respeitando `prefers-reduced-motion`.
 - Componentes em `apps/web/src/components/ui/`. O [UI Kit](ui-kit.md) é **somente documentação**.
 - Cabeçalhos fixos; navegação mobile adaptada ao teclado e safe areas; controle de foco e toque confortável; tradução PT/EN e temas Light/Dark.
+- No compositor de conversas individuais e canais, abrir o seletor de emojis **não ativa o teclado** quando ele está fechado; se o campo de mensagem já estiver focado com o teclado aberto, tocar em emojis, selecionar ou fechar o seletor **não deve desfocar o campo nem fechar o teclado**. A escolha do emoji insere o caractere sem forçar foco. O seletor permanece acessível por teclado físico.
 - Skeleton nos carregamentos iniciais e spinners em ações dependentes da API. Atualizações em segundo plano não apagam dados já exibidos.
 - Atividades, presenças, badges e recomendações não devem ser simulados como reais.
 

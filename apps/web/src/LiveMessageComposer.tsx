@@ -349,6 +349,8 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     <div className="relative shrink-0">
       <button type="button" aria-label={pt ? 'Abrir lista de emojis' : 'Open emoji picker'}
         aria-expanded={emojiOpen} aria-haspopup="dialog"
+        // Pointer activation must not blur the composer (and dismiss its mobile keyboard).
+        onPointerDown={event => event.preventDefault()}
         onClick={() => { setEmojiOpen(v => !v); setAttachmentsOpen(false); }}
         className="grid size-11 lg:size-12 place-items-center text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
         <Smile className="size-5"/>
@@ -358,6 +360,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         <div className="mb-1 flex items-center justify-between">
           <p className="text-xs font-semibold">{pt ? 'Emojis' : 'Emojis'}</p>
           <button type="button" aria-label={pt ? 'Fechar emojis' : 'Close emojis'}
+            onPointerDown={event => event.preventDefault()}
             onClick={() => setEmojiOpen(false)} className="grid size-8 place-items-center hover:bg-accent">
             <X className="size-4"/>
           </button>
@@ -366,8 +369,8 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
           <p className="mb-1 text-xs text-muted-foreground">{pt ? group.pt : group.en}</p>
           <div className="grid grid-cols-6 gap-1">
             {group.symbols.map(emoji => <button type="button" key={emoji}
-              aria-label={emoji} onMouseDown={event => event.preventDefault()}
-              onClick={() => { onChange(value + emoji); textareaRef.current?.focus({ preventScroll: true }); }}
+              aria-label={emoji} onPointerDown={event => event.preventDefault()}
+              onClick={() => { onChange(value + emoji); }}
               className="grid size-8 place-items-center text-base leading-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{emoji}</button>)}
           </div>
         </section>)}
