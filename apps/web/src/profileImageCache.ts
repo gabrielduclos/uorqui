@@ -182,7 +182,8 @@ export function clearProfileImageCache(): Promise<void> {
 /** Called when an avatar or cover is replaced or removed. */
 export function invalidateProfileImage(url: string | null | undefined) {
   if (!url) return;
-  generation++;
+  // Evicting this URL invalidates its in-flight request without disrupting
+  // unrelated avatar downloads for the current account.
   evict(url);
   emit();
   if (activeAccount) void removeStored(activeAccount,url);
