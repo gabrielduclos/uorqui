@@ -21,7 +21,7 @@ export function CommunityMessageAttachment({attachment,src,locale}:{attachment:C
     </button>:isVideo?<video src={visible} controls playsInline preload="metadata" className="max-h-72 max-w-full rounded-xl border border-border"/>:
       isAudio?<div className="max-w-sm"><ChatAudioPlayer src={src}/></div>:
       <a href={src} download={attachment.name} className="flex max-w-sm items-center gap-2 rounded-xl border border-border bg-secondary/40 p-3 text-sm hover:bg-secondary">
-        <FileText className="size-5 shrink-0 text-primary"/><span className="min-w-0 flex-1 truncate">{attachmentLabel(type,locale)}</span><Download className="size-4 shrink-0"/>
+        <FileText className="size-5 shrink-0 text-primary"/><span className="min-w-0 flex-1 truncate" title={attachment.name}>{attachment.name || attachmentLabel(type,locale)}</span><Download className="size-4 shrink-0"/>
       </a>}
     {expanded&&isImage&&typeof document!=='undefined'&&createPortal(
       <div className="fixed inset-0 z-[150] flex flex-col bg-black/95 text-white" role="dialog" aria-modal="true"
