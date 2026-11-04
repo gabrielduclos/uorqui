@@ -78,7 +78,7 @@ async function process(command: DmCommand) {
     };
     await saveDmCommand(next).catch(() => {});
     announce(next, permanent ? 'failed' : 'queued');
-    if (!permanent) schedule(command.accountId, Math.max(1000, next.nextAttemptAt - Date.now()));
+    // The next flush also services other ready commands before scheduling this retry.
   } finally {
     processing.delete(key);
     if (activeAccounts.has(command.accountId)) schedule(command.accountId, 250);
