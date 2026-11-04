@@ -224,6 +224,11 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
               <FileText className="size-5 shrink-0"/><span className="min-w-0 flex-1 truncate text-xs" title={asset.name}>{asset.name || mediaLabel}</span>
               <Download className="size-4 shrink-0"/>
             </a>}
+          {mine && message.pendingStatus === 'sending' && <span role="status"
+              aria-label={pt?'Enviando anexo':'Uploading attachment'}
+              className="mt-1 inline-flex items-center gap-1.5 text-[11px] opacity-80">
+              <Spinner className="size-3.5"/>{pt?'Enviando mídia':'Uploading media'}
+            </span>}
         </div>}
         {mapHref && !message.deletedAt && <a href={mapHref} target="_blank" rel="noopener noreferrer"
           className="mb-2 flex items-center gap-2 border border-current/25 bg-current/5 px-3 py-3 hover:underline"
