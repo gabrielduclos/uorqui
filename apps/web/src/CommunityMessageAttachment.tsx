@@ -13,7 +13,9 @@ export function CommunityMessageAttachment({attachment,src,locale}:{attachment:C
   const type=attachment.type,pt=locale==='pt-BR';
   const isImage=type.startsWith('image/'),isVideo=type.startsWith('video/'),isAudio=type.startsWith('audio/');
   const cached=useCachedChatMedia(src,isImage||isVideo);
-  const visible=cached||src;
+  // Do not fetch the same private image/video twice through both <img>/<video> and the media cache.
+  const privateMedia=/^\/media\/(?:dm|community-attachment)\//.test(src);
+  const visible=cached || (privateMedia ? null : src);
   const [imageReadySrc,setImageReadySrc]=useState<string|null>(null);
   const [imageFailedSrc,setImageFailedSrc]=useState<string|null>(null);
   const [videoReadySrc,setVideoReadySrc]=useState<string|null>(null);
@@ -21,7 +23,7 @@ export function CommunityMessageAttachment({attachment,src,locale}:{attachment:C
   return <div className="mt-2 min-w-0 max-w-full">
     {isImage?<button type="button" onClick={()=>setExpanded(true)} className="group relative block min-h-32 min-w-36 max-w-full overflow-hidden rounded-xl border border-border"
       aria-label={pt?'Ampliar imagem':'Expand image'}>
-      <img src={visible} alt={attachmentLabel(type,locale)} loading="lazy"
+      <img src={visible ?? undefined} alt={attachmentLabel(type,locale)} loading="lazy"
         onLoad={()=>setImageReadySrc(visible)} onError={()=>setImageFailedSrc(visible)}
         className="max-h-72 max-w-full object-contain"/>
       {imageReadySrc!==visible&&imageFailedSrc!==visible&&
@@ -30,7 +32,7 @@ export function CommunityMessageAttachment({attachment,src,locale}:{attachment:C
         </span>}
       {imageReadySrc===visible&&<Maximize2 className="absolute right-2 top-2 size-6 rounded bg-black/60 p-1 text-white opacity-80 group-hover:opacity-100"/>}
     </button>:isVideo?<div className="relative inline-block min-h-32 min-w-36 max-w-full">
-      <video src={visible} controls playsInline preload="metadata"
+      <video src={visible ?? undefined} controls playsInline preload="metadata"
         onLoadedMetadata={()=>setVideoReadySrc(visible)} onError={()=>setVideoFailedSrc(visible)}
         className="max-h-72 max-w-full rounded-xl border border-border"/>
       {videoReadySrc!==visible&&videoFailedSrc!==visible&&
