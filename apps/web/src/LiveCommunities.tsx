@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog } from 'radix-ui';
 import { VoicePortalShell } from './VoicePortalShell';
@@ -227,14 +227,23 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const scrollRef=useRef<HTMLDivElement>(null);
+  const messageContentRef=useRef<HTMLDivElement>(null);
+  const followBottomRef=useRef(true);
   const composerRef=useRef<HTMLTextAreaElement>(null);
   const pendingFiles=useRef(new Map<string,File>());
   const pendingBlobUrls=useRef(new Map<string,string>());
   const previousLastMessage=useRef<string|null>(null);
   const previousMessageCount=useRef(0);
   const activeScrollKey=useRef<string|null>(null);
-  const scrollPositions=useRef(new Map<string,{top:number;atBottom:boolean}>());
   const acknowledged=useRef(new Map<string,string>());
+  // Reopening a channel always begins with its newest message. Scrolling
+  // through history during an open session still remains under user control.
+  useEffect(()=>{
+    if(!channelOpen || !active){
+      activeScrollKey.current=null;
+      followBottomRef.current=true;
+    }
+  },[channelOpen,active]);
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
   const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
@@ -516,25 +525,29 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     };
   },[myId,selectedId,channelId,activeChannel?.kind,activeChannel?.hasPassword,activeChannel?.unlocked,community?.myRole]);
 
-  useEffect(()=>{
+  useLayoutEffect(()=>{
     const element=scrollRef.current;
     const key=currentMessageKey;
-    if(!element||!key||messagesForKey!==key||messagesLoading)return;
+    if(!active||!channelOpen||!element||!key||messagesForKey!==key||messagesLoading)return;
     const latest=messages.at(-1)?.id??null;
     if(activeScrollKey.current!==key){
       activeScrollKey.current=key;
       previousLastMessage.current=latest;
       previousMessageCount.current=messages.length;
+      followBottomRef.current=true;
       setNewBelow(0);
-      const saved=scrollPositions.current.get(key);
+      // Position before paint, then again after mobile/PWA layout settles.
+      element.scrollTop=element.scrollHeight;
       const frame=window.requestAnimationFrame(()=>{
-        element.scrollTop=saved&&!saved.atBottom?saved.top:element.scrollHeight;
+        if(scrollRef.current===element&&activeScrollKey.current===key)
+          element.scrollTop=element.scrollHeight;
       });
       return ()=>window.cancelAnimationFrame(frame);
     }
     if(latest&&latest!==previousLastMessage.current){
       const distance=element.scrollHeight-element.scrollTop-element.clientHeight;
-      if(distance<180){
+      if(followBottomRef.current||distance<180){
+        followBottomRef.current=true;
         element.scrollTo({top:element.scrollHeight,behavior:previousLastMessage.current?'smooth':'instant'});
       }else if(previousLastMessage.current){
         setNewBelow(old=>old+Math.max(1,messages.length-previousMessageCount.current));
@@ -542,7 +555,41 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     }
     previousLastMessage.current=latest;
     previousMessageCount.current=messages.length;
-  },[messages,selectedId,channelId,messagesForKey,messagesLoading,currentMessageKey]);
+  },[active,channelOpen,messages,selectedId,channelId,messagesForKey,messagesLoading,currentMessageKey]);
+
+  // Image previews and GIFs may expand after channel data is painted. Keep
+  // the bottom anchored only while the reader has not scrolled away.
+  useLayoutEffect(()=>{
+    const element=scrollRef.current,content=messageContentRef.current;
+    const key=currentMessageKey;
+    if(!active||!channelOpen||!element||!content||!key||messagesForKey!==key||messagesLoading)return;
+    let previousHeight=element.scrollHeight;
+    let frame=0;
+    const pin=()=>{
+      const height=element.scrollHeight;
+      const grew=height>previousHeight;
+      const wasNearBottom=previousHeight-element.scrollTop-element.clientHeight<110;
+      previousHeight=height;
+      if(!followBottomRef.current && !(grew&&wasNearBottom))return;
+      window.cancelAnimationFrame(frame);
+      frame=window.requestAnimationFrame(()=>{
+        if(scrollRef.current===element&&activeScrollKey.current===key)
+          element.scrollTop=element.scrollHeight;
+      });
+    };
+    let observer:ResizeObserver|null=null;
+    if(typeof ResizeObserver!=='undefined'){
+      observer=new ResizeObserver(pin);
+      observer.observe(content);
+      observer.observe(element);
+    }
+    const openingFrame=window.requestAnimationFrame(pin);
+    return ()=>{
+      observer?.disconnect();
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(openingFrame);
+    };
+  },[active,channelOpen,currentMessageKey,messagesForKey,messagesLoading,voiceTextExpanded]);
   useEffect(()=>{
     if(activeChannel?.kind==='text'||!voiceTextExpanded)return;
     const frame=window.requestAnimationFrame(()=>{
@@ -1252,7 +1299,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               const element=event.currentTarget,key=currentMessageKey;
               if(!key||messagesForKey!==key)return;
               const atBottom=element.scrollHeight-element.scrollTop-element.clientHeight<110;
-              scrollPositions.current.set(key,{top:element.scrollTop,atBottom});
+              followBottomRef.current=atBottom;
               if(atBottom)setNewBelow(old=>old?0:old);
             }}
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
@@ -1265,7 +1312,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
             </div>}
-            <div className="space-y-1.5">{renderedMessages.map((message,index)=><div key={message.clientId}
+            <div ref={messageContentRef} className="space-y-1.5">{renderedMessages.map((message,index)=><div key={message.clientId}
               className={cn('flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20',groupedWithPrevious(renderedMessages,index)&&'py-0.5')}>
               {groupedWithPrevious(renderedMessages,index)?<span aria-hidden="true" className="w-8 shrink-0"/>:
                 <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>}
