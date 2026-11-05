@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Uorqui — Novo workspace',
-  description: 'Base nova e independente para o sistema de comunicação empresarial.',
+  title: 'Uorqui — Workspace',
+  description: 'Uorqui: comunicação corporativa organizada em canais, mensagens, reuniões e clientes.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
