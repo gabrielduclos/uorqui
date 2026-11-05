@@ -46,7 +46,10 @@ async function requestMail<T>(path: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange: (open: boolean) => void }) {
+export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
+  onMobileOpenChange: (open: boolean) => void;
+  requestedMessage?: { accountId: string; messageId: string; nonce: number } | null;
+}) {
   const { locale } = useUorquiPreferences(), pt = locale === 'pt-BR';
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
   const [providers, setProviders] = useState<Accounts['providers']>([]);
@@ -94,6 +97,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const [draft, setDraft] = useState({ to: '', subject: '', body: '' });
   const [sendError, setSendError] = useState('');
   const detailAbort = useRef<AbortController | null>(null);
+  const openedMailLink = useRef<number | null>(null);
   const account = accounts.find(item => item.id === accountId);
   const open = Boolean(selected || compose);
   useEffect(() => { onMobileOpenChange(open); return () => onMobileOpenChange(false); }, [open, onMobileOpenChange]);
@@ -166,6 +170,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
       setManualDraft(previous => ({...previous, password: '', smtpPassword: ''}));
       setManualFormOpen(false); setConnectPicker(false); setNotice('connected');
       setAccountRefresh(value => value + 1);
+      window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
     } catch (error) {
       setError(error instanceof Error && error.message === 'MAIL_MANUAL_INVALID'
         ? (pt ? 'Confira os dados: IMAP TLS usa porta 993; SMTP TLS usa 465, 587 ou 2525.' : 'Check your settings: IMAP TLS uses port 993; SMTP TLS uses 465, 587 or 2525.')
@@ -176,16 +181,15 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   async function disconnect() {
     if (!account || disconnecting || !window.confirm(pt ? 'Desconectar ' + account.email + '? Seus emails continuarão no provedor.' : 'Disconnect ' + account.email + '? Your email will remain with the provider.')) return;
     setDisconnecting(true); setError('');
-    try { await requestMail('accounts/' + account.id, { method: 'DELETE' }); resetList(); setAccountId(''); setAccounts([]); setAccountRefresh(value => value + 1); }
+    try { await requestMail('accounts/' + account.id, { method: 'DELETE' }); resetList(); setAccountId(''); setAccounts([]); setAccountRefresh(value => value + 1); window.dispatchEvent(new Event('uorqui:mail-unread-refresh')); }
     catch (error) { setError(explainError(error)); }
     finally { setDisconnecting(false); }
   }
-  async function showMessage(message: Message) {
+  async function showMessage(message: Message, chosenAccount = accountId) {
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
     setCompose(false); setReplying(false); setReplyBody('');
     setSelected(message); setLoadingBody(true); setError('');
-    const chosenAccount = accountId;
     try {
       const data = await requestMail<Message>('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id), { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -197,6 +201,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
           if (controller.signal.aborted) return;
           setMessages(old => old.map(row => row.id === data.id ? { ...row, unread: false } : row));
           setSelected(old => old?.id === data.id ? { ...old, unread: false } : old);
+          window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:1}}));
         } catch {
           if (!controller.signal.aborted)
             setError(pt ? 'Mensagem aberta, mas não foi possível marcá-la como lida. Reconecte a conta para conceder permissão de edição.'
@@ -206,6 +211,23 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     } catch (error) { if (!controller.signal.aborted) setError(explainError(error)); }
     finally { if (!controller.signal.aborted) setLoadingBody(false); }
   }
+  // Push clicks may arrive while the inbox is closed, or switch between linked accounts.
+  // Open the actual provider message by ID; do not depend on the first page of the inbox.
+  useEffect(() => {
+    if (!requestedMessage || loadingAccounts || openedMailLink.current === requestedMessage.nonce) return;
+    openedMailLink.current = requestedMessage.nonce;
+    if (!accounts.some(item => item.id === requestedMessage.accountId)) {
+      setError(pt ? 'A conta deste e-mail não está conectada.' : 'This email account is not connected.');
+      return;
+    }
+    resetList();
+    setFolder('inbox'); setFilter('all'); setAccountId(requestedMessage.accountId);
+    void showMessage({
+      id: requestedMessage.messageId, from:'', to:'', subject:'', preview:'',
+      date:new Date().toISOString(), unread:false, starred:false,
+    },requestedMessage.accountId);
+  }, [requestedMessage?.nonce, loadingAccounts, accounts]);
+
   async function submit(event: FormEvent) {
     event.preventDefault(); if (sending || !account) return;
     setSending(true); setSendError('');
@@ -249,6 +271,10 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
       const moved = new Set(result.moved.filter(id => ids.includes(id)));
       const failed = ids.filter(id => !moved.has(id));
       if (moved.size) {
+        if (folder === 'inbox') {
+          const unreadMoved = messages.filter(message => message.unread && moved.has(message.id)).length;
+          if (unreadMoved) window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:unreadMoved}}));
+        }
         setMessages(previous => previous.filter(message => !moved.has(message.id)));
         if (selected && moved.has(selected.id)) closeDetail();
       }
