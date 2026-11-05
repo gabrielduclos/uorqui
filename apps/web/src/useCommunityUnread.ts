@@ -35,7 +35,7 @@ export function useCommunityUnread(){
         const channels={...old.channels},communities={...old.communities};
         delete channels[ids.channelId];
         communities[ids.communityId]=Math.max(0,(communities[ids.communityId]??0)-previous);
-        return {total:Math.max(0,old.total-previous),channels,communities,
+        return {...old,total:Math.max(0,old.total-previous),channels,communities,
           locations:old.locations.filter(location=>location.channelId!==ids.channelId),invites:old.invites};
       });
       void refresh();
