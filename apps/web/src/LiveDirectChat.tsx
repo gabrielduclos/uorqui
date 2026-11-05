@@ -939,14 +939,14 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const archivedThreads = threads.filter(c=>c.archived).length;
 
   return <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-    <section data-uorqui-inbox-list ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
+    <section data-uorqui-inbox-list data-uorqui-dm-list ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
       'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-background md:flex md:w-[340px] md:shrink-0 xl:w-[380px]',
       mobileOpened ? 'hidden' : 'flex'
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-3">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div><h2 className="text-lg font-semibold tracking-tight">{listView === 'contacts' ? (pt ? 'Amigos' : 'Friends') : (pt ? 'Mensagens' : 'Messages')}</h2>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Tudo perto. Tudo em um lugar.' : 'Close conversations, all in one place.'}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Mensagens individuais' : 'Direct messages'}</p>
           </div>
 
         </div>
@@ -1000,8 +1000,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <UserPlus className="size-4 shrink-0 text-muted-foreground"/>
           </button>)}
         </>}
-        {visibleThreads.map((thread,index) => <button type="button" key={thread.id} onClick={() => openThread(thread.id)}
-          className={cn('relative flex min-h-[68px] w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+        {visibleThreads.map((thread,index) => <button data-uorqui-dm-row type="button" key={thread.id} onClick={() => openThread(thread.id)}
+          className={cn('relative flex min-h-[60px] w-full touch-manipulation items-center gap-3 rounded-md px-3 py-2 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-secondary/70 max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
             index<visibleThreads.length-1 && "after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0 after:h-px after:bg-border/50",
             activeId === thread.id && mobileOpened && 'bg-secondary')}
           aria-current={activeId === thread.id && mobileOpened ? 'true' : undefined}>
