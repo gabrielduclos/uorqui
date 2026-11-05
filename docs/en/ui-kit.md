@@ -155,3 +155,15 @@ This is a **visual migration only**: React/Vite, Fastify/Render, Better Auth, Ne
 - **Never place** sessions, API data, auth, `/media/*`, chat attachments or cross-origin content in shared Service Worker/Cache Storage. Private attachments have no persistent disk cache and are fetched with the Worker's permission checks. No unread/read status changes occur during media preloading.
 
 Verify avatar reuse across screens, logout/account switch purging, real chat media playback and attachment downloads, both themes, mobile/desktop, and frontend/Worker builds.
+
+
+## Private chat cache — browser security (2026-11-05)
+
+- Direct-message and private channel attachments remain in **tab memory only**, using temporary Blob URLs. They are never written to IndexedDB, Cache Storage, localStorage, or the Service Worker; the Worker retains `Cache-Control: private, no-store` and checks access on each HTTP request.
+- The in-memory cache is now **bound to the authenticated account**. Logging out or switching accounts aborts in-flight downloads and revokes object URLs. Revoked messages and deleted conversations also clear cached media.
+- Nearby audio notes preload with bounded concurrency; the player avoids eager metadata downloads, reuses RAM blobs, and still invokes `play()` synchronously within the user gesture for Safari iOS.
+- Expanded private images await the existing cached blob rather than launching parallel image fetches. Videos and downloads reuse any available in-tab entry.
+- Limits remain 32–96 MiB depending on device memory, 42 entries, 24 MiB per item and 90 minutes. Oversized files use the authorized endpoint.
+- **Caveat:** media visible during an authenticated session can still be inspected by anyone controlling that browser/profile. Private attachments do not persist after a tab is closed. Persisted **avatar** storage is separate and follows a different policy.
+
+Manually test iOS Safari and desktop audio/video playback, image viewers, PDFs, account switches and logout, and confirm `/media/dm/*` never reaches Cache Storage/IndexedDB.
