@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { useUorquiPreferences } from './UorquiPreferences';
+import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
 type Provider = 'gmail' | 'outlook';
 type MailAccount = { id: string; provider: Provider; email: string };
@@ -164,7 +165,8 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.') : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.') : (pt ? 'Não foi possível conectar a conta. Tente novamente.' : 'Could not connect your account. Please try again.')}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
         {error && <div role="alert" className="m-3 rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" className="mt-2" onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}>{pt ? 'Tentar novamente' : 'Retry'}</Button></div>}
-        {(loadingAccounts || (loading && !messages.length)) && <div role="status" aria-label={pt ? 'Carregando emails' : 'Loading email'} className="space-y-5 p-4">{[0, 1, 2, 3].map(i => <div key={i} className="animate-pulse space-y-3"><div className="h-3 w-1/2 rounded bg-muted" /><div className="h-3 w-4/5 rounded bg-muted" /><div className="h-3 w-3/5 rounded bg-muted" /></div>)}</div>}
+        {(loadingAccounts || (loading && !messages.length)) &&
+          <WorkspaceContentLoading label={pt?'Carregando emails':'Loading emails'} rows={4} className="p-4"/>}
         {!loadingAccounts && !account && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
           <h2 className="font-medium">{pt ? 'Seu email, por perto' : 'Your email, close by'}</h2>
           <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail ou Outlook para acompanhar sua caixa de entrada e enviar emails sem sair do Uorqui.' : 'Connect Gmail or Outlook to follow your inbox and send email from Uorqui.'}</p>
@@ -197,9 +199,9 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
       </form> : selected ? <>
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
           <span className="truncate text-xs text-muted-foreground">{account?.email}</span><Button size="sm" variant="ghost" onClick={startCompose} className="gap-2"><Plus className="size-4" />{pt ? 'Novo' : 'New'}</Button></header>
-        <article className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
+        <article key={selected.id} className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
-          {loadingBody ? <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner className="size-4" />{pt ? 'Carregando mensagem…' : 'Loading message…'}</div> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
+          {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
         </article>
       </> : <div className="flex min-h-0 flex-1 items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl border border-border bg-card"><Mail className="size-6 text-muted-foreground" /></div>
         <h2 className="mt-5 text-lg font-medium tracking-tight">{pt ? 'Um espaço para cada conversa' : 'A space for every conversation'}</h2>
