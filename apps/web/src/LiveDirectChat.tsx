@@ -262,7 +262,6 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   }, [search]);
 
   const openThread = useCallback((id: string) => {
-    setListView('conversations');
     setConversationMenuOpen(false);setConversationConfirm(null);
     setActiveId(id);
     try{navigator.serviceWorker?.controller?.postMessage({type:'uorqui:clear-dm-push',conversationId:id});}catch{}
