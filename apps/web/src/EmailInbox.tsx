@@ -275,10 +275,31 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
             onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}><RefreshCw className="size-4" /></Button>
             <Button size="icon" variant="ghost" aria-label={pt ? 'Novo email' : 'New email'} disabled={!account} onClick={startCompose}><Plus className="size-4" /></Button></div>
         </div>
-        {account && <div className="flex items-center gap-1"><select aria-label={pt ? 'Conta de email' : 'Email account'} value={accountId} disabled={sending}
-          onChange={event => { resetList(); setAccountId(event.target.value); }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
-          {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
-        </select><Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'} disabled={disconnecting || sending} onClick={() => void disconnect()}><Unplug className="size-4" /></Button></div>}
+        {account && <>
+          <div className="flex items-center gap-1">
+            <select aria-label={pt ? 'Conta de email' : 'Email account'} value={accountId} disabled={sending || moving}
+              onChange={event => {
+                if (event.target.value === '__connect__') { setConnectPicker(true); return; }
+                resetList(); setAccountId(event.target.value); setConnectPicker(false);
+              }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
+              {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
+              <option value="__connect__">{pt ? '+ Conectar novo e-mail' : '+ Connect another email'}</option>
+            </select>
+            <Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'}
+              disabled={disconnecting || sending || moving} onClick={() => void disconnect()}><Unplug className="size-4" /></Button>
+          </div>
+          {connectPicker && <div className="space-y-2 rounded-md border border-border bg-card p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium">{pt ? 'Escolha o provedor' : 'Choose a provider'}</span>
+              <Button type="button" variant="ghost" size="icon" aria-label={pt ? 'Fechar conexão' : 'Close account connection'}
+                onClick={() => setConnectPicker(false)}><X className="size-4" /></Button>
+            </div>
+            {connectButtons}
+            <p className="text-[11px] text-muted-foreground">
+              {pt ? 'Você pode conectar outro endereço, inclusive do mesmo provedor.' : 'You can connect another address, including from the same provider.'}
+            </p>
+          </div>}
+        </>}
         <div className="flex flex-wrap gap-x-4 gap-y-1" role="group" aria-label={pt ? 'Pastas de email' : 'Email folders'}>
           {(['inbox', 'sent', 'spam', 'trash'] as const).map(value => <button key={value} type="button" aria-pressed={folder === value} onClick={() => { resetList(); setFolder(value); }}
             className={cn('flex min-h-10 items-center gap-2 border-b-2 text-sm transition-colors', folder === value ? 'border-foreground font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
@@ -296,7 +317,11 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         </div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.') : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.') : mailOAuthFailureMessage(mailFailureReason, pt)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
+        {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.')
+            : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.')
+            : notice === 'movedTrash' ? (pt ? 'Mensagens movidas para Lixeira.' : 'Messages moved to Trash.')
+            : notice === 'movedSpam' ? (pt ? 'Mensagens movidas para Spam.' : 'Messages moved to Spam.')
+            : mailOAuthFailureMessage(mailFailureReason, pt)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
         {error && <div role="alert" className="m-3 rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" className="mt-2" onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}>{pt ? 'Tentar novamente' : 'Retry'}</Button></div>}
         {(loadingAccounts || (loading && !messages.length)) &&
           <WorkspaceContentLoading label={pt?'Carregando emails':'Loading emails'} rows={4} className="p-4"/>}
@@ -320,7 +345,6 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         {account && !loading && !error && visible.length === 0 && <div className="px-6 py-14 text-center"><Inbox className="mx-auto mb-3 size-7 text-muted-foreground" /><p className="text-sm font-medium">{pt ? 'Nenhum email por aqui' : 'No email here'}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{pt ? 'Tente outra pasta, filtro ou busca.' : 'Try a different folder, filter or search.'}</p></div>}
         {nextPage && !query && <Button variant="ghost" className="my-3 w-full" disabled={loading} onClick={() => setPage(nextPage)}>{loading ? <Spinner /> : (pt ? 'Carregar mais' : 'Load more')}</Button>}
       </div>
-      {account && <footer className="shrink-0 space-y-2 border-t border-border p-3"><p className="text-[11px] text-muted-foreground">{pt ? 'Conectar ou autorizar novamente' : 'Connect or authorize again'}</p>{connectButtons}</footer>}
     </aside>
 
     <section aria-label={pt ? 'Leitura de email' : 'Email reader'} className={cn('min-h-0 min-w-0 flex-1 flex-col bg-background', open ? 'flex' : 'hidden md:flex')}>
