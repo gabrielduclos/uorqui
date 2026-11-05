@@ -21,13 +21,15 @@ registerMailRoutes(app, async request => request.headers['x-test-user'] ? { user
 const alice = randomUUID(), bob = randomUUID();
 const realFetch = globalThis.fetch;
 let calls = [];
+let tokenFailure = false;
+let mailboxFailure = false;
 before(async () => {
   await getPool().query('INSERT INTO users (id,handle) VALUES ($1,$2),($3,$4)', [alice, 'mail_' + alice.slice(0, 8), bob, 'mail_' + bob.slice(0, 8)]);
   await app.ready();
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input)); calls.push({ url, init });
-    if (url.hostname === 'oauth2.googleapis.com' || url.pathname.endsWith('/token')) return Response.json({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 3600 });
-    if (url.pathname.endsWith('/profile')) return Response.json({ emailAddress: 'alice@example.test' });
+    if (url.hostname === 'oauth2.googleapis.com' || url.pathname.endsWith('/token')) return tokenFailure ? Response.json({ error: 'invalid_client' }, { status: 400 }) : Response.json({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 3600 });
+    if (url.pathname.endsWith('/profile')) return mailboxFailure ? Response.json({ error: 'forbidden' }, { status: 403 }) : Response.json({ emailAddress: 'alice@example.test' });
     if (url.pathname === '/v1.0/me') return Response.json({ mail: 'alice@outlook.test' });
     if (url.pathname.endsWith('/send') || url.pathname.endsWith('/sendMail')) return new Response(null, { status: 202 });
     if (url.hostname === 'graph.microsoft.com' && url.pathname.endsWith('/messages')) return Response.json({ value: [{ id: 'outlook-id', subject: 'Outlook mail', bodyPreview: 'hello', isRead: true }], '@odata.nextLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$skip=20' });
@@ -70,10 +72,11 @@ test('OAuth requires session, trusted origin, PKCE and a single-use account-boun
   const url = await start(); const state = url.searchParams.get('state');
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256'); assert.ok(url.searchParams.get('code_challenge'));
   assert.equal(url.searchParams.get('redirect_uri'), 'http://localhost:5173/api/v1/mail/oauth/gmail/callback');
+  assert.equal((await request('accounts')).json().webOrigin, 'http://localhost:5173');
   const wrongUser = await request('oauth/gmail/callback?state=' + state + '&code=test', { user: bob });
-  assert.match(wrongUser.headers.location, /mail=failed/);
+  assert.match(wrongUser.headers.location, /mail=failed&mail_reason=state/);
   const valid = await request('oauth/gmail/callback?state=' + state + '&code=test'); assert.match(valid.headers.location, /mail=connected/);
-  const replay = await request('oauth/gmail/callback?state=' + state + '&code=test'); assert.match(replay.headers.location, /mail=failed/);
+  const replay = await request('oauth/gmail/callback?state=' + state + '&code=test'); assert.match(replay.headers.location, /mail=failed&mail_reason=state/);
   const db = await getPool().query('SELECT tokens FROM mail_connections WHERE user_id=$1', [alice]);
   assert.ok(!db.rows[0].tokens.includes('test-refresh'));
   assert.ok(!JSON.stringify((await request('accounts')).json()).includes('tokens'));
@@ -81,10 +84,37 @@ test('OAuth requires session, trusted origin, PKCE and a single-use account-boun
 test('expired OAuth state and denied consent never connect', async () => {
   const url = await start();
   await getPool().query('UPDATE mail_oauth_states SET expires_at=now()-interval \'1 minute\' WHERE user_id=$1', [alice]);
-  assert.match((await request('oauth/gmail/callback?state=' + url.searchParams.get('state') + '&code=test')).headers.location, /mail=failed/);
+  assert.match((await request('oauth/gmail/callback?state=' + url.searchParams.get('state') + '&code=test')).headers.location, /mail=failed&mail_reason=state/);
   const denied = await start();
-  assert.match((await request('oauth/gmail/callback?state=' + denied.searchParams.get('state') + '&error=access_denied')).headers.location, /mail=failed/);
+  assert.match((await request('oauth/gmail/callback?state=' + denied.searchParams.get('state') + '&error=access_denied')).headers.location, /mail=failed&mail_reason=denied/);
 });
+test('OAuth callback returns sanitized session, token and Gmail API failure codes', async () => {
+  const first = await start();
+  const state = first.searchParams.get('state');
+  const withoutSession = await request('oauth/gmail/callback?state=' + state + '&code=private-code', { user: null });
+  assert.match(withoutSession.headers.location, /mail=failed&mail_reason=session/);
+  assert.doesNotMatch(withoutSession.headers.location, /private-code|state=/);
+  // Missing session must not consume the original state.
+  const valid = await request('oauth/gmail/callback?state=' + state + '&code=test');
+  assert.match(valid.headers.location, /mail=connected/);
+
+  const second = await start();
+  tokenFailure = true;
+  let badToken;
+  try { badToken = await request('oauth/gmail/callback?state=' + second.searchParams.get('state') + '&code=private-code'); }
+  finally { tokenFailure = false; }
+  assert.match(badToken.headers.location, /mail=failed&mail_reason=token/);
+  assert.doesNotMatch(badToken.headers.location, /private-code|invalid_client/);
+
+  const third = await start();
+  mailboxFailure = true;
+  let badMailbox;
+  try { badMailbox = await request('oauth/gmail/callback?state=' + third.searchParams.get('state') + '&code=private-code'); }
+  finally { mailboxFailure = false; }
+  assert.match(badMailbox.headers.location, /mail=failed&mail_reason=mailbox/);
+  assert.doesNotMatch(badMailbox.headers.location, /private-code|forbidden/);
+});
+
 test('mail reads isolate accounts and return plain text only', async () => {
   const account = await connect();
   assert.equal((await request('accounts/' + account.id + '/messages', { user: bob })).statusCode, 404);

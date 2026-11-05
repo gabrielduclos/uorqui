@@ -53,11 +53,11 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const providers = ['gmail', 'outlook'].map(provider => ({ id: provider, configured: mailProviderReady(provider as MailProvider) }));
       try {
         const accounts = await getPool().query('SELECT id,provider,email FROM mail_connections WHERE user_id=$1 ORDER BY provider', [id]);
-        return { accounts: accounts.rows, providers };
+        return { accounts: accounts.rows, providers, webOrigin: new URL(process.env.WEB_ORIGIN ?? 'http://localhost:5173').origin };
       } catch (error) {
         // A frontend release may precede migration/configuration. Existing
         // connections remain visible and disconnectable if OAuth is disabled.
-        if (!providers.some(provider => provider.configured) && typeof error === 'object' && error !== null && 'code' in error && error.code === '42P01') return { accounts: [], providers };
+        if (!providers.some(provider => provider.configured) && typeof error === 'object' && error !== null && 'code' in error && error.code === '42P01') return { accounts: [], providers, webOrigin: new URL(process.env.WEB_ORIGIN ?? 'http://localhost:5173').origin };
         throw error;
       }
     } catch (error) { return unavailable(reply, error); }
@@ -80,21 +80,39 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
   app.get('/api/v1/mail/oauth/:provider/callback', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store').header('Referrer-Policy', 'no-referrer');
     const destination = new URL('/', process.env.WEB_ORIGIN ?? 'http://localhost:5173');
-    const done = (status: string) => { destination.searchParams.set('mail', status); return reply.redirect(destination.toString()); };
+    // Expose only a fixed diagnostic category. Never redirect OAuth codes,
+    // state, provider error strings or tokens into the SPA URL or logs.
+    type Failure = 'session' | 'invalid_return' | 'state' | 'denied' | 'token' | 'mailbox' | 'storage';
+    const done = (status: 'connected' | 'failed', reason?: Failure) => {
+      const target = new URL(destination);
+      target.searchParams.set('mail', status);
+      if (status === 'failed' && reason) target.searchParams.set('mail_reason', reason);
+      return reply.redirect(target.toString());
+    };
+    let stage: Failure = 'session';
     try {
       const provider = (request.params as { provider: string }).provider;
       const query = request.query as { state?: string; code?: string; error?: string };
       const session = await readSession(request);
-      if (!session || !isMailProvider(provider) || typeof query.state !== 'string' || query.state.length > 256) return done('failed');
+      if (!session) return done('failed', 'session');
+      if (!isMailProvider(provider) || typeof query.state !== 'string' || query.state.length > 256) return done('failed', 'invalid_return');
+      stage = 'state';
       const consumed = await getPool().query<{ verifier: string }>('DELETE FROM mail_oauth_states WHERE state_hash=$1 AND user_id=$2 AND provider=$3 AND expires_at>now() RETURNING verifier',
         [stateHash(query.state), session.user.id, provider]);
-      if (!consumed.rows[0] || query.error || typeof query.code !== 'string' || query.code.length > 4096) return done('failed');
+      if (!consumed.rows[0]) return done('failed', 'state');
+      if (query.error) return done('failed', 'denied');
+      if (typeof query.code !== 'string' || query.code.length > 4096) return done('failed', 'invalid_return');
+      stage = 'token';
       const tokens = await exchangeTokens(provider, { grant_type: 'authorization_code', code: query.code, code_verifier: openMailSecret(consumed.rows[0].verifier) });
+      stage = 'mailbox';
       const email = await mailboxEmail(provider, tokens.access_token);
+      stage = 'storage';
       await getPool().query('INSERT INTO mail_connections (user_id,provider,email,tokens) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id,provider) DO UPDATE SET email=excluded.email,tokens=excluded.tokens,updated_at=now()',
         [session.user.id, provider, email, sealMailSecret(JSON.stringify(tokens))]);
       return done('connected');
-    } catch { return done('failed'); }
+    } catch {
+      return done('failed', stage);
+    }
   });
 
   app.delete('/api/v1/mail/accounts/:accountId', { schema: { params: accountParams } }, async (request, reply) => {

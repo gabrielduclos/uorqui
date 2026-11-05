@@ -27,3 +27,9 @@ O módulo Email integra Gmail API e Microsoft Graph por OAuth 2.0 com PKCE. Não
 `mail.integration.test.mjs` usa PostgreSQL temporário e respostas simuladas dos provedores. Valida isolamento, Origin, PKCE, replay/expiração do estado, criptografia, renovação, envio e paginação restrita. Não envia emails reais. A validação ao vivo depende dos clientes e contas configurados acima.
 
 Referências: [Google OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [escopos Gmail](https://developers.google.com/workspace/gmail/api/auth/scopes), [Microsoft OAuth](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow), [Graph mail](https://learn.microsoft.com/en-us/graph/api/resources/mail-api-overview).
+
+## Diagnóstico de OAuth
+
+- A API informa `webOrigin` em `/api/v1/mail/accounts`; ao conectar, o frontend confere que o domínio atual coincide com `WEB_ORIGIN` para impedir que cookies de sessão de `workers.dev` sejam perdidos no retorno ao domínio canônico. Caso divergam, apresenta link para a origem oficial, sem iniciar o OAuth.
+- O callback nunca envia tokens, código OAuth, estado ou mensagens brutas do provedor ao navegador. Em falhas, adiciona somente uma categoria fixa `mail_reason` ao redirecionamento (`session`, `state`, `denied`, `invalid_return`, `token`, `mailbox`, `storage`). A UI apresenta orientações específicas; os parâmetros de retorno são removidos do endereço após leitura.
+- `session`: ausência de login na origem canônica; `state`: autorização expirada, incorreta ou reutilizada; `denied`: consentimento negado/testador não permitido; `token`: troca de token recusada (ID, segredo, redirect URI ou escopos); `mailbox`: Gmail API/permissões; `storage`: erro ao salvar no Neon. Sem sucesso real no Google, o frontend não promete conexão.

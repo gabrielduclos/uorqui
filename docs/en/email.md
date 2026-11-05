@@ -27,3 +27,9 @@ Email integrates Gmail API and Microsoft Graph through OAuth 2.0 with PKCE. It d
 `mail.integration.test.mjs` uses temporary PostgreSQL and mocked provider responses. It verifies isolation, Origin, PKCE, state replay/expiry, encryption, refresh, sending and constrained pagination. It sends no real email. Live verification requires the configured clients and accounts above.
 
 References: [Google OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes), [Microsoft OAuth](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow), [Graph mail](https://learn.microsoft.com/en-us/graph/api/resources/mail-api-overview).
+
+## OAuth troubleshooting
+
+- The `/api/v1/mail/accounts` endpoint returns `webOrigin`; before connecting, the client checks that its current domain matches `WEB_ORIGIN` to prevent login session cookies from being lost when returning from OAuth at another hostname. When origins differ, the UI links to the canonical host rather than starting OAuth.
+- The callback never redirects OAuth authorization codes, state, tokens or raw provider error strings to the browser. A failed callback carries a fixed `mail_reason` category only (`session`, `state`, `denied`, `invalid_return`, `token`, `mailbox`, `storage`). The UI shows actionable advice and removes the callback flags from the URL.
+- `session`: missing login on the canonical origin; `state`: expired/invalid/replayed attempt; `denied`: denied consent or non-test account; `token`: rejected OAuth token exchange (client credentials, redirect URI or scopes); `mailbox`: Gmail API or scope issue; `storage`: Neon persistence error. The UI does not claim a connection succeeded until the provider confirms it.
