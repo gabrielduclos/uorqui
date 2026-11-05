@@ -404,7 +404,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             <button type="button" onClick={()=>setCommandOpen(true)}
               aria-label={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
               title={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
-              className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+              className="hidden size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring min-[400px]:flex">
               <Search className="size-[18px]"/>
             </button>
              <PreferencesControls />
