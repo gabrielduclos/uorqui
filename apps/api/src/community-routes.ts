@@ -308,7 +308,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
 
   /** Revalidate delayed invitation pushes without disclosing private
    * community names to signed-out, banned or uninvited users. */
-  app.get('/api/v1/communities/:id/invite/notification-access',{schema:{params:idParams}},async(request,reply)=>{
+  app.get('/api/v1/communities/:id/invite/notification-access',{schema:{params:groupParams}},async(request,reply)=>{
     try{
       const me=await self(request);
       if(!me)return reply.code(401).header('Cache-Control',noCache).send({authorized:false});
