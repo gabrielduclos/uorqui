@@ -78,6 +78,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const [compose, setCompose] = useState(false);
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
+  const [expandedImage,setExpandedImage]=useState<{src:string;alt:string}|null>(null);
   const [replyError, setReplyError] = useState('');
   // Remote HTTPS images are loaded by default, as requested. The iframe still
   // blocks scripts, forms, access to Uorqui cookies and parent DOM.
@@ -138,7 +139,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     return () => controller.abort();
   }, [accountId, folder, filter, page, refresh, explainError]);
 
-  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
+  function closeDetail() { setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
   function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
   function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
   async function connect(provider: 'gmail') {
@@ -186,6 +187,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     finally { setDisconnecting(false); }
   }
   async function showMessage(message: Message, chosenAccount = accountId) {
+    setExpandedImage(null);
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
     setCompose(false); setReplying(false); setReplyBody('');
@@ -296,7 +298,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
     '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: https:; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
-    '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}</style>',
+    '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:min(100%,420px)!important;max-height:280px!important;width:auto!important;height:auto!important;object-fit:contain!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
@@ -503,7 +505,33 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
           {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : framedHtml ? <>
             <iframe key={selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
-              sandbox="" referrerPolicy="no-referrer" srcDoc={framedHtml}
+              sandbox="allow-same-origin" referrerPolicy="no-referrer" srcDoc={framedHtml}
+              onLoad={event=>{
+                // The frame is never allowed to execute scripts or forms. The parent
+                // attaches an image-only click handler to its inert document.
+                const doc=event.currentTarget.contentDocument;
+                if(!doc)return;
+                const openImage=(target:EventTarget|null)=>{
+                  const image=target instanceof HTMLImageElement?target:
+                    target instanceof HTMLElement?target.closest('img'):null;
+                  if(!image)return false;
+                  const src=image.currentSrc||image.src;
+                  if(!/^https:\/\//i.test(src)&&!/^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(src))return false;
+                  setExpandedImage({src,alt:image.alt|| (pt?'Imagem do e-mail':'Email image')});
+                  return true;
+                };
+                doc.querySelectorAll('img').forEach(img=>{
+                  img.setAttribute('tabindex','0');
+                  img.setAttribute('role','button');
+                  img.setAttribute('aria-label',pt?'Ampliar imagem':'Enlarge image');
+                });
+                doc.addEventListener('click',e=>{if(openImage(e.target))e.preventDefault();},true);
+                doc.addEventListener('keydown',e=>{
+                  if((e.key==='Enter'||e.key===' ')&&e.target instanceof HTMLImageElement){
+                    if(openImage(e.target))e.preventDefault();
+                  }
+                });
+              }}
               className="h-[min(70vh,760px)] w-full rounded-md border border-border bg-white" />
           </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
           {replying && !loadingBody && <form onSubmit={event => void submitReply(event)} className="mt-6 space-y-3 border-t border-border pt-5">
@@ -527,5 +555,18 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         {account && <Button variant="outline" className="mt-5 gap-2" onClick={startCompose}>{pt ? 'Escrever email' : 'Write email'}<ArrowUpRight className="size-4" /></Button>}
       </div></div>}
     </section>
+    {expandedImage&&<div role="dialog" aria-modal="true" aria-label={pt?'Imagem ampliada':'Enlarged image'}
+      className="fixed inset-0 z-[210] flex flex-col bg-black/90 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      onKeyDown={event=>{if(event.key==='Escape')setExpandedImage(null);}}>
+      <div className="flex shrink-0 justify-end">
+        <Button type="button" variant="secondary" size="icon" autoFocus aria-label={pt?'Fechar imagem':'Close image'}
+          onClick={()=>setExpandedImage(null)}><X className="size-5"/></Button>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto" onClick={()=>setExpandedImage(null)}>
+        <img src={expandedImage.src} alt={expandedImage.alt}
+          className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer"
+          onClick={event=>event.stopPropagation()}/>
+      </div>
+    </div>}
   </div>;
 }
