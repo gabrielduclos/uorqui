@@ -214,3 +214,15 @@ A migração visual **não troca** React/Vite por Next.js e **não modifica** AP
 - **Não cachear via Service Worker/Cache Storage** respostas de sessão, API, autenticação, `/media/*`, chats, documentos privados nem arquivos de outras origens. Anexos privados sempre passam por autorização inicial no Worker e não persistem entre sessões. Recibos, histórico e mensagens continuam sujeitos à API. Não alterar os recibos de leitura ao pré-carregar mídia.
 
 Verificação: abrir diversas comunidades, trocar de módulo, inspecionar a aba Network para downloads duplicados de avatar; testar fotos/áudios/vídeos/PDF em conversas reais, logout e troca de conta, light/dark, celular e permissões. Validar `npm run build -w @uorqui/web` e `npm run check:worker -w @uorqui/web`.
+
+
+## Cache privado de chats — proteção do navegador (05/11/2026)
+
+- As mídias de mensagens diretas e canais privados continuam **somente na RAM da aba** (Blob URLs temporários). Não são gravadas em IndexedDB, Cache Storage, localStorage nem pelo Service Worker; o Worker mantém `Cache-Control: private, no-store` e revalida a autorização em cada solicitação de rede.
+- O cache agora é **vinculado à conta autenticada**. Ao trocar de usuário ou sair, os downloads em andamento são abortados, e as URLs temporárias são revogadas. Mídia cancelada ou conversa excluída também invalida o cache.
+- Áudios próximos da área visível são pré-carregados com controle de concorrência. O player não solicita metadados diretamente antes de ser acionado e reutiliza os bytes em RAM se já disponíveis; o `play()` segue dentro do gesto do usuário, inclusive no Safari iOS.
+- Imagens abertas no visualizador aguardam a versão já carregada em memória, evitando duas solicitações paralelas. Anexos e vídeos abertos também reutilizam o cache temporário quando disponíveis.
+- Permanecem os limites por dispositivo de 32–96 MiB, até 42 itens, 24 MiB por arquivo e 90 minutos. Arquivos grandes ou não compatíveis seguem pelo endpoint original e a sessão ativa continua exigindo permissão para acessá-los.
+- **Atenção:** qualquer mídia exibida durante uma sessão autenticada pode ser inspecionada por alguém que controle o mesmo navegador/perfil. Não há cache persistente de anexos privados, por isso eles não ficam disponíveis após encerrar a aba. O cache persistente de **avatares** é separado e tem outra política.
+
+Testar no desktop e no Safari iOS: tocar/reproduzir áudio e vídeo, alternar mensagens, reabrir imagem, baixar PDF, trocar contas e sair; verificar que `/media/dm/*` nunca consta no Cache Storage/IndexedDB nem no Service Worker.
