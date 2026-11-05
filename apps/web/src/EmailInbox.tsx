@@ -213,6 +213,9 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             setError(pt ? 'Mensagem aberta, mas não foi possível marcá-la como lida. Reconecte a conta para conceder permissão de edição.'
               : 'Message opened, but it could not be marked as read. Reconnect the account to grant write access.');
         }
+      } else {
+        // The provider may already have marked it read on another device.
+        clearReadPush({kind:'mail',accountId:chosenAccount,messageId:data.id});
       }
     } catch (error) { if (!controller.signal.aborted) setError(explainError(error)); }
     finally { if (!controller.signal.aborted) setLoadingBody(false); }
