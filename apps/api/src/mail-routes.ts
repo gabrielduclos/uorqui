@@ -9,7 +9,8 @@ type Connection = { id: string; provider: MailProvider; email: string; tokens: s
 const uuid = { type: 'string', format: 'uuid' };
 const accountParams = { type: 'object', required: ['accountId'], properties: { accountId: uuid } };
 const accountMessageParams = { type: 'object', required: ['accountId', 'messageId'], properties: {
-  accountId: uuid, messageId: { type: 'string', minLength: 1, maxLength: 1024, pattern: '^[A-Za-z0-9_=+/\\-]+
+  accountId: uuid, messageId: { type: 'string', minLength: 1, maxLength: 1024, pattern: '^[A-Za-z0-9_=+/\-]+$' },
+} };
 
 export function registerMailRoutes(app: FastifyInstance, readSession: SessionReader) {
   async function user(request: FastifyRequest, reply: FastifyReply) {
