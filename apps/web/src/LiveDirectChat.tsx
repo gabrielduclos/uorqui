@@ -10,7 +10,6 @@ import { clearChatMediaCache, invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
 import { InternalShareDialog } from './InternalShareDialog';
 import { ContentReportDialog } from './ContentReportDialog';
-import { FriendsPanel } from './FriendsPanel';
 import { clearProfileImageCache } from './profileImageCache';
 import { clearDmConversation, listDmCommands, peekDmInbox, peekDmRoom, readDmInbox, readDmRoom, saveDmInbox, saveDmRoom } from './dmCache';
 import { enqueueDmMessage, retryDmMessage, type DmOutboxUpdate } from './dmOutbox';
@@ -98,16 +97,15 @@ function statusForOutgoingBlock(messages: Message[], pt: boolean): BlockReceipt 
   return { label: pt ? 'Lida' : 'Read', updatedAt };
 }
 
-export default function LiveDirectChat({ myId, initialHandle, initialConversationId, onStarted, onMobileOpenChange }: {
+export default function LiveDirectChat({ myId, initialHandle, initialConversationId, onStarted, onMobileOpenChange, onOpenContacts }: {
   myId: string; initialHandle?: string | null; initialConversationId?: string|null; onStarted?: () => void;
-  onMobileOpenChange?: (open: boolean) => void;
+  onMobileOpenChange?: (open: boolean) => void; onOpenContacts?: () => void;
 }) {
   const { locale } = useUorquiPreferences();
   const pt = locale === 'pt-BR';
   const [threads, setThreads] = useState<Conversation[]>(() => peekDmInbox<Conversation>(myId));
   const [people, setPeople] = useState<Person[]>([]);
   const [search, setSearch] = useState('');
-  const [listView, setListView] = useState<'conversations' | 'contacts'>('conversations');
   const [filter, setFilter] = useState<'all' | 'unread' | 'archived'>('all');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpened, setMobileOpened] = useState(false);
@@ -323,7 +321,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       setSearch('');
     } catch (e) {
       setError(e instanceof Error && e.message === 'HTTP_403'
-        ? (pt ? 'Este perfil é privado. É preciso aceitar uma solicitação de amizade antes de conversar.' : 'This private profile must accept your friend request before you can message them.')
+        ? (pt ? 'Este perfil é privado. É preciso aceitar uma solicitação de contato antes de conversar.' : 'This private profile must accept your contact request before you can message them.')
         : (pt ? 'Não foi possível iniciar esta conversa.' : 'Could not open this conversation.'));
     } finally { setBusy(false); }
   }, [loadThreads, openThread, pt]);
@@ -982,23 +980,11 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-3">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <div><h2 className="text-lg font-semibold tracking-tight">{listView === 'contacts' ? (pt ? 'Amigos' : 'Friends') : (pt ? 'Mensagens' : 'Messages')}</h2>
+          <div><h2 className="text-lg font-semibold tracking-tight">{pt ? 'Mensagens' : 'Messages'}</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Mensagens individuais' : 'Direct messages'}</p>
           </div>
 
         </div>
-        <div role="tablist" aria-label={pt ? 'Áreas do mensageiro' : 'Messenger sections'}
-          className="uorqui-messenger-tabs mb-3 flex gap-4">
-          {(['conversations', 'contacts'] as const).map(view => (
-            <button key={view} type="button" role="tab" aria-selected={listView === view}
-              onClick={() => { setListView(view); setSearch(''); }}
-              className={cn('min-h-10 border-b-2 text-sm font-medium transition-colors',
-                listView === view ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-              {view === 'conversations' ? (pt ? 'Conversas' : 'Chats') : (pt ? 'Amigos' : 'Friends')}
-            </button>
-          ))}
-        </div>
-        {listView === 'conversations' && <>
         <div className="relative">
           <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
           <Input value={search} onChange={e => setSearch(e.target.value)}
@@ -1017,10 +1003,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
              {value === 'archived' && archivedThreads > 0 && <span className="rounded bg-current/10 px-1 text-[10px]">{archivedThreads}</span>}
           </button>)}
         </div>
-        </>}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1">
-        {listView === 'contacts' ? <FriendsPanel onMessage={startPerson} busy={busy} /> : <>
+        <>
         {error && <div role="alert" className="m-2 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{error}
           <Button className="ml-2" size="sm" variant="outline" onClick={() => void loadThreads().catch(() => {})}>{pt ? 'Tentar novamente' : 'Retry'}</Button>
         </div>}
@@ -1074,7 +1059,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           <h3 className="mt-3 font-semibold">{filter === 'unread' ? (pt ? 'Tudo em dia' : 'All caught up') : filter === 'archived' ? (pt?'Nenhuma conversa arquivada':'No archived chats') : (pt ? 'Comece uma conversa' : 'Start a conversation')}</h3>
           <p className="mt-2 text-sm text-muted-foreground">{pt ? 'Busque uma pessoa pelo nome ou @usuário.' : 'Search people by name or @username.'}</p>
         </div>}
-        </>}
+        </>
       </div>
     </section>
 
@@ -1186,8 +1171,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/> :
             <div role="status" className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-center text-sm text-muted-foreground">
               {pt ? 'Mensagens indisponíveis: perfil privado sem amizade ou conta bloqueada.' : 'Messaging unavailable: private profile without friendship or blocked account.'}
-              <div className="mt-2"><button type="button" className="text-primary underline" onClick={() => { closeThread(); setListView('contacts'); }}>
-                {pt ? 'Ver solicitações de amizade' : 'View friend requests'}
+              <div className="mt-2"><button type="button" className="text-primary underline" onClick={() => { closeThread(); onOpenContacts?.(); }}>
+                {pt ? 'Ver solicitações de contato' : 'View contact requests'}
               </button></div>
             </div>}
         </div>
