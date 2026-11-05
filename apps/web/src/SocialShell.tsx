@@ -87,6 +87,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const { t, locale } = useUorquiPreferences();
   useVisualViewportFrame();
   const [area, setArea] = useState<Area>(() => readLastArea(account.user.id));
+  // Remember the module beneath Notifications so tapping its bell a second
+  // time returns to the exact module instead of restarting at the home screen.
+  const notificationReturnArea=useRef<Area>(area==='notifications'?'conversations':area);
   const areaAccountId = useRef(account.user.id);
   const [platformModerator,setPlatformModerator]=useState<boolean | null>(null);
   useEffect(()=>{
@@ -146,6 +149,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     // into another account's preference.
     if (areaAccountId.current !== account.user.id) {
       areaAccountId.current = account.user.id;
+      notificationReturnArea.current='conversations';
       setArea(readLastArea(account.user.id));
       return;
     }
@@ -180,6 +184,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
   const move=useCallback((next: Area) => {
     const order:Area[]=['conversations','communities','email','notifications','profile','moderation'];
+    if(next==='notifications'&&previousArea.current!=='notifications')
+      notificationReturnArea.current=previousArea.current;
     setNavDirection(order.indexOf(next)>=order.indexOf(previousArea.current)?1:-1);
     previousArea.current=next;
     setArea(next);
@@ -187,6 +193,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     setEmailOpened(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
   }, []);
+  const toggleNotifications=()=>{
+    if(area==='notifications')move(notificationReturnArea.current==='notifications'?'conversations':notificationReturnArea.current);
+    else move('notifications');
+  };
   useEffect(()=>{
     const open=(event:Event)=>{
       const target=(event as CustomEvent<{communityId?:string;channelId?:string}>).detail;
@@ -377,7 +387,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] sm:px-5 md:h-13 md:min-h-13 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => move('conversations')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
-              <span className="max-w-[22vw] truncate text-sm font-medium">{t(activeLabel)}</span>
+              <UorquiWordmark aria-hidden="true" className="h-[17px] w-auto max-w-[104px] text-foreground"/>
             </button>
             <button type="button" className="hidden size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:grid"
               title={sidebarCollapsed?(locale==='pt-BR'?'Expandir menu':'Expand sidebar'):(locale==='pt-BR'?'Recolher menu':'Collapse sidebar')}
@@ -391,7 +401,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={()=>move('notifications')}
+            <button type="button" onClick={toggleNotifications}
               aria-label={t('Notificações')+(notificationBadgeCount?' · '+notificationBadgeCount+' '+(locale==='pt-BR'?'avisos não lidos':'unread alerts'):'')}
               title={t('Notificações')}
               aria-current={area==='notifications'?'page':undefined}
@@ -518,7 +528,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         {!showSubpage && <nav className="flex shrink-0 justify-around border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] md:hidden" aria-label={t("Navegação principal")}>
           {navigation.map(item => {
             const Icon = item.icon;
-            return <Button data-uorqui-tour-target={item.id} key={item.id} variant="ghost" onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('flex h-16 min-w-0 flex-1 flex-col gap-1 rounded-none px-1 text-[11px] font-medium', area === item.id ? 'text-primary' : 'text-muted-foreground')}
+            return <Button data-uorqui-tour-target={item.id} key={item.id} variant="ghost" onClick={() => item.id==='notifications'?toggleNotifications():move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('flex h-16 min-w-0 flex-1 flex-col gap-1 rounded-none px-1 text-[11px] font-medium', area === item.id ? 'text-primary' : 'text-muted-foreground')}
               aria-label={item.id === 'conversations' && unreadMessageCount ? t(item.label) + ': ' + unreadMessageCount + (locale === 'pt-BR' ? ' mensagens não lidas' : ' unread messages') : t(item.label)}>
               <span className="relative inline-flex">
                 <Icon aria-hidden="true" className="size-5" />
