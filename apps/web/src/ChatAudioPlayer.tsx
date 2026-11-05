@@ -87,7 +87,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
       onEnded={() => setPlaying(false)}
-      onError={() => { setError(true); setPlaying(false); setLoading(false); }} />
+      onError={() => { if(!player.current?.getAttribute('src'))return; setError(true); setPlaying(false); setLoading(false); }} />
     <div className="flex min-w-0 items-center gap-2">
       <button type="button" onClick={() => void toggle()} aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'} className="grid size-10 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground shadow-sm hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         {loading && !error ? <span role="status" aria-label="Carregando áudio"><Spinner className="size-4"/></span> :
