@@ -226,3 +226,11 @@ Verificação: abrir diversas comunidades, trocar de módulo, inspecionar a aba 
 - **Atenção:** qualquer mídia exibida durante uma sessão autenticada pode ser inspecionada por alguém que controle o mesmo navegador/perfil. Não há cache persistente de anexos privados, por isso eles não ficam disponíveis após encerrar a aba. O cache persistente de **avatares** é separado e tem outra política.
 
 Testar no desktop e no Safari iOS: tocar/reproduzir áudio e vídeo, alternar mensagens, reabrir imagem, baixar PDF, trocar contas e sair; verificar que `/media/dm/*` nunca consta no Cache Storage/IndexedDB nem no Service Worker.
+
+## Ancoragem de mensagens na abertura (05/11/2026)
+
+- **Mensagens privadas:** ao abrir uma conversa, rola imediatamente para a última mensagem. Um `ResizeObserver` acompanha mudanças tardias de altura de fotos, mídias e conteúdo, mantendo o fim visível **somente se o usuário estiver no fim**. Quando a pessoa sobe para ler histórico antigo, a posição não é forçada para baixo; novas mensagens continuam gerando o aviso já existente.
+- **Canais de texto e chat das salas de voz:** reabrir um canal inicia na última mensagem, sem restaurar a rolagem antiga. O scroll segue o fim enquanto a pessoa está próxima dele, inclusive ao expandir anexos; ao rolar para cima, mantém a posição. No celular, um ajuste após o primeiro frame cobre a disposição responsiva.
+- As mudanças afetam apenas a apresentação e não enviam recibos de leitura por abertura da lista nem modificam SSE, cache, API ou WebRTC.
+
+Validar com históricos longos, mídia de carregamento tardio, mensagens recebidas enquanto lê o histórico e abertura repetida no Safari iOS e desktop.
