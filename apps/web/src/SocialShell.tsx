@@ -60,6 +60,14 @@ const navigation = [
   { id: 'notifications', label: 'Notificações', icon: Bell },
 ] as const;
 
+function CommunityRailPicture({url,name}:{url:string|null;name:string}) {
+  const cached=useCachedProfileImage(url);
+  return <span aria-hidden="true" className="uorqui-kit-community-picture">
+    {cached?<img src={cached} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"/>:
+      <span>{name.trim().charAt(0).toUpperCase()||'C'}</span>}
+  </span>;
+}
+
 function ProfileAvatar({ name, image, className }: { name: string; image?: string | null; className?: string }) {
   const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U';
   const source = useCachedProfileImage(image);
@@ -401,17 +409,16 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {area==='communities'&&<nav data-uorqui-community-icon-rail
           aria-label={locale==='pt-BR'?'Barra de ícones das comunidades':'Community icon rail'}
-          className={cn('uorqui-kit-community-icon-rail z-20 h-full w-14 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border px-1.5 py-3 md:w-16',channelOpened?'hidden md:flex':'flex')}>
+          className={cn('uorqui-kit-community-icon-rail z-20 h-full w-14 min-w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain border-r border-border px-1 py-3 md:w-16 md:min-w-16',channelOpened?'hidden md:flex':'flex')}>
           {workspaceCommunities.map(item=>{
             const selected=selectedCommunityId===item.id;
             const unread=communityUnread.communities[item.id]??0;
             return <button type="button" key={item.id}
-              className={cn('uorqui-kit-community-icon relative grid size-10 shrink-0 place-items-center rounded-xl',selected&&'uorqui-kit-community-icon--active')}
+              className={cn('uorqui-kit-community-icon relative grid h-10 w-10 min-h-10 min-w-10 shrink-0 place-items-center rounded-xl',selected&&'uorqui-kit-community-icon--active')}
               title={item.name} aria-label={item.name+(unread?' · '+unread+' '+(locale==='pt-BR'?'mensagens não lidas':'unread messages'):'')}
               aria-current={selected?'page':undefined}
               onClick={()=>openDiscoveryCommunity(item.id)}>
-              {item.avatarUrl?<img src={item.avatarUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-full rounded-xl object-cover"/>:
-                <span aria-hidden="true" className="grid size-full place-items-center text-sm font-semibold">{item.name.trim().charAt(0).toUpperCase()||'C'}</span>}
+              <CommunityRailPicture url={item.avatarUrl} name={item.name}/>
               {unread>0&&<span aria-hidden="true" className="uorqui-kit-community-unread">{unread>99?'99+':unread}</span>}
             </button>;
           })}
