@@ -15,7 +15,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 }
 .app[data-theme="dark"]{--page:#141414;--sidebar:#191919;--panel:#202020;--surface:#242424;--hover:#2b2b2b;--text:#f5f5f5;--muted:#a2a2a2;--border:#353535;--line:#333;--subtle:#292929;--selected:#f5f5f5;--selected-text:#171717;--tag-border:#454545;color-scheme:dark}
 .sidebar{width:255px;min-width:255px;display:flex;flex-direction:column;height:100%;background:var(--sidebar);transition:width .18s ease,min-width .18s ease;z-index:20}
-.app--compact .sidebar{width:70px;min-width:70px}
+.app--compact .sidebar{width:0;min-width:0;overflow:hidden}
 .brandbar{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 24px;gap:8px;flex-shrink:0}
 .brand{min-width:0;display:flex;align-items:center;gap:9px;border:none;background:transparent;color:var(--text);padding:0;font-weight:650;font-size:15px;white-space:nowrap}
 .brand-badge{font-size:11px;line-height:1;width:24px;height:24px;border:1px solid var(--border);border-radius:50%;display:grid;place-items:center;font-weight:650;color:var(--muted);background:var(--surface)}
@@ -56,6 +56,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .app--compact .team-heading{justify-content:center;padding:0}
 .app--compact .sidebar-bottom{justify-content:center;padding:0 0 14px}
 .main-panel{position:relative;min-width:0;flex:1;margin:7px 7px 7px 0;background:var(--panel);border:1px solid var(--border);border-radius:17px;display:flex;flex-direction:column;overflow:hidden}
+.app--compact .main-panel{margin-left:7px}
 .topbar{height:53px;flex-shrink:0;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border);gap:11px;position:relative}
 .topbar-divider{height:19px;width:1px;background:var(--border);margin:0 2px 0 0}
 .topbar-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -253,7 +254,7 @@ kbd{font:10px ui-monospace,monospace;color:var(--muted);border:1px solid var(--b
  .app--compact .sidebar-bottom{justify-content:flex-start;padding:0 15px 14px}
  .app--compact .sidebar-scroll{padding:4px 15px 12px}
  .sidebar-scrim{display:block;position:fixed;inset:0;z-index:19;background:#0007;border:0}
- .main-panel{margin:0;border-radius:0;border:0}
+ .main-panel,.app--compact .main-panel{margin:0;border-radius:0;border:0}
  .topbar{height:52px}
  .toolbar-actions .view-button{display:none}
  .row-age{width:56px;min-width:56px}
