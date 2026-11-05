@@ -207,6 +207,41 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
           : 'Reply could not be confirmed. Check Sent before trying again.'));
     } finally { setReplySending(false); }
   }
+  function toggleSelected(id: string) {
+    setSelectedIds(previous => previous.includes(id)
+      ? previous.filter(item => item !== id)
+      : previous.length >= 100 ? previous : [...previous, id]);
+  }
+  async function moveSelected(destination: 'trash' | 'spam') {
+    if (!account || selectedIds.length === 0 || moving) return;
+    setMoving(true); setError('');
+    const targetAccount = account.id;
+    const ids = [...selectedIds];
+    try {
+      const result = await requestMail<{ moved: string[]; failed: string[] }>(
+        'accounts/' + targetAccount + '/messages/move', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids, destination }),
+        });
+      const moved = new Set(result.moved.filter(id => ids.includes(id)));
+      const failed = ids.filter(id => !moved.has(id));
+      if (moved.size) {
+        setMessages(previous => previous.filter(message => !moved.has(message.id)));
+        if (selected && moved.has(selected.id)) closeDetail();
+      }
+      setSelectedIds(failed);
+      setSelectionMode(failed.length > 0);
+      if (failed.length) {
+        setError(pt
+          ? `${moved.size} movidos, ${failed.length} não puderam ser movidos. Tente novamente.`
+          : `${moved.size} moved, ${failed.length} could not be moved. Please retry.`);
+      } else {
+        setNotice(destination === 'trash' ? 'movedTrash' : 'movedSpam');
+      }
+      if (moved.size) { setPage(''); setNextPage(null); setRefresh(value => value + 1); }
+    } catch (error) { setError(explainError(error)); }
+    finally { setMoving(false); }
+  }
   function startCompose() { detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
@@ -216,6 +251,13 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
+  const visibleIds = visible.map(message => message.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
+  function toggleVisible() {
+    setSelectedIds(previous => allVisibleSelected
+      ? previous.filter(id => !visibleIds.includes(id))
+      : [...new Set([...previous, ...visibleIds])].slice(0, 100));
+  }
   function date(value: string) { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString(locale, { day: 'numeric', month: 'short' }); }
   const connectButtons = <div className="flex flex-wrap gap-2">{(['gmail', 'outlook'] as const).map(provider => {
     const ready = providers.some(item => item.id === provider && item.configured);
