@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
 import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady,
-  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, stateHash, type MailFolder, type MailProvider, type MailTokens } from './mail-providers.js';
+  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type MailFolder, type MailProvider, type MailTokens } from './mail-providers.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 type Connection = { id: string; provider: MailProvider; email: string; tokens: string };
@@ -55,7 +55,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const id = await user(request, reply); if (!id) return;
       const providers = ['gmail', 'outlook'].map(provider => ({ id: provider, configured: mailProviderReady(provider as MailProvider) }));
       try {
-        const accounts = await getPool().query('SELECT id,provider,email FROM mail_connections WHERE user_id=$1 ORDER BY provider', [id]);
+        const accounts = await getPool().query('SELECT id,provider,email FROM mail_connections WHERE user_id=$1 ORDER BY provider,email', [id]);
         return { accounts: accounts.rows, providers, webOrigin: new URL(process.env.WEB_ORIGIN ?? 'http://localhost:5173').origin };
       } catch (error) {
         // A frontend release may precede migration/configuration. Existing
@@ -110,8 +110,8 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       stage = 'mailbox';
       const email = await mailboxEmail(provider, tokens.access_token);
       stage = 'storage';
-      await getPool().query('INSERT INTO mail_connections (user_id,provider,email,tokens) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id,provider) DO UPDATE SET email=excluded.email,tokens=excluded.tokens,updated_at=now()',
-        [session.user.id, provider, email, sealMailSecret(JSON.stringify(tokens))]);
+      await getPool().query('INSERT INTO mail_connections (user_id,provider,email,tokens) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id,provider,email) DO UPDATE SET tokens=excluded.tokens,updated_at=now()',
+        [session.user.id, provider, email.trim().toLowerCase(), sealMailSecret(JSON.stringify(tokens))]);
       return done('connected');
     } catch {
       return done('failed', stage);
@@ -149,6 +149,83 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     } catch (error) { return unavailable(reply, error); }
   });
 
+
+  app.post('/api/v1/mail/accounts/:accountId/messages/move', { schema: {
+    params: accountParams,
+    body: { type: 'object', additionalProperties: false, required: ['ids', 'destination'], properties: {
+      ids: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true,
+        items: { type: 'string', minLength: 1, maxLength: 1024, pattern: '^[A-Za-z0-9_=+/\-]+ { schema: { params: accountMessageParams } }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId, messageId } = request.params as { accountId: string; messageId: string };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        await markMailRead(connection.provider, token, messageId);
+        return { ok: true };
+      });
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+
+  app.post('/api/v1/mail/accounts/:accountId/messages/:messageId/reply', {
+    // Reject unexpected recipient/subject before Fastify's schema validation can
+    // strip extra fields. Replies must derive the recipient from the provider.
+    preValidation: async (request, reply) => {
+      const body = request.body;
+      if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some(key => key !== 'body')) {
+        return reply.code(400).send({ error: 'MAIL_INVALID_REPLY_BODY' });
+      }
+    },
+    schema: {
+    params: accountMessageParams,
+    body: { type: 'object', additionalProperties: false, required: ['body'],
+      properties: { body: { type: 'string', minLength: 1, maxLength: 30000, pattern: '\\S' } } },
+  } }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId, messageId } = request.params as { accountId: string; messageId: string };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        await replyToMail(connection.provider, token, connection.email, messageId, (request.body as { body: string }).body);
+        return { ok: true };
+      });
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+
+  app.post('/api/v1/mail/accounts/:accountId/send', { schema: { params: accountParams, body: {
+    type: 'object', additionalProperties: false, required: ['to', 'subject', 'body'], properties: {
+      to: { type: 'string', maxLength: 320, pattern: '^[A-Za-z0-9.!#$%&\x27*+/=?^_`{|}~\\-]+@[A-Za-z0-9](?:[A-Za-z0-9.\\-]*[A-Za-z0-9])?\\.[A-Za-z]{2,}$' },
+      subject: { type: 'string', maxLength: 200, pattern: '^[^\\r\\n]*$' }, body: { type: 'string', minLength: 1, maxLength: 30000 },
+    },
+  } } }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId } = request.params as { accountId: string };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        await sendMail(connection.provider, token, connection.email, request.body as { to: string; subject: string; body: string });
+        return { ok: true };
+      });
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+}
+ } },
+      destination: { enum: ['trash', 'spam'] },
+    } },
+  } }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId } = request.params as { accountId: string };
+      const { ids, destination } = request.body as { ids: string[]; destination: 'trash' | 'spam' };
+      const result = await withMailbox(id, accountId, (connection, token) =>
+        moveMailMessages(connection.provider, token, ids, destination));
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
 
   app.post('/api/v1/mail/accounts/:accountId/messages/:messageId/read', { schema: { params: accountMessageParams } }, async (request, reply) => {
     if (!originAllowed(request, reply)) return;
