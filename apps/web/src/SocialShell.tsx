@@ -106,8 +106,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       try { return localStorage.getItem('uorqui:last-community:' + account.user.id); } catch { return null; }
     });
     const onSelect = (event: Event) => {
-      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      if (typeof id === 'string') setSelectedCommunityId(id);
+      const id = (event as CustomEvent<{ id?: string | null }>).detail?.id;
+      if (typeof id === 'string' || id === null) setSelectedCommunityId(id);
     };
     window.addEventListener('uorqui:community-selected', onSelect);
     return () => window.removeEventListener('uorqui:community-selected', onSelect);
@@ -354,8 +354,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             <WorkspaceCommunityShortcuts communities={workspaceCommunities}
               unread={communityUnread.communities} channelUnread={communityUnread.channels}
               selectedId={selectedCommunityId} selectedChannelId={selectedChannelId}
-              active={area==='communities'} onOpen={openDiscoveryCommunity}
-              onOpenChannel={(communityId,channelId)=>openDiscoveryCommunity(communityId,channelId)}
+              active={area==='communities'} onOpen={communityId=>{setChannelPanelOpen(false);openDiscoveryCommunity(communityId);}}
+              onOpenChannel={(communityId,channelId)=>{setChannelPanelOpen(false);openDiscoveryCommunity(communityId,channelId);}}
               locale={locale}/>
           </section>}
           {platformModerator&&<div className="mt-4">
