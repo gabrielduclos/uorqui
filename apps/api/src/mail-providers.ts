@@ -223,7 +223,7 @@ export async function replyToMail(provider: MailProvider, token: string, sender:
     encodeURIComponent(id) + '?format=full', { headers: headers(token) });
   const original = await originalResponse.json() as GmailMessage;
   const fields = original.payload?.headers ?? [];
-  const field = (name: string) => fields.find(h => h.name.toLowerCase() === name)?.value ?? '';
+  const field = (name: string) => fields.find(h => h.name.toLowerCase() === name.toLowerCase())?.value ?? '';
   const recipientRaw = field('Reply-To') || field('From');
   const extracted = /<([^<>\r\n]+)>/.exec(recipientRaw)?.[1] ?? recipientRaw.trim();
   const email = /^[^\s@<>\r\n,;]+@[^\s@<>\r\n,;]+\.[^\s@<>\r\n,;]+$/.test(extracted) ? extracted : '';
@@ -236,6 +236,7 @@ export async function replyToMail(provider: MailProvider, token: string, sender:
   const references = field('References').match(/<[^<>\r\n]{1,320}>/g)?.slice(-20) ?? [];
   if (validMessageId) references.push(validMessageId);
   if (!validMessageId) throw Error('MAIL_PROVIDER_UNAVAILABLE');
+  if (/[\r\n]/.test(sender)) throw Error('MAIL_PROVIDER_UNAVAILABLE');
   const raw = [
     'From: ' + sender, 'To: ' + email,
     'Subject: =?UTF-8?B?' + Buffer.from(subject).toString('base64') + '?=',
