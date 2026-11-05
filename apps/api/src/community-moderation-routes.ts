@@ -239,6 +239,7 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
       if(name.length<2)return reply.code(400).send({error:'Invalid channel'});
       const changed=await getPool().query('UPDATE community_channels SET name=$3 WHERE community_id=$1 AND id=$2 RETURNING id,name,kind',[id,channelId,name]);
       if(!changed.rowCount)return reply.code(404).send({error:'Channel not found'});
+      void publishCommunityEvent(id,null,'channel').catch(()=>{});
       return reply.header('Cache-Control',noCache).send({channel:changed.rows[0]});
     }catch(error){
       if(typeof error==='object'&&error!==null&&'code' in error&&error.code==='23505')return reply.code(409).send({error:'CHANNEL_EXISTS'});
