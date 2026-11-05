@@ -232,10 +232,11 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
           onChange={event => { resetList(); setAccountId(event.target.value); }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
           {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
         </select><Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'} disabled={disconnecting || sending} onClick={() => void disconnect()}><Unplug className="size-4" /></Button></div>}
-        <div className="flex gap-4" role="group" aria-label={pt ? 'Pastas de email' : 'Email folders'}>
-          {(['inbox', 'sent'] as const).map(value => <button key={value} type="button" aria-pressed={folder === value} onClick={() => { resetList(); setFolder(value); }}
+        <div className="flex flex-wrap gap-x-4 gap-y-1" role="group" aria-label={pt ? 'Pastas de email' : 'Email folders'}>
+          {(['inbox', 'sent', 'spam', 'trash'] as const).map(value => <button key={value} type="button" aria-pressed={folder === value} onClick={() => { resetList(); setFolder(value); }}
             className={cn('flex min-h-10 items-center gap-2 border-b-2 text-sm transition-colors', folder === value ? 'border-foreground font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-            {value === 'inbox' ? <Inbox className="size-4" /> : <Send className="size-4" />}{value === 'inbox' ? (pt ? 'Caixa de entrada' : 'Inbox') : (pt ? 'Enviados' : 'Sent')}
+            {value === 'inbox' ? <Inbox className="size-4" /> : value === 'sent' ? <Send className="size-4" /> : value === 'spam' ? <ShieldAlert className="size-4" /> : <Trash2 className="size-4" />}
+            {value === 'inbox' ? (pt ? 'Entrada' : 'Inbox') : value === 'sent' ? (pt ? 'Enviados' : 'Sent') : value === 'spam' ? 'Spam' : (pt ? 'Lixeira' : 'Trash')}
           </button>)}
         </div>
         <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -287,10 +288,42 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         <footer className="flex justify-end border-t border-border p-4"><Button disabled={sending} className="min-h-11 gap-2" type="submit">{sending ? <Spinner className="size-4" /> : <Send className="size-4" />}{pt ? 'Enviar email' : 'Send email'}</Button></footer>
       </form> : selected ? <>
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
-          <span className="truncate text-xs text-muted-foreground">{account?.email}</span><Button size="sm" variant="ghost" onClick={startCompose} className="gap-2"><Plus className="size-4" />{pt ? 'Novo' : 'New'}</Button></header>
+          <span className="truncate text-xs text-muted-foreground">{account?.email}</span>
+          <div className="flex shrink-0 gap-1">
+            <Button size="sm" variant="ghost" onClick={() => { setReplying(true); setReplyError(''); }} className="gap-2" disabled={loadingBody || replySending}>
+              <Reply className="size-4" />{pt ? 'Responder' : 'Reply'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={startCompose} className="gap-2"><Plus className="size-4" />{pt ? 'Novo' : 'New'}</Button>
+          </div></header>
         <article key={selected.id} className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
-          {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
+          {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : framedHtml ? <>
+            <div className="mb-3 flex items-center justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setRemoteImages(enabled => !enabled)} aria-pressed={remoteImages}>
+                {remoteImages ? (pt ? 'Bloquear imagens externas' : 'Block external images') : (pt ? 'Carregar imagens externas' : 'Load external images')}
+              </Button>
+            </div>
+            <iframe key={selected.id + ':' + String(remoteImages)} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
+              sandbox="allow-popups" referrerPolicy="no-referrer" srcDoc={framedHtml}
+              className="h-[min(70vh,760px)] w-full rounded-md border border-border bg-white" />
+            <p className="mt-2 text-[11px] text-muted-foreground">{pt
+              ? 'Imagens incorporadas aparecem automaticamente. Imagens externas exigem sua autorização, para proteger sua privacidade.'
+              : 'Embedded images load automatically. External images require your permission to protect your privacy.'}</p>
+          </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
+          {replying && !loadingBody && <form onSubmit={event => void submitReply(event)} className="mt-6 space-y-3 border-t border-border pt-5">
+            <p className="text-xs font-medium">{pt ? 'Responder a ' : 'Reply to '}{selected.from}</p>
+            <textarea value={replyBody} onChange={event => setReplyBody(event.target.value)} required maxLength={30000}
+              autoFocus disabled={replySending} rows={6} placeholder={pt ? 'Escreva sua resposta…' : 'Write your reply…'}
+              className="w-full resize-y rounded-md border border-input bg-background p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" />
+            {replyError && <p role="alert" className="text-sm text-destructive">{replyError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={replySending} onClick={() => setReplying(false)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
+              <Button type="submit" disabled={replySending || !replyBody.trim()} className="gap-2">
+                {replySending ? <Spinner className="size-4" /> : <Reply className="size-4" />}
+                {pt ? 'Enviar resposta' : 'Send reply'}
+              </Button>
+            </div>
+          </form>}
         </article>
       </> : <div className="flex min-h-0 flex-1 items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl border border-border bg-card"><Mail className="size-6 text-muted-foreground" /></div>
         <h2 className="mt-5 text-lg font-medium tracking-tight">{pt ? 'Um espaço para cada conversa' : 'A space for every conversation'}</h2>
