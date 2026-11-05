@@ -1,5 +1,5 @@
 import { Spinner } from '@/components/ui/spinner';
-import { SkeletonRows } from '@/components/ui/skeleton';
+import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
@@ -1024,9 +1024,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         {error && <div role="alert" className="m-2 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{error}
           <Button className="ml-2" size="sm" variant="outline" onClick={() => void loadThreads().catch(() => {})}>{pt ? 'Tentar novamente' : 'Retry'}</Button>
         </div>}
-        {loading && <div className="space-y-2 px-3 py-2" role="status" aria-label={pt ? 'Carregando conversas' : 'Loading chats'}>
-          {[0, 1, 2].map(n => <div key={n} className="flex h-16 animate-pulse items-center gap-3"><div className="size-11 rounded-full bg-muted"/><div className="flex-1 space-y-2"><div className="h-3 w-1/2 rounded bg-muted"/><div className="h-3 w-4/5 rounded bg-muted"/></div></div>)}
-        </div>}
+        {loading && <WorkspaceContentLoading label={pt?'Carregando conversas':'Loading chats'}
+          rows={3} className="p-3"/>}
         {query.length >= 2 && <>
           <p className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{pt ? 'Pessoas' : 'People'} {searching ? '…' : ''}</p>
           {people.map(person => <button type="button" key={person.handle} disabled={busy} onClick={() => void startPerson(person.handle)}
@@ -1123,10 +1122,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollBox} onScroll={onMessagesScroll}
             data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
-            <div ref={messageContentRef} className="flex w-full min-w-0 flex-col gap-2.5">
-              {messagesLoading && <div className="space-y-3 py-4" role="status" aria-label={pt ? 'Carregando mensagens' : 'Loading messages'}>
-                <SkeletonRows rows={4} className="w-full px-3"/>
-              </div>}
+            <div ref={messageContentRef} key={activeId} className="uorqui-kit-content-enter flex w-full min-w-0 flex-col gap-2.5">
+              {messagesLoading && <WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'}
+                rows={4} className="w-full py-4"/>}
               {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
               {renderedMessages.map(message => {
                 const status = blockReceipts.get(message.id);
