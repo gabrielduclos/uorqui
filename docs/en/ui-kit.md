@@ -145,3 +145,13 @@ This is a **visual migration only**: React/Vite, Fastify/Render, Better Auth, Ne
 - **Notifications** moved from the desktop sidebar to a **header bell button** with an unread count and navigation to the existing notification screen. Mobile notifications stay in the bottom navigation.
 - The main sidebar has no community list or notification item. The Communities module is still accessible, as are search and profile via existing controls.
 - The API, persistence, SSE and WebRTC are untouched; `LiveCommunities` stays mounted across navigation.
+
+## Icon rail constraints and media caching policy (2026-11-05)
+
+- The Communities content now has **one icon rail only**. The legacy internal `LiveCommunities` rail is visually hidden without unmounting the voice component. Avatars are fixed at 40 × 40 px, cropped with `object-fit: cover`, badges are constrained inside icons, and rail width is 56 px on mobile / 64 px on desktop.
+- **Profile photos, covers and community avatars** share a bounded, versioned-URL **account-scoped IndexedDB and memory cache**, with at most 96 objects / 48 MiB on disk and 24-hour TTL. Profile images have a 3 MiB per-item limit, community avatars 10 MiB. Logout/account switches purge saved images and revoke Blob URLs.
+- **Direct messages and channel attachments** use **tab-memory only** with reusable object URLs for images, audio, videos, PDFs, ZIPs and common documents. Memory limit is 32–96 MiB depending on reported RAM (default 64 MiB), up to 42 items, 24 MiB each and 90 minutes. Oversized downloads are stopped while streaming and remain available through the authorized endpoint.
+- **Public PWA static assets** are cached by the Service Worker: hashed JS/CSS/images/fonts/static audio/video (up to 8 MiB) and branding/manifest resources, with a 100-item limit. Stable public file names use stale-while-revalidate.
+- **Never place** sessions, API data, auth, `/media/*`, chat attachments or cross-origin content in shared Service Worker/Cache Storage. Private attachments have no persistent disk cache and are fetched with the Worker's permission checks. No unread/read status changes occur during media preloading.
+
+Verify avatar reuse across screens, logout/account switch purging, real chat media playback and attachment downloads, both themes, mobile/desktop, and frontend/Worker builds.
