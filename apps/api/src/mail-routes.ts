@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
+import { withMailbox } from './mail-account-access.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
 import { validateManualMailSettings, validateManualHosts } from './manual-mail.js';
 import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady,
-  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type OAuthMailProvider, type MailFolder, type MailProvider, type MailTokens } from './mail-providers.js';
+  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type OAuthMailProvider, type MailFolder } from './mail-providers.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
-type Connection = { id: string; provider: MailProvider; email: string; tokens: string };
 const uuid = { type: 'string', format: 'uuid' };
 const accountParams = { type: 'object', required: ['accountId'], properties: { accountId: uuid } };
 const accountMessageParams = { type: 'object', required: ['accountId', 'messageId'], properties: {
@@ -29,33 +29,6 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
   function unavailable(reply: FastifyReply, error: unknown) {
     const reconnect = error instanceof Error && error.message === 'MAIL_RECONNECT';
     return reply.code(reconnect ? 409 : 503).send({ error: reconnect ? 'MAIL_RECONNECT' : 'MAIL_UNAVAILABLE' });
-  }
-  async function withMailbox<T>(userId: string, accountId: string, run: (connection: Connection, token: string) => Promise<T>) {
-    // Serializing refreshes prevents overwriting rotating Microsoft refresh tokens.
-    const db = await getPool().connect();
-    let connection: Connection;
-    let credential = '';
-    let transactionActive = false;
-    try {
-      await db.query('BEGIN'); transactionActive = true;
-      const found = await db.query<Connection>('SELECT id,provider,email,tokens FROM mail_connections WHERE id=$1 AND user_id=$2 FOR UPDATE', [accountId, userId]);
-      if (!found.rows[0]) { await db.query('ROLLBACK'); transactionActive = false; return null; }
-      connection = found.rows[0];
-      const stored = openMailSecret(connection.tokens);
-      if (connection.provider === 'manual') {
-        credential = stored; // Encrypted settings; never sent to the browser.
-      } else {
-        let tokens = JSON.parse(stored) as MailTokens;
-        if (tokens.expires_at < Date.now() + 60_000) {
-          tokens = await exchangeTokens(connection.provider, { grant_type: 'refresh_token', refresh_token: tokens.refresh_token }, tokens.refresh_token);
-          await db.query('UPDATE mail_connections SET tokens=$1,updated_at=now() WHERE id=$2', [sealMailSecret(JSON.stringify(tokens)), accountId]);
-        }
-        credential = tokens.access_token;
-      }
-      await db.query('COMMIT'); transactionActive = false;
-    } catch (error) { if (transactionActive) await db.query('ROLLBACK'); throw error; }
-    finally { db.release(); }
-    return run(connection!, credential);
   }
 
   app.get('/api/v1/mail/accounts', async (request, reply) => {
