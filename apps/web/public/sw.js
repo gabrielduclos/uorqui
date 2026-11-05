@@ -216,7 +216,7 @@ self.addEventListener('message',event=>{
       tags.add('uorqui-activity-'+target.notificationId);
     else if(target.kind==='activity-all')clearAllActivities=true;
     else if(target.kind==='mail'&&uuid.test(String(target.accountId||''))&&
-      /^[A-Za-z0-9_=+\\/\\-]{1,1024}$/.test(String(target.messageId||'')))
+      /^[A-Za-z0-9_=+\/\-]{1,1024}$/.test(String(target.messageId||'')))
       tags.add('uorqui-mail-'+target.accountId+'-'+target.messageId.slice(0,64));
   }
   if(!tags.size&&!clearAllActivities)return;
