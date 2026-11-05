@@ -85,10 +85,10 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
       await friendsRequest(path,options);
       await refresh();
       window.dispatchEvent(new Event('uorqui:friends-updated'));
-      setNotice(kind==='request'?(pt?'Solicitação enviada.':'Friend request sent.')
+      setNotice(kind==='request'?(pt?'Solicitação enviada.':'Contact request sent.')
         :kind==='accept'?(pt?'Contato adicionado.':'Contact added.')
         :kind==='decline'?(pt?'Solicitação recusada.':'Request declined.')
-        :(pt?'Contato removido.':'Friend removed.'));
+        :(pt?'Contato removido.':'Contact removed.'));
     }catch(e){
       const code=e instanceof Error?e.message:'';
       setError(code==='HTTP_429'
