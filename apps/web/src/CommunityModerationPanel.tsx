@@ -42,7 +42,13 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   const [groupVisibility,setGroupVisibility]=useState<Visibility>(visibility);
   const [photo,setPhoto]=useState(avatarUrl);
   const [confirmDeleteText,setConfirmDeleteText]=useState('');
+  const [channelDrafts,setChannelDrafts]=useState<Record<string,{name:string;accessMode:'open'|'restricted';password:string}>>({});
   useEffect(()=>{setGroupName(name);setGroupDescription(description??'');setGroupVisibility(visibility);setPhoto(avatarUrl);},[name,description,visibility,avatarUrl]);
+  useEffect(()=>{
+    setChannelDrafts(Object.fromEntries(channels.map(channel=>[channel.id,{
+      name:channel.name,accessMode:channel.accessMode??'open',password:''
+    }])));
+  },[channels]);
   const base='/api/v1/communities/'+id;
   const canAdmin=weight[role]>=3;
   const load=useCallback(async()=>{
@@ -76,6 +82,17 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
     return (role==='owner'?['admin','moderator','member']:role==='admin'?['moderator','member']:[]) as Role[];
   };
   const requestBody=(v:unknown)=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)} as RequestInit);
+  const bodyFor=(method:'PATCH'|'PUT',v:unknown)=>({
+    method,headers:{'Content-Type':'application/json'},body:JSON.stringify(v)
+  } as RequestInit);
+  function updateChannelDraft(channelId:string,change:Partial<{name:string;accessMode:'open'|'restricted';password:string}>){
+    setChannelDrafts(old=>({...old,[channelId]:{
+      name:old[channelId]?.name??channels.find(ch=>ch.id===channelId)?.name??'',
+      accessMode:old[channelId]?.accessMode??'open',
+      password:old[channelId]?.password??'',
+      ...change
+    }}));
+  }
 
   return <Dialog.Root open={open} onOpenChange={next=>{
     if(busy)return;
@@ -282,17 +299,96 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
         </div>:<p className="rounded-lg border border-border/70 p-4 text-sm text-muted-foreground">{pt?'Nenhuma conta banida nesta comunidade.':'No accounts are banned in this community.'}</p>}
         </>}
       </Tabs.Content>
-      {canAdmin&&<Tabs.Content value="channels" className="space-y-2 outline-none">
+      {canAdmin&&<Tabs.Content value="channels" className="space-y-3 outline-none">
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
-          {channels.map(ch=><div key={ch.id} className="space-y-2 rounded-lg border border-border/70 p-2">
-            <p className="flex items-center gap-1.5 truncate text-xs font-medium">{ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}{ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}{ch.accessMode==='restricted'&&
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{pt?'Fechado':'Closed'}</span>}</p>
-            <Button size="sm" variant="outline" className="h-9" disabled={busy} loading={busyKey==='channel:delete:'+ch.id}
-              onClick={()=>request('channel:delete:'+ch.id,
-                ()=>api(base+'/channels/'+ch.id,{method:'DELETE'}),pt?'Canal excluído.':'Channel deleted.',
-                pt?'excluir canal '+ch.name:'delete channel '+ch.name)}>
-              <Trash2 className="size-3.5"/>{pt?'Excluir':'Delete'}</Button>
-          </div>)}
+          <p className="text-xs text-muted-foreground">{pt?
+            'Nome, acesso e senha são alterações independentes. Somente administradores podem editar.':
+            'Name, access and password can be changed separately by administrators.'}</p>
+          {channels.map(ch=>{
+            const draft=channelDrafts[ch.id]??{name:ch.name,accessMode:ch.accessMode??'open',password:''};
+            const endpoint=base+'/channels/'+ch.id;
+            const changedName=draft.name.trim();
+            return <section key={ch.id} className="space-y-3 rounded-lg border border-border/70 p-3">
+              <p className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                {ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}
+                {ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}
+                {ch.accessMode==='restricted'&&
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{pt?'Fechado':'Restricted'}</span>}
+              </p>
+              <form className="flex flex-wrap items-end gap-2" onSubmit={event=>{
+                event.preventDefault();
+                if(changedName.length<2||changedName.length>64||changedName===ch.name)return;
+                void action('channel:name:'+ch.id,()=>api(endpoint,bodyFor('PATCH',{name:changedName})),
+                  pt?'Nome do canal atualizado.':'Channel renamed.');
+              }}>
+                <label className="min-w-[160px] flex-1 text-xs">{pt?'Nome do canal':'Channel name'}
+                  <Input value={draft.name} onChange={event=>updateChannelDraft(ch.id,{name:event.target.value})}
+                    minLength={2} maxLength={64} required disabled={busy} className="mt-1 h-9 text-base"/>
+                </label>
+                <Button type="submit" size="sm" variant="outline" className="h-9"
+                  disabled={busy||changedName.length<2||changedName===ch.name}
+                  loading={busyKey==='channel:name:'+ch.id}>
+                  <Check className="size-3.5"/>{pt?'Salvar nome':'Save name'}
+                </Button>
+              </form>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="min-w-[170px] flex-1 text-xs">{pt?'Acesso ao canal':'Channel access'}
+                  <select value={draft.accessMode} disabled={busy}
+                    onChange={event=>updateChannelDraft(ch.id,{accessMode:event.target.value as 'open'|'restricted'})}
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-base">
+                    <option value="open">{pt?'Aberto aos membros':'Open to members'}</option>
+                    <option value="restricted">{pt?'Restrito — por permissão':'Restricted — granted members'}</option>
+                  </select>
+                </label>
+                <Button type="button" size="sm" variant="outline" className="h-9"
+                  loading={busyKey==='channel:access:'+ch.id}
+                  disabled={busy||draft.accessMode===(ch.accessMode??'open')}
+                  onClick={()=>void action('channel:access:'+ch.id,
+                    ()=>api(endpoint+'/access',bodyFor('PUT',{accessMode:draft.accessMode})),
+                    draft.accessMode==='restricted'?(pt?'Acesso restrito ativado.':'Restricted access enabled.'):
+                      (pt?'Canal aberto para membros.':'Channel opened to members.'))}>
+                  <Check className="size-3.5"/>{pt?'Salvar acesso':'Save access'}
+                </Button>
+              </div>
+              {draft.accessMode==='restricted'&&<button type="button" disabled={busy}
+                className="text-left text-xs text-primary underline underline-offset-2"
+                onClick={()=>{setTab('members');setConfirm(null);}}>
+                {pt?'Gerenciar permissões dos membros':'Manage member access permissions'}
+              </button>}
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="min-w-[170px] flex-1 text-xs">{ch.hasPassword?(pt?'Substituir senha':'Replace password'):(pt?'Proteger com senha':'Set password')}
+                  <Input type="password" autoComplete="new-password" value={draft.password} minLength={8} maxLength={72}
+                    disabled={busy} onChange={event=>updateChannelDraft(ch.id,{password:event.target.value})}
+                    placeholder={pt?'Mínimo de 8 caracteres':'At least 8 characters'} className="mt-1 h-9 text-base"/>
+                </label>
+                <Button type="button" size="sm" variant="outline" className="h-9"
+                  disabled={busy||draft.password.length<8||draft.password.length>72}
+                  loading={busyKey==='channel:password:'+ch.id}
+                  onClick={()=>void action('channel:password:'+ch.id,
+                    ()=>api(endpoint+'/password',bodyFor('PUT',{password:draft.password})),
+                    pt?'Senha do canal atualizada.':'Channel password updated.')}>
+                  <LockKeyhole className="size-3.5"/>{pt?'Salvar senha':'Save password'}
+                </Button>
+                {ch.hasPassword&&<Button type="button" size="sm" variant="outline" className="h-9"
+                  disabled={busy} loading={busyKey==='channel:password-remove:'+ch.id}
+                  onClick={()=>request('channel:password-remove:'+ch.id,
+                    ()=>api(endpoint+'/password',bodyFor('PUT',{password:null})),
+                    pt?'Senha removida.':'Password removed.',
+                    pt?'remover proteção por senha':'remove password protection')}>
+                  <X className="size-3.5"/>{pt?'Remover senha':'Remove password'}
+                </Button>}
+              </div>
+              <div className="flex justify-end border-t border-border/70 pt-3">
+                <Button size="sm" variant="outline" className="h-9 text-destructive" disabled={busy}
+                  loading={busyKey==='channel:delete:'+ch.id}
+                  onClick={()=>request('channel:delete:'+ch.id,
+                    ()=>api(endpoint,{method:'DELETE'}),pt?'Canal excluído.':'Channel deleted.',
+                    pt?'excluir canal '+ch.name:'delete channel '+ch.name)}>
+                  <Trash2 className="size-3.5"/>{pt?'Excluir canal':'Delete channel'}
+                </Button>
+              </div>
+            </section>;
+          })}
         </Tabs.Content>}
         {role==='owner'&&<Tabs.Content value="danger" className="space-y-3 outline-none">
           <h4 className="text-xs font-semibold text-destructive">{pt?'Excluir comunidade permanentemente':'Permanently delete community'}</h4>
