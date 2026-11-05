@@ -11,6 +11,8 @@ interface ProfileMediaBucket {
 }
 interface Env {
   API_ORIGIN?: string;
+  UORQUI_ENV?: string;
+  AUTH_PROXY_ORIGIN?: string;
   PROFILE_MEDIA?: ProfileMediaBucket;
   DM_ATTACHMENTS?: ProfileMediaBucket;
   DM_ATTACHMENT_PROOF_SECRET?: string;
@@ -495,10 +497,28 @@ export default {
       }catch{return jsonError(502,'Could not cancel message');}
     }
 
+    // Preview shares existing Uorqui accounts only for login and read-only UI review.
+    // All other non-idempotent API operations are rejected before touching production.
+    const isPreview = env.UORQUI_ENV === 'preview';
+    const safeAuthPost = request.method === 'POST' &&
+      (current.pathname === '/api/auth/sign-in/email' || current.pathname === '/api/auth/sign-out');
+    if(isPreview && !['GET','HEAD','OPTIONS'].includes(request.method) && !safeAuthPost)
+      return jsonError(403, 'Esta prévia é somente para avaliação visual. Alterações estão desativadas.');
+    if(isPreview && safeAuthPost &&
+      (request.headers.get('origin') !== current.origin || request.headers.get('sec-fetch-site') === 'cross-site'))
+      return jsonError(403, 'Invalid preview origin');
+    if(isPreview && request.method === 'GET' && current.pathname === '/api/auth/verify-email')
+      return jsonError(403, 'Verification is unavailable in preview');
+
     const upstream = new URL(current.pathname + current.search, origin);
     try {
       const forwarded = new Request(upstream.toString(), request);
       forwarded.headers.delete('host');
+      // The preview is a same-origin trusted reverse proxy, not a new trusted API
+      // browser origin. Check the real origin above before sending the canonical
+      // origin to Better Auth's explicitly allowlisted origin validator.
+      if(isPreview && safeAuthPost && env.AUTH_PROXY_ORIGIN)
+        forwarded.headers.set('origin', env.AUTH_PROXY_ORIGIN);
       const response = await fetch(forwarded, { redirect: 'manual' });
       const headers = new Headers(response.headers);
       headers.set('cache-control', 'no-store');
