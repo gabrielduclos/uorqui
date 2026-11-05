@@ -285,7 +285,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           <button type="button" onClick={()=>move('communities')}
             className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
             aria-label={t('Uorqui — ir para o início')}>
-            <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-full border border-border bg-card text-[11px] font-bold tracking-tight text-foreground">U</span>
+            <img src="/icon-192.png" alt="" aria-hidden="true" className="size-7 shrink-0 rounded-full object-cover"/>
             {!sidebarCollapsed&&<><UorquiWordmark className="h-[17px] w-auto max-w-[120px] text-foreground"/><ChevronDown className="size-3.5 shrink-0 text-muted-foreground"/></>}
           </button>
           {!sidebarCollapsed&&<div className="flex shrink-0 items-center gap-0.5">
