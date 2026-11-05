@@ -512,8 +512,11 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                 const doc=event.currentTarget.contentDocument;
                 if(!doc)return;
                 const openImage=(target:EventTarget|null)=>{
-                  const image=target instanceof HTMLImageElement?target:
-                    target instanceof HTMLElement?target.closest('img'):null;
+                  // iframe elements belong to another window realm, so the
+                  // parent's HTMLImageElement instanceof checks are unreliable.
+                  const element=target as Element|null;
+                  const image=element?.tagName?.toLowerCase()==='img'?element as HTMLImageElement:
+                    element?.closest?.('img') as HTMLImageElement|null;
                   if(!image)return false;
                   const src=image.currentSrc||image.src;
                   if(!/^https:\/\//i.test(src)&&!/^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(src))return false;
@@ -527,7 +530,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                 });
                 doc.addEventListener('click',e=>{if(openImage(e.target))e.preventDefault();},true);
                 doc.addEventListener('keydown',e=>{
-                  if((e.key==='Enter'||e.key===' ')&&e.target instanceof HTMLImageElement){
+                  if((e.key==='Enter'||e.key===' ')&&(e.target as Element|null)?.tagName?.toLowerCase()==='img'){
                     if(openImage(e.target))e.preventDefault();
                   }
                 });
