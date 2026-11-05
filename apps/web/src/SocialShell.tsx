@@ -201,9 +201,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const notificationBadgeCount = activity.unread + communityUnread.locations.length + communityUnread.invites.length;
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
-  const [conversationOpened, setConversationOpened] = useState(false);
+  const [, setConversationOpened] = useState(false);
   const [channelOpened, setChannelOpened] = useState(false);
-  const [emailOpened, setEmailOpened] = useState(false);
+  const [, setEmailOpened] = useState(false);
   const [mailDeepLink,setMailDeepLink]=useState<{accountId:string;messageId:string;nonce:number}|null>(null);
   const mailLinkNonce=useRef(0);
   const [loggingOut, setLoggingOut] = useState(false);
