@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
+import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { cn } from '@/lib/utils';
 import { PreferencesControls } from './PreferencesControls';
 import { UorquiWordmark } from './UorquiWordmark';
@@ -52,6 +53,8 @@ function readLastArea(userId: string): Area {
     return 'conversations';
   }
 }
+
+const WORKSPACE_PAGE_MOTION = { duration: 0.18, ease: [0.22, 1, 0.36, 1] as [number,number,number,number] };
 
 const navigation = [
   { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
@@ -436,15 +439,20 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           <div className="h-full min-h-0 min-w-0 flex-1 overflow-hidden">
             {/* A persistent mount keeps the microphone, signaling and room state alive
                 when switching between Email, Messages, Profile and Communities. */}
-            <div hidden={area!=='communities'} data-uorqui-panel={area==='communities'?'active':'inactive'} data-direction={navDirection} className="h-full min-h-0">
+            <motion.div hidden={area!=='communities'} data-uorqui-panel={area==='communities'?'active':'inactive'}
+              data-uorqui-motion-panel data-direction={navDirection}
+              initial={{opacity:0,x:navDirection*14}}
+              animate={area==='communities'?{opacity:1,x:0}:{opacity:0,x:navDirection*14}}
+              transition={WORKSPACE_PAGE_MOTION}
+              className="h-full min-h-0 overflow-hidden">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
                 initialCommunityId={invitedCommunityId}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
-            </div>
+            </motion.div>
             {area!=='communities'&&<motion.div key={area} data-uorqui-motion-panel initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
-              transition={{duration:0.18,ease:[0.22,1,0.36,1]}} className="h-full min-h-0 overflow-hidden">
+              transition={WORKSPACE_PAGE_MOTION} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
                 onMobileOpenChange={setConversationOpened}
@@ -456,7 +464,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               items={activity.items} unread={activity.unread} loading={activity.loading}
               error={activity.error} onRefresh={()=>void activity.refresh()}
               onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>}
-            {area === 'moderation' && platformModerator === null && <div className="grid h-full place-items-center"><Spinner /></div>}
+            {area === 'moderation' && platformModerator === null &&
+              <WorkspaceContentLoading label={locale==='pt-BR'?'Carregando moderação':'Loading moderation'} className="mx-auto max-w-4xl p-6" />}
             {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
             {area === 'profile' && account.profile && (
               <ScrollArea className="h-full">
