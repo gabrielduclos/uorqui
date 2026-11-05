@@ -117,7 +117,7 @@ async function gmailHtml(data: GmailMessage, token: string): Promise<string | un
     if (bytes.length > 1_000_000 || total + bytes.length > 3_000_000) continue;
     total += bytes.length;
     const dataUri = 'data:' + item.mimeType!.toLowerCase() + ';base64,' + bytes.toString('base64');
-    const escaped = contentId.replace(/[.*+?^${}()|[\]\\]/g, '\\function gmailMessage(data: GmailMessage, full: boolean): MailMessage {');
+    const escaped = contentId.split('').map(ch => '\\^$.*+?()[]{}|'.includes(ch) ? '\\' + ch : ch).join('');
     html = html.replace(new RegExp('cid:' + escaped, 'gi'), dataUri);
   }
   return html;
