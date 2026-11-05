@@ -97,8 +97,8 @@ function statusForOutgoingBlock(messages: Message[], pt: boolean): BlockReceipt 
   return { label: pt ? 'Lida' : 'Read', updatedAt };
 }
 
-export default function LiveDirectChat({ myId, initialHandle, initialConversationId, onStarted, onMobileOpenChange, onOpenContacts }: {
-  myId: string; initialHandle?: string | null; initialConversationId?: string|null; onStarted?: () => void;
+export default function LiveDirectChat({ myId, initialHandle, initialConversationId, requestedOpenNonce, onStarted, onMobileOpenChange, onOpenContacts }: {
+  myId: string; initialHandle?: string | null; initialConversationId?: string|null; requestedOpenNonce?: number; onStarted?: () => void;
   onMobileOpenChange?: (open: boolean) => void; onOpenContacts?: () => void;
 }) {
   const { locale } = useUorquiPreferences();
@@ -287,7 +287,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   }, [myId]);
   useEffect(()=>{
     if(initialConversationId&&/^[0-9a-f-]{36}$/i.test(initialConversationId))openThread(initialConversationId);
-  },[initialConversationId,openThread]);
+  },[initialConversationId,requestedOpenNonce,openThread]);
   const closeThread = useCallback(() => {
     setConversationMenuOpen(false);setConversationConfirm(null);
     setActiveId(null);
