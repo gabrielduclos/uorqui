@@ -43,7 +43,7 @@ export function ContactToggleButton({ handle }: { handle: string }) {
     }catch(e){
       setError(e instanceof Error&&e.message==='HTTP_429'
         ?(pt?'Aguarde antes de enviar outra solicitação.':'Please wait before requesting again.')
-        :(pt?'Não foi possível atualizar a amizade.':'Could not update friendship.'));
+        :(pt?'Não foi possível atualizar o contato.':'Could not update contact.'));
     }finally{setBusy(false);}
   }
 
@@ -61,10 +61,10 @@ export function ContactToggleButton({ handle }: { handle: string }) {
     finally{setBusy(false);}
   }
 
-  const label=status==='none'?(pt?'Adicionar amigo':'Add friend')
+  const label=status==='none'?(pt?'Adicionar contato':'Add contact')
     :status==='sent'?(pt?'Cancelar pedido':'Cancel request')
-    :status==='received'?(pt?'Aceitar pedido':'Accept request')
-    :status==='friends'?(pt?'Desfazer amizade':'Unfriend')
+    :status==='received'?(pt?'Aceitar solicitação':'Accept request')
+    :status==='friends'?(pt?'Remover contato':'Remove contact')
     :status==='blocked'?(pt?'Conta bloqueada':'Blocked account'):(pt?'Carregando…':'Loading…');
   const Icon=status==='friends'?UserMinus:status==='sent'?X:status==='received'?Check:status===null?Clock:UserPlus;
 
@@ -74,7 +74,7 @@ export function ContactToggleButton({ handle }: { handle: string }) {
         <Icon className="size-4"/>{label}
       </Button>
       {status==='received'&&<Button type="button" variant="outline" disabled={busy} onClick={()=>void decline()}
-        aria-label={pt?'Recusar solicitação de amizade':'Decline friend request'}>
+        aria-label={pt?'Recusar solicitação de contato':'Decline contact request'}>
         <X className="size-4"/>{pt?'Recusar':'Decline'}
       </Button>}
     </div>

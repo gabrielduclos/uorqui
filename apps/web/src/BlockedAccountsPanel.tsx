@@ -38,7 +38,7 @@ export function BlockedAccountsPanel(){
   return <div className="space-y-3 px-2 py-2">
     <div className="flex items-start gap-2"><ShieldBan className="mt-0.5 size-5 shrink-0 text-muted-foreground"/>
       <div><h3 className="text-sm font-semibold">{pt?'Contas bloqueadas':'Blocked accounts'}</h3>
-      <p className="mt-1 text-xs text-muted-foreground">{pt?'Fotos e capas ocultas. Desbloquear não restaura a amizade.':'Photos and covers hidden. Unblocking does not restore friendship.'}</p></div></div>
+      <p className="mt-1 text-xs text-muted-foreground">{pt?'Fotos e capas ocultas. Desbloquear não adiciona o contato novamente.':'Photos and covers hidden. Unblocking does not add the contact again.'}</p></div></div>
     {error&&<p role="alert" className="text-xs text-destructive">{error}</p>}
     {loading&&<p role="status" className="text-xs text-muted-foreground">{pt?'Carregando…':'Loading…'}</p>}
     {!loading&&!blocked.length&&<p className="py-8 text-center text-xs text-muted-foreground">{pt?'Nenhuma conta bloqueada.':'No blocked accounts.'}</p>}

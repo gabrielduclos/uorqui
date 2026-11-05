@@ -33,7 +33,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
     return()=>window.clearTimeout(timer);
   },[accountId]);
   useEffect(()=>{
-    if(!accountId||installVisible||!push.supported||push.status==='ready'||push.status==='busy'){
+    if(!accountId||installVisible||!push.supported||push.status==='ready'||push.status==='busy'||push.status==='checking'){
       setAskPush(false);return;
     }
     const id='uorqui:social:push-ask:'+accountId;
@@ -81,7 +81,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
           ?pt?'Acesse o Uorqui direto da tela inicial, como um aplicativo.':'Add Uorqui to your home screen.'
           :Notification.permission==='denied'
             ?(pt?'As notificações estão bloqueadas. Libere o Uorqui nas configurações do navegador ou dispositivo.':'Notifications are blocked. Allow Uorqui in browser or device settings.')
-            :(pt?'Receba avisos de mensagens, amizades e atividades mesmo com o aplicativo fechado.':'Get alerts for messages, friends and activity when the app is closed.')}</p>
+            :(pt?'Receba avisos de mensagens, contatos e atividades mesmo com o aplicativo fechado.':'Get alerts for messages, contacts and activity when the app is closed.')}</p>
       </div>
       <button type="button" onClick={installing?()=>setInstallVisible(false):dismissPush}
         className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-muted" aria-label={pt?'Agora não':'Not now'}><X className="size-4"/></button>

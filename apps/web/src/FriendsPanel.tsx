@@ -42,7 +42,7 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
   },[]);
   useEffect(()=>{
     let active=true;
-    void refresh().catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar suas amizades.':'Could not load your friends.');}});
+    void refresh().catch(()=>{if(active){setLoading(false);setError(pt?'Não foi possível carregar seus contatos.':'Could not load your contacts.');}});
     const update=()=>{clearProfileImageCache();void refresh().catch(()=>{});};
     const focus=()=>void refresh().catch(()=>{});
     window.addEventListener('uorqui:friends-updated',update);
@@ -85,22 +85,22 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
       await friendsRequest(path,options);
       await refresh();
       window.dispatchEvent(new Event('uorqui:friends-updated'));
-      setNotice(kind==='request'?(pt?'Solicitação enviada.':'Friend request sent.')
-        :kind==='accept'?(pt?'Agora vocês são amigos.':'You are now friends.')
+      setNotice(kind==='request'?(pt?'Solicitação enviada.':'Contact request sent.')
+        :kind==='accept'?(pt?'Contato adicionado.':'Contact added.')
         :kind==='decline'?(pt?'Solicitação recusada.':'Request declined.')
-        :(pt?'Contato removido.':'Friend removed.'));
+        :(pt?'Contato removido.':'Contact removed.'));
     }catch(e){
       const code=e instanceof Error?e.message:'';
       setError(code==='HTTP_429'
         ?(pt?'Limite ou intervalo de solicitações atingido. Tente mais tarde.':'Request rate limit or cooldown reached.')
         :code==='HTTP_409'
-        ?(pt?'Já existe uma solicitação ou o limite de amigos foi atingido.':'A request already exists or the friend limit was reached.')
-        :(pt?'Não foi possível atualizar a amizade.':'Could not update friendship.'));
+        ?(pt?'Já existe uma solicitação ou o limite de contatos foi atingido.':'A request already exists or the contact limit was reached.')
+        :(pt?'Não foi possível atualizar o contato.':'Could not update contact.'));
     }finally{setPending(null);}
   }
   const pendingSet=new Set([...list.friends,...list.received,...list.sent].map(p=>p.handle));
   const visible=(tab==='blocked'?[]:list[tab]).filter(p=>(p.displayName+' '+p.handle).toLocaleLowerCase(locale).includes(search.trim().toLocaleLowerCase(locale)));
-  const labels:Record<Tab,string>=pt?{friends:'Amigos',received:'Recebidos',sent:'Enviados',blocked:'Bloqueados'}:{friends:'Friends',received:'Received',sent:'Sent',blocked:'Blocked'};
+  const labels:Record<Tab,string>=pt?{friends:'Contatos',received:'Recebidos',sent:'Enviados',blocked:'Bloqueados'}:{friends:'Contacts',received:'Received',sent:'Sent',blocked:'Blocked'};
 
   const item=(person:Friend,kind:Tab)=> <div key={person.handle} className="flex min-h-[66px] items-center gap-2 rounded-xl px-2 py-2 hover:bg-secondary/60">
     <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
@@ -116,7 +116,7 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
         <MessageCircle className="size-4"/>
       </button>
       <button type="button" disabled={!!pending} onClick={()=>void action(person.handle,'remove')}
-        aria-label={pt?'Desfazer amizade com '+person.displayName:'Unfriend '+person.displayName}
+        aria-label={pt?'Remover contato '+person.displayName:'Remove contact '+person.displayName}
         className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary disabled:opacity-50">
         <UserRoundX className="size-4"/>
       </button>
@@ -134,8 +134,8 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
 
   return <div className="space-y-3 px-1 pb-6">
     <div className="flex items-center justify-between gap-2 px-2">
-      <div><h3 className="text-sm font-semibold">{pt?'Amizades':'Friends'}</h3>
-        <p className="text-xs text-muted-foreground">{pt?'Pedidos e contatos mútuos':'Requests and mutual friends'}</p></div>
+      <div><h3 className="text-sm font-semibold">{pt?'Contatos':'Contacts'}</h3>
+        <p className="text-xs text-muted-foreground">{pt?'Pessoas adicionadas e solicitações':'Saved contacts and requests'}</p></div>
       <Button size="sm" variant={adding?'outline':'secondary'}
         onClick={()=>{setAdding(v=>!v);setSearch('');setQuery('');setError('');setNotice('');}}>
         {adding?<X className="size-4"/>:<UserPlus className="size-4"/>}
@@ -167,7 +167,7 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
       </div>)}
       <p className="px-3 text-xs text-muted-foreground">{pt?'Perfis privados não aparecem na busca; use o @usuário exato para solicitar.':'Private profiles are not searchable; use the exact @username to request.'}</p>
     </div>:<>
-      <div className="grid grid-cols-4 gap-1 rounded-xl bg-secondary/70 p-1" role="tablist" aria-label={pt?'Listas de amizade':'Friendship lists'}>
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-secondary/70 p-1" role="tablist" aria-label={pt?'Listas de contatos':'Contact lists'}>
         {(['friends','received','sent','blocked'] as const).map(kind=><button key={kind} type="button" role="tab" aria-selected={tab===kind}
           onClick={()=>{setTab(kind);setSearch('');setNotice('');}}
           className={'flex min-h-10 items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium '+(tab===kind?'bg-card shadow-sm':'text-muted-foreground hover:text-foreground')}>
@@ -177,12 +177,12 @@ export function FriendsPanel({ onMessage, busy }: { onMessage: (handle:string)=>
       {tab==='blocked'?<BlockedAccountsPanel/>:<>
       <div className="relative px-1"><Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
         <Input value={search} onChange={e=>setSearch(e.target.value)} className="h-11 rounded-xl bg-background pl-9 text-base"
-          aria-label={pt?'Pesquisar amigos':'Search friends'} placeholder={pt?'Pesquisar por nome ou @usuário':'Search by name or @username'}/>
+          aria-label={pt?'Pesquisar contatos':'Search contacts'} placeholder={pt?'Pesquisar por nome ou @usuário':'Search by name or @username'}/>
       </div>
-      {loading&&<p role="status" className="px-3 py-4 text-sm text-muted-foreground">{pt?'Carregando amizades…':'Loading friends…'}</p>}
+      {loading&&<p role="status" className="px-3 py-4 text-sm text-muted-foreground">{pt?'Carregando contatos…':'Loading contacts…'}</p>}
       {!loading&&!visible.length&&<div className="px-4 py-10 text-center"><Users className="mx-auto size-9 text-primary"/>
-        <h4 className="mt-3 text-sm font-semibold">{tab==='friends'?(pt?'Nenhum amigo ainda':'No friends yet'):tab==='received'?(pt?'Nenhuma solicitação recebida':'No incoming requests'):(pt?'Nenhuma solicitação enviada':'No sent requests')}</h4>
-        <p className="mt-2 text-xs text-muted-foreground">{pt?'A amizade só é confirmada quando a solicitação é aceita.':'Friendship starts when a request is accepted.'}</p>
+        <h4 className="mt-3 text-sm font-semibold">{tab==='friends'?(pt?'Nenhum contato ainda':'No contacts yet'):tab==='received'?(pt?'Nenhuma solicitação recebida':'No incoming requests'):(pt?'Nenhuma solicitação enviada':'No sent requests')}</h4>
+        <p className="mt-2 text-xs text-muted-foreground">{pt?'O contato é adicionado quando a solicitação é aceita.':'A contact is added when a request is accepted.'}</p>
       </div>}
       {visible.map(person=>item(person,tab))}
       </>}

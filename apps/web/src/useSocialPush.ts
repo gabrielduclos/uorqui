@@ -2,7 +2,9 @@ import {useCallback,useEffect,useState} from 'react';
 import {iosBrowser,installedPwa} from './pwaInstallPrompt';
 
 const key='uorqui:social:push-account';
-type Status='unsupported'|'disabled'|'ready'|'busy'|'error';
+const pushChangedEvent='uorqui:push-changed';
+type Status='unsupported'|'checking'|'disabled'|'ready'|'busy'|'error';
+
 function b64Bytes(s:string){
   const input=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));
   return Uint8Array.from(input,ch=>ch.charCodeAt(0));
@@ -12,18 +14,30 @@ function supported(){
     'PushManager'in window&&'Notification'in window&&
     (!iosBrowser()||installedPwa());
 }
-function accountStored(){
-  try{return localStorage.getItem(key);}catch{return null;}
-}
 function setStored(id:string|null){
   try{id?localStorage.setItem(key,id):localStorage.removeItem(key);}catch{}
 }
+function broadcastChange(){
+  window.dispatchEvent(new Event(pushChangedEvent));
+}
 async function registration(){
-  const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'});
+  const existing=await navigator.serviceWorker.getRegistration('/');
+  const reg=existing??await navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'});
   return reg.active?reg:navigator.serviceWorker.ready;
 }
+async function saveSubscription(sub:PushSubscription){
+  const saved=sub.toJSON();
+  if(!saved.endpoint||!saved.keys?.p256dh||!saved.keys.auth)
+    throw Error('Inscrição de notificações inválida');
+  const response=await fetch('/api/v1/push/subscription',{
+    method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({subscription:saved})
+  });
+  if(!response.ok)throw Error('Falha ao sincronizar notificações com a conta');
+}
 export async function deactivatePush(){
-  if(!('serviceWorker'in navigator))return;
+  if(!('serviceWorker'in navigator)){setStored(null);broadcastChange();return;}
   try{
     const reg=await navigator.serviceWorker.getRegistration('/');
     const sub=await reg?.pushManager.getSubscription();
@@ -32,42 +46,62 @@ export async function deactivatePush(){
         headers:{'content-type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}).catch(()=>{});
       await sub.unsubscribe().catch(()=>false);
     }
-  }finally{setStored(null);}
+  }finally{setStored(null);broadcastChange();}
 }
 export function useSocialPush(accountId:string){
-  const [status,setStatus]=useState<Status>(()=>supported()?'disabled':'unsupported');
+  const [status,setStatus]=useState<Status>(()=>supported()?'checking':'unsupported');
   const [error,setError]=useState('');
   useEffect(()=>{
     if(!supported()){setStatus('unsupported');return;}
     let live=true;
+    let inFlight=false;
     async function restore(){
+      if(inFlight)return;
+      inFlight=true;
       try{
+        if(Notification.permission!=='granted'){
+          if(live){setStatus('disabled');setError('');}
+          return;
+        }
         const reg=await registration();
         const sub=await reg.pushManager.getSubscription();
         if(!live)return;
-        if(accountStored()!==accountId||!sub||Notification.permission!=='granted'){
-          setStatus('disabled');return;
+        if(!sub){setStatus('disabled');setError('');return;}
+        // A valid browser subscription is authoritative: localStorage may have
+        // been cleared, or another mounted hook may have enabled this device.
+        await saveSubscription(sub);
+        if(!live)return;
+        setStored(accountId);
+        setError('');
+        setStatus('ready');
+      }catch(e){
+        if(live){
+          setStatus('error');
+          setError(e instanceof Error?e.message:String(e));
         }
-        const saved=sub.toJSON();
-        if(!saved.keys?.p256dh||!saved.keys.auth)return;
-        const result=await fetch('/api/v1/push/subscription',{
-          method:'POST',credentials:'same-origin',cache:'no-store',
-          headers:{'content-type':'application/json'},
-          body:JSON.stringify({subscription:saved})
-        });
-        if(live)setStatus(result.ok?'ready':'error');
-      }catch{if(live)setStatus('error');}
+      }finally{inFlight=false;}
     }
     void restore();
-    return()=>{live=false;};
+    const refresh=()=>{void restore();};
+    window.addEventListener(pushChangedEvent,refresh);
+    window.addEventListener('focus',refresh);
+    return()=>{live=false;window.removeEventListener(pushChangedEvent,refresh);window.removeEventListener('focus',refresh);};
   },[accountId]);
   const enable=useCallback(async()=>{
     if(!supported()){setStatus('unsupported');return;}
     setStatus('busy');setError('');
     try{
-      // Permission must only be requested from a deliberate click/tap.
-      const permission=await Notification.requestPermission();
-      if(permission!=='granted'){setStatus('disabled');return;}
+      // Only request a new browser permission during an explicit click/tap.
+      // An existing grant must reconnect without triggering another permission dialog.
+      const permission=Notification.permission==='default'?
+        await Notification.requestPermission():Notification.permission;
+      if(permission!=='granted'){
+        setStatus('disabled');
+        setError(permission==='denied'?
+          'Notificações bloqueadas pelo navegador. Permita notificações nas configurações do site e tente novamente.':
+          'Permissão de notificações não concedida.');
+        return;
+      }
       const config=await fetch('/api/v1/push/config',{cache:'no-store'}).then(async r=>{
         if(!r.ok)throw Error('Configuração de push indisponível');
         return r.json() as Promise<{publicKey:string|null;enabled:boolean}>;
@@ -84,14 +118,16 @@ export function useSocialPush(accountId:string){
         }
       }
       if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64Bytes(config.publicKey)});
-      const response=await fetch('/api/v1/push/subscription',{
-        method:'POST',credentials:'same-origin',cache:'no-store',
-        headers:{'content-type':'application/json'},body:JSON.stringify({subscription:sub.toJSON()})
-      });
-      if(!response.ok)throw Error('Falha ao registrar este dispositivo');
-      setStored(accountId);setStatus('ready');
+      await saveSubscription(sub);
+      setStored(accountId);
+      setStatus('ready');
+      broadcastChange();
     }catch(e){setError(e instanceof Error?e.message:String(e));setStatus('error');}
   },[accountId]);
-  const disable=useCallback(async()=>{setStatus('busy');try{await deactivatePush();setStatus('disabled');}catch{setStatus('error');}},[]);
+  const disable=useCallback(async()=>{
+    setStatus('busy');
+    try{await deactivatePush();setError('');setStatus('disabled');}
+    catch(e){setError(e instanceof Error?e.message:String(e));setStatus('error');}
+  },[]);
   return {status,error,enable,disable,supported:status!=='unsupported'};
 }
