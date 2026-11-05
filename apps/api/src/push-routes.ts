@@ -275,6 +275,31 @@ export async function pushActivityNotification(notificationId:string){
   }));
 }
 
+/** New-mail Web Push follows the same account-bound subscription and opt-out
+ * rules as messages. Never send a mail notification to a different user. */
+export async function pushMailNotification(recipientId: string, accountId: string, message: {
+  id: string; from: string; subject: string;
+}) {
+  if (!enabled()) return;
+  const subscriptions = await getPool().query<Subscription>(
+    'SELECT s.endpoint,s.p256dh,s.auth,s.user_id FROM push_subscriptions s '+
+    'JOIN mail_connections m ON m.user_id=s.user_id AND m.id=$2 '+
+    'LEFT JOIN notification_preferences np ON np.user_id=s.user_id '+
+    'WHERE s.user_id=$1 AND COALESCE(np.email_message,true)=true '+
+    'ORDER BY s.updated_at DESC LIMIT 10', [recipientId, accountId]);
+  const title = ('Email · ' + (message.from || 'Novo remetente')).slice(0,80);
+  const body = (message.subject || '(Sem assunto)').slice(0,180);
+  await Promise.allSettled(subscriptions.rows.map(async sub => {
+    try {
+      const status = await sendPush(sub, {kind:'mail',recipientId,accountId,
+        messageId:message.id,title,body});
+      if (status===404 || status===410) await getPool().query(
+        'DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',
+        [sub.endpoint,recipientId]);
+    } catch { /* Browser notification delivery is best effort. */ }
+  }));
+}
+
 export function registerPushRoutes(app:FastifyInstance,readSession:SessionReader){
   async function me(request:FastifyRequest){
     const session=await readSession(request);
