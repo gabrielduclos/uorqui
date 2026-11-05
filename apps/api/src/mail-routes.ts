@@ -163,7 +163,17 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     } catch (error) { return unavailable(reply, error); }
   });
 
-  app.post('/api/v1/mail/accounts/:accountId/messages/:messageId/reply', { schema: {
+  app.post('/api/v1/mail/accounts/:accountId/messages/:messageId/reply', {
+    // Reject unexpected recipient/subject before Fastify's schema validation can
+    // strip extra fields. Replies must derive the recipient from the provider.
+    preValidation: async (request, reply) => {
+      const body = request.body;
+      if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some(key => key !== 'body')) {
+        return reply.code(400).send({ error: 'MAIL_INVALID_REPLY_BODY' });
+      }
+    },
+    schema: {
     params: accountMessageParams,
     body: { type: 'object', additionalProperties: false, required: ['body'],
       properties: { body: { type: 'string', minLength: 1, maxLength: 30000, pattern: '\\S' } } },
