@@ -1185,7 +1185,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {conversationConfirm==='delete'
                 ?(pt?'A conversa e suas mensagens antigas desaparecerão somente para você. A outra pessoa mantém o histórico. Mensagens novas poderão reabrir a conversa.':'This conversation and past messages will be hidden only for you. The other person keeps their history. New messages can reopen it.')
-                :(pt?'Vocês não poderão trocar mensagens e a amizade será encerrada. Você poderá desbloquear depois nas configurações.':'You will no longer be able to message each other and your friendship will end. You can unblock later in settings.')}
+                :(pt?'Vocês não poderão trocar mensagens e o contato será removido. Você poderá desbloquear depois no perfil.':'You will no longer be able to message each other and the contact will be removed. You can unblock later from your profile.')}
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" disabled={conversationBusy} onClick={()=>setConversationConfirm(null)}>{pt?'Cancelar':'Cancel'}</Button>
