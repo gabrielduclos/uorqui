@@ -10,8 +10,34 @@ import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 type Provider = 'gmail' | 'outlook';
 type MailAccount = { id: string; provider: Provider; email: string };
 type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string };
-type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[] };
+type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[]; webOrigin?: string };
 const providerName = (provider: Provider) => provider === 'gmail' ? 'Gmail' : 'Outlook';
+function mailOAuthFailureMessage(reason: string, pt: boolean): string {
+  switch (reason) {
+    case 'session': return pt
+      ? 'Sua sessão não foi reconhecida no retorno do Google. Abra o domínio oficial do Uorqui, faça login e tente conectar novamente.'
+      : 'Your Uorqui session was not recognized after returning from Google. Sign in on the official Uorqui domain and try again.';
+    case 'state': return pt
+      ? 'A tentativa de autorização expirou ou não corresponde à sessão atual. Volte ao Uorqui e inicie uma nova conexão.'
+      : 'This authorization attempt expired or does not match your current session. Start a new connection.';
+    case 'denied': return pt
+      ? 'O Google não autorizou o acesso. Se o aplicativo estiver em teste, inclua sua conta Gmail nos usuários de teste do Google Cloud e tente novamente.'
+      : 'Google did not grant access. If the app is in testing, add your Gmail account as a Google Cloud test user and retry.';
+    case 'token': return pt
+      ? 'O Google não concluiu a troca de credenciais. Confira o Client ID, o Client Secret e a URI de redirecionamento configurados no Google Cloud.'
+      : 'Google did not complete the token exchange. Check the OAuth Client ID, Client Secret and redirect URI in Google Cloud.';
+    case 'mailbox': return pt
+      ? 'A autorização chegou ao servidor, mas o Gmail não liberou a caixa de entrada. Confirme que a Gmail API está ativada e os escopos foram concedidos.'
+      : 'Authorization reached the server, but Gmail mailbox access failed. Enable the Gmail API and check the granted scopes.';
+    case 'storage': return pt
+      ? 'O Google autorizou o acesso, mas não foi possível salvar a conexão no banco de dados. Confira os logs da API.'
+      : 'Google granted access, but the server could not save the connection. Check API logs.';
+    case 'invalid_return': return pt
+      ? 'O retorno do provedor estava incompleto. Reabra o Uorqui e inicie uma nova conexão.'
+      : 'The provider callback was incomplete. Reopen Uorqui and start a new connection.';
+    default: return pt ? 'Não foi possível conectar a conta. Tente novamente.' : 'Could not connect your account. Please try again.';
+  }
+}
 
 async function requestMail<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch('/api/v1/mail/' + path, { credentials: 'same-origin', cache: 'no-store', ...init });
@@ -24,6 +50,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const { locale } = useUorquiPreferences(), pt = locale === 'pt-BR';
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
   const [providers, setProviders] = useState<Accounts['providers']>([]);
+  const [webOrigin, setWebOrigin] = useState('');
   const [accountId, setAccountId] = useState('');
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [accountRefresh, setAccountRefresh] = useState(0);
@@ -42,6 +69,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     const value = new URLSearchParams(window.location.search).get('mail');
     return value === 'connected' ? 'connected' : value === 'failed' ? 'failed' : '';
   });
+  const [mailFailureReason] = useState(() => new URLSearchParams(window.location.search).get('mail_reason') ?? '');
   const [connecting, setConnecting] = useState<Provider | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [compose, setCompose] = useState(false);
@@ -54,7 +82,10 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   useEffect(() => { onMobileOpenChange(open); return () => onMobileOpenChange(false); }, [open, onMobileOpenChange]);
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.has('mail')) { url.searchParams.delete('mail'); window.history.replaceState({}, '', url.pathname + url.search + url.hash); }
+    if (url.searchParams.has('mail') || url.searchParams.has('mail_reason')) {
+      url.searchParams.delete('mail'); url.searchParams.delete('mail_reason');
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    }
     return () => detailAbort.current?.abort();
   }, []);
 
@@ -67,7 +98,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     setLoadingAccounts(true); setError('');
     void requestMail<Accounts>('accounts', { signal: controller.signal }).then(data => {
       if (controller.signal.aborted) return;
-      setAccounts(data.accounts); setProviders(data.providers);
+      setAccounts(data.accounts); setProviders(data.providers); setWebOrigin(data.webOrigin ?? '');
       setAccountId(previous => data.accounts.some(item => item.id === previous) ? previous : data.accounts[0]?.id ?? '');
     }).catch(error => { if (!controller.signal.aborted) setError(explainError(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoadingAccounts(false); });
@@ -92,11 +123,20 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     if (connecting) return;
     setConnecting(provider); setError('');
     try {
+      // OAuth callbacks use WEB_ORIGIN. Different hosts do not share session cookies.
+      if (webOrigin && window.location.origin !== webOrigin)
+        throw Error('MAIL_ORIGIN_MISMATCH');
       const data = await requestMail<{ url: string }>('oauth/' + provider, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       const url = new URL(data.url);
       if (url.protocol !== 'https:' || !['accounts.google.com', 'login.microsoftonline.com'].includes(url.hostname)) throw Error('MAIL_UNAVAILABLE');
       window.location.assign(url.toString());
-    } catch (error) { setError(explainError(error)); setConnecting(null); }
+    } catch (error) {
+      setError(error instanceof Error && error.message === 'MAIL_ORIGIN_MISMATCH'
+        ? (pt ? 'Abra ' + webOrigin + ', faça login e conecte seu email por esse endereço. A sessão de outro domínio não é compartilhada.'
+          : 'Open ' + webOrigin + ', sign in and connect your email there. Sessions cannot be shared between domains.')
+        : explainError(error));
+      setConnecting(null);
+    }
   }
   async function disconnect() {
     if (!account || disconnecting || !window.confirm(pt ? 'Desconectar ' + account.email + '? Seus emails continuarão no provedor.' : 'Disconnect ' + account.email + '? Your email will remain with the provider.')) return;
@@ -163,7 +203,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         </div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.') : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.') : (pt ? 'Não foi possível conectar a conta. Tente novamente.' : 'Could not connect your account. Please try again.')}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
+        {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.') : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.') : mailOAuthFailureMessage(mailFailureReason, pt)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
         {error && <div role="alert" className="m-3 rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" className="mt-2" onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}>{pt ? 'Tentar novamente' : 'Retry'}</Button></div>}
         {(loadingAccounts || (loading && !messages.length)) &&
           <WorkspaceContentLoading label={pt?'Carregando emails':'Loading emails'} rows={4} className="p-4"/>}
@@ -171,6 +211,10 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
           <h2 className="font-medium">{pt ? 'Seu email, por perto' : 'Your email, close by'}</h2>
           <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail ou Outlook para acompanhar sua caixa de entrada e enviar emails sem sair do Uorqui.' : 'Connect Gmail or Outlook to follow your inbox and send email from Uorqui.'}</p>
           {connectButtons}
+          {webOrigin && window.location.origin !== webOrigin && <p className="text-xs leading-5 text-muted-foreground">
+            {pt ? 'Para vincular sua conta, acesse o domínio oficial: ' : 'To connect your mailbox, open the official domain: '}
+            <a className="font-medium underline underline-offset-2" href={webOrigin}>{webOrigin}</a>
+          </p>}
           {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'A conexão estará disponível quando a integração OAuth for configurada pelo administrador.' : 'Connection will be available once the administrator configures OAuth.'}</p>}
           <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Autorização pelo provedor, sem compartilhar sua senha com o Uorqui.' : 'Authorize through your provider without sharing your password with Uorqui.'}</p>
         </div>}
