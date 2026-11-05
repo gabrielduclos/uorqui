@@ -386,7 +386,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         </div>
       </aside>
 
-      <div data-uorqui-inset-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card md:my-2 md:mr-2 md:rounded-2xl md:border md:border-border md:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+      <div data-uorqui-inset-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card md:my-2 md:mr-2 md:h-auto md:rounded-2xl md:border md:border-border md:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] sm:px-5 md:h-13 md:min-h-13 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => move('communities')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
