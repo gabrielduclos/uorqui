@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { dmStreamConnected, invalidateDmInbox, loadDmInboxNetwork, subscribeDmStream } from './dmEventStream';
 import { peekDmInbox, readDmInbox } from './dmCache';
+import {clearReadPush} from './readPushNotifications';
 
 /** One source of unread truth; shares the messenger's network and SSE transport. */
 export function useUnreadDirectMessages(accountId: string) {
@@ -35,6 +36,10 @@ export function useUnreadDirectMessages(accountId: string) {
         const count = payload.conversations.reduce((sum, thread) =>
           sum + (thread.archived ? 0 : Math.max(0, Number(thread.unreadCount) || 0)), 0);
         setUnread(count);
+        // Sync already-read conversations even when the user is in another module.
+        const readConversations=payload.conversations.filter(thread=>
+          thread.unreadCount===0&&/^[0-9a-f-]{36}$/i.test(thread.id)).slice(0,100);
+        if(readConversations.length)clearReadPush(readConversations.map(thread=>({kind:'dm' as const,conversationId:thread.id})));
         receivedFromServer = true;
         lastRefresh = Date.now();
         for (const thread of payload.conversations) {
