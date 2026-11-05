@@ -138,9 +138,10 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
       data:{url,kind:payload.kind,conversationId:payload.conversationId||'',messageId:payload.messageId||''}
     });
     await acknowledge(payload);
-    if(payload.kind==='activity'){
+    if(payload.kind==='activity'||payload.kind==='community'||payload.kind==='community-invite'){
       const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-      pages.forEach(client=>client.postMessage({type:'uorqui:activity-update'}));
+      const type=payload.kind==='activity'?'uorqui:activity-update':'uorqui:community-push-update';
+      pages.forEach(client=>client.postMessage({type}));
     }
   }catch{/* Unsupported browser notifications cannot claim delivery. */}
 })());});
