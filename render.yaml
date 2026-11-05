@@ -18,10 +18,13 @@ services:
         value: production
       - key: ENABLE_DEV_SIGNUP
         value: "false"
+      # These URLs must use the same canonical hostname as the browser session.
+      # Google/Outlook OAuth redirects use WEB_ORIGIN; an old workers.dev
+      # hostname cannot share login cookies with https://uorqui.app.
       - key: AUTH_BASE_URL
-        value: https://main.uorqui1.workers.dev
+        value: https://uorqui.app
       - key: WEB_ORIGIN
-        value: https://main.uorqui1.workers.dev
+        value: https://uorqui.app
       - key: AUTH_SECRET
         generateValue: true
       - key: DATABASE_URL
