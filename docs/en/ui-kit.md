@@ -197,3 +197,9 @@ Check module navigation, long history, channel switching, email details, mobile/
 - Page transitions and content-only loading remain scoped to the content area, preserving the shell and ongoing voice sessions.
 
 Test with multiple accounts and revoked memberships: open/restricted channels, password rotation, invitation acceptance/decline, unread badges and delayed push delivery.
+
+## Mobile header and notification return navigation (2026-11-05)
+
+- The mobile header shows the pixel-art **Uorqui** wordmark instead of the active module name. The logo still opens Messages; the other header controls remain available.
+- Tapping the desktop notification bell or the mobile Notifications tab opens Notifications and remembers the previous module. Tapping it again while Notifications is open returns to that module, including when a deep link opened Notifications. The Communities component stays mounted to preserve voice sessions.
+- This behavior does not clear notifications, change read receipts or alter content-only loading/page animations.
