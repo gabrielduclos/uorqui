@@ -283,7 +283,7 @@ export function PublicProfilePage({ handle, onMessage }: { handle: string; onMes
       {status === 'missing' && <div className="flex flex-col items-center gap-3 py-16 text-center">
           <LockKeyhole className="size-10 text-muted-foreground"/>
           <h1 className="text-xl font-semibold">{pt ? 'Perfil privado ou indisponível' : 'Private or unavailable profile'}</h1>
-          <p className="max-w-sm text-sm text-muted-foreground">{pt ? 'Se você conhece este @usuário, pode enviar uma solicitação de amizade. O perfil só será mostrado após a aceitação.' : 'If you know this @username, send a friend request. The profile becomes available after acceptance.'}</p>
+          <p className="max-w-sm text-sm text-muted-foreground">{pt ? 'Se você conhece este @usuário, pode enviar uma solicitação de contato. O perfil só será mostrado após a aceitação.' : 'If you know this @username, send a contact request. The profile becomes available after acceptance.'}</p>
           {onMessage && <ContactToggleButton handle={handle}/>}
           {onMessage && <AccountBlockButton handle={handle} compact />}
           <Button variant="outline" asChild><a href="/" onClick={navigateBackFromPublicProfile}>{pt ? 'Voltar ao Uorqui' : 'Back to Uorqui'}</a></Button>
