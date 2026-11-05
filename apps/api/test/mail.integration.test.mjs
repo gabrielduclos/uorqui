@@ -100,7 +100,7 @@ test('OAuth starts only for Gmail and preserves distinct addresses per user', as
   assert.equal(list.accounts.filter(a=>a.provider==='gmail').length, 2);
 });
 test('manual server config validates fields without exposing passwords', async () => {
-  const valid = { email: 'me@company.example.com', imapHost: 'localhost',
+  const valid = { email: 'me@company.example.com', imapHost: 'imap.service.invalid',
     imapPort: 993, smtpHost: 'smtp.example.com', smtpPort: 587,
     username: 'me@company.example.com', password: 'private-app-secret' };
   const noAuth = await request('manual', { method: 'POST', body: valid, user: null });
