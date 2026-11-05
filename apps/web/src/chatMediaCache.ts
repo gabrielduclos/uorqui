@@ -96,7 +96,8 @@ export async function ensureChatMediaCached(url: string): Promise<string | null>
         const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:abort.signal});
         if(!response.ok)throw Error('Not authorized to access DM media');
         const kind=(response.headers.get('content-type')??'').split(';')[0].toLowerCase();
-        if(!/^(image|audio|video)\//.test(kind))throw Error('Unexpected media content');
+        if(!(/^(image|audio|video)\//.test(kind)||/^(application\/(?:pdf|zip|octet-stream|msword|vnd\.(?:openxmlformats-officedocument|ms-excel|ms-powerpoint))|text\/plain)$/.test(kind)))
+          throw Error('Unexpected media content');
         if(response.status===206)throw Error('Partial response must not be cached as complete');
         const length=Number(response.headers.get('content-length')??0);
         if(length>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
