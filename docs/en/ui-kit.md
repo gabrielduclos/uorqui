@@ -138,3 +138,10 @@ The UI kit now includes an original, reusable Sprintrix-inspired implementation,
 This is a **visual migration only**: React/Vite, Fastify/Render, Better Auth, Neon, SSE, uploads and WebRTC remain in place. `LiveCommunities` stays mounted during module changes to preserve voice sessions. Mock preview data is never used in production.
 
 **Verify:** `npm run build -w @uorqui/web`, `npm run check:worker -w @uorqui/web`, authenticated navigation, both themes, full sidebar collapse and voice continuity.
+
+## Community rail and desktop notification placement (2026-11-05)
+
+- The community icon rail now sits **inside the inset content panel**, below its header, not alongside the main sidebar. It appears only within Communities and is hidden on mobile when a channel is open; its background and divider follow the content panel.
+- **Notifications** moved from the desktop sidebar to a **header bell button** with an unread count and navigation to the existing notification screen. Mobile notifications stay in the bottom navigation.
+- The main sidebar has no community list or notification item. The Communities module is still accessible, as are search and profile via existing controls.
+- The API, persistence, SSE and WebRTC are untouched; `LiveCommunities` stays mounted across navigation.
