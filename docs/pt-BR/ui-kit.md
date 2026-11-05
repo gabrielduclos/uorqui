@@ -256,3 +256,9 @@ Validar ida e volta entre módulos, troca de canais, abertura de conversa, e-mai
 - As mesmas animações curtas de troca de página e os skeletons internos à área de conteúdo continuam sendo usados; menu, cabeçalho e salas de voz persistentes não são desmontados em navegações.
 
 Testar com duas contas: enviar mensagem em canal aberto/fechado, revogar acesso antes do recebimento do push, aceitar/recusar convite, renomear/restringir/proteger canais e confirmar que a central e os badges mostram apenas recursos autorizados.
+
+## Cabeçalho móvel e retorno das notificações (05/11/2026)
+
+- O cabeçalho do celular exibe a marca pixelada **Uorqui**, independente do módulo ativo, no lugar do título da tela. A marca continua levando a Mensagens quando tocada; os demais controles não mudam.
+- O sino do cabeçalho desktop e a aba **Notificações** no menu inferior mobile são alternadores: ao abrir notificações, a navegação memoriza o módulo anterior; ao tocar no mesmo sino/aba novamente, retorna a esse módulo. Links diretos de push também mantêm a regra. O conteúdo de Comunidades segue montado para preservar chamadas de voz.
+- A volta não apaga notificações, não altera recibos de leitura e preserva o mecanismo de carregamento e animação somente do conteúdo.
