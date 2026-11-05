@@ -12,8 +12,8 @@ const options=[
   {key:'direct_message',pt:'Mensagens privadas',en:'Direct messages',icon:MessageCircle},
   {key:'community_message',pt:'Mensagens em comunidades e canais',en:'Community and channel messages',icon:Users},
   {key:'community_request',pt:'Solicitações das comunidades e reuniões',en:'Community and meeting join requests',icon:UserPlus},
-  {key:'friend_request',pt:'Solicitações de amizade',en:'Friend requests',icon:UserPlus},
-  {key:'friend_accepted',pt:'Amizades aceitas',en:'Accepted friend requests',icon:UserRoundCheck}
+  {key:'friend_request',pt:'Solicitações de contato',en:'Contact requests',icon:UserPlus},
+  {key:'friend_accepted',pt:'Contatos adicionados',en:'Accepted contact requests',icon:UserRoundCheck}
 ] as const;
 
 export function NotificationSettings({accountId,onBack}:{accountId:string;onBack:()=>void}){
