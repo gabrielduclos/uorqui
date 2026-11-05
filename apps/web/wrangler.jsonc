@@ -44,7 +44,8 @@
   },
   "previews": {
     "vars": {
-      "API_ORIGIN": "https://preview-api.invalid",
+      "API_ORIGIN": "https://uorqui-social-api.onrender.com",
+      "AUTH_PROXY_ORIGIN": "https://uorqui.app",
       "UORQUI_ENV": "preview"
     },
     "r2_buckets": [
