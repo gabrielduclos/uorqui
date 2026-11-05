@@ -10,7 +10,7 @@ export type PushSettings=Record<PushKind,boolean>;
 const initial:PushSettings={direct_message:true,community_message:true,community_request:true,friend_request:true,friend_accepted:true};
 const options=[
   {key:'direct_message',pt:'Mensagens privadas',en:'Direct messages',icon:MessageCircle},
-  {key:'community_message',pt:'Mensagens em comunidades',en:'Community messages',icon:Users},
+  {key:'community_message',pt:'Mensagens em comunidades e canais',en:'Community and channel messages',icon:Users},
   {key:'community_request',pt:'Solicitações das comunidades e reuniões',en:'Community and meeting join requests',icon:UserPlus},
   {key:'friend_request',pt:'Solicitações de amizade',en:'Friend requests',icon:UserPlus},
   {key:'friend_accepted',pt:'Amizades aceitas',en:'Accepted friend requests',icon:UserRoundCheck}
