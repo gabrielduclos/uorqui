@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, ChevronDown, Mail, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, ShieldCheck, Users,
+  Bell, Mail, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
