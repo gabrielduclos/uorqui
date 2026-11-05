@@ -157,7 +157,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const communityUnreadCount = Object.values(communityUnread.communities).reduce((sum, count) => sum + count, 0);
   // Count unread channel locations once per channel, not once per message.
-  const notificationBadgeCount = activity.unread + communityUnread.locations.length;
+  const notificationBadgeCount = activity.unread + communityUnread.locations.length + communityUnread.invites.length;
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
@@ -217,6 +217,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     const onMessage=(event:MessageEvent)=>{
       if(event.data?.type==='uorqui:push-open'&&typeof event.data.url==='string')open(event.data.url);
       if(event.data?.type==='uorqui:activity-update')window.dispatchEvent(new Event('uorqui:activity-update'));
+      if(event.data?.type==='uorqui:community-push-update')window.dispatchEvent(new Event('uorqui:community-push-update'));
     };
     navigator.serviceWorker?.addEventListener('message',onMessage);
     const current=new URL(window.location.href);
@@ -465,7 +466,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
               items={activity.items} unread={activity.unread} loading={activity.loading}
               channelAlerts={communityUnread.locations}
+              communityInvites={communityUnread.invites}
               onOpenChannel={(communityId,channelId)=>openDiscoveryCommunity(communityId,channelId)}
+              onOpenCommunity={communityId=>openDiscoveryCommunity(communityId)}
               error={activity.error} onRefresh={()=>void activity.refresh()}
               onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>} 
             {area === 'moderation' && platformModerator === null &&
