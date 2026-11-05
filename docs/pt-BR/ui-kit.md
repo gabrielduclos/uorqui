@@ -204,3 +204,13 @@ A migração visual **não troca** React/Vite por Next.js e **não modifica** AP
 - O acesso a **Notificações** foi transferido da sidebar para o **cabeçalho desktop** (sino com badge de não lidas e acesso à tela existente). No mobile, Notificações continua na navegação inferior.
 - O menu principal não exibe a lista de comunidades nem o item Notificações no desktop; o módulo Comunidades permanece acessível. A busca e o perfil continuam disponíveis pelos acessos anteriores.
 - Não foram alterados API, persistência, SSE ou WebRTC; `LiveCommunities` continua montado durante a navegação.
+
+## Ajuste do trilho e política de cache de mídia (05/11/2026)
+
+- O painel Comunidades agora usa **apenas uma barra de ícones**: a barra antiga dentro de `LiveCommunities` fica oculta, sem desmontar a sala de voz. Os avatares têm tamanho fixo 40 × 40 px, imagens contidas em um quadrado com `object-fit: cover`, badges posicionados dentro do ícone e largura do trilho fixa (56 px no celular e 64 px no desktop), sem extrapolar o quadro.
+- **Fotos de perfil, capas e avatares de comunidades**: cache único de URLs de mídia versionadas em memória e IndexedDB **por conta autenticada**, com no máximo 96 itens / 48 MiB em disco e validade de 24 h; limite de 3 MiB para fotos de perfil e 10 MiB para imagens de comunidades. Logout ou troca de conta limpa o armazenamento e revoga os Blob URLs.
+- **Mensagens diretas e anexos de canais**: cache somente **na memória da aba**, com URLs Blob reutilizáveis para imagens, vídeos, áudio e arquivos comuns (PDF, ZIP, texto e documentos Office). Limites de 32–96 MiB conforme RAM detectada (64 MiB padrão), até 42 itens, até 24 MiB por item e 90 min. O fluxo de download é interrompido quando excede o limite; o que for maior permanece acessível diretamente pelo endpoint autorizado.
+- **Arquivos públicos do PWA**: o Service Worker guarda a versão atual dos assets com hash (JS, CSS, ícones, imagens, fontes e áudios/vídeos estáticos até 8 MiB) e ícones/manifest do PWA, com limite de 100 itens. Ícones sem hash são revalidados em segundo plano.
+- **Não cachear via Service Worker/Cache Storage** respostas de sessão, API, autenticação, `/media/*`, chats, documentos privados nem arquivos de outras origens. Anexos privados sempre passam por autorização inicial no Worker e não persistem entre sessões. Recibos, histórico e mensagens continuam sujeitos à API. Não alterar os recibos de leitura ao pré-carregar mídia.
+
+Verificação: abrir diversas comunidades, trocar de módulo, inspecionar a aba Network para downloads duplicados de avatar; testar fotos/áudios/vídeos/PDF em conversas reais, logout e troca de conta, light/dark, celular e permissões. Validar `npm run build -w @uorqui/web` e `npm run check:worker -w @uorqui/web`.
