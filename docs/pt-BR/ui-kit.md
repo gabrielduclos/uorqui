@@ -234,3 +234,14 @@ Testar no desktop e no Safari iOS: tocar/reproduzir áudio e vídeo, alternar me
 - As mudanças afetam apenas a apresentação e não enviam recibos de leitura por abertura da lista nem modificam SSE, cache, API ou WebRTC.
 
 Validar com históricos longos, mídia de carregamento tardio, mensagens recebidas enquanto lê o histórico e abertura repetida no Safari iOS e desktop.
+
+
+## Transições e carregamento por área de conteúdo (05/11/2026)
+
+- O **menu principal, a barra de comunidades e o cabeçalho do workspace permanecem estáveis**. Ao navegar entre Mensagens, Comunidades, E-mail, Notificações, Perfil e Moderação, **somente o painel central** usa a mesma transição de entrada: opacidade 0 → 1, deslocamento horizontal de 14 px → 0, 180 ms e curva `cubic-bezier(.22,1,.36,1)`.
+- **Comunidades continua montado** quando o usuário muda de módulo, para não desconectar o microfone/WebRTC. Apenas sua superfície de conteúdo fica oculta e é animada novamente ao retornar.
+- Dentro dos módulos, entrar em conversa privada, canal ou mensagem de e-mail usa o mesmo efeito no conteúdo, sem animar o cabeçalho do chat. A tela de ajustes de notificações também usa a transição.
+- Um único `WorkspaceContentLoading` (`apps/web/src/ui-kit/WorkspaceContentLoading.tsx`) padroniza skeletons de **conversas, mensagens, canais, comunidades, e-mails, notificações e moderação**, exibidos apenas na região que aguarda dados reais. Nenhum timer artificial ou bloqueio da navegação é introduzido.
+- O movimento é removido quando o sistema solicita **redução de animações** (`prefers-reduced-motion`). SSE, posicionamento da última mensagem, uso do cache, recibos de leitura e chamadas permanecem independentes da transição.
+
+Validar ida e volta entre módulos, troca de canais, abertura de conversa, e-mail e notificações, bem como PWA/mobile, redução de movimento e voz ativa durante a navegação.
