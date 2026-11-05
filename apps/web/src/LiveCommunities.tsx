@@ -21,6 +21,7 @@ import type {UnreadLocation} from './useCommunityUnread';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
+import { peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -33,6 +34,15 @@ type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
 type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
+/** Stoat-like compact rows: consecutive posts from the same author form a group. */
+function groupedWithPrevious(messages:(Message|PendingMessage)[],index:number){
+  if(index<=0)return false;
+  const previous=messages[index-1],current=messages[index];
+  if(!previous||!current||previous.authorHandle!==current.authorHandle||
+     previous.authorName!==current.authorName||previous.deletedAt||current.deletedAt)return false;
+  const delta=Date.parse(current.createdAt)-Date.parse(previous.createdAt);
+  return delta>=0&&delta<5*60_000;
+}
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
 const allowedSlug=/^[a-z][a-z0-9-]{2,63}$/;
 
@@ -184,6 +194,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   },[channelSettingsOpen]);
   const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
+  const [messagesForKey,setMessagesForKey]=useState<string|null>(null);
+  const [newBelow,setNewBelow]=useState(0);
   const [pendingMessages,setPendingMessages]=useState<PendingMessage[]>([]);
   const [messagesLoading,setMessagesLoading]=useState(false);
   const [messagesLoadFailed,setMessagesLoadFailed]=useState(false);
@@ -207,6 +219,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const pendingFiles=useRef(new Map<string,File>());
   const pendingBlobUrls=useRef(new Map<string,string>());
   const previousLastMessage=useRef<string|null>(null);
+  const previousMessageCount=useRef(0);
+  const activeScrollKey=useRef<string|null>(null);
+  const scrollPositions=useRef(new Map<string,{top:number;atBottom:boolean}>());
   const acknowledged=useRef(new Map<string,string>());
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
@@ -220,7 +235,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     setActiveVoiceRoom(null);setVoiceParticipants([]);setVoiceMinimized(true);
     setNotice(pt?'Você não tem mais acesso a esta sala.':'You no longer have access to this room.');
   },[detail,activeVoiceRoom,selectedId,pt]);
-  const renderedMessages=[...messages,...pendingMessages.filter(p=>p.channelId===channelId&&!messages.some(m=>m.clientId===p.clientId))];
+  const currentMessageKey=selectedId&&channelId?selectedId+'/'+channelId:null;
+  const visibleMessages=messagesForKey===currentMessageKey?messages:[];
+  const renderedMessages=[...visibleMessages,...pendingMessages.filter(p=>p.channelId===channelId&&!visibleMessages.some(m=>m.clientId===p.clientId))];
 
   const loadList=useCallback(async()=>{
     const data=await api<{communities:Community[]}>('/api/v1/communities');
@@ -401,56 +418,86 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         'Could not send the message. Check direct-message permissions.');
     }finally{setChannelInviteSending(null);}
   }
-  const closeChannel=()=>{setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setMessages([]);setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
-    if(!selectedId||!channelId||!activeChannel||!community?.myRole||(activeChannel.hasPassword&&!activeChannel.unlocked)){
-      setMessages([]);setMessagesLoadFailed(false);return;
+    if(!selectedId||!channelId||!activeChannel||!community?.myRole||
+       (activeChannel.hasPassword&&!activeChannel.unlocked)){
+      setMessagesForKey(null);setMessages([]);setMessagesLoadFailed(false);return;
     }
-    let active=true,loadedOnce=false,requestId=0;
-    previousLastMessage.current=null;
-    setReactionPickerId(null);setMessages([]);setMessagesLoading(true);setMessagesLoadFailed(false);
-    const refresh=async()=>{
-      const id=++requestId;
+    const communityId=selectedId,roomId=channelId,roomKey=communityId+'/'+roomId;
+    let mounted=true,inFlight=false,repeat=false,lastRefresh=0;
+    const cached=peekCommunityMessages<Message>(myId,communityId,roomId);
+    setReactionPickerId(null);setMessagesForKey(roomKey);
+    setMessages(cached??[]);setMessagesLoading(!cached);setMessagesLoadFailed(false);
+    // Open from cache immediately, then revalidate in the background. A burst
+    // of SSE events during one request only schedules one follow-up request.
+    const refresh=async(force=false)=>{
+      if(!mounted)return;
+      if(inFlight){repeat=true;return;}
+      if(!force&&Date.now()-lastRefresh<350)return;
+      inFlight=true;lastRefresh=Date.now();
       try{
-        const result=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
-        if(active&&id===requestId){
-          loadedOnce=true;
-          setMessages(result.messages);
-          setPendingMessages(old=>old.filter(p=>p.channelId!==channelId||!result.messages.some(m=>m.clientId===p.clientId)));
+        const result=await api<{messages:Message[]}>(`/api/v1/communities/${communityId}/channels/${roomId}/messages`);
+        if(mounted){
+          putCommunityMessages(myId,communityId,roomId,result.messages);
+          setMessages(old=>reconcileCommunityMessages(old,result.messages));
+          setPendingMessages(old=>old.filter(p=>p.channelId!==roomId||!result.messages.some(m=>m.clientId===p.clientId)));
           setMessagesLoading(false);setMessagesLoadFailed(false);
         }
       }catch{
-        if(active&&id===requestId){
+        if(mounted){
           setMessagesLoading(false);
-          if(!loadedOnce)setMessagesLoadFailed(true);
+          if(!cached)setMessagesLoadFailed(true);
         }
+      }finally{
+        inFlight=false;
+        if(repeat&&mounted){repeat=false;void refresh(true);}
       }
     };
     const event=(incoming:Event)=>{
       const detail=(incoming as CustomEvent<{kind:string;communityId?:string;channelId?:string}>).detail;
-      if(detail?.kind==='ready'||(detail?.kind==='message'&&detail.communityId===selectedId&&detail.channelId===channelId))
+      if(detail?.kind==='ready'||(detail?.kind==='message'&&detail.communityId===communityId&&detail.channelId===roomId))
         void refresh();
     };
     const focus=()=>{if(document.visibilityState==='visible')void refresh();};
     window.addEventListener('uorqui:community-event',event);
     window.addEventListener('focus',focus);
-    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void refresh();},30000);
-    void refresh();
-    return ()=>{active=false;requestId++;window.clearInterval(timer);
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void refresh();},60_000);
+    void refresh(true);
+    return ()=>{mounted=false;window.clearInterval(timer);
       window.removeEventListener('uorqui:community-event',event);
       window.removeEventListener('focus',focus);
     };
-  },[selectedId,channelId,activeChannel?.kind,activeChannel?.hasPassword,activeChannel?.unlocked,community?.myRole]);
+  },[myId,selectedId,channelId,activeChannel?.kind,activeChannel?.hasPassword,activeChannel?.unlocked,community?.myRole]);
+
   useEffect(()=>{
+    const element=scrollRef.current;
+    const key=currentMessageKey;
+    if(!element||!key||messagesForKey!==key||messagesLoading)return;
     const latest=messages.at(-1)?.id??null;
+    if(activeScrollKey.current!==key){
+      activeScrollKey.current=key;
+      previousLastMessage.current=latest;
+      previousMessageCount.current=messages.length;
+      setNewBelow(0);
+      const saved=scrollPositions.current.get(key);
+      const frame=window.requestAnimationFrame(()=>{
+        element.scrollTop=saved&&!saved.atBottom?saved.top:element.scrollHeight;
+      });
+      return ()=>window.cancelAnimationFrame(frame);
+    }
     if(latest&&latest!==previousLastMessage.current){
-      const el=scrollRef.current;
-      if(el&&(!previousLastMessage.current||el.scrollHeight-el.scrollTop-el.clientHeight<220))
-        el.scrollTo({top:el.scrollHeight,behavior:previousLastMessage.current?'smooth':'instant'});
+      const distance=element.scrollHeight-element.scrollTop-element.clientHeight;
+      if(distance<180){
+        element.scrollTo({top:element.scrollHeight,behavior:previousLastMessage.current?'smooth':'instant'});
+      }else if(previousLastMessage.current){
+        setNewBelow(old=>old+Math.max(1,messages.length-previousMessageCount.current));
+      }
     }
     previousLastMessage.current=latest;
-  },[messages]);
+    previousMessageCount.current=messages.length;
+  },[messages,selectedId,channelId,messagesForKey,messagesLoading,currentMessageKey]);
   useEffect(()=>{
     if(activeChannel?.kind==='text'||!voiceTextExpanded)return;
     const frame=window.requestAnimationFrame(()=>{
@@ -638,7 +685,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       }
       if(channelId===p.channelId&&currentCommunity){
         const updated=await api<{messages:Message[]}>('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages');
-        setMessages(updated.messages);
+        putCommunityMessages(myId,currentCommunity,p.channelId,updated.messages);
+        setMessages(old=>reconcileCommunityMessages(old,updated.messages));
         setPendingMessages(old=>old.filter(msg=>msg.clientId!==p.clientId || !updated.messages.some(m=>m.clientId===msg.clientId)));
         if(updated.messages.some(m=>m.clientId===p.clientId))releasePending(p.clientId);
       }else{
@@ -701,7 +749,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:editingBody.trim()})
       });
       const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
-      setMessages(updated.messages);setEditingId(null);setEditingBody('');
+      putCommunityMessages(myId,selectedId,channelId,updated.messages);
+      setMessages(old=>reconcileCommunityMessages(old,updated.messages));setEditingId(null);setEditingBody('');
     }catch{setError(pt?'Não foi possível editar a mensagem.':'Could not edit message.');}
     finally{setBusy(false);setBusyAction(null);}
   }
@@ -713,7 +762,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       setBusyAction('deleteMessage:'+messageId);
       await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+messageId,{method:'DELETE'});
       const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
-      setMessages(updated.messages);setDeletingId(null);
+      putCommunityMessages(myId,selectedId,channelId,updated.messages);
+      setMessages(old=>reconcileCommunityMessages(old,updated.messages));setDeletingId(null);
     }catch{setError(pt?'Não foi possível cancelar a mensagem.':'Could not remove message.');}
     finally{setBusy(false);setBusyAction(null);}
   }
@@ -1140,20 +1190,30 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         </button>}
         {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind!=='text'?'uorqui-voice-text-panel':undefined}
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
-            {!messages.length&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
+          <div ref={scrollRef}
+            onScroll={event=>{
+              const element=event.currentTarget,key=currentMessageKey;
+              if(!key||messagesForKey!==key)return;
+              const atBottom=element.scrollHeight-element.scrollTop-element.clientHeight<110;
+              scrollPositions.current.set(key,{top:element.scrollTop,atBottom});
+              if(atBottom)setNewBelow(old=>old?0:old);
+            }}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
+            {!messagesLoading&&!visibleMessages.length&&!pendingMessages.some(p=>p.channelId===channelId)&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{pt?'Compartilhe textos, fotos e links com os membros da sala.':'Share text, photos and links with room members.'}</p>
             </div>}
-            {messagesLoading&&<SkeletonRows rows={4} className="mb-5"/>}
+            {messagesLoading&&!visibleMessages.length&&<SkeletonRows rows={4} className="mb-5"/>}
             {messagesLoadFailed&&!messagesLoading&&<div role="status" className="mb-4 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
               {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
             </div>}
-            <div className="space-y-4">{renderedMessages.map(message=><div key={message.clientId} className="flex min-w-0 gap-3">
-              <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>
+            <div className="space-y-1.5">{renderedMessages.map((message,index)=><div key={message.clientId}
+              className={cn('flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20',groupedWithPrevious(renderedMessages,index)&&'py-0.5')}>
+              {groupedWithPrevious(renderedMessages,index)?<span aria-hidden="true" className="w-8 shrink-0"/>:
+                <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>}
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-baseline gap-2">{message.authorHandle?
+                <div className={cn('flex flex-wrap items-baseline gap-2',groupedWithPrevious(renderedMessages,index)&&'sr-only')}>{message.authorHandle?
                   <a href={'/@'+message.authorHandle} onClick={event=>navigateToPublicProfile(event,message.authorHandle)}
                     className="rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
                     {message.authorName}</a>:
@@ -1208,6 +1268,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               </div>
             </div>)}</div>
           </div>
+          {newBelow>0&&<div className="pointer-events-none relative z-10 h-0 shrink-0">
+            <button type="button" className="pointer-events-auto absolute bottom-3 right-4 rounded-full border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-lg hover:bg-accent"
+              onClick={()=>{scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'});setNewBelow(0);}}>
+              {newBelow>99?'99+':newBelow} {pt?'novas mensagens ↓':'new messages ↓'}
+            </button>
+          </div>}
           <div className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
             {mediaPicker==='gif'&&<CommunityMediaPicker key="gif" tab="gif" pt={pt}
               onClose={()=>setMediaPicker(null)}

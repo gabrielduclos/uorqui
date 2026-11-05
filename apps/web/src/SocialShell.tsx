@@ -24,6 +24,7 @@ import { startDmOutbox } from './dmOutbox';
 import { clearDmAccount } from './dmCache';
 import { resetDmInboxSession } from './dmEventStream';
 import { clearChatMediaCache } from './chatMediaCache';
+import { clearCommunityMessageCache } from './communityMessageCache';
 import {useCommunityUnread} from './useCommunityUnread';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
@@ -199,7 +200,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     if (loggingOut) return;
     setLoggingOut(true);
     setLogoutError('');
-    try { await onLogout(); resetDmInboxSession(); clearChatMediaCache(); await clearDmAccount(account.user.id); }
+    try { await onLogout(); resetDmInboxSession(); clearChatMediaCache(); clearCommunityMessageCache(account.user.id); await clearDmAccount(account.user.id); }
     catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 
