@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Flag, RefreshCcw, ShieldCheck, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SkeletonRows } from '@/components/ui/skeleton';
+
+import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
 type Status='pending'|'reviewing'|'resolved'|'dismissed';
 type FilterStatus='all'|Status;
@@ -149,7 +150,7 @@ export default function ModerationPanel({locale}:{locale:string}){
     {error&&<p role="alert" className="mx-4 mt-3 rounded-lg border border-destructive/40 bg-card p-3 text-sm text-destructive sm:mx-6">{error}</p>}
 
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
-      {loading&&<SkeletonRows rows={5}/>}
+      {loading&&<WorkspaceContentLoading label={pt?'Carregando denúncias':'Loading reports'} rows={5}/>} 
       {!loading&&!reports.length&&!error&&<div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
         <Flag className="mx-auto mb-3 size-8"/>
         {pt?'Nenhuma denúncia encontrada para os filtros selecionados.':'No reports match the selected filters.'}
