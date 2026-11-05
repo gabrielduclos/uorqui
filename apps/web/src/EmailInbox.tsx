@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowUpRight, Inbox, Link2, Mail, Plus, RefreshCw, Search, Send, ShieldCheck, Star, Unplug, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Inbox, Link2, Mail, Plus, RefreshCw, Reply, Search, Send, ShieldAlert, ShieldCheck, Star, Trash2, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -9,7 +9,8 @@ import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
 type Provider = 'gmail' | 'outlook';
 type MailAccount = { id: string; provider: Provider; email: string };
-type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string };
+type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
+type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
 type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[]; webOrigin?: string };
 const providerName = (provider: Provider) => provider === 'gmail' ? 'Gmail' : 'Outlook';
 function mailOAuthFailureMessage(reason: string, pt: boolean): string {
@@ -54,7 +55,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const [accountId, setAccountId] = useState('');
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [accountRefresh, setAccountRefresh] = useState(0);
-  const [folder, setFolder] = useState<'inbox' | 'sent'>('inbox');
+  const [folder, setFolder] = useState<MailFolder>('inbox');
   const [filter, setFilter] = useState<'all' | 'unread' | 'starred'>('all');
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -73,7 +74,12 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const [connecting, setConnecting] = useState<Provider | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [compose, setCompose] = useState(false);
+  const [replying, setReplying] = useState(false);
+  const [replyBody, setReplyBody] = useState('');
+  const [replyError, setReplyError] = useState('');
+  const [remoteImages, setRemoteImages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [replySending, setReplySending] = useState(false);
   const [draft, setDraft] = useState({ to: '', subject: '', body: '' });
   const [sendError, setSendError] = useState('');
   const detailAbort = useRef<AbortController | null>(null);
@@ -117,7 +123,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     return () => controller.abort();
   }, [accountId, folder, filter, page, refresh, explainError]);
 
-  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setLoadingBody(false); }
+  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setRemoteImages(false); setLoadingBody(false); }
   function resetList() { closeDetail(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
   async function connect(provider: Provider) {
     if (connecting) return;
@@ -148,10 +154,26 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   async function showMessage(message: Message) {
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
-    setCompose(false); setSelected(message); setLoadingBody(true); setError('');
+    setCompose(false); setReplying(false); setReplyBody(''); setRemoteImages(false);
+    setSelected(message); setLoadingBody(true); setError('');
+    const chosenAccount = accountId;
     try {
-      const data = await requestMail<Message>('accounts/' + accountId + '/messages/' + encodeURIComponent(message.id), { signal: controller.signal });
-      if (!controller.signal.aborted) setSelected(data);
+      const data = await requestMail<Message>('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id), { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setSelected(data);
+      if (data.unread) {
+        try {
+          await requestMail('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id) + '/read',
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          if (controller.signal.aborted) return;
+          setMessages(old => old.map(row => row.id === data.id ? { ...row, unread: false } : row));
+          setSelected(old => old?.id === data.id ? { ...old, unread: false } : old);
+        } catch {
+          if (!controller.signal.aborted)
+            setError(pt ? 'Mensagem aberta, mas não foi possível marcá-la como lida. Reconecte a conta para conceder permissão de edição.'
+              : 'Message opened, but it could not be marked as read. Reconnect the account to grant write access.');
+        }
+      }
     } catch (error) { if (!controller.signal.aborted) setError(explainError(error)); }
     finally { if (!controller.signal.aborted) setLoadingBody(false); }
   }
@@ -164,7 +186,30 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     } catch { setSendError(pt ? 'Não foi possível confirmar o envio. Verifique a pasta Enviados antes de tentar novamente.' : 'Could not confirm delivery. Check Sent before trying again.'); }
     finally { setSending(false); }
   }
-  function startCompose() { detailAbort.current?.abort(); setSelected(null); setCompose(true); setSendError(''); }
+  async function submitReply(event: FormEvent) {
+    event.preventDefault();
+    if (!selected || !account || !replyBody.trim() || replySending) return;
+    setReplySending(true); setReplyError('');
+    try {
+      await requestMail('accounts/' + account.id + '/messages/' + encodeURIComponent(selected.id) + '/reply',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: replyBody.trim() }) });
+      setReplying(false); setReplyBody(''); setNotice('sent'); setPage(''); setRefresh(value => value + 1);
+    } catch (error) {
+      setReplyError(error instanceof Error && error.message === 'MAIL_RECONNECT'
+        ? (pt ? 'Reconecte sua conta para autorizar o envio.' : 'Reconnect your account to authorize sending.')
+        : (pt ? 'Não foi possível confirmar a resposta. Confira Enviados antes de tentar novamente.'
+          : 'Reply could not be confirmed. Check Sent before trying again.'));
+    } finally { setReplySending(false); }
+  }
+  function startCompose() { detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
+  const framedHtml = selected?.html ? [
+    '<!doctype html><html><head><meta charset="utf-8">',
+    '<meta name="referrer" content="no-referrer">',
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: ' +
+      (remoteImages ? 'https:' : '') + '; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
+    '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}</style>',
+    '</head><body>', selected.html, '</body></html>',
+  ].join('') : '';
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
   function date(value: string) { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString(locale, { day: 'numeric', month: 'short' }); }
   const connectButtons = <div className="flex flex-wrap gap-2">{(['gmail', 'outlook'] as const).map(provider => {
