@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './pwaInstallPrompt';
 import App from './App';
 import './styles.css';
+import './ui-kit/sprintrix.css';
 
 const target = document.getElementById('root');
 if (!target) throw new Error('Missing #root element');

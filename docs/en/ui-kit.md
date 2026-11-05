@@ -123,3 +123,17 @@ When changing UI, review dark/light × Portuguese/English × desktop/mobile, upd
 - Show localized human-readable media labels rather than technical filenames, while preserving original download metadata.
 - Audio controls use semantic high-contrast card foreground, primary Play/Pause, secondary speed and primary seek progress for both themes.
 - Chat images and opened media share bounded private tab-memory object URLs; location cards open Google Maps including previously sent OpenStreetMap links.
+
+
+## Workspace v1 visual migration (2026-11-05)
+
+The UI kit now includes an original, reusable Sprintrix-inspired implementation, without importing commercial template code or the Next.js mock application:
+
+- `apps/web/src/ui-kit/sprintrix.css` — theme tokens scoped to the signed-in app; light canvas/sidebar `#fafafa`, dark canvas/sidebar `#181818`, white / `#0a0a0a` inset panel, subtle borders and contrast-aware selection.
+- `apps/web/src/ui-kit/components.tsx` — `UIKitSectionHeading`, `UIKitCount` and `UIKitChip`.
+- `apps/web/src/SocialShell.tsx` — compact single-sidebar navigation, instant full collapse, pixel wordmark without a circular icon, 53 px header, 7 px panel inset and 17 px corner radius on desktop.
+- The previous permanent server icon rail is now integrated into the main navigation through **real authorized communities** (`WorkspaceCommunityShortcuts`); Communities also appears in mobile navigation.
+
+This is a **visual migration only**: React/Vite, Fastify/Render, Better Auth, Neon, SSE, uploads and WebRTC remain in place. `LiveCommunities` stays mounted during module changes to preserve voice sessions. Mock preview data is never used in production.
+
+**Verify:** `npm run build -w @uorqui/web`, `npm run check:worker -w @uorqui/web`, authenticated navigation, both themes, full sidebar collapse and voice continuity.

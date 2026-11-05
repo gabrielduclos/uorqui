@@ -182,3 +182,17 @@ A cada mudança, conferir dark/light × português/inglês × desktop/mobile, ac
 - **Link para compartilhar:** membro pode copiar o link ativo; administrador gera, renova e revoga. O link é temporário (7 dias) e a renovação invalida o anterior. Usuários banidos não podem reingressar.
 - **Convite para novos usuários:** aceitar link em `/invite/<token>` antes de login; após cadastro, confirmação de e-mail e criação do perfil, a participação é efetivada automaticamente. A verificação por e-mail não deve ser pulada. Preservar o convite ao voltar da confirmação e ao usar o mesmo navegador.
 - **Compartilhamento de tela em voz:** botão de apresentar, solicitação explícita de permissão, prévia local, vídeos remotos e botão para parar. Finalizar todas as trilhas quando sair da sala, sem gravar vídeo. Ocultar/desabilitar o controle quando `getDisplayMedia` não existir no navegador.
+
+
+## Migração visual — Workspace v1 (05/11/2026)
+
+O UI Kit agora também possui uma implementação reutilizável em código próprio, inspirada na demonstração Sprintrix, sem importar o código comercial nem o protótipo Next.js:
+
+- `apps/web/src/ui-kit/sprintrix.css` — variáveis semânticas escopadas ao workspace autenticado: canvas e sidebar claro `#fafafa` / escuro `#181818`, painel branco / `#0a0a0a`, bordas discretas e seleção contrastante.
+- `apps/web/src/ui-kit/components.tsx` — `UIKitSectionHeading`, `UIKitCount` e `UIKitChip`.
+- `apps/web/src/SocialShell.tsx` — aplica a paleta e a estrutura de sidebar compacta, com recolhimento total instantâneo, marca pixelada sem símbolo circular, 53 px de cabeçalho e painel com 7 px de margem e raio de 17 px no desktop.
+- A antiga barra permanente de servidores foi integrada ao menu com as comunidades **reais e autorizadas** (`WorkspaceCommunityShortcuts`), e Comunidades também aparece na navegação inferior do celular.
+
+A migração visual **não troca** React/Vite por Next.js e **não modifica** API Fastify/Render, Better Auth, Neon, SSE, uploads ou WebRTC. `LiveCommunities` continua montado para preservar salas de voz ao navegar. Dados do protótipo não entram na produção.
+
+**Validação:** `npm run build -w @uorqui/web`, `npm run check:worker -w @uorqui/web`, login e navegação reais, temas claro/escuro, fechamento do menu e continuidade da voz.
