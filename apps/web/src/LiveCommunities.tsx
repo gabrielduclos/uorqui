@@ -521,6 +521,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   // in background tabs; the cursor is tied to a message present in our response.
   useEffect(()=>{
     if(!active||!channelOpen||!selectedId||!channelId||!activeChannel||
+       messagesForKey!==currentMessageKey||
        (activeChannel.kind!=='text'&&!voiceTextExpanded)||
        document.visibilityState!=='visible'||messagesLoading)return;
     const lastMessageId=messages.at(-1)?.id;
@@ -538,7 +539,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       }).catch(()=>{/* Leave badge intact and retry after next successful load. */});
     },250);
     return ()=>{cancelled=true;window.clearTimeout(timer);};
-  },[active,channelOpen,selectedId,channelId,activeChannel?.kind,voiceTextExpanded,messages,messagesLoading]);
+  },[active,channelOpen,selectedId,channelId,activeChannel?.kind,voiceTextExpanded,messages,messagesLoading,messagesForKey,currentMessageKey]);
 
   async function refresh(id=selectedId){
     await loadList();
