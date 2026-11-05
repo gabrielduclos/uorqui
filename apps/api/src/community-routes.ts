@@ -306,6 +306,27 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }catch(error){request.log.error({err:error},'Community unread counts');return reply.code(503).send({error:'Unavailable'});}
   });
 
+  /** Revalidate delayed invitation pushes without disclosing private
+   * community names to signed-out, banned or uninvited users. */
+  app.get('/api/v1/communities/:id/invite/notification-access',{schema:{params:idParams}},async(request,reply)=>{
+    try{
+      const me=await self(request);
+      if(!me)return reply.code(401).header('Cache-Control',noCache).send({authorized:false});
+      const {id}=request.params as {id:string};
+      const allowed=await getPool().query(
+        'SELECT 1 FROM community_join_requests invite JOIN communities c ON c.id=invite.community_id '+
+        "WHERE invite.community_id=$1 AND invite.user_id=$2 AND invite.kind='invite' AND invite.status='pending' "+
+        'AND NOT EXISTS(SELECT 1 FROM community_bans ban WHERE ban.community_id=$1 AND ban.user_id=$2) '+
+        'AND NOT EXISTS(SELECT 1 FROM community_members member WHERE member.community_id=$1 AND member.user_id=$2)',
+        [id,me]);
+      if(!allowed.rowCount)return reply.code(403).header('Cache-Control',noCache).send({authorized:false});
+      return reply.header('Cache-Control',noCache).send({authorized:true});
+    }catch(error){
+      request.log.error({err:error},'Authorize community invitation push');
+      return reply.code(503).header('Cache-Control',noCache).send({authorized:false});
+    }
+  });
+
   /** Called by the Service Worker before showing a queued channel push.
    * Re-check current membership, channel password and restricted grants, rather
    * than revealing a channel's name after permission is revoked. */
