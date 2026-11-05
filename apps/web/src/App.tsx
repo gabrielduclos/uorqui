@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MotionConfig } from 'motion/react';
-import { Github, MessageCircle, Users, Compass, X } from 'lucide-react';
+import { Github, MessageCircle, Users, Mail, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import AuthPanel, { type Account } from './AuthPanel';
@@ -22,8 +22,8 @@ import { CookieNotice } from './CookieNotice';
 
 const areas = [
   { title: 'Comunidades', icon: Users, description: 'Seu ponto de partida para canais de texto, salas de voz e reuniões.' },
-  { title: 'Conversas', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
-  { title: 'Descobrir', icon: Compass, description: 'Encontre comunidades recomendadas e acompanhe a atividade dos seus canais.' },
+  { title: 'Mensagens', icon: MessageCircle, description: 'Mensagens privadas entre duas pessoas, com uma interface leve e familiar.' },
+  { title: 'Email', icon: Mail, description: 'Conecte Gmail e Outlook e acompanhe seus emails no mesmo lugar.' },
 ] as const;
 
 function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => void }) {
@@ -50,8 +50,8 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
         <section className="grid flex-1 content-start items-center gap-5 py-4 sm:gap-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:py-20">
           <div className="hidden lg:block">
             <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-primary">{t("Conecte pessoas e interesses")}</p>
-            <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">{t('Descubra. Converse.')} <span className="text-primary">{t('Participe.')}</span></h1>
-            <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg">{t('Uma plataforma social que reúne conversas individuais, comunidades e conteúdo em um só lugar.')}</p>
+            <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">{t('Sua comunicação.')} <span className="text-primary">{t('Em um só lugar.')}</span></h1>
+            <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground sm:text-lg">{t('Mensagens, comunidades e email conectados ao seu dia a dia.')}</p>
 
           </div>
           <div className="mx-auto w-full max-w-[440px] lg:max-w-none">

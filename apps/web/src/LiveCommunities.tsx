@@ -69,6 +69,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const lastCommunityKey='uorqui:last-community:'+myId;
   const [list,setList]=useState<Community[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(initialCommunityId??null);
+  const [directory, setDirectory] = useState(false);
+  const [communitySearch, setCommunitySearch] = useState('');
   const [detail,setDetail]=useState<Detail|null>(null);
   const [channelId,setChannelId]=useState<string|null>(null);
   const requestedChannel=useRef<{communityId:string;channelId:string}|null>(null);
@@ -799,7 +801,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   }
 
   const owned=list.filter(group=>group.myRole);
-  const homeGroups=[...owned,...list.filter(group=>!group.myRole&&group.requestKind==='invite'&&group.requestStatus==='pending')];
+  const homeGroups=(directory ? list.filter(group=>group.visibility!=='private') : [...owned,...list.filter(group=>!group.myRole&&group.requestKind==='invite'&&group.requestStatus==='pending')])
+    .filter(group=>(group.name+' '+group.slug).toLocaleLowerCase(locale).includes(communitySearch.toLocaleLowerCase(locale)));
   const visibilityLabel=(v:Visibility)=>v==='public'?(pt?'Pública':'Public'):v==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Privada':'Private');
   const communityIcon=(group:Community)=>group.name.trim().charAt(0).toUpperCase()||'C';
   const communityAvatar=(group:Community,classes:string)=>group.avatarUrl?
@@ -829,13 +832,20 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         className="grid size-11 shrink-0 place-items-center rounded-2xl border border-dashed border-primary/60 text-primary hover:bg-secondary">
         <Plus className="size-5"/>
       </button>
+      <button type="button" onClick={()=>{closeChannel();setSelectedId(null);setCreateOpen(false);setDirectory(true);}}
+        aria-label={pt?'Comunidades públicas':'Public communities'} title={pt?'Comunidades públicas':'Public communities'}
+        className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-secondary"><Search className="size-5"/></button>
     </nav>
 
     <section data-uorqui-channel-nav aria-label={pt?'Comunidades e canais':'Communities and channels'}
       className={cn('h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/25 md:flex md:w-64 md:shrink-0',channelOpen?'hidden':'flex')}>
       {createOpen||!selectedId?<div className="flex h-full min-h-0 flex-col">
         <div className="shrink-0 space-y-3 border-b border-border bg-card/95 p-4">
-          <h2 className="text-base font-semibold">{createOpen?(pt?'Criar comunidade':'Create community'):(pt?'Minhas comunidades':'My communities')}</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{createOpen?(pt?'Criar comunidade':'Create community'):(pt?'Comunidades':'Communities')}</h2>
+          {!createOpen&&<><div className="uorqui-inbox-filters flex gap-1" role="group" aria-label={pt?'Filtrar comunidades':'Filter communities'}>
+            <button type="button" aria-pressed={!directory} onClick={()=>setDirectory(false)} className="min-h-10 rounded-md px-3 text-xs">{pt?'Suas comunidades':'Your communities'}</button>
+            <button type="button" aria-pressed={directory} onClick={()=>setDirectory(true)} className="min-h-10 rounded-md px-3 text-xs">{pt?'Públicas':'Public'}</button>
+          </div><Input value={communitySearch} onChange={event=>setCommunitySearch(event.target.value)} aria-label={pt?'Buscar comunidades':'Search communities'} placeholder={pt?'Buscar comunidades…':'Search communities…'} className="h-10 text-base md:text-sm"/></>}
           <Button className="w-full" size="sm" variant={createOpen?'outline':'secondary'}
             onClick={()=>{setCreateOpen(v=>!v);setError('');}}>{createOpen?<X className="size-4"/>:<Plus className="size-4"/>}
             {createOpen?(pt?'Fechar formulário':'Close form'):(pt?'Nova comunidade':'New community')}</Button>
@@ -854,7 +864,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           {!loading&&!owned.length&&!createOpen&&<section className="mb-4 space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
             <h3 className="text-sm font-semibold">{pt?'Comece por uma comunidade':'Start with a community'}</h3>
             <p className="text-xs leading-5 text-muted-foreground">{pt?'Encontre uma comunidade para participar ou crie a sua.':'Find a community to join or create your own.'}</p>
-            <p className="text-xs text-muted-foreground">{pt?'Para encontrar comunidades públicas, use a aba Descobrir.':'Find public communities in the Discover tab.'}</p>
+            <p className="text-xs text-muted-foreground">{pt?'Use o filtro Públicas para encontrar uma comunidade ou entre por um convite.':'Use the Public filter to find a community or join through an invitation.'}</p>
           </section>}
           {createOpen?<form onSubmit={event=>void create(event)} className="space-y-3">
             <label className="block text-xs font-medium">{pt?'Nome':'Name'}
@@ -886,12 +896,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               </span>
             </button>)}
             {!loading&&!homeGroups.length&&<p className="p-4 text-center text-sm text-muted-foreground">
-              {pt?'Você ainda não participa de comunidades. Encontre novas na aba Descobrir.':'You have not joined any communities yet. Find them in the Discover tab.'}
+              {pt?'Nenhuma comunidade encontrada. Use o filtro Públicas ou crie a sua.':'No communities found. Use the Public filter or create your own.'}
             </p>}
           </div>}
         </div>
       </div>:<>
         <div className="shrink-0 border-b border-border bg-card/95 p-4">
+          <button type="button" onClick={()=>{closeChannel();setSelectedId(null);setCreateOpen(false);}}
+            className="mb-3 flex min-h-9 items-center gap-2 rounded-md text-xs text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="size-3.5"/>{pt?'Todas as comunidades':'All communities'}
+          </button>
           {detailLoading?<div className="space-y-2"><Skeleton className="h-5 w-3/4"/><Skeleton className="h-3 w-1/2"/></div>:
           <div className="flex items-center gap-2">
             {community?.avatarUrl&&<div className="size-10 shrink-0 overflow-hidden rounded-xl"><img src={community.avatarUrl} alt="" className="block size-full object-cover"/></div>}

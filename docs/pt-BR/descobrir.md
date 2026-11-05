@@ -1,5 +1,7 @@
 # Decisão de produto — Descobrir no lugar do feed
 
+> Substituída em 5 de novembro de 2026: Descobrir saiu da navegação. O espaço reúne Mensagens, Comunidades e Email. A busca de comunidades públicas fica dentro de Comunidades. Consulte [interface do espaço](sprintrix-workspace-ui.md) e [email](email.md). O restante registra a decisão anterior.
+
 [Português](descobrir.md) · [English](../en/discover.md)
 
 **Decisão:** 2 de novembro de 2026. **Estado:** primeira implementação no código da branch `main`: Descobrir, recomendações, atividade autenticada, navegação e onboarding. **Publicação em produção e testes em aparelhos ainda não confirmados.** Feed e dados antigos foram preservados para compatibilidade.

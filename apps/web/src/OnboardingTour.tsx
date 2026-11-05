@@ -1,6 +1,6 @@
 import {useEffect,useState,type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
-import {Camera,CheckCircle2,ChevronRight,Compass,MessageCircle,SkipForward,Users} from 'lucide-react';
+import {Camera,CheckCircle2,ChevronRight,Mail,MessageCircle,SkipForward,Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar,type UserProfileData} from './UserProfiles';
@@ -10,7 +10,7 @@ import {useUorquiPreferences} from './UorquiPreferences';
 
 // Version 2 presents the product in context instead of interrupting it with a dialog.
 export const onboardingStorageKey=(userId:string)=>'uorqui:tour:v2:'+userId;
-type Tab='discover'|'conversations'|'communities';
+type Tab='email'|'conversations'|'communities';
 type Highlight={top:number;left:number;width:number;height:number};
 
 export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinish}:{
@@ -29,8 +29,8 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
       description:pt?'Aqui começam as conversas em canais de texto, voz e reuniões.':'Start conversations in text, voice and meeting channels here.'},
     {icon:MessageCircle,tab:'conversations' as Tab,title:pt?'Mensagens':'Messages',
       description:pt?'Aqui ficam suas conversas privadas.':'Find your private conversations here.'},
-    {icon:Compass,tab:'discover' as Tab,title:pt?'Descobrir':'Discover',
-      description:pt?'Encontre novas comunidades e veja o que acontece nas suas.':'Find new communities and see what is happening in yours.'},
+    {icon:Mail,tab:'email' as Tab,title:'Email',
+      description:pt?'Conecte sua conta Gmail ou Outlook para ler e enviar emails.':'Connect Gmail or Outlook to read and send email.'},
   ];
   const current=screens[step];
 

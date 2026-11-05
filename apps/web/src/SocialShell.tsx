@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, ChevronRight, Compass, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Search, Settings2, ShieldCheck, Users,
+  Bell, ChevronRight, Mail, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Search, Settings2, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BetaBadge } from './BetaBadge';
@@ -17,7 +17,7 @@ import { ProfileEditor, type UserProfileData } from './UserProfiles';
 import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
 import LiveCommunities from './LiveCommunities';
-import DiscoverHome from './DiscoverHome';
+import EmailInbox from './EmailInbox';
 import ModerationPanel from './ModerationPanel';
 import { useUnreadDirectMessages } from './useUnreadDirectMessages';
 import { startDmOutbox } from './dmOutbox';
@@ -37,25 +37,26 @@ export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: UserProfileData | null;
 };
-type Area = 'discover' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
+type Area = 'email' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
 
 // Remember the last main app module per account on this device. Direct links
 // and invitations remain authoritative over the restored selection.
-const rememberedAreas: readonly Area[] = ['discover', 'conversations', 'communities', 'notifications', 'profile', 'moderation'];
+const rememberedAreas: readonly Area[] = ['email', 'conversations', 'communities', 'notifications', 'profile', 'moderation'];
 const lastAreaKey = (userId: string) => 'uorqui:last-area:v1:' + userId;
 function readLastArea(userId: string): Area {
   try {
     const value = localStorage.getItem(lastAreaKey(userId));
-    return rememberedAreas.find(area => area === value) ?? 'communities';
+    if (new URLSearchParams(window.location.search).has('mail')) return 'email';
+    return rememberedAreas.find(area => area === value) ?? 'conversations';
   } catch {
-    return 'communities';
+    return 'conversations';
   }
 }
 
 const navigation = [
+  { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
   { id: 'communities', label: 'Comunidades', icon: Users },
-  { id: 'conversations', label: 'Conversas', icon: MessageCircle },
-  { id: 'discover', label: 'Descobrir', icon: Compass },
+  { id: 'email', label: 'Email', icon: Mail },
   { id: 'notifications', label: 'Notificações', icon: Bell },
 ] as const;
 
@@ -148,6 +149,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
   const [channelOpened, setChannelOpened] = useState(false);
+  const [emailOpened, setEmailOpened] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutConfirm,setLogoutConfirm]=useState(false);
   const [logoutError, setLogoutError] = useState('');
@@ -164,11 +166,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   }, []);
 
   const move=useCallback((next: Area) => {
-    const order:Area[]=['communities','conversations','discover','notifications','profile','moderation'];
+    const order:Area[]=['conversations','communities','email','notifications','profile','moderation'];
     setNavDirection(order.indexOf(next)>=order.indexOf(previousArea.current)?1:-1);
     previousArea.current=next;
     setArea(next);
     setConversationOpened(false);
+    setEmailOpened(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
   }, []);
   useEffect(()=>{
@@ -260,7 +263,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       run: () => openDiscoveryCommunity(item.id),
     })),
   ];
-  const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
+  const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened) || (area === 'email' && emailOpened);
 
   return (
     <div data-uorqui-app-shell data-uorqui-sidebar-mode={sidebarCollapsed?'collapsed':'expanded'} className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
@@ -384,12 +387,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <div className="h-full min-h-0 overflow-hidden">
-            <div hidden={area!=='discover'} data-uorqui-panel={area==='discover'?'active':'inactive'} data-direction={navDirection} className="h-full min-h-0">
-              <DiscoverHome active={area==='discover'} unreadLocations={communityUnread.locations}
-                onOpenCommunity={openDiscoveryCommunity}/>
-            </div>
             {/* A persistent mount keeps the microphone, signaling and room state alive
-                when switching between Discover, Messages, Profile and Communities. */}
+                when switching between Email, Messages, Profile and Communities. */}
             <div hidden={area!=='communities'} data-uorqui-panel={area==='communities'?'active':'inactive'} data-direction={navDirection} className="h-full min-h-0">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
@@ -397,13 +396,14 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
             </div>
-            {area!=='discover'&&area!=='communities'&&<motion.div key={area} data-uorqui-motion-panel initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
+            {area!=='communities'&&<motion.div key={area} data-uorqui-motion-panel initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
               transition={{duration:0.18,ease:[0.22,1,0.36,1]}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
                 onMobileOpenChange={setConversationOpened}
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
+            {area === 'email' && <EmailInbox onMobileOpenChange={setEmailOpened} />}
 
             {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
               items={activity.items} unread={activity.unread} loading={activity.loading}

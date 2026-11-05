@@ -1,5 +1,7 @@
 # Product decision — Discover replaces the feed
 
+> Superseded on November 5, 2026: Discover is no longer a navigation tab. The workspace contains Messages, Communities and Email. Public community browsing is inside Communities. See [workspace UI](sprintrix-workspace-ui.md) and [email](email.md). The remaining text records the earlier decision.
+
 [English](discover.md) · [Português](../pt-BR/descobrir.md)
 
 **Decision date:** November 2, 2026. **Status:** initial implementation committed to `main`: Discover home, recommendations, authenticated activity, navigation and onboarding. **Production deployment and device acceptance are not yet confirmed.** Old feed data/code remain for compatibility.

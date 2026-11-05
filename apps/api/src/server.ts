@@ -25,10 +25,15 @@ import { registerPlatformModerationRoutes } from './platform-moderation-routes.j
 import { TERMS_VERSION, PRIVACY_NOTICE_VERSION, validSignupAgreement } from './legal-policy.js';
 import { closeDmEvents } from './dm-events.js';
 import {closeCommunityEvents} from './community-events.js';
+import { registerMailRoutes } from './mail-routes.js';
 
 const app = Fastify({
   logger: {
     redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'],
+    serializers: { req(request) {
+      return { method: request.method, url: request.url?.includes('/mail/oauth/') ? request.url.split('?')[0] : request.url,
+        hostname: request.hostname, remoteAddress: request.ip };
+    } },
   },
   bodyLimit: 64 * 1024,
 });
@@ -286,6 +291,7 @@ registerProfileRoutes(app, async request => readSession(request));
 registerDirectMessageRoutes(app, async request => readSession(request));
 registerPushRoutes(app, async request => readSession(request));
 registerNotificationRoutes(app, async request => readSession(request));
+registerMailRoutes(app, async request => readSession(request));
 registerLinkPreviewRoutes(app, async request => readSession(request));
 registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));

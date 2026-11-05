@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import { setTimeout as wait } from 'node:timers/promises';
 
@@ -46,9 +47,10 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
   try {
     await waitFor(apiOrigin + '/health/db', service, 'Fastify');
 
-    // npx is available from setup-node; wrangler is installed as web dependency.
-    worker = spawn('npx', [
-      'wrangler', 'dev',
+    // Resolve the installed CLI directly so this also works on Windows without
+    // spawning npx.cmd through a shell.
+    worker = spawn(process.execPath, [
+      resolve(dirname(createRequire(new URL('../../web/package.json', import.meta.url)).resolve('wrangler/package.json')), 'bin/wrangler.js'), 'dev',
       '--ip', '127.0.0.1',
       '--port', String(WORKER_PORT),
       '--var', `API_ORIGIN:${apiOrigin}`,

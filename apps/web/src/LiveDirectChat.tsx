@@ -939,24 +939,24 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const archivedThreads = threads.filter(c=>c.archived).length;
 
   return <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-    <section ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
-      'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card md:flex md:w-[306px] md:shrink-0 xl:w-[326px]',
+    <section data-uorqui-inbox-list ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
+      'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-background md:flex md:w-[340px] md:shrink-0 xl:w-[380px]',
       mobileOpened ? 'hidden' : 'flex'
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-3">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <div><h2 className="text-xl font-semibold tracking-tight">{listView === 'contacts' ? (pt ? 'Amigos' : 'Friends') : (pt ? 'Conversas' : 'Messages')}</h2>
+          <div><h2 className="text-lg font-semibold tracking-tight">{listView === 'contacts' ? (pt ? 'Amigos' : 'Friends') : (pt ? 'Mensagens' : 'Messages')}</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Tudo perto. Tudo em um lugar.' : 'Close conversations, all in one place.'}</p>
           </div>
 
         </div>
         <div role="tablist" aria-label={pt ? 'Áreas do mensageiro' : 'Messenger sections'}
-          className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-secondary/70 p-1">
+          className="uorqui-messenger-tabs mb-3 flex gap-4">
           {(['conversations', 'contacts'] as const).map(view => (
             <button key={view} type="button" role="tab" aria-selected={listView === view}
               onClick={() => { setListView(view); setSearch(''); }}
-              className={cn('min-h-10 rounded-lg px-3 text-sm font-medium transition-colors',
-                listView === view ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn('min-h-10 border-b-2 text-sm font-medium transition-colors',
+                listView === view ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
               {view === 'conversations' ? (pt ? 'Conversas' : 'Chats') : (pt ? 'Amigos' : 'Friends')}
             </button>
           ))}
@@ -967,14 +967,14 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           <Input value={search} onChange={e => setSearch(e.target.value)}
             aria-label={pt ? 'Buscar contatos ou conversas' : 'Search contacts or conversations'}
             placeholder={pt ? 'Buscar conversa ou @usuário' : 'Find a chat or @username'}
-            className="h-11 rounded-xl bg-background pl-9 pr-10 text-base"/>
+            className="h-10 rounded-md bg-card pl-9 pr-10 text-base md:text-sm"/>
           {search && <button type="button" onClick={() => setSearch('')} aria-label={pt ? 'Limpar pesquisa' : 'Clear search'}
             className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent"><X className="size-4"/></button>}
         </div>
-        <div className="mt-3 flex gap-1" role="group" aria-label={pt ? 'Filtrar conversas' : 'Filter conversations'}>
+        <div className="uorqui-inbox-filters mt-3 flex gap-1" role="group" aria-label={pt ? 'Filtrar conversas' : 'Filter conversations'}>
           {(['all', 'unread', 'archived'] as const).map(value => <button type="button" key={value} onClick={() => setFilter(value)}
             aria-pressed={filter === value} className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium',
-              filter === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary')}>
+              filter === value ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary')}>
             {value === 'all' ? (pt ? 'Todas' : 'All') : value === 'unread' ? (pt ? 'Não lidas' : 'Unread') : (pt ? 'Arquivadas' : 'Archived')}
             {value === 'unread' && unreadThreads > 0 && <span className="rounded bg-current/10 px-1 text-[10px]">{unreadThreads}</span>}
              {value === 'archived' && archivedThreads > 0 && <span className="rounded bg-current/10 px-1 text-[10px]">{archivedThreads}</span>}
@@ -982,7 +982,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         </div>
         </>}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1">
         {listView === 'contacts' ? <FriendsPanel onMessage={startPerson} busy={busy} /> : <>
         {error && <div role="alert" className="m-2 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{error}
           <Button className="ml-2" size="sm" variant="outline" onClick={() => void loadThreads().catch(() => {})}>{pt ? 'Tentar novamente' : 'Retry'}</Button>

@@ -25,6 +25,25 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** Mail credentials belong to the API and are encrypted with a dedicated key. */
+export const mailConnections = pgTable('mail_connections', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: varchar('provider', { length: 16 }).notNull(),
+  email: varchar('email', { length: 320 }).notNull(),
+  tokens: text('tokens').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex('mail_connections_user_provider').on(t.userId, t.provider),
+  check('mail_connections_provider', sql`${t.provider} IN ('gmail','outlook')`)]);
+
+export const mailOauthStates = pgTable('mail_oauth_states', {
+  stateHash: text('state_hash').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: varchar('provider', { length: 16 }).notNull(),
+  verifier: text('verifier').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, t => [index('mail_oauth_states_expiry').on(t.expiresAt)]);
+
 export const profiles = pgTable('profiles', {
   userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   displayName: varchar('display_name', { length: 120 }).notNull(),
