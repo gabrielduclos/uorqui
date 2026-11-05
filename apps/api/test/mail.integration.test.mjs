@@ -176,7 +176,8 @@ test('Gmail replies go to the server-verified sender and same thread, not client
   assert.equal((await request(path, { method: 'POST', body: { body: '  ' } })).statusCode, 400);
   assert.equal((await request(path, { method: 'POST', body: { body: 'Hello!', to: 'attacker@example.test' } })).statusCode, 400);
   calls = [];
-  assert.equal((await request(path, { method: 'POST', body: { body: 'Obrigado, recebido!' } })).statusCode, 200);
+  const reply = await request(path, { method: 'POST', body: { body: 'Obrigado, recebido!' } });
+  assert.equal(reply.statusCode, 200, 'Mailbox provider paths: ' + calls.map(c => c.url.pathname).join(' | '));
   const sent = calls.find(c => c.url.pathname.endsWith('/send'));
   assert.ok(sent);
   const payload = JSON.parse(sent.init.body);
