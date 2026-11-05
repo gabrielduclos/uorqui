@@ -107,16 +107,17 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
   if(!payload||!uuid.test(String(payload.recipientId||'')))return;
   // A queued push must never reveal another account's activity after sign out.
   if(await account()!==payload.recipientId)return;
-  if(payload.kind==='community'){
-    const communityId=String(payload.communityId||''),channelId=String(payload.channelId||'');
-    if(!uuid.test(communityId)||!uuid.test(channelId))return;
-    // A subscription can remain queued after a role, password or channel
-    // restriction changes. Reauthorize immediately before displaying names.
+  if(payload.kind==='community'||payload.kind==='community-invite'){
+    const communityId=String(payload.communityId||'');
+    const channelId=String(payload.channelId||'');
+    if(!uuid.test(communityId)||(payload.kind==='community'&&!uuid.test(channelId)))return;
+    // Delayed pushes must be authorized at display time, not only when queued.
+    // Invitation or closed-channel access can be revoked in the meantime.
+    const endpoint=payload.kind==='community'
+      ?'/api/v1/communities/'+encodeURIComponent(communityId)+'/channels/'+encodeURIComponent(channelId)+'/notification-access'
+      :'/api/v1/communities/'+encodeURIComponent(communityId)+'/invite/notification-access';
     try{
-      const result=await fetch('/api/v1/communities/'+encodeURIComponent(communityId)+
-        '/channels/'+encodeURIComponent(channelId)+'/notification-access',{
-        credentials:'include',cache:'no-store'
-      });
+      const result=await fetch(endpoint,{credentials:'include',cache:'no-store'});
       if(!result.ok)return;
       const access=await result.json();
       if(access?.authorized!==true)return;
