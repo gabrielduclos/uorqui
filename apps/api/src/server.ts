@@ -26,6 +26,7 @@ import { TERMS_VERSION, PRIVACY_NOTICE_VERSION, validSignupAgreement } from './l
 import { closeDmEvents } from './dm-events.js';
 import {closeCommunityEvents} from './community-events.js';
 import { registerMailRoutes } from './mail-routes.js';
+import { startMailInboxPolling } from './mail-poller.js';
 
 const app = Fastify({
   logger: {
@@ -292,6 +293,7 @@ registerDirectMessageRoutes(app, async request => readSession(request));
 registerPushRoutes(app, async request => readSession(request));
 registerNotificationRoutes(app, async request => readSession(request));
 registerMailRoutes(app, async request => readSession(request));
+startMailInboxPolling(app);
 registerLinkPreviewRoutes(app, async request => readSession(request));
 registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));

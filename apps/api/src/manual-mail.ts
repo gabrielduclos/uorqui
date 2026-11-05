@@ -157,6 +157,16 @@ export async function listManualMail(raw: string, folder: Folder, filter: 'all'|
     } finally { lock.release(); }
   });
 }
+/** Reads the server's IMAP UNSEEN count without downloading message bodies. */
+export async function countManualInboxUnread(raw: string): Promise<number> {
+  return connectedImap(raw, async client => {
+    const path = await resolveMailbox(client, 'inbox');
+    if (!path) return 0;
+    const status = await client.status(path, { unseen: true });
+    return Math.max(0, Number(status?.unseen ?? 0));
+  });
+}
+
 export async function getManualMessage(raw: string, id: string): Promise<MailSummary> {
   const { path, uid } = decodeId(id);
   return connectedImap(raw, async client => {

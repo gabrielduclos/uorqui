@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { getManualMessage, listManualMail, sendManualMail, markManualRead, replyManualMail, moveManualMessages } from './manual-mail.js';
+import { getManualMessage, listManualMail, countManualInboxUnread, sendManualMail, markManualRead, replyManualMail, moveManualMessages } from './manual-mail.js';
 
 export type OAuthMailProvider = 'gmail' | 'outlook';
 export type MailProvider = OAuthMailProvider | 'manual';
@@ -191,6 +191,21 @@ export async function listMail(provider: MailProvider, token: string, folder: Ma
   }
   return { messages: (data.value ?? []).map(item => outlookMessage(item, false)), nextPage };
 }
+/** Number of unread messages in the actual Inbox (not Spam or Trash).
+ * This is read from providers, then cached in mail_inbox_state for the menu. */
+export async function countInboxUnread(provider: MailProvider, token: string): Promise<number> {
+  if (provider === 'manual') return countManualInboxUnread(token);
+  if (provider === 'gmail') {
+    const query = new URLSearchParams({labelIds:'INBOX',q:'is:unread',maxResults:'1'});
+    const result = await providerFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?' + query, {headers:headers(token)});
+    const data = await result.json() as {resultSizeEstimate?:number};
+    return Math.max(0,Math.floor(Number(data.resultSizeEstimate ?? 0)));
+  }
+  const result = await providerFetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox?$select=unreadItemCount',{headers:headers(token)});
+  const data = await result.json() as {unreadItemCount?:number};
+  return Math.max(0,Math.floor(Number(data.unreadItemCount ?? 0)));
+}
+
 export async function sendMail(provider: MailProvider, token: string, sender: string, message: { to: string; subject: string; body: string }) {
   if (provider === 'manual') return sendManualMail(token, message.to, message.subject, message.body);
   if (provider === 'gmail') {

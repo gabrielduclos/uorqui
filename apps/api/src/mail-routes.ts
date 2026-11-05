@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
+import { withMailbox } from './mail-account-access.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
 import { validateManualMailSettings, validateManualHosts } from './manual-mail.js';
-import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady,
-  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type OAuthMailProvider, type MailFolder, type MailProvider, type MailTokens } from './mail-providers.js';
+import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady, countInboxUnread,
+  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type OAuthMailProvider, type MailFolder } from './mail-providers.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
-type Connection = { id: string; provider: MailProvider; email: string; tokens: string };
 const uuid = { type: 'string', format: 'uuid' };
 const accountParams = { type: 'object', required: ['accountId'], properties: { accountId: uuid } };
 const accountMessageParams = { type: 'object', required: ['accountId', 'messageId'], properties: {
@@ -30,33 +30,27 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     const reconnect = error instanceof Error && error.message === 'MAIL_RECONNECT';
     return reply.code(reconnect ? 409 : 503).send({ error: reconnect ? 'MAIL_RECONNECT' : 'MAIL_UNAVAILABLE' });
   }
-  async function withMailbox<T>(userId: string, accountId: string, run: (connection: Connection, token: string) => Promise<T>) {
-    // Serializing refreshes prevents overwriting rotating Microsoft refresh tokens.
-    const db = await getPool().connect();
-    let connection: Connection;
-    let credential = '';
-    let transactionActive = false;
+
+  // Polling caches per-account inbox counts; never expose other users' totals.
+  app.get('/api/v1/mail/unread', async (request, reply) => {
     try {
-      await db.query('BEGIN'); transactionActive = true;
-      const found = await db.query<Connection>('SELECT id,provider,email,tokens FROM mail_connections WHERE id=$1 AND user_id=$2 FOR UPDATE', [accountId, userId]);
-      if (!found.rows[0]) { await db.query('ROLLBACK'); transactionActive = false; return null; }
-      connection = found.rows[0];
-      const stored = openMailSecret(connection.tokens);
-      if (connection.provider === 'manual') {
-        credential = stored; // Encrypted settings; never sent to the browser.
-      } else {
-        let tokens = JSON.parse(stored) as MailTokens;
-        if (tokens.expires_at < Date.now() + 60_000) {
-          tokens = await exchangeTokens(connection.provider, { grant_type: 'refresh_token', refresh_token: tokens.refresh_token }, tokens.refresh_token);
-          await db.query('UPDATE mail_connections SET tokens=$1,updated_at=now() WHERE id=$2', [sealMailSecret(JSON.stringify(tokens)), accountId]);
-        }
-        credential = tokens.access_token;
-      }
-      await db.query('COMMIT'); transactionActive = false;
-    } catch (error) { if (transactionActive) await db.query('ROLLBACK'); throw error; }
-    finally { db.release(); }
-    return run(connection!, credential);
-  }
+      const id = await user(request, reply); if (!id) return;
+      const result = await getPool().query<{ count: number }>(
+        'SELECT COALESCE(SUM(s.unread_count),0)::int AS count '+
+        'FROM mail_connections m JOIN mail_inbox_state s ON s.account_id=m.id WHERE m.user_id=$1',[id]);
+      return {unreadCount:Math.max(0,result.rows[0]?.count ?? 0)};
+    } catch(error) { return unavailable(reply,error); }
+  });
+
+  // Delayed browser push must not reveal mail from a disconnected account.
+  app.get('/api/v1/mail/accounts/:accountId/notification-access', {schema:{params:accountParams}},async(request,reply)=>{
+    try {
+      const id=await user(request,reply); if(!id)return;
+      const {accountId}=request.params as {accountId:string};
+      const result=await getPool().query('SELECT 1 FROM mail_connections WHERE id=$1 AND user_id=$2',[accountId,id]);
+      return {authorized:Boolean(result.rowCount)};
+    } catch(error) { return unavailable(reply,error); }
+  });
 
   app.get('/api/v1/mail/accounts', async (request, reply) => {
     try {
@@ -201,8 +195,16 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const id = await user(request, reply); if (!id) return;
       const { accountId } = request.params as { accountId: string };
       const { ids, destination } = request.body as { ids: string[]; destination: 'trash' | 'spam' };
-      const result = await withMailbox(id, accountId, (connection, token) =>
-        moveMailMessages(connection.provider, token, ids, destination));
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        const moved = await moveMailMessages(connection.provider, token, ids, destination);
+        if (moved.moved.length) {
+          try {
+            const unread = await countInboxUnread(connection.provider, token);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1',[accountId,unread]);
+          } catch { /* Existing provider move succeeded; a subsequent scan updates the count. */ }
+        }
+        return moved;
+      });
       return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
     } catch (error) { return unavailable(reply, error); }
   });
@@ -214,6 +216,10 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const { accountId, messageId } = request.params as { accountId: string; messageId: string };
       const result = await withMailbox(id, accountId, async (connection, token) => {
         await markMailRead(connection.provider, token, messageId);
+        try {
+          const unread = await countInboxUnread(connection.provider, token);
+          await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1',[accountId,unread]);
+        } catch { /* Marking read succeeded; the next scan refreshes badge counts. */ }
         return { ok: true };
       });
       return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });

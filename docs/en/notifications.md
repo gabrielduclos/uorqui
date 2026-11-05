@@ -25,3 +25,7 @@ Settings are stored per account in `notification_preferences` and **enforced on 
 The full notification retains the color PWA icon, `icon-192.png`. The small **Android status-bar glyph** uses `notification-badge.png` instead: a 72 × 72 px white-on-transparent PNG showing the U monogram inside a chat bubble. Its vector source is `notification-badge.svg`. Avoid using the colored launcher icon as the notification `badge`: Android converts it into a monochrome silhouette.
 
 After deployment, reopen the installed PWA to update its service worker and receive a new push on a physical Android device to verify the result. Exact appearance varies with Android and browser versions.
+
+## Email notifications
+
+New Gmail and manual IMAP messages use the same account-bound VAPID push subscription; legacy connected Outlook accounts remain eligible. The **New emails** switch controls `notification_preferences.email_message` (migration `0037_mail_push.sql`). Push shows sender and subject, never the full body, and opens the connected message. The initial mailbox scan is silent to prevent an old-email flood, and delivery may be delayed when the API host is asleep.

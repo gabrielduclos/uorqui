@@ -25,3 +25,7 @@ As escolhas são persistidas por conta na tabela `notification_preferences`, apl
 O ícone colorido do PWA permanece como `icon-192.png` no conteúdo da notificação. Para o pequeno símbolo da **barra de status do Android**, o service worker utiliza `notification-badge.png`: PNG de 72 × 72 px, branco com transparência, com o monograma U em um balão de conversa. A fonte vetorial é `notification-badge.svg`. Não usar o logotipo colorido como `badge`, pois o Android reduz esse recurso a uma silhueta monocromática.
 
 Após a publicação, reabra o PWA para atualizar o service worker e receba um novo push em um aparelho Android para conferir o resultado. A aparência final depende da versão do Android e do navegador.
+
+## Notificações de e-mail
+
+O push de e-mails usa o mesmo service worker e inscrições VAPID. Gmail e IMAP são monitorados pelo backend, e contas Outlook conectadas anteriormente continuam elegíveis. A categoria **Novos e-mails** é controlada por `notification_preferences.email_message`, criada na migração `0037_mail_push.sql`. O usuário recebe remetente/assunto, sem corpo de mensagem; ao tocar, abre a mensagem na caixa conectada. O primeiro ciclo não notifica mensagens antigas; a API não promete entrega imediata quando a hospedagem estiver suspensa.

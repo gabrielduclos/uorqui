@@ -36,6 +36,24 @@ export const mailConnections = pgTable('mail_connections', {
 }, t => [uniqueIndex('mail_connections_user_provider_email').on(t.userId, t.provider, t.email),
   check('mail_connections_provider', sql`${t.provider} IN ('gmail','outlook','manual')`)]);
 
+/** A durable snapshot of unread inbox counts and the first successful poll. */
+export const mailInboxState = pgTable('mail_inbox_state', {
+  accountId: uuid('account_id').primaryKey().references(() => mailConnections.id, { onDelete: 'cascade' }),
+  unreadCount: integer('unread_count').notNull().default(0),
+  initializedAt: timestamp('initialized_at', { withTimezone: true }).notNull().defaultNow(),
+  lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Inbox message IDs deduplicate pushes across API restarts and deployments. */
+export const mailSeenMessages = pgTable('mail_seen_messages', {
+  accountId: uuid('account_id').notNull().references(() => mailConnections.id, { onDelete: 'cascade' }),
+  messageId: varchar('message_id', { length: 1024 }).notNull(),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  primaryKey({ columns: [t.accountId, t.messageId], name: 'mail_seen_messages_pk' }),
+  index('mail_seen_messages_seen_idx').on(t.firstSeenAt),
+]);
+
 export const mailOauthStates = pgTable('mail_oauth_states', {
   stateHash: text('state_hash').primaryKey(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -416,4 +434,5 @@ export const notificationPreferences = pgTable('notification_preferences', {
   communityRequest: boolean('community_request').notNull().default(true),
   friendRequest: boolean('friend_request').notNull().default(true),
   friendAccepted: boolean('friend_accepted').notNull().default(true),
+  emailMessage: boolean('email_message').notNull().default(true),
 });
