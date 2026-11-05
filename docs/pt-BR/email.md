@@ -1,16 +1,16 @@
-# Email via Gmail e Outlook
+# E-mail: Gmail OAuth e servidores IMAP/SMTP
 
 [English](../en/email.md) · [Português](email.md)
 
-O módulo Email integra Gmail API e Microsoft Graph por OAuth 2.0 com PKCE. Não usa a senha do usuário e não altera o login Better Auth. Uma conta de cada provedor pode ser conectada por usuário; uma nova autorização substitui a conexão anterior desse provedor.
+O Uorqui integra Gmail via OAuth e servidores IMAP/SMTP por configuração manual. Permite várias contas do mesmo provedor. Senhas manuais são armazenadas criptografadas com AES-256-GCM; o OAuth Outlook deixa de aceitar novas conexões, mas contas antigas continuam acessíveis enquanto autorizadas.
 
 ## Configuração
 
 1. Validar a migração Drizzle `0035_cooing_shard.sql` em uma branch Neon de desenvolvimento antes de solicitar aprovação para produção. O snapshot `0034_snapshot.json` registra as migrações manuais 0022–0034, sem repetir suas alterações.
 2. Criar um cliente OAuth web no Google Cloud, habilitar Gmail API e configurar consentimento. Solicitar `gmail.modify` e `gmail.send` para permitir sincronizar a leitura de mensagens. O escopo `gmail.modify` é restrito: a liberação pública depende da verificação do Google e dos requisitos de segurança aplicáveis. Durante testes, usar usuários de teste autorizados.
-3. Registrar um aplicativo web no Microsoft Entra com contas organizacionais e pessoais e permissões delegadas `User.Read`, `Mail.ReadWrite`, `Mail.Send` e `offline_access`. Organizações podem exigir consentimento administrativo.
-4. Cadastrar callbacks exatos no domínio canônico de `WEB_ORIGIN`: `/api/v1/mail/oauth/gmail/callback` e `/api/v1/mail/oauth/outlook/callback`. Passam pelo proxy existente do Worker até o Fastify; a sessão deve estar ativa no mesmo domínio.
-5. Configurar **somente no Render**, como variáveis privadas: `MAIL_GOOGLE_CLIENT_ID`, `MAIL_GOOGLE_CLIENT_SECRET`, `MAIL_MICROSOFT_CLIENT_ID`, `MAIL_MICROSOFT_CLIENT_SECRET` e `MAIL_TOKEN_KEY`. A chave é independente de `AUTH_SECRET`: 32 bytes aleatórios codificados em base64. Não rotacionar sem um plano para recriptografar ou reconectar contas existentes.
+3. Para servidor manual, informe usuário/senha de aplicativo, host IMAP TLS (porta 993) e host SMTP TLS (465), STARTTLS (587 ou 2525). Outlook.com/Microsoft 365 exigem OAuth2 e não funcionam com senha manual comum.
+4. Cadastre o callback Gmail no domínio `WEB_ORIGIN`: `/api/v1/mail/oauth/gmail/callback`.
+5. Configurar **somente no Render**, como variáveis privadas: `MAIL_GOOGLE_CLIENT_ID`, `MAIL_GOOGLE_CLIENT_SECRET`, `MAIL_TOKEN_KEY`. A chave é independente de `AUTH_SECRET`: 32 bytes aleatórios codificados em base64. Não rotacionar sem um plano para recriptografar ou reconectar contas existentes.
 6. Conferir `/health/ready`, então testar autorização, retorno, leitura, envio, expiração e desconexão com contas controladas dos dois provedores. Credenciais não estão no repositório. Sem configuração, a interface explica a indisponibilidade e desabilita a conexão.
 
 ## Comportamento
@@ -43,3 +43,13 @@ O Blueprint `render.yaml` usa `AUTH_BASE_URL=https://uorqui.app` e `WEB_ORIGIN=h
 ## Reautorização após liberar marcação de leitura
 
 Como o escopo Gmail mudou de `gmail.readonly` para `gmail.modify` e o Outlook de `Mail.Read` para `Mail.ReadWrite`, **contas previamente conectadas precisam reconectar o provedor pelo botão Gmail/Outlook** para conceder a nova permissão. Os escopos precisam constar no consentimento configurado no Google Cloud / Microsoft Entra. Nenhuma senha ou chave precisa ser gerada novamente; as conexões existentes não são excluídas pelo deploy. Um erro 409 `MAIL_RECONNECT` após tentativa de gravação indica que a permissão ainda não foi concedida.
+
+## Contas, seleção e servidores manuais
+
+- O seletor de contas contém **+ Conectar novo e-mail**; oferece Gmail OAuth ou **Servidor manual (IMAP/SMTP)**. Botões permanentes de provedores são removidos depois que uma conta está conectada.
+- A migração `0036_mail_multiple_accounts.sql` permite vários endereços do mesmo provedor e o tipo `manual`, preservando contas existentes. Aplicá-la antes da publicação da API.
+- Selecione até **100 mensagens** e mova para **Spam** ou **Lixeira**, sem exclusão permanente. A API usa Gmail `batchModify`, Graph `/move` para contas Microsoft legadas e IMAP MOVE para servidores manuais.
+- Imagens externas HTTPS são carregadas automaticamente no iframe isolado, com scripts e formulários bloqueados. Isso pode revelar ao remetente a abertura do e-mail por pixels de rastreamento.
+- Credenciais de servidores manuais são armazenadas criptografadas, nunca são retornadas na listagem de contas, e cada conexão valida o destino DNS contra redes privadas e locais. Só IMAP TLS 993 e SMTP seguro 465, 587 e 2525 são aceitos. Conexão SMTP não é testada durante o cadastro.
+- **Render gratuito bloqueia SMTP nas portas 25, 465 e 587**. Para enviar por SMTP convencional nessas portas, é preciso hospedar a API em serviço com egress liberado ou usar outra solução de envio. A porta 2525 funciona somente se o provedor oferecer SMTP STARTTLS nela.
+- Outlook.com e Microsoft 365 requerem OAuth2 e não aceitam senha manual como substituta. Novas conexões Outlook OAuth foram desabilitadas, mas contas Outlook existentes permanecem acessíveis enquanto as credenciais ainda funcionarem.
