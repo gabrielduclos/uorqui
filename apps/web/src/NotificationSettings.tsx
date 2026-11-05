@@ -1,19 +1,20 @@
 import {useEffect,useState} from 'react';
-import {ArrowLeft,Bell,BellOff,Check,MessageCircle,Users,UserPlus,UserRoundCheck} from 'lucide-react';
+import {ArrowLeft,Bell,BellOff,Check,Mail,MessageCircle,Users,UserPlus,UserRoundCheck} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {PushPreferences} from './PushPreferences';
 import {useUorquiPreferences} from './UorquiPreferences';
 
-export type PushKind='direct_message'|'community_message'|'community_request'|'friend_request'|'friend_accepted';
+export type PushKind='direct_message'|'community_message'|'community_request'|'friend_request'|'friend_accepted'|'email_message';
 export type PushSettings=Record<PushKind,boolean>;
-const initial:PushSettings={direct_message:true,community_message:true,community_request:true,friend_request:true,friend_accepted:true};
+const initial:PushSettings={direct_message:true,community_message:true,community_request:true,friend_request:true,friend_accepted:true,email_message:true};
 const options=[
   {key:'direct_message',pt:'Mensagens privadas',en:'Direct messages',icon:MessageCircle},
   {key:'community_message',pt:'Mensagens em comunidades e canais',en:'Community and channel messages',icon:Users},
   {key:'community_request',pt:'Solicitações das comunidades e reuniões',en:'Community and meeting join requests',icon:UserPlus},
   {key:'friend_request',pt:'Solicitações de contato',en:'Contact requests',icon:UserPlus},
-  {key:'friend_accepted',pt:'Contatos adicionados',en:'Accepted contact requests',icon:UserRoundCheck}
+  {key:'friend_accepted',pt:'Contatos adicionados',en:'Accepted contact requests',icon:UserRoundCheck},
+  {key:'email_message',pt:'Novos e-mails',en:'New emails',icon:Mail}
 ] as const;
 
 export function NotificationSettings({accountId,onBack}:{accountId:string;onBack:()=>void}){
