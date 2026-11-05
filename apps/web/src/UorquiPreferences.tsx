@@ -7,7 +7,7 @@ const en: Record<string, string> = {
   'Mensagens': 'Messages', 'Sua comunicação.': 'Your communication.', 'Em um só lugar.': 'All in one place.',
   'Mensagens, comunidades e email conectados ao seu dia a dia.': 'Messages, communities and email connected to your everyday life.',
   'Conecte Gmail e Outlook e acompanhe seus emails no mesmo lugar.': 'Connect Gmail and Outlook and keep up with your email in one place.',
-  'Início': 'Home', 'Descobrir': 'Discover', 'Conversas': 'Messages', 'Comunidades': 'Communities', 'Perfil': 'Profile',
+  'Início': 'Home', 'Descobrir': 'Discover', 'Conversas': 'Messages', 'Contatos': 'Contacts', 'Notificações': 'Notifications', 'Comunidades': 'Communities', 'Perfil': 'Profile',
   'UI Kit': 'UI Kit', 'Sua conta': 'Your account', 'Acesso à conta': 'Account access',
   'Navegação principal': 'Main navigation', 'Abrir meu perfil': 'Open my profile',
   'Uorqui — ir para o início': 'Uorqui — go home', 'Uorqui — voltar ao início': 'Uorqui — back home',
