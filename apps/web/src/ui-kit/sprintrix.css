@@ -196,7 +196,7 @@
 /* Communities are selected from the primary menu, then shown in their own
  * icon rail. The primary sidebar never lists community/channel entries. */
 [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-community-icon-rail]{
-  background:var(--kit-sidebar);
+  background:var(--kit-panel);
   border-color:var(--border);
   scrollbar-width:none;
 }
@@ -222,7 +222,7 @@
   min-height:17px;
   display:grid;
   place-items:center;
-  border:2px solid var(--kit-sidebar);
+  border:2px solid var(--kit-panel);
   border-radius:999px;
   background:#e15b5b;
   color:white;
@@ -245,4 +245,26 @@
   [data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-mobile-header-control{
     display:none!important;
   }
+}
+
+/* Community icons are now INSIDE the inset content panel, below its topbar.
+   Their background is the panel surface, not the main application sidebar. */
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-header-notifications[aria-current="page"]{
+  color:var(--foreground);
+  background:var(--accent);
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-notification-count{
+  position:absolute;
+  top:-3px;
+  right:-6px;
+  min-width:17px;
+  min-height:17px;
+  padding:0 3px;
+  background:#e15b5b;
+  border:2px solid var(--kit-panel);
+  border-radius:999px;
+  color:#fff;
+  font-size:10px;
+  font-weight:700;
+  line-height:1;
 }

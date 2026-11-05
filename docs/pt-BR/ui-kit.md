@@ -197,3 +197,10 @@ O UI Kit agora também possui uma implementação reutilizável em código próp
 A migração visual **não troca** React/Vite por Next.js e **não modifica** API Fastify/Render, Better Auth, Neon, SSE, uploads ou WebRTC. `LiveCommunities` continua montado para preservar salas de voz ao navegar. Dados do protótipo não entram na produção.
 
 **Validação:** `npm run build -w @uorqui/web`, `npm run check:worker -w @uorqui/web`, login e navegação reais, temas claro/escuro, fechamento do menu e continuidade da voz.
+
+## Ajuste de disposição — comunidades e notificações (05/11/2026)
+
+- A barra de ícones das comunidades pertence à **área de conteúdo**, dentro de `data-uorqui-inset-panel`, diretamente abaixo do cabeçalho, e não ao lado do menu principal. É exibida somente no módulo Comunidades; no mobile se oculta quando um canal está aberto. Segue as cores e as bordas do painel.
+- O acesso a **Notificações** foi transferido da sidebar para o **cabeçalho desktop** (sino com badge de não lidas e acesso à tela existente). No mobile, Notificações continua na navegação inferior.
+- O menu principal não exibe a lista de comunidades nem o item Notificações no desktop; o módulo Comunidades permanece acessível. A busca e o perfil continuam disponíveis pelos acessos anteriores.
+- Não foram alterados API, persistência, SSE ou WebRTC; `LiveCommunities` continua montado durante a navegação.
