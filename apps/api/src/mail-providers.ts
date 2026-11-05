@@ -250,3 +250,41 @@ export async function replyToMail(provider: MailProvider, token: string, sender:
     { method: 'POST', headers: headers(token),
       body: JSON.stringify({ raw: Buffer.from(raw).toString('base64url'), threadId: original.threadId }) });
 }
+
+
+/**
+ * Move selected messages to recoverable folders. No permanent deletion.
+ * Gmail supports batchModify; Microsoft Graph requires one move per message.
+ * Partial Graph failures are returned explicitly so the UI can keep failures selected.
+ */
+export async function moveMailMessages(
+  provider: MailProvider, token: string, ids: string[], destination: 'trash' | 'spam',
+): Promise<{ moved: string[]; failed: string[] }> {
+  if (provider === 'gmail') {
+    const label = destination === 'trash' ? 'TRASH' : 'SPAM';
+    await providerFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
+      method: 'POST', headers: headers(token),
+      body: JSON.stringify({
+        ids, addLabelIds: [label],
+        removeLabelIds: destination === 'trash' ? ['INBOX', 'SPAM'] : ['INBOX', 'TRASH'],
+      }),
+    });
+    return { moved: ids, failed: [] };
+  }
+  const folder = destination === 'trash' ? 'deleteditems' : 'junkemail';
+  const moved: string[] = [], failed: string[] = [];
+  // Keep the provider call fan-out small; do not leak provider errors or tokens.
+  for (let i = 0; i < ids.length; i += 4) {
+    const results = await Promise.all(ids.slice(i, i + 4).map(async id => {
+      try {
+        await providerFetch('https://graph.microsoft.com/v1.0/me/messages/' + encodeURIComponent(id) + '/move', {
+          method: 'POST', headers: headers(token),
+          body: JSON.stringify({ destinationId: folder }),
+        });
+        return { id, ok: true };
+      } catch { return { id, ok: false }; }
+    }));
+    for (const result of results) (result.ok ? moved : failed).push(result.id);
+  }
+  return { moved, failed };
+}
