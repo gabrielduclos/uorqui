@@ -330,6 +330,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     return()=>window.removeEventListener('uorqui:open-community',navigate);
   },[]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
+  useEffect(()=>{
+    if(selectedId) window.dispatchEvent(new CustomEvent('uorqui:community-selected',{detail:{id:selectedId}}));
+  },[selectedId]);
   // The main room roster is refreshed immediately by the shared community SSE.
   // Retain a slow fallback only for disconnected browsers or expired sessions.
   useEffect(()=>{

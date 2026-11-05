@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, ChevronRight, Compass, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, ShieldCheck, Users,
+  Bell, ChevronRight, Compass, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Search, Settings2, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BetaBadge } from './BetaBadge';
@@ -26,6 +26,8 @@ import { resetDmInboxSession } from './dmEventStream';
 import { clearChatMediaCache } from './chatMediaCache';
 import { clearCommunityMessageCache } from './communityMessageCache';
 import {useCommunityUnread} from './useCommunityUnread';
+import { useWorkspaceCommunities, WorkspaceCommunityShortcuts } from './WorkspaceCommunities';
+import { WorkspaceCommandPalette, type WorkspaceCommand } from './WorkspaceCommandPalette';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
 import {ActivityNotifications} from './ActivityNotifications';
@@ -95,6 +97,31 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const unreadMessageCount = useUnreadDirectMessages(account.user.id);
   useEffect(() => startDmOutbox(account.user.id), [account.user.id]);
   const communityUnread = useCommunityUnread();
+  const workspaceCommunities = useWorkspaceCommunities(account.user.id);
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string|null>(() => {
+    try { return localStorage.getItem('uorqui:last-community:' + account.user.id); } catch { return null; }
+  });
+  useEffect(() => {
+    setSelectedCommunityId(() => {
+      try { return localStorage.getItem('uorqui:last-community:' + account.user.id); } catch { return null; }
+    });
+    const onSelect = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (typeof id === 'string') setSelectedCommunityId(id);
+    };
+    window.addEventListener('uorqui:community-selected', onSelect);
+    return () => window.removeEventListener('uorqui:community-selected', onSelect);
+  }, [account.user.id]);
+  const [commandOpen, setCommandOpen] = useState(false);
+  useEffect(() => {
+    const open = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault(); setCommandOpen(previous => !previous);
+      }
+    };
+    window.addEventListener('keydown', open);
+    return () => window.removeEventListener('keydown', open);
+  }, []);
   const activity = useActivityNotifications(account.user.id);
   const communityUnreadLabel=communityUnread.total>99?'99+':String(communityUnread.total);
   // Joining through an invite takes priority; present the tour on a later normal visit.
@@ -220,11 +247,24 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   useEffect(()=>{previousArea.current=area;},[area]);
   const activeLabel=area==='profile'?'Perfil':area==='moderation'?(locale==='pt-BR'?'Moderação':'Moderation'):
     navigation.find(item=>item.id===area)?.label??'Comunidades';
+  const commands:WorkspaceCommand[] = [
+    ...navigation.map(item => ({
+      id: item.id, label: t(item.label), hint: locale==='pt-BR'?'Módulo principal':'Main module',
+      type: 'module' as const, run: () => move(item.id),
+    })),
+    { id: 'profile', label: t('Perfil'), hint: locale==='pt-BR'?'Sua conta':'Your account',
+      type: 'module' as const, run: () => move('profile') },
+    ...workspaceCommunities.map(item => ({
+      id: 'community:' + item.id, label: item.name,
+      hint: locale==='pt-BR'?'Comunidade':'Community', type: 'community' as const,
+      run: () => openDiscoveryCommunity(item.id),
+    })),
+  ];
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
-    <div data-uorqui-app-shell className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
-      <aside data-uorqui-dashboard-sidebar className={cn('hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-out md:flex',sidebarCollapsed?'w-16':'w-52')}>
+    <div data-uorqui-app-shell data-uorqui-sidebar-mode={sidebarCollapsed?'collapsed':'expanded'} className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
+      <aside data-uorqui-dashboard-sidebar className={cn('hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-out md:flex',sidebarCollapsed?'w-16':'w-60')}>
         <div className={cn('flex h-14 shrink-0 items-center border-b border-border',sidebarCollapsed?'justify-center gap-1 px-1':'justify-between gap-2 px-3')}>
           <button type="button" className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left font-semibold focus-visible:outline-2 focus-visible:outline-ring" onClick={()=>move('communities')} aria-label={t('Uorqui — ir para o início')}>
             {sidebarCollapsed?<span aria-hidden="true" className="grid size-8 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">U</span>:
@@ -238,7 +278,18 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           </button>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-2 py-3" aria-label={t('Navegação principal')}>
-          {!sidebarCollapsed&&<p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[.12em] text-muted-foreground">{locale==='pt-BR'?'ESPAÇO DE TRABALHO':'WORKSPACE'}</p>}
+          {!sidebarCollapsed&&<button type="button" onClick={()=>setCommandOpen(true)}
+            className="mb-3 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+            <Search className="size-4 shrink-0"/>
+            <span className="min-w-0 flex-1 truncate">{locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}</span>
+            <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
+          </button>}
+          {sidebarCollapsed&&<button type="button" aria-label={locale==='pt-BR'?'Abrir busca':'Open search'}
+            title={locale==='pt-BR'?'Buscar':'Search'} onClick={()=>setCommandOpen(true)}
+            className="mb-2 grid h-9 w-full place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
+            <Search className="size-4"/>
+          </button>}
+          {!sidebarCollapsed&&<p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">{locale==='pt-BR'?'PRINCIPAL':'MAIN'}</p>}
           {navigation.map(item=>{
             const Icon=item.icon;
             const badge=item.id==='conversations'?unreadMessageCount:item.id==='communities'?communityUnread.total:item.id==='notifications'?activity.unread:0;
@@ -247,16 +298,42 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               aria-current={area===item.id?'page':undefined}
               aria-label={t(item.label)+(badge?' · '+badge:'')}
               onClick={()=>move(item.id)}
-              className={cn('relative h-9 w-full rounded-md text-[13px] transition-colors',sidebarCollapsed?'justify-center px-1':'justify-start gap-2.5 px-3',area===item.id&&'font-semibold text-foreground')}>
+              className={cn('relative h-9 w-full rounded-md text-[13px] transition-colors',sidebarCollapsed?'justify-center px-1':'justify-start gap-2.5 px-2',area===item.id&&'font-semibold text-foreground')}>
               <Icon aria-hidden="true" className={cn('size-4 shrink-0',area===item.id?'text-primary':'text-muted-foreground')}/>
               {!sidebarCollapsed&&<span className="truncate">{t(item.label)}</span>}
-              {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 shrink-0 place-items-center rounded-md bg-primary px-1 text-[10px] font-bold text-primary-foreground',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
+              {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 shrink-0 place-items-center rounded-md bg-primary/12 px-1 text-[10px] font-semibold text-primary',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
             </Button>;
           })}
-          {platformModerator&&<Button type="button" size="sm" variant={area==='moderation'?'secondary':'ghost'} title={sidebarCollapsed?(locale==='pt-BR'?'Moderação':'Moderation'):undefined}
-            onClick={()=>move('moderation')} className={cn('h-9 rounded-md text-[13px]',sidebarCollapsed?'justify-center px-1':'justify-start gap-2.5 px-3')}>
-            <ShieldCheck className="size-4 shrink-0"/>{!sidebarCollapsed&&(locale==='pt-BR'?'Moderação':'Moderation')}
-          </Button>}
+          {!sidebarCollapsed&&<div className="my-2 h-px bg-border/80" role="separator"/>}
+          {!sidebarCollapsed&&<section aria-label={locale==='pt-BR'?'Suas comunidades':'Your communities'}>
+            <div className="mb-1 flex items-center justify-between gap-2 px-2">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">{locale==='pt-BR'?'SUAS COMUNIDADES':'YOUR COMMUNITIES'}</h2>
+              <button type="button" onClick={()=>move('communities')} title={locale==='pt-BR'?'Ver comunidades':'View communities'}
+                aria-label={locale==='pt-BR'?'Ver comunidades':'View communities'}
+                className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+                <ChevronRight className="size-3.5"/>
+              </button>
+            </div>
+            <WorkspaceCommunityShortcuts communities={workspaceCommunities}
+              unread={communityUnread.communities} selectedId={selectedCommunityId}
+              active={area==='communities'} onOpen={openDiscoveryCommunity} locale={locale}/>
+          </section>}
+          {platformModerator&&<div className="mt-2">
+            {!sidebarCollapsed&&<p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">{locale==='pt-BR'?'ADMINISTRAÇÃO':'ADMINISTRATION'}</p>}
+            <Button type="button" size="sm" variant={area==='moderation'?'secondary':'ghost'}
+              title={sidebarCollapsed?(locale==='pt-BR'?'Moderação':'Moderation'):undefined}
+              onClick={()=>move('moderation')} className={cn('h-9 w-full rounded-md text-[13px]',sidebarCollapsed?'justify-center px-1':'justify-start gap-2.5 px-2')}>
+              <ShieldCheck className="size-4 shrink-0"/>{!sidebarCollapsed&&(locale==='pt-BR'?'Moderação':'Moderation')}
+            </Button>
+          </div>}
+          <div className="mt-auto pt-2">
+            {!sidebarCollapsed&&<p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">{locale==='pt-BR'?'PREFERÊNCIAS':'PREFERENCES'}</p>}
+            <Button type="button" size="sm" variant={area==='profile'?'secondary':'ghost'} onClick={()=>move('profile')}
+              title={sidebarCollapsed?t('Perfil'):undefined}
+              className={cn('h-9 w-full rounded-md text-[13px]',sidebarCollapsed?'justify-center px-1':'justify-start gap-2.5 px-2')}>
+              <Settings2 className="size-4"/>{!sidebarCollapsed&&(locale==='pt-BR'?'Perfil e ajustes':'Profile & settings')}
+            </Button>
+          </div>
         </nav>
         <div className="mt-auto border-t border-border p-2">
           <button type="button" onClick={()=>move('profile')} title={sidebarCollapsed?t('Abrir meu perfil'):undefined}
@@ -292,6 +369,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button type="button" onClick={()=>setCommandOpen(true)}
+              aria-label={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
+              title={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
+              className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+              <Search className="size-[18px]"/>
+            </button>
              <PreferencesControls />
             <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} className="size-8" />
@@ -386,6 +469,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           })}
         </nav>}
       </div>
+      <WorkspaceCommandPalette open={commandOpen} onOpenChange={setCommandOpen}
+        commands={commands} locale={locale}/>
       {!tourVisible&&<PwaFirstRun accountId={account.user.id}/>}
       {tourVisible&&account.profile&&<OnboardingTour userId={account.user.id} profile={account.profile}
         onNavigate={move}

@@ -29,47 +29,47 @@
 
 :root {
   color-scheme: dark;
-  --radius: 0.625rem;
-  --background: #0e1117;
-  --foreground: #edf0f6;
-  --card: #161b24;
-  --card-foreground: #edf0f6;
-  --popover: #1b222e;
-  --popover-foreground: #edf0f6;
-  --primary: #8b80f9;
-  --primary-foreground: #0f1020;
-  --secondary: #262e3b;
-  --secondary-foreground: #e9edf5;
-  --muted: #202733;
-  --muted-foreground: #a6b0c1;
-  --accent: #303a49;
+  --radius: 0.5rem;
+  --background: #101114;
+  --foreground: #f0f1f4;
+  --card: #16171b;
+  --card-foreground: #f0f1f4;
+  --popover: #1c1e23;
+  --popover-foreground: #f0f1f4;
+  --primary: #9e8ffa;
+  --primary-foreground: #111016;
+  --secondary: #26272d;
+  --secondary-foreground: #f0f1f4;
+  --muted: #212228;
+  --muted-foreground: #a0a4ae;
+  --accent: #2c2e35;
   --accent-foreground: #ffffff;
-  --destructive: #f15d65;
-  --border: #303847;
-  --input: #3b4657;
-  --ring: #9c94fb;
+  --destructive: #fa646e;
+  --border: #32333b;
+  --input: #40424c;
+  --ring: #a99cff;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 :root.light {
   color-scheme: light;
-  --background: #f5f6f8;
-  --foreground: #202534;
+  --background: #fafafa;
+  --foreground: #181a20;
   --card: #ffffff;
-  --card-foreground: #202534;
+  --card-foreground: #181a20;
   --popover: #ffffff;
-  --popover-foreground: #202534;
-  --primary: #6156dd;
+  --popover-foreground: #181a20;
+  --primary: #6557d6;
   --primary-foreground: #ffffff;
-  --secondary: #ecedf2;
-  --secondary-foreground: #272e3e;
-  --muted: #f0f2f5;
-  --muted-foreground: #687183;
-  --accent: #e6e9f0;
-  --accent-foreground: #202534;
-  --destructive: #cf3648;
-  --border: #dce0e7;
-  --input: #c8ced9;
-  --ring: #756bf1;
+  --secondary: #f0f0f2;
+  --secondary-foreground: #23262d;
+  --muted: #f5f5f6;
+  --muted-foreground: #727783;
+  --accent: #e9e9ed;
+  --accent-foreground: #1b1e26;
+  --destructive: #d63a4e;
+  --border: #e2e3e7;
+  --input: #d1d3dc;
+  --ring: #8578e2;
 }
 
 @layer base {
@@ -150,4 +150,21 @@ body.uorqui-app-active {
   [data-uorqui-room-history],
   [data-uorqui-channel-nav] { animation: none !important; }
   [data-uorqui-motion-panel] { animation: none !important; transition: none !important; transform: none !important; opacity: 1 !important; }
+}
+
+/* Sprintrix-inspired workspace hierarchy, implemented independently with the
+   existing Uorqui React/shadcn components; no proprietary template assets. */
+@media (min-width: 768px) {
+  [data-uorqui-app-shell][data-uorqui-sidebar-mode="expanded"] [data-uorqui-community-rail] {
+    display: none;
+  }
+  [data-uorqui-dashboard-sidebar] {
+    background: var(--card);
+  }
+  [data-uorqui-app-shell] [data-uorqui-context-header] {
+    background: var(--card);
+  }
+}
+[data-uorqui-workspace-shortcuts] button[aria-current="page"] {
+  box-shadow: inset 2px 0 0 var(--primary);
 }
