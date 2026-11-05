@@ -31,6 +31,27 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     return reply.code(reconnect ? 409 : 503).send({ error: reconnect ? 'MAIL_RECONNECT' : 'MAIL_UNAVAILABLE' });
   }
 
+  // Polling caches per-account inbox counts; never expose other users' totals.
+  app.get('/api/v1/mail/unread', async (request, reply) => {
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const result = await getPool().query<{ count: number }>(
+        'SELECT COALESCE(SUM(s.unread_count),0)::int AS count '+
+        'FROM mail_connections m JOIN mail_inbox_state s ON s.account_id=m.id WHERE m.user_id=$1',[id]);
+      return {unreadCount:Math.max(0,result.rows[0]?.count ?? 0)};
+    } catch(error) { return unavailable(reply,error); }
+  });
+
+  // Delayed browser push must not reveal mail from a disconnected account.
+  app.get('/api/v1/mail/accounts/:accountId/notification-access', {schema:{params:accountParams}},async(request,reply)=>{
+    try {
+      const id=await user(request,reply); if(!id)return;
+      const {accountId}=request.params as {accountId:string};
+      const result=await getPool().query('SELECT 1 FROM mail_connections WHERE id=$1 AND user_id=$2',[accountId,id]);
+      return {authorized:Boolean(result.rowCount)};
+    } catch(error) { return unavailable(reply,error); }
+  });
+
   app.get('/api/v1/mail/accounts', async (request, reply) => {
     try {
       const id = await user(request, reply); if (!id) return;
