@@ -253,6 +253,13 @@
       "when": 1793882506500,
       "tag": "0035_cooing_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793906400000,
+      "tag": "0036_mail_multiple_accounts",
+      "breakpoints": true
     }
   ]
 }
