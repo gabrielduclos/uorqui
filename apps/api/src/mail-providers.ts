@@ -1,10 +1,12 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { getManualMessage, listManualMail, sendManualMail, markManualRead, replyManualMail, moveManualMessages } from './manual-mail.js';
 
-export type MailProvider = 'gmail' | 'outlook';
+export type OAuthMailProvider = 'gmail' | 'outlook';
+export type MailProvider = OAuthMailProvider | 'manual';
 export type MailTokens = { access_token: string; refresh_token: string; expires_at: number };
 export type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
 export type MailMessage = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
-export const isMailProvider = (value: string): value is MailProvider => value === 'gmail' || value === 'outlook';
+export const isMailProvider = (value: string): value is OAuthMailProvider => value === 'gmail';
 export const stateHash = (value: string) => createHash('sha256').update(value).digest('hex');
 export const randomSecret = () => randomBytes(32).toString('base64url');
 
@@ -24,7 +26,7 @@ export function openMailSecret(value: string) {
   decipher.setAuthTag(bytes.subarray(-16));
   return Buffer.concat([decipher.update(bytes.subarray(12, -16)), decipher.final()]).toString('utf8');
 }
-export function mailConfig(provider: MailProvider) {
+export function mailConfig(provider: OAuthMailProvider) {
   encryptionKey();
   const prefix = provider === 'gmail' ? 'MAIL_GOOGLE' : 'MAIL_MICROSOFT';
   const clientId = process.env[prefix + '_CLIENT_ID'];
@@ -36,8 +38,8 @@ export function mailConfig(provider: MailProvider) {
     token: provider === 'gmail' ? 'https://oauth2.googleapis.com/token' : 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     scope: provider === 'gmail' ? 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send' : 'offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send' };
 }
-export function mailProviderReady(provider: MailProvider) { try { mailConfig(provider); return true; } catch { return false; } }
-export function authorizationUrl(provider: MailProvider, state: string, verifier: string) {
+export function mailProviderReady(provider: OAuthMailProvider) { if (provider !== 'gmail') return false; try { mailConfig(provider); return true; } catch { return false; } }
+export function authorizationUrl(provider: OAuthMailProvider, state: string, verifier: string) {
   const config = mailConfig(provider);
   const query = new URLSearchParams({ client_id: config.clientId, redirect_uri: config.redirectUri, response_type: 'code',
     scope: config.scope, state, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
@@ -51,7 +53,7 @@ async function providerFetch(url: string, init: RequestInit, oauth = false): Pro
   if (!response.ok) throw Error(response.status === 401 || response.status === 403 || (oauth && response.status === 400) ? 'MAIL_RECONNECT' : 'MAIL_PROVIDER_UNAVAILABLE');
   return response;
 }
-export async function exchangeTokens(provider: MailProvider, fields: Record<string, string>, previousRefresh = ''): Promise<MailTokens> {
+export async function exchangeTokens(provider: OAuthMailProvider, fields: Record<string, string>, previousRefresh = ''): Promise<MailTokens> {
   const config = mailConfig(provider);
   const response = await providerFetch(config.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, redirect_uri: config.redirectUri, ...fields }) }, true);
@@ -63,7 +65,7 @@ export async function exchangeTokens(provider: MailProvider, fields: Record<stri
     expires_at: Date.now() + Math.max(0, Number(data.expires_in ?? 3600)) * 1000 };
 }
 function headers(token: string) { return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Prefer: 'outlook.body-content-type="text"' }; }
-export async function mailboxEmail(provider: MailProvider, token: string) {
+export async function mailboxEmail(provider: OAuthMailProvider, token: string) {
   const response = await providerFetch(provider === 'gmail' ? 'https://gmail.googleapis.com/gmail/v1/users/me/profile' :
     'https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName', { headers: headers(token) });
   const data = await response.json() as { emailAddress?: string; mail?: string; userPrincipalName?: string };
@@ -139,6 +141,7 @@ function outlookMessage(data: OutlookMessage, full: boolean): MailMessage {
     ...(full ? { body: data.body?.content || data.bodyPreview || '' } : {}) };
 }
 export async function getMailMessage(provider: MailProvider, token: string, id: string) {
+  if (provider === 'manual') return getManualMessage(token, id);
   const response = await providerFetch(provider === 'gmail' ? 'https://gmail.googleapis.com/gmail/v1/users/me/messages/' + encodeURIComponent(id) + '?format=full' :
     'https://graph.microsoft.com/v1.0/me/messages/' + encodeURIComponent(id) + '?$select=id,from,toRecipients,subject,bodyPreview,receivedDateTime,sentDateTime,isRead,flag,body', {
       headers: provider === 'gmail' ? headers(token) : { ...headers(token), Prefer: 'outlook.body-content-type="html"' },
@@ -151,6 +154,7 @@ export async function getMailMessage(provider: MailProvider, token: string, id: 
   return { ...outlookMessage(data, true), ...(data.body?.content ? { html: data.body.content } : {}) };
 }
 export async function listMail(provider: MailProvider, token: string, folder: MailFolder, filter: 'all' | 'unread' | 'starred', page = '') {
+  if (provider === 'manual') return listManualMail(token, folder, filter, page);
   if (provider === 'gmail') {
     const query = new URLSearchParams({ maxResults: '20',
       labelIds: ({ inbox: 'INBOX', sent: 'SENT', spam: 'SPAM', trash: 'TRASH' } as const)[folder],
@@ -188,6 +192,7 @@ export async function listMail(provider: MailProvider, token: string, folder: Ma
   return { messages: (data.value ?? []).map(item => outlookMessage(item, false)), nextPage };
 }
 export async function sendMail(provider: MailProvider, token: string, sender: string, message: { to: string; subject: string; body: string }) {
+  if (provider === 'manual') return sendManualMail(token, message.to, message.subject, message.body);
   if (provider === 'gmail') {
     if (/[\r\n]/.test(sender)) throw Error('MAIL_PROVIDER_UNAVAILABLE');
     const raw = ['From: ' + sender, 'To: ' + message.to, 'Subject: =?UTF-8?B?' + Buffer.from(message.subject).toString('base64') + '?=',
@@ -203,6 +208,7 @@ export async function sendMail(provider: MailProvider, token: string, sender: st
 
 /** Persist read state in the actual mailbox; the client only updates after this returns. */
 export async function markMailRead(provider: MailProvider, token: string, id: string) {
+  if (provider === 'manual') return markManualRead(token, id);
   if (provider === 'gmail') {
     await providerFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + encodeURIComponent(id) + '/modify',
       { method: 'POST', headers: headers(token), body: JSON.stringify({ removeLabelIds: ['UNREAD'] }) });
@@ -213,6 +219,7 @@ export async function markMailRead(provider: MailProvider, token: string, id: st
 }
 
 export async function replyToMail(provider: MailProvider, token: string, sender: string, id: string, body: string) {
+  if (provider === 'manual') return replyManualMail(token, id, body);
   if (provider === 'outlook') {
     // Reply on the source message, not a user-supplied destination or subject.
     await providerFetch('https://graph.microsoft.com/v1.0/me/messages/' + encodeURIComponent(id) + '/reply',
@@ -260,6 +267,7 @@ export async function replyToMail(provider: MailProvider, token: string, sender:
 export async function moveMailMessages(
   provider: MailProvider, token: string, ids: string[], destination: 'trash' | 'spam',
 ): Promise<{ moved: string[]; failed: string[] }> {
+  if (provider === 'manual') return moveManualMessages(token, ids, destination);
   if (provider === 'gmail') {
     const label = destination === 'trash' ? 'TRASH' : 'SPAM';
     await providerFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
