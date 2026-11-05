@@ -6,10 +6,13 @@ import { useEffect, useSyncExternalStore } from 'react';
  * The first fetch always passes the Worker's per-message membership check.
  */
 const PRIVATE_MEDIA_URL = /^(?:\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}|\/media\/community-attachment\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36})$/i;
-const LIMIT_BYTES = 48 * 1024 * 1024;
-const MAX_ITEM_BYTES = 12 * 1024 * 1024;
-const MAX_ITEMS = 24;
-const MAX_AGE_MS = 45 * 60 * 1000;
+// Allow more reusable private media on devices with sufficient RAM, without
+// making mobile/PWA tabs hold an unbounded collection of large videos.
+const deviceMemory=typeof navigator==='undefined'?4:(navigator as Navigator & { deviceMemory?:number }).deviceMemory??4;
+const LIMIT_BYTES = deviceMemory<=2?32*1024*1024:deviceMemory<=4?64*1024*1024:96*1024*1024;
+const MAX_ITEM_BYTES = 24 * 1024 * 1024;
+const MAX_ITEMS = 42;
+const MAX_AGE_MS = 90 * 60 * 1000;
 const RETRY_MS = 12_000;
 const MAX_PARALLEL_MEDIA = 3;
 let downloading = 0;
@@ -93,12 +96,36 @@ export async function ensureChatMediaCached(url: string): Promise<string | null>
         const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:abort.signal});
         if(!response.ok)throw Error('Not authorized to access DM media');
         const kind=(response.headers.get('content-type')??'').split(';')[0].toLowerCase();
-        if(!/^(image|audio|video)\//.test(kind))throw Error('Unexpected media content');
+        if(!(/^(image|audio|video)\//.test(kind)||/^(application\/(?:pdf|zip|octet-stream|msword|vnd\.(?:openxmlformats-officedocument|ms-excel|ms-powerpoint))|text\/plain)$/.test(kind)))
+          throw Error('Unexpected media content');
+        if(response.status===206)throw Error('Partial response must not be cached as complete');
         const length=Number(response.headers.get('content-length')??0);
         if(length>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
-        const bytes=await response.blob();
-        if(bytes.size>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
-        return bytes;
+        // Cap the stream while reading, even if the server sends no length.
+        // Do not download a complete 50 MB video just to discard it afterwards.
+        if(!response.body){
+          const bytes=await response.blob();
+          if(bytes.size>MAX_ITEM_BYTES)throw Error('Media exceeds memory cache limit');
+          return bytes;
+        }
+        const reader=response.body.getReader();
+        const chunks:BlobPart[]=[];
+        let total=0;
+        try{
+          while(true){
+            const {done,value}=await reader.read();
+            if(done)break;
+            total+=value.byteLength;
+            if(total>MAX_ITEM_BYTES){
+              await reader.cancel().catch(()=>{});
+              throw Error('Media exceeds memory cache limit');
+            }
+            const copy=new Uint8Array(value.byteLength);
+            copy.set(value);
+            chunks.push(copy);
+          }
+        }finally{reader.releaseLock();}
+        return new Blob(chunks,{type:kind});
       });
       if(entries.get(url)!==item || abort.signal.aborted)return null;
       item.blobUrl=URL.createObjectURL(blob);

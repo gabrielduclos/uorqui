@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 import { UsersRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCachedProfileImage } from './profileImageCache';
+
+/** Single object URL reused with the main rail and community directory. */
+function CommunityShortcutAvatar({url,name}:{url:string|null;name:string}){
+  const cached=useCachedProfileImage(url);
+  return cached?<img src={cached} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"
+    className="size-5 shrink-0 rounded-full object-cover"/>:
+    <span aria-hidden="true" className="grid size-5 shrink-0 place-items-center rounded-full border border-border bg-secondary text-[10px] font-semibold text-foreground">
+      {name.trim().charAt(0).toUpperCase()||<UsersRound className="size-3"/>}
+    </span>;
+}
 
 export type WorkspaceCommunity = {
   id: string;
@@ -127,12 +138,7 @@ export function WorkspaceCommunityShortcuts({
           aria-label={item.name + (count ? ' · ' + count : '')}
           className={cn('group flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-[13px] transition-colors hover:bg-accent/75 focus-visible:outline-2 focus-visible:outline-ring',
             isCurrent ? 'font-semibold text-foreground' : 'text-foreground/85')}>
-          {item.avatarUrl
-            ? <img src={item.avatarUrl} alt="" loading="lazy" referrerPolicy="no-referrer"
-                className="size-5 shrink-0 rounded-full object-cover"/>
-            : <span aria-hidden="true" className="grid size-5 shrink-0 place-items-center rounded-full border border-border bg-secondary text-[10px] font-semibold text-foreground">
-              {item.name.charAt(0).toUpperCase() || <UsersRound className="size-3"/>}
-            </span>}
+          <CommunityShortcutAvatar url={item.avatarUrl} name={item.name}/>
           <span className="min-w-0 flex-1 truncate">{item.name}</span>
           {count > 0 && <span aria-hidden="true" className="grid min-h-4 min-w-4 shrink-0 place-items-center rounded bg-muted px-1 text-[10px] font-semibold text-foreground">
             {count > 99 ? '99+' : count}

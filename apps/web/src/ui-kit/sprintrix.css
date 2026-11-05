@@ -268,3 +268,85 @@
   font-weight:700;
   line-height:1;
 }
+
+/* Only one community icon rail may be visible: the inset-panel rail belongs
+ * to SocialShell; the legacy internal LiveCommunities rail must not duplicate it.
+ * Disabling it visually does NOT unmount the community/voice component. */
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-community-rail]{
+  display:none!important;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-community-icon-rail]{
+  width:56px;
+  min-width:56px;
+  max-width:56px;
+  flex-shrink:0;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  box-sizing:border-box;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-icon{
+  width:40px;
+  min-width:40px;
+  max-width:40px;
+  height:40px;
+  min-height:40px;
+  max-height:40px;
+  flex-shrink:0;
+  box-sizing:border-box;
+  grid-template-columns:minmax(0,1fr);
+  overflow:hidden;
+  box-shadow:none;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-icon--active{
+  border-color:var(--foreground);
+  box-shadow:inset 0 0 0 1px var(--foreground);
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-picture,
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-picture>span{
+  display:grid;
+  place-items:center;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  height:100%;
+  overflow:hidden;
+  border-radius:10px;
+  font-size:14px;
+  font-weight:600;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-picture img{
+  display:block;
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  max-width:100%;
+  max-height:100%;
+  object-fit:cover;
+  border-radius:10px;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-unread{
+  top:1px;
+  right:1px;
+  min-width:14px;
+  min-height:14px;
+  border-width:1px;
+  font-size:9px;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-community-icon-rail] .uorqui-kit-community-utility{
+  width:40px;
+  max-width:40px;
+  min-width:40px;
+  height:40px;
+  min-height:40px;
+  flex-shrink:0;
+  box-sizing:border-box;
+}
+@media(min-width:768px){
+  [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-community-icon-rail]{
+    width:64px;
+    min-width:64px;
+    max-width:64px;
+  }
+}

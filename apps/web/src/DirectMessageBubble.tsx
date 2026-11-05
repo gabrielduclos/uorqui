@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { MessageText } from './MessageText';
 import { LinkPreview } from './LinkPreview';
 import { attachmentLabel } from './chatAttachmentLabels';
-import { useCachedChatMedia } from './chatMediaCache';
+import { ensureChatMediaCached, useCachedChatMedia } from './chatMediaCache';
 import { cn } from '@/lib/utils';
 
 export type DirectChatMessage = {
@@ -219,7 +219,9 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
                   : <Play className="size-10 text-white" fill="currentColor"/>}
               </span>
             </button> : isAudio ? <ChatAudioPlayer src={assetUrl}/> :
-            <a href={assetUrl} download={asset.name}
+            <a href={cachedSrc||assetUrl} download={asset.name}
+              onMouseEnter={()=>{if(assetUrl)void ensureChatMediaCached(assetUrl);}}
+              onFocus={()=>{if(assetUrl)void ensureChatMediaCached(assetUrl);}}
               className="flex min-w-0 items-center gap-2 border border-current/20 px-2 py-2 hover:underline">
               <FileText className="size-5 shrink-0"/><span className="min-w-0 flex-1 truncate text-xs" title={asset.name}>{asset.name || mediaLabel}</span>
               <Download className="size-4 shrink-0"/>

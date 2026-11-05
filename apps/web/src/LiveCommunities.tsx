@@ -9,6 +9,7 @@ import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from './UserProfiles';
+import { useCachedProfileImage } from './profileImageCache';
 import { useUorquiPreferences } from './UorquiPreferences';
 import CommunityVoiceRoom, { type CommunityVoiceParticipant, type VoiceRoomTarget, type VoicePhase } from './CommunityVoiceRoom';
 import CommunityModerationPanel from './CommunityModerationPanel';
@@ -22,6 +23,15 @@ import { CommunityMessageAttachment, type CommunityAttachment } from './Communit
 import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
+
+/** Shared authorized avatar cache prevents repeated R2 downloads between
+ * the community directory, channel header and the workspace icon rail. */
+function CommunityAvatarImage({url,name,classes}:{url:string|null;name:string;classes:string}) {
+  const cached=useCachedProfileImage(url);
+  return cached?<img src={cached} alt="" loading="lazy" decoding="async"
+    referrerPolicy="no-referrer" className={classes+' block min-h-0 min-w-0 object-cover'}/>:
+    <span aria-hidden="true" className="grid size-full place-items-center">{name.trim().charAt(0).toUpperCase()||'C'}</span>;
+}
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -825,10 +835,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const homeGroups=(directory ? list.filter(group=>group.visibility!=='private') : [...owned,...list.filter(group=>!group.myRole&&group.requestKind==='invite'&&group.requestStatus==='pending')])
     .filter(group=>(group.name+' '+group.slug).toLocaleLowerCase(locale).includes(communitySearch.toLocaleLowerCase(locale)));
   const visibilityLabel=(v:Visibility)=>v==='public'?(pt?'Pública':'Public'):v==='approval'?(pt?'Por aprovação':'Approval required'):(pt?'Privada':'Private');
-  const communityIcon=(group:Community)=>group.name.trim().charAt(0).toUpperCase()||'C';
-  const communityAvatar=(group:Community,classes:string)=>group.avatarUrl?
-    <img src={group.avatarUrl} alt="" className={classes+' block min-h-0 min-w-0 object-cover'}/>:
-    <span aria-hidden="true">{communityIcon(group)}</span>;
+  const communityAvatar=(group:Community,classes:string)=><CommunityAvatarImage
+    url={group.avatarUrl} name={group.name} classes={classes}/>;
 
   const voiceInline=Boolean(activeVoiceRoom&&active&&channelOpen&&!voiceMinimized&&!createOpen&&
     community?.id===activeVoiceRoom.communityId&&activeChannel?.id===activeVoiceRoom.channelId&&
@@ -929,7 +937,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </button>
           {detailLoading?<div className="space-y-2"><Skeleton className="h-5 w-3/4"/><Skeleton className="h-3 w-1/2"/></div>:
           <div className="flex items-center gap-2">
-            {community?.avatarUrl&&<div className="size-10 shrink-0 overflow-hidden rounded-xl"><img src={community.avatarUrl} alt="" className="block size-full object-cover"/></div>}
+            {community?.avatarUrl&&<div className="size-10 shrink-0 overflow-hidden rounded-xl"><CommunityAvatarImage
+              url={community.avatarUrl} name={community.name} classes="block size-full object-cover"/></div>}
             <div className="min-w-0 flex-1 truncate text-base font-semibold">{community?.name??(pt?'Comunidade':'Community')}</div>
           </div>}
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{community?.description|| (community?visibilityLabel(community.visibility):'…')}</p>

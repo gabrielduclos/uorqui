@@ -1,25 +1,29 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
 /**
- * Reuse immutable, authorized private R2 profile images across app restarts.
+ * Reuse immutable, authorized private profile and community avatar images across app restarts.
  * A bounded IndexedDB copy is scoped to the authenticated account and never
  * placed in shared HTTP, Service Worker, CDN or Cache Storage caches.
  * The app only mounts authenticated profile UI after /api/v1/me succeeds.
  * URLs change when a picture is replaced; logout and privacy changes purge data.
  */
-const PROFILE_MEDIA = /^\/media\/profile\/[a-f0-9-]{36}\/(?:avatar|cover)\/[a-f0-9-]{36}\.(?:webp|png|jpg)$/;
-const MAX_ENTRIES = 48;
+const PROFILE_MEDIA = /^\/media\/profile\/[a-f0-9-]{36}\/(?:avatar|cover)\/[a-f0-9-]{36}\.(?:webp|png|jpg)$/i;
+const COMMUNITY_MEDIA = /^\/media\/community\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.(?:webp|png|jpg)$/i;
+const CACHEABLE_IMAGE = (url: string) => PROFILE_MEDIA.test(url) || COMMUNITY_MEDIA.test(url);
+const itemLimit = (url: string) => COMMUNITY_MEDIA.test(url) ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
+const MAX_ENTRIES = 72;
+const MAX_MEMORY_BYTES = 48 * 1024 * 1024;
 const MAX_AGE_MS = 30 * 60 * 1000;
 const MAX_DISK_AGE_MS = 24 * 60 * 60 * 1000;
-const MAX_DISK_BYTES = 24 * 1024 * 1024;
-const MAX_DISK_ENTRIES = 64;
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+const MAX_DISK_BYTES = 48 * 1024 * 1024;
+const MAX_DISK_ENTRIES = 96;
 const RETRY_FAILED_MS = 12_000;
 const DB_NAME = 'uorqui-profile-image-cache';
 const DB_TABLE = 'images';
 
 type Cached = {
   blobUrl: string | null;
+  size: number;
   pending: Promise<void> | null;
   checkedAt: number;
   accessedAt: number;
@@ -130,8 +134,8 @@ async function trimStored() {
   let size = 0, count = 0;
   const remove: StoredImage[] = [];
   for (const item of sorted) {
-    const valid = item.accountId === activeAccount && PROFILE_MEDIA.test(item.url) &&
-      item.blob instanceof Blob && item.blob.size <= MAX_IMAGE_BYTES &&
+    const valid = item.accountId === activeAccount && CACHEABLE_IMAGE(item.url) &&
+      item.blob instanceof Blob && item.blob.size <= itemLimit(item.url) &&
       item.blob.type.startsWith('image/') &&
       now - item.checkedAt >= 0 && now - item.checkedAt < MAX_DISK_AGE_MS;
     if (!valid || count >= MAX_DISK_ENTRIES || size+item.blob.size > MAX_DISK_BYTES) {
@@ -150,7 +154,7 @@ function subscribe(listener: () => void) {
 }
 function cachedUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  if (!PROFILE_MEDIA.test(url)) return url;
+  if (!CACHEABLE_IMAGE(url)) return url;
   return entries.get(url)?.blobUrl ?? null;
 }
 function evict(url: string) {
@@ -195,24 +199,25 @@ function removeOldEntries(now: number) {
       evict(url); changed = true;
     }
   }
-  if (entries.size > MAX_ENTRIES) {
-    const lru = [...entries.entries()].filter(([,item])=>!item.pending)
-      .sort((a,b)=>a[1].accessedAt-b[1].accessedAt);
-    for (const [url] of lru.slice(0,Math.max(0,entries.size-MAX_ENTRIES))) {
-      evict(url); changed = true;
-    }
+  let bytes = [...entries.values()].reduce((sum,item)=>sum+item.size,0);
+  const lru = [...entries.entries()].filter(([,item])=>!item.pending)
+    .sort((a,b)=>a[1].accessedAt-b[1].accessedAt);
+  for(const [url,item] of lru){
+    if(entries.size<=MAX_ENTRIES && bytes<=MAX_MEMORY_BYTES)break;
+    bytes-=item.size;
+    evict(url);changed=true;
   }
   if (changed) emit();
 }
 function load(url: string) {
-  if (!PROFILE_MEDIA.test(url)) return;
+  if (!CACHEABLE_IMAGE(url)) return;
   const now = Date.now();
   removeOldEntries(now);
   const existing = entries.get(url);
   if (existing?.pending) return;
   if (existing?.blobUrl) { existing.accessedAt = now; return; }
   if (existing?.failedAt && now-existing.failedAt < RETRY_FAILED_MS) return;
-  const item: Cached = existing ?? { blobUrl: null, pending: null, checkedAt: now, accessedAt: now, failedAt: 0 };
+  const item: Cached = existing ?? { blobUrl: null, size: 0, pending: null, checkedAt: now, accessedAt: now, failedAt: 0 };
   const account = activeAccount;
   const startedAt = generation;
   const stillValid = () => entries.get(url) === item && generation === startedAt && account === activeAccount;
@@ -225,9 +230,10 @@ function load(url: string) {
       if (!stillValid()) return;
       if (restored && restored.accountId===account && restored.url===url &&
         restored.blob instanceof Blob && restored.blob.type.startsWith('image/') &&
-        restored.blob.size<=MAX_IMAGE_BYTES && Date.now()-restored.checkedAt<MAX_DISK_AGE_MS &&
+        restored.blob.size<=itemLimit(url) && Date.now()-restored.checkedAt<MAX_DISK_AGE_MS &&
         Date.now()-restored.checkedAt>=0) {
         item.blobUrl = URL.createObjectURL(restored.blob);
+        item.size = restored.blob.size;
         item.checkedAt = Date.now();
         item.failedAt = 0;
         return;
@@ -239,9 +245,10 @@ function load(url: string) {
     const contentType = (response.headers.get('content-type')??'').split(';')[0].toLowerCase();
     if (!contentType.startsWith('image/')) throw Error('Invalid profile image type');
     const blob = await response.blob();
-    if (blob.size>MAX_IMAGE_BYTES) throw Error('Profile image too large');
+    if (blob.size>itemLimit(url)) throw Error('Image exceeds cache limit');
     if (!stillValid()) return;
     item.blobUrl=URL.createObjectURL(blob);
+    item.size=blob.size;
     item.checkedAt=Date.now();
     item.failedAt=0;
     if (account) {
