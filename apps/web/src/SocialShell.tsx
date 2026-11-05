@@ -196,7 +196,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     try { localStorage.setItem(lastAreaKey(account.user.id), area); }
     catch { /* Private browsing or blocked storage: keep normal navigation. */ }
   }, [area, account.user.id, tourVisible]);
-  const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const communityUnreadCount = Object.values(communityUnread.communities).reduce((sum, count) => sum + count, 0);
   // Count unread channel locations once per channel, not once per message.
   const notificationBadgeCount = activity.unread + communityUnread.locations.length + communityUnread.invites.length;
@@ -343,7 +342,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       run: () => openDiscoveryCommunity(item.id),
     })),
   ];
-  const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened) || (area === 'email' && emailOpened);
 
   return (
     <div data-uorqui-app-shell data-uorqui-ui-kit="sprintrix-v1" data-uorqui-sidebar-mode={sidebarCollapsed?'collapsed':'expanded'} className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
