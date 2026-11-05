@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
+import { validateManualMailSettings, validateManualHosts } from './manual-mail.js';
 import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady,
-  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type MailFolder, type MailProvider, type MailTokens } from './mail-providers.js';
+  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type OAuthMailProvider, type MailFolder, type MailProvider, type MailTokens } from './mail-providers.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 type Connection = { id: string; provider: MailProvider; email: string; tokens: string };
@@ -33,27 +34,34 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     // Serializing refreshes prevents overwriting rotating Microsoft refresh tokens.
     const db = await getPool().connect();
     let connection: Connection;
-    let tokens: MailTokens;
+    let credential = '';
+    let transactionActive = false;
     try {
-      await db.query('BEGIN');
+      await db.query('BEGIN'); transactionActive = true;
       const found = await db.query<Connection>('SELECT id,provider,email,tokens FROM mail_connections WHERE id=$1 AND user_id=$2 FOR UPDATE', [accountId, userId]);
-      if (!found.rows[0]) { await db.query('ROLLBACK'); return null; }
+      if (!found.rows[0]) { await db.query('ROLLBACK'); transactionActive = false; return null; }
       connection = found.rows[0];
-      tokens = JSON.parse(openMailSecret(connection.tokens)) as MailTokens;
-      if (tokens.expires_at < Date.now() + 60_000) {
-        tokens = await exchangeTokens(connection.provider, { grant_type: 'refresh_token', refresh_token: tokens.refresh_token }, tokens.refresh_token);
-        await db.query('UPDATE mail_connections SET tokens=$1,updated_at=now() WHERE id=$2', [sealMailSecret(JSON.stringify(tokens)), accountId]);
+      const stored = openMailSecret(connection.tokens);
+      if (connection.provider === 'manual') {
+        credential = stored; // Encrypted settings; never sent to the browser.
+      } else {
+        let tokens = JSON.parse(stored) as MailTokens;
+        if (tokens.expires_at < Date.now() + 60_000) {
+          tokens = await exchangeTokens(connection.provider, { grant_type: 'refresh_token', refresh_token: tokens.refresh_token }, tokens.refresh_token);
+          await db.query('UPDATE mail_connections SET tokens=$1,updated_at=now() WHERE id=$2', [sealMailSecret(JSON.stringify(tokens)), accountId]);
+        }
+        credential = tokens.access_token;
       }
-      await db.query('COMMIT');
-    } catch (error) { await db.query('ROLLBACK'); throw error; }
+      await db.query('COMMIT'); transactionActive = false;
+    } catch (error) { if (transactionActive) await db.query('ROLLBACK'); throw error; }
     finally { db.release(); }
-    return run(connection!, tokens!.access_token);
+    return run(connection!, credential);
   }
 
   app.get('/api/v1/mail/accounts', async (request, reply) => {
     try {
       const id = await user(request, reply); if (!id) return;
-      const providers = ['gmail', 'outlook'].map(provider => ({ id: provider, configured: mailProviderReady(provider as MailProvider) }));
+      const providers = [{ id: 'gmail', configured: mailProviderReady('gmail') }];
       try {
         const accounts = await getPool().query('SELECT id,provider,email FROM mail_connections WHERE user_id=$1 ORDER BY provider,email', [id]);
         return { accounts: accounts.rows, providers, webOrigin: new URL(process.env.WEB_ORIGIN ?? 'http://localhost:5173').origin };
@@ -66,11 +74,11 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     } catch (error) { return unavailable(reply, error); }
   });
 
-  app.post('/api/v1/mail/oauth/:provider', { schema: { params: { type: 'object', required: ['provider'], properties: { provider: { enum: ['gmail', 'outlook'] } } } } }, async (request, reply) => {
+  app.post('/api/v1/mail/oauth/:provider', { schema: { params: { type: 'object', required: ['provider'], properties: { provider: { enum: ['gmail'] } } } } }, async (request, reply) => {
     if (!originAllowed(request, reply)) return;
     try {
       const id = await user(request, reply); if (!id) return;
-      const provider = (request.params as { provider: MailProvider }).provider;
+      const provider = (request.params as { provider: OAuthMailProvider }).provider;
       if (!mailProviderReady(provider)) return reply.code(503).send({ error: 'MAIL_NOT_CONFIGURED' });
       const state = randomSecret(), verifier = randomSecret();
       await getPool().query('DELETE FROM mail_oauth_states WHERE expires_at < now() OR (user_id=$1 AND provider=$2)', [id, provider]);
@@ -116,6 +124,36 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     } catch {
       return done('failed', stage);
     }
+  });
+
+  app.post('/api/v1/mail/manual', { schema: {
+    body: { type: 'object', additionalProperties: false,
+      required: ['email','imapHost','imapPort','smtpHost','smtpPort','username','password'],
+      properties: {
+        email: { type: 'string', maxLength: 320 },
+        imapHost: { type: 'string', maxLength: 253 },
+        imapPort: { type: 'integer', minimum: 1, maximum: 65535 },
+        smtpHost: { type: 'string', maxLength: 253 },
+        smtpPort: { type: 'integer', minimum: 1, maximum: 65535 },
+        username: { type: 'string', maxLength: 320 },
+        password: { type: 'string', minLength: 1, maxLength: 1024 },
+        smtpUsername: { type: 'string', maxLength: 320 },
+        smtpPassword: { type: 'string', maxLength: 1024 },
+      },
+    },
+  } }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    const id = await user(request, reply); if (!id) return;
+    let settings;
+    try { settings = validateManualMailSettings(request.body); }
+    catch { return reply.code(400).send({ error: 'MAIL_MANUAL_INVALID' }); }
+    try {
+      await validateManualHosts(settings);
+      await getPool().query(
+        'INSERT INTO mail_connections (user_id,provider,email,tokens) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id,provider,email) DO UPDATE SET tokens=excluded.tokens,updated_at=now()',
+        [id, 'manual', settings.email, sealMailSecret(JSON.stringify(settings))]);
+      return { ok: true };
+    } catch { return reply.code(503).send({ error: 'MAIL_MANUAL_UNAVAILABLE' }); }
   });
 
   app.delete('/api/v1/mail/accounts/:accountId', { schema: { params: accountParams } }, async (request, reply) => {
