@@ -3,7 +3,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { createPortal } from 'react-dom';
 import { Download, FileText, Maximize2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
-import { useCachedChatMedia } from './chatMediaCache';
+import { ensureChatMediaCached, useCachedChatMedia } from './chatMediaCache';
 import { ZoomableChatImage } from './ZoomableChatImage';
 import { attachmentLabel } from './chatAttachmentLabels';
 
@@ -41,7 +41,10 @@ export function CommunityMessageAttachment({attachment,src,locale}:{attachment:C
         </span>}
     </div>:
       isAudio?<div className="max-w-sm"><ChatAudioPlayer src={src}/></div>:
-      <a href={src} download={attachment.name} className="flex max-w-sm items-center gap-2 rounded-xl border border-border bg-secondary/40 p-3 text-sm hover:bg-secondary">
+      <a href={cached||src} download={attachment.name}
+        onMouseEnter={()=>void ensureChatMediaCached(src)}
+        onFocus={()=>void ensureChatMediaCached(src)}
+        className="flex max-w-sm items-center gap-2 rounded-xl border border-border bg-secondary/40 p-3 text-sm hover:bg-secondary">
         <FileText className="size-5 shrink-0 text-primary"/><span className="min-w-0 flex-1 truncate" title={attachment.name}>{attachment.name || attachmentLabel(type,locale)}</span><Download className="size-4 shrink-0"/>
       </a>}
     {expanded&&isImage&&typeof document!=='undefined'&&createPortal(
