@@ -72,8 +72,9 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,unreadChannels,unreadCommunities,unreadLocations,active}:{
+export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,requestedDestination,unreadChannels,unreadCommunities,unreadLocations,active}:{
   myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
+  requestedDestination?:{communityId:string;channelId:string|null;nonce:number}|null;
   unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
@@ -351,6 +352,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     window.addEventListener('uorqui:open-community',navigate);
     return()=>window.removeEventListener('uorqui:open-community',navigate);
   },[]);
+  // On a cold PWA start the shell may parse a notification before a
+  // window event listener exists. The explicit prop replays the destination
+  // reliably and prevents the async initial community restore from winning.
+  const lastDestinationNonce=useRef<number|null>(null);
+  useEffect(()=>{
+    if(!requestedDestination||lastDestinationNonce.current===requestedDestination.nonce)return;
+    lastDestinationNonce.current=requestedDestination.nonce;
+    window.dispatchEvent(new CustomEvent('uorqui:open-community',{
+      detail:{communityId:requestedDestination.communityId,channelId:requestedDestination.channelId}
+    }));
+  },[requestedDestination]);
+
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
   useEffect(()=>{
     window.dispatchEvent(new CustomEvent('uorqui:community-selected',{detail:{id:selectedId}}));
