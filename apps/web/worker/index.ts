@@ -443,6 +443,18 @@ export default {
     const origin = apiOrigin(env.API_ORIGIN, current);
     if (!origin) return jsonError(503, 'API unavailable');
 
+    // All routes, including uploads and cancellation, pass through this guard.
+    const isPreview = env.UORQUI_ENV === 'preview';
+    const safeAuthPost = request.method === 'POST' &&
+      (current.pathname === '/api/auth/sign-in/email' || current.pathname === '/api/auth/sign-out');
+    if(isPreview && !['GET','HEAD','OPTIONS'].includes(request.method) && !safeAuthPost)
+      return jsonError(403, 'Esta prévia é somente para avaliação visual. Alterações estão desativadas.');
+    if(isPreview && safeAuthPost &&
+      (request.headers.get('origin') !== current.origin || request.headers.get('sec-fetch-site') === 'cross-site'))
+      return jsonError(403, 'Invalid preview origin');
+    if(isPreview && request.method === 'GET' && current.pathname === '/api/auth/verify-email')
+      return jsonError(403, 'Verification is unavailable in preview');
+
     if(communityImage){
       if(!['GET','HEAD'].includes(request.method))return jsonError(405,'Method not allowed');
       return readCommunityImage(request,env,origin,communityImage);
@@ -496,19 +508,6 @@ export default {
         return new Response(response.body,{status:response.status,headers});
       }catch{return jsonError(502,'Could not cancel message');}
     }
-
-    // Preview shares existing Uorqui accounts only for login and read-only UI review.
-    // All other non-idempotent API operations are rejected before touching production.
-    const isPreview = env.UORQUI_ENV === 'preview';
-    const safeAuthPost = request.method === 'POST' &&
-      (current.pathname === '/api/auth/sign-in/email' || current.pathname === '/api/auth/sign-out');
-    if(isPreview && !['GET','HEAD','OPTIONS'].includes(request.method) && !safeAuthPost)
-      return jsonError(403, 'Esta prévia é somente para avaliação visual. Alterações estão desativadas.');
-    if(isPreview && safeAuthPost &&
-      (request.headers.get('origin') !== current.origin || request.headers.get('sec-fetch-site') === 'cross-site'))
-      return jsonError(403, 'Invalid preview origin');
-    if(isPreview && request.method === 'GET' && current.pathname === '/api/auth/verify-email')
-      return jsonError(403, 'Verification is unavailable in preview');
 
     const upstream = new URL(current.pathname + current.search, origin);
     try {
