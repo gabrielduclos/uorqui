@@ -57,11 +57,12 @@ function readLastArea(userId: string): Area {
 
 const WORKSPACE_PAGE_MOTION = { duration: 0.18, ease: [0.22, 1, 0.36, 1] as [number,number,number,number] };
 
+// The same alphabetical order is used in the desktop sidebar and mobile menu.
 const navigation = [
-  { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
-  { id: 'contacts', label: 'Contatos', icon: ContactRound },
   { id: 'communities', label: 'Comunidades', icon: Users },
+  { id: 'contacts', label: 'Contatos', icon: ContactRound },
   { id: 'email', label: 'Email', icon: Mail },
+  { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
   { id: 'notifications', label: 'Notificações', icon: Bell },
 ] as const;
 
@@ -185,7 +186,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   }, []);
 
   const move=useCallback((next: Area) => {
-    const order:Area[]=['conversations','contacts','communities','email','notifications','profile','moderation'];
+    const order:Area[]=['communities','contacts','email','conversations','notifications','profile','moderation'];
     if(next==='notifications'&&previousArea.current!=='notifications')
       notificationReturnArea.current=previousArea.current;
     setNavDirection(order.indexOf(next)>=order.indexOf(previousArea.current)?1:-1);
@@ -325,24 +326,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             className="mb-2 grid h-9 w-full place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
             <Search className="size-4"/>
           </button>}
-          {navigation.filter(item=>item.id==='conversations').map(item=>{
+          {/* Notification access stays in the header bell; the sidebar lists the other modules alphabetically. */}
+          {navigation.filter(item=>item.id!=='notifications').map(item=>{
             const Icon=item.icon;
-            const badge=item.id==='conversations'?unreadMessageCount:activity.unread;
-            return <Button key={item.id} type="button" size="sm" variant="ghost"
-              data-uorqui-tour-target={item.id} title={sidebarCollapsed?t(item.label):undefined}
-              aria-current={area===item.id?'page':undefined}
-              aria-label={t(item.label)+(badge?' · '+badge:'')} onClick={()=>move(item.id)}
-              className={cn('uorqui-sidebar-item relative h-8 w-full rounded-md text-[13px] font-medium',
-                sidebarCollapsed?'justify-center px-1':'justify-start gap-3 px-2.5')}>
-              <Icon aria-hidden="true" className="size-4 shrink-0"/>
-              {!sidebarCollapsed&&<span className="truncate">{t(item.label)}</span>}
-              {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 place-items-center rounded bg-muted px-1 text-[10px] font-medium',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
-            </Button>;
-          })}
-          {/* Contacts, communities and Email belong to the main navigation. */}
-          {navigation.filter(item=>item.id==='contacts'||item.id==='communities'||item.id==='email').map(item=>{
-            const Icon=item.icon;
-            const badge=item.id==='communities'?communityUnreadCount:0;
+            const badge=item.id==='conversations'?unreadMessageCount:item.id==='communities'?communityUnreadCount:0;
             return <Button key={item.id} type="button" size="sm" variant="ghost"
               data-uorqui-tour-target={item.id} title={sidebarCollapsed?t(item.label):undefined}
               aria-current={area===item.id?'page':undefined}
