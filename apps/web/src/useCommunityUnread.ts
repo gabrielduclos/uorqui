@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {clearReadPush} from './readPushNotifications';
+import {clearReadPush,type ReadPushTarget} from './readPushNotifications';
 
 export type UnreadLocation={communityId:string;communityName:string;channelId:string;channelName:string;
   channelKind:'text'|'voice'|'meeting';count:number};
@@ -24,20 +24,20 @@ export function useCommunityUnread(){
           const currentChannels=data.channels??{};
           const currentInvites=Array.isArray(data.invites)?data.invites:[];
           if(lastSuccessfulSnapshot){
-            const cleared=Object.entries(lastSuccessfulSnapshot.channels)
+            const cleared:ReadPushTarget[]=Object.entries(lastSuccessfulSnapshot.channels)
               .filter(([channelId,count])=>count>0 && !(Number(currentChannels[channelId])>0))
               .map(([channelId])=>({kind:'community' as const,channelId}));
             const invitationIds=new Set(currentInvites.map(invite=>invite.communityId));
             for(const communityId of lastSuccessfulSnapshot.invites)
-              if(!invitationIds.has(communityId))cleared.push({kind:'community-invite',communityId} as never);
+              if(!invitationIds.has(communityId))cleared.push({kind:'community-invite',communityId});
             if(cleared.length)clearReadPush(cleared);
           }
           lastSuccessfulSnapshot={channels:currentChannels,invites:currentInvites.map(invite=>invite.communityId)};
           setUnread({
-          initialized:true,total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{},
+            initialized:true,total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{},
           locations:Array.isArray(data.locations)?data.locations:[],
-          invites:currentInvites
-        });
+            invites:currentInvites
+          });
         }
       }catch{/* Keep the last known badge if offline or if migration is pending. */}
     };
