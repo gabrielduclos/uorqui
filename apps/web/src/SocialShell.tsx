@@ -34,12 +34,16 @@ import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
 import {ActivityNotifications} from './ActivityNotifications';
 import {useActivityNotifications,type ActivityNotification} from './useActivityNotifications';
+import {subscribeDmStream} from './dmEventStream';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: UserProfileData | null;
 };
 type Area = 'email' | 'conversations' | 'contacts' | 'communities' | 'notifications' | 'profile' | 'moderation';
+type InAppNotice = {id:string;key:string;title:string;body:string;url:string};
+const validUuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const mailMessageId=/^[A-Za-z0-9_=+\/\-]{1,1024}$/;
 
 // Remember the last main app module per account on this device. Direct links
 // and invitations remain authoritative over the restored selection.
@@ -200,12 +204,19 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   // Count unread channel locations once per channel, not once per message.
   const notificationBadgeCount = activity.unread + communityUnread.locations.length + communityUnread.invites.length;
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
-  const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
+  const [requestedConversation,setRequestedConversation]=useState<{id:string;nonce:number}|null>(null);
+  const [requestedCommunity,setRequestedCommunity]=useState<{communityId:string;channelId:string|null;nonce:number}|null>(null);
+  const [requestedActivity,setRequestedActivity]=useState<{id:string;nonce:number}|null>(null);
+  const navigationNonce=useRef(0);
+  const [inAppNotices,setInAppNotices]=useState<InAppNotice[]>([]);
+  const noticeTimers=useRef(new Map<string,number>());
+  const noticeDedupe=useRef(new Map<string,number>());
+  const currentArea=useRef<Area>(area);
+  useEffect(()=>{currentArea.current=area;},[area]);
   const [, setConversationOpened] = useState(false);
   const [channelOpened, setChannelOpened] = useState(false);
   const [, setEmailOpened] = useState(false);
   const [mailDeepLink,setMailDeepLink]=useState<{accountId:string;messageId:string;nonce:number}|null>(null);
-  const mailLinkNonce=useRef(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutConfirm,setLogoutConfirm]=useState(false);
   const [logoutError, setLogoutError] = useState('');
@@ -253,41 +264,172 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   },[move]);
 
 
+  /** One navigation entry point for system notifications and in-app alerts.
+   * Stable URLs also work when the PWA is cold-started from an OS notification. */
+  const openPushDestination=useCallback((urlValue:string)=>{
+    let url:URL;
+    try{url=new URL(urlValue,window.location.origin);}catch{return;}
+    if(url.origin!==window.location.origin||url.pathname!=='/')return;
+    const params=url.searchParams;
+    const id=params.get('conversation');
+    const community=params.get('community');
+    const channel=params.get('channel');
+    const notification=params.get('notification');
+    const invited=params.get('communityInvite');
+    const mailAccount=params.get('mailAccount');
+    const mailMessage=params.get('mailMessage');
+    if(mailAccount&&validUuid.test(mailAccount)&&mailMessage&&mailMessageId.test(mailMessage)){
+      setMailDeepLink({accountId:mailAccount,messageId:mailMessage,nonce:++navigationNonce.current});
+      move('email');
+    }else if(id&&validUuid.test(id)){
+      setRequestedConversation({id,nonce:++navigationNonce.current});
+      move('conversations');
+    }else if(community&&validUuid.test(community)){
+      setRequestedCommunity({communityId:community,channelId:channel&&validUuid.test(channel)?channel:null,
+        nonce:++navigationNonce.current});
+      move('communities');
+    }else if(notification&&validUuid.test(notification)){
+      setRequestedActivity({id:notification,nonce:++navigationNonce.current});
+      move('notifications');
+      window.dispatchEvent(new Event('uorqui:activity-update'));
+    }else if(invited&&validUuid.test(invited)){
+      move('notifications');
+      window.dispatchEvent(new Event('uorqui:community-push-update'));
+    }else if(params.has('mailInbox')){
+      move('email');
+    }
+  },[move]);
+
+  const dismissNotice=useCallback((id:string)=>{
+    const timer=noticeTimers.current.get(id);
+    if(timer!==undefined)window.clearTimeout(timer);
+    noticeTimers.current.delete(id);
+    setInAppNotices(old=>old.filter(item=>item.id!==id));
+  },[]);
+  const showNotice=useCallback((key:string,title:string,body:string,url:string,destination:Area)=>{
+    if(document.visibilityState!=='visible'||currentArea.current===destination)return;
+    const now=Date.now();
+    if(now-(noticeDedupe.current.get(key)??0)<12_000)return;
+    noticeDedupe.current.set(key,now);
+    if(noticeDedupe.current.size>100)
+      for(const [id,at] of noticeDedupe.current)if(now-at>30_000)noticeDedupe.current.delete(id);
+    const id=key+':'+now;
+    setInAppNotices(old=>[...old.slice(-2),{id,key,title:title.slice(0,100),body:body.slice(0,180),url}]);
+    const timer=window.setTimeout(()=>dismissNotice(id),6500);
+    noticeTimers.current.set(id,timer);
+  },[dismissNotice]);
+  useEffect(()=>()=>{
+    noticeTimers.current.forEach(timer=>window.clearTimeout(timer));
+    noticeTimers.current.clear();
+  },[account.user.id]);
+
   useEffect(()=>{
-    const open=(urlValue:string)=>{
-      const url=new URL(urlValue,window.location.origin);
-      if(url.origin!==window.location.origin)return;
-      const id=url.searchParams.get('conversation');
-      const community=url.searchParams.get('community');
-      const channel=url.searchParams.get('channel');
-      const notification=url.searchParams.get('notification');
-      const mailAccount=url.searchParams.get('mailAccount');
-      const mailMessage=url.searchParams.get('mailMessage');
-      if(mailAccount&&/^[0-9a-f-]{36}$/i.test(mailAccount)&&mailMessage&&/^[A-Za-z0-9_=+\/\-]{1,1024}$/.test(mailMessage)){
-        setMailDeepLink({accountId:mailAccount,messageId:mailMessage,nonce:++mailLinkNonce.current});
-        move('email');
-      }
-      else if(id&&/^[0-9a-f-]{36}$/i.test(id)){setRequestedConversationId(id);move('conversations');}
-      else if(community&&/^[0-9a-f-]{36}$/i.test(community)){
-        move('communities');
-        if(channel&&/^[0-9a-f-]{36}$/i.test(channel))window.setTimeout(()=>window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:{communityId:community,channelId:channel}})),50);
-      }
-      else if(notification&&/^[0-9a-f-]{36}$/i.test(notification))move('notifications');
-    };
     const onMessage=(event:MessageEvent)=>{
-      if(event.data?.type==='uorqui:push-open'&&typeof event.data.url==='string')open(event.data.url);
-      if(event.data?.type==='uorqui:activity-update')window.dispatchEvent(new Event('uorqui:activity-update'));
-      if(event.data?.type==='uorqui:community-push-update')window.dispatchEvent(new Event('uorqui:community-push-update'));
-      if(event.data?.type==='uorqui:mail-push-update')window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
+      const data=event.data as {type?:string;recipientId?:string;kind?:string;title?:string;body?:string;url?:string;
+        messageId?:string;channelId?:string;notificationId?:string}|null;
+      if(data?.type==='uorqui:push-open'&&typeof data.url==='string')openPushDestination(data.url);
+      if(data?.type==='uorqui:activity-update')window.dispatchEvent(new Event('uorqui:activity-update'));
+      if(data?.type==='uorqui:community-push-update')window.dispatchEvent(new Event('uorqui:community-push-update'));
+      if(data?.type==='uorqui:mail-push-update')window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
+      if(data?.type!=='uorqui:foreground-push'||data.recipientId!==account.user.id||
+        typeof data.url!=='string'||typeof data.kind!=='string')return;
+      const destination:Area = data.kind==='dm'?'conversations':
+        data.kind==='community'?'communities':data.kind==='mail'?'email':'notifications';
+      const key=data.kind==='dm'?'dm:'+(data.messageId||data.url):
+        data.kind==='community'?'community:'+(data.channelId||data.url):
+        data.kind==='mail'?'mail:'+(data.messageId||data.url):
+        data.kind==='activity'?'activity:'+(data.notificationId||data.url):data.kind+':'+data.url;
+      showNotice(key,data.title||'Uorqui',data.body||'Nova notificação',data.url,destination);
     };
     navigator.serviceWorker?.addEventListener('message',onMessage);
+    // Keep the deep link intact through login. Parse it only when the signed-in
+    // shell exists, then clear navigation parameters from the visible address.
     const current=new URL(window.location.href);
-    if(current.searchParams.has('conversation')||current.searchParams.has('community')||current.searchParams.has('notification')||current.searchParams.has('mailAccount')){
-      open(current.toString());current.searchParams.delete('conversation');current.searchParams.delete('community');current.searchParams.delete('channel');current.searchParams.delete('notification');current.searchParams.delete('mailAccount');current.searchParams.delete('mailMessage');
-      window.history.replaceState({},'',current.pathname+current.search);
+    if(['conversation','community','notification','mailAccount','communityInvite','mailInbox'].some(key=>current.searchParams.has(key))){
+      openPushDestination(current.toString());
+      for(const key of ['conversation','community','channel','notification','mailAccount','mailMessage','communityInvite','mailInbox'])
+        current.searchParams.delete(key);
+      window.history.replaceState({},'',current.pathname+current.search+current.hash);
     }
-    return()=>navigator.serviceWorker?.removeEventListener('message',onMessage);
-  },[move]);
+    const pending=(event:Event)=>{const target=(event as CustomEvent<string>).detail;
+      if(typeof target==='string')openPushDestination(target);};
+    window.addEventListener('uorqui:open-notification-destination',pending);
+    return()=>{
+      navigator.serviceWorker?.removeEventListener('message',onMessage);
+      window.removeEventListener('uorqui:open-notification-destination',pending);
+    };
+  },[openPushDestination,showNotice,account.user.id]);
+
+  // DM SSE is also active when the user has not allowed operating-system push.
+  useEffect(()=>subscribeDmStream(event=>{
+    if(event.kind!=='message'||!event.message||event.message.authorId===account.user.id)return;
+    const conversationId=event.conversationId;
+    if(validUuid.test(conversationId))
+      showNotice('dm:'+event.message.id,
+        locale==='pt-BR'?'Nova mensagem privada':'New direct message',
+        locale==='pt-BR'?'Você recebeu uma mensagem.':'You received a message.',
+        '/?conversation='+encodeURIComponent(conversationId),'conversations');
+  }),[account.user.id,locale,showNotice]);
+
+  const communityBaseline=useRef<{channels:Record<string,number>;invites:string[]}|null>(null);
+  useEffect(()=>{
+    if(!communityUnread.initialized)return;
+    const current={channels:communityUnread.channels,invites:communityUnread.invites.map(item=>item.communityId)};
+    const previous=communityBaseline.current;
+    communityBaseline.current=current;
+    if(!previous)return;
+    if(currentArea.current!=='communities'){
+      for(const location of communityUnread.locations){
+        const before=previous.channels[location.channelId]??0;
+        if(location.count>before){
+          showNotice('community:'+location.channelId,
+            locale==='pt-BR'?'Nova mensagem em comunidade':'New community message',
+            location.communityName+' · #'+location.channelName,
+            '/?community='+encodeURIComponent(location.communityId)+'&channel='+encodeURIComponent(location.channelId),
+            'communities');
+          break; // One compact toast per incoming batch.
+        }
+      }
+    }
+    if(currentArea.current!=='notifications'){
+      for(const invite of communityUnread.invites){
+        if(!previous.invites.includes(invite.communityId)){
+          showNotice('invite:'+invite.communityId,
+            locale==='pt-BR'?'Convite para comunidade':'Community invitation',
+            invite.communityName,'/?communityInvite='+encodeURIComponent(invite.communityId),'notifications');
+          break;
+        }
+      }
+    }
+  },[communityUnread,locale,showNotice]);
+
+  const activityBaseline=useRef<string[]|null>(null);
+  useEffect(()=>{
+    if(activity.loading)return;
+    const now=activity.items.filter(item=>!item.readAt).map(item=>item.id);
+    const before=activityBaseline.current;
+    activityBaseline.current=now;
+    if(!before||currentArea.current==='notifications')return;
+    const known=new Set(before);
+    const first=activity.items.find(item=>!item.readAt&&!known.has(item.id));
+    if(first)showNotice('activity:'+first.id,
+      locale==='pt-BR'?'Nova notificação':'New notification',
+      first.actorName+' · '+(first.kind==='friend_request'?
+        (locale==='pt-BR'?'solicitação de contato':'contact request'):
+        first.kind==='friend_accepted'?(locale==='pt-BR'?'contato aceito':'contact accepted'):
+        (locale==='pt-BR'?'atividade na comunidade':'community activity')),
+      '/?notification='+encodeURIComponent(first.id),'notifications');
+  },[activity.items,activity.loading,locale,showNotice]);
+
+  const handledActivity=useRef(0);
+  useEffect(()=>{
+    if(!requestedActivity||handledActivity.current===requestedActivity.nonce)return;
+    const target=activity.items.find(item=>item.id===requestedActivity.id);
+    if(!target)return;
+    handledActivity.current=requestedActivity.nonce;
+    openActivity(target);
+  },[requestedActivity,activity.items]);
+
 
   function openActivity(item:ActivityNotification){
     void activity.markRead(item.id);
@@ -536,14 +678,14 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               className="h-full min-h-0 overflow-hidden">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
-                initialCommunityId={invitedCommunityId}
+                initialCommunityId={invitedCommunityId} requestedDestination={requestedCommunity}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
             </motion.div>
             {area!=='communities'&&<motion.div key={area} data-uorqui-motion-panel initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
               transition={WORKSPACE_PAGE_MOTION} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
-              <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
+              <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversation?.id} requestedOpenNonce={requestedConversation?.nonce}
                 onMobileOpenChange={setConversationOpened} onOpenContacts={()=>move('contacts')}
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
@@ -604,6 +746,23 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
 
       </div>
+      {inAppNotices.length>0&&<section aria-label={locale==='pt-BR'?'Avisos recentes':'Recent alerts'}
+        aria-live="polite" className="pointer-events-none fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[120] flex w-[min(26rem,calc(100vw-1.5rem))] flex-col gap-2 md:top-17">
+        {inAppNotices.map(notice=><div key={notice.id}
+          className="pointer-events-auto flex min-h-17 items-start gap-2 rounded-xl border border-border bg-card p-3 shadow-xl">
+          <button type="button" className="flex min-w-0 flex-1 items-start gap-3 text-left"
+            aria-label={notice.title+' · '+notice.body}
+            onClick={()=>{dismissNotice(notice.id);openPushDestination(notice.url);}}>
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Bell className="size-4"/></span>
+            <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{notice.title}</strong>
+              <span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{notice.body}</span></span>
+          </button>
+          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent"
+            aria-label={locale==='pt-BR'?'Dispensar aviso':'Dismiss alert'} onClick={()=>dismissNotice(notice.id)}>
+            <X className="size-4"/>
+          </button>
+        </div>)}
+      </section>}
       <WorkspaceCommandPalette open={commandOpen} onOpenChange={setCommandOpen}
         commands={commands} locale={locale}/>
       {!tourVisible&&<PwaFirstRun accountId={account.user.id}/>}
