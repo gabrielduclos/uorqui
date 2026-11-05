@@ -186,3 +186,14 @@ Check long histories, delayed image loads, inbound messages while scrolled up, r
 - Motion is disabled for `prefers-reduced-motion`; SSE, read receipts, caching, scroll anchoring and active calls are unaffected.
 
 Check module navigation, long history, channel switching, email details, mobile/PWA, reduced motion and ongoing voice rooms.
+
+## Channel moderation and permission-aware notifications (2026-11-05)
+
+- The **Moderation → Channels** tab now edits a channel's **name**, **open/restricted access** and **password** (set/replace/remove) and retains confirmed deletion. Each action uses existing server-side endpoints requiring **owner or admin** role; member grants for restricted channels remain in Moderation → Members. Password access and restricted member grants are independent.
+- The **notification center** shows persisted social activity, pending community invitations and unread channel locations from `/api/v1/communities/unread`. The server filters by membership, password unlock and restricted grants. Private invitations show only the recipient's invited community name, never internal channels.
+- The header bell and mobile badge count one alert per unread channel, one per pending invitation and persisted activity. Opening a channel doesn't bypass existing read-receipt visibility checks. **Mark all as read** continues to apply only to persisted activity records.
+- Existing community message push respects `community_message` preference, current membership, password access, restricted grants, bans, and mutual blocks. Invitation push respects `community_request`. Community message notifications deep-link to the permitted channel.
+- The Service Worker **revalidates queued channel and invitation pushes at display time** with authenticated, no-store API endpoints before showing names. If permissions are revoked, a user signs out or the server is unavailable, the push is suppressed. Private attachments are not added to Service Worker caches.
+- Page transitions and content-only loading remain scoped to the content area, preserving the shell and ongoing voice sessions.
+
+Test with multiple accounts and revoked memberships: open/restricted channels, password rotation, invitation acceptance/decline, unread badges and delayed push delivery.
