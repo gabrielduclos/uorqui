@@ -77,7 +77,12 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [replyError, setReplyError] = useState('');
-  const [remoteImages, setRemoteImages] = useState(false);
+  // Remote HTTPS images are loaded by default, as requested. The iframe still
+  // blocks scripts, forms, access to Uorqui cookies and parent DOM.
+  const [connectPicker, setConnectPicker] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [moving, setMoving] = useState(false);
   const [sending, setSending] = useState(false);
   const [replySending, setReplySending] = useState(false);
   const [draft, setDraft] = useState({ to: '', subject: '', body: '' });
@@ -123,8 +128,9 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     return () => controller.abort();
   }, [accountId, folder, filter, page, refresh, explainError]);
 
-  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setRemoteImages(false); setLoadingBody(false); }
-  function resetList() { closeDetail(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
+  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
+  function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
+  function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
   async function connect(provider: Provider) {
     if (connecting) return;
     setConnecting(provider); setError('');
@@ -154,7 +160,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   async function showMessage(message: Message) {
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
-    setCompose(false); setReplying(false); setReplyBody(''); setRemoteImages(false);
+    setCompose(false); setReplying(false); setReplyBody('');
     setSelected(message); setLoadingBody(true); setError('');
     const chosenAccount = accountId;
     try {
@@ -205,8 +211,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
-    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: ' +
-      (remoteImages ? 'https:' : '') + '; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: https:; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
     '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
@@ -298,17 +303,9 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         <article key={selected.id} className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
           {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : framedHtml ? <>
-            <div className="mb-3 flex items-center justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={() => setRemoteImages(enabled => !enabled)} aria-pressed={remoteImages}>
-                {remoteImages ? (pt ? 'Bloquear imagens externas' : 'Block external images') : (pt ? 'Carregar imagens externas' : 'Load external images')}
-              </Button>
-            </div>
-            <iframe key={selected.id + ':' + String(remoteImages)} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
-              sandbox="allow-popups" referrerPolicy="no-referrer" srcDoc={framedHtml}
+            <iframe key={selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
+              sandbox="" referrerPolicy="no-referrer" srcDoc={framedHtml}
               className="h-[min(70vh,760px)] w-full rounded-md border border-border bg-white" />
-            <p className="mt-2 text-[11px] text-muted-foreground">{pt
-              ? 'Imagens incorporadas aparecem automaticamente. Imagens externas exigem sua autorização, para proteger sua privacidade.'
-              : 'Embedded images load automatically. External images require your permission to protect your privacy.'}</p>
           </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
           {replying && !loadingBody && <form onSubmit={event => void submitReply(event)} className="mt-6 space-y-3 border-t border-border pt-5">
             <p className="text-xs font-medium">{pt ? 'Responder a ' : 'Reply to '}{selected.from}</p>
