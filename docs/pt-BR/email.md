@@ -53,3 +53,11 @@ Como o escopo Gmail mudou de `gmail.readonly` para `gmail.modify` e o Outlook de
 - Credenciais de servidores manuais são armazenadas criptografadas, nunca são retornadas na listagem de contas, e cada conexão valida o destino DNS contra redes privadas e locais. Só IMAP TLS 993 e SMTP seguro 465, 587 e 2525 são aceitos. Conexão SMTP não é testada durante o cadastro.
 - **Render gratuito bloqueia SMTP nas portas 25, 465 e 587**. Para enviar por SMTP convencional nessas portas, é preciso hospedar a API em serviço com egress liberado ou usar outra solução de envio. A porta 2525 funciona somente se o provedor oferecer SMTP STARTTLS nela.
 - Outlook.com e Microsoft 365 requerem OAuth2 e não aceitam senha manual como substituta. Novas conexões Outlook OAuth foram desabilitadas, mas contas Outlook existentes permanecem acessíveis enquanto as credenciais ainda funcionarem.
+
+## Push de novos e-mails
+
+Após conectar Gmail ou um servidor IMAP, o backend Render verifica a caixa de entrada periodicamente (padrão: a cada 120 segundos; `MAIL_POLL_INTERVAL_MS` ajustável entre 60 segundos e 1 hora). Outlook OAuth legado também é verificado para contas já conectadas. O primeiro ciclo estabelece uma referência **sem notificar mensagens antigas**; IDs já vistos ficam em `mail_seen_messages`, resistentes a reinicializações e reimplantações. A tabela `mail_inbox_state` mantém os contadores consultados pelo menu.
+
+Somente e-mails que chegam após a referência inicial geram push. O payload informa remetente e assunto (sem corpo completo), com destinatário autenticado, verificação de acesso à conta ainda conectada antes de exibir e abertura direta da mensagem na conta correta. O usuário pode desabilitar **Novos e-mails** em Ajustes de notificações. Com a API suspensa ou indisponível, o monitoramento atrasa; o push é de melhor esforço e não substitui o provedor de e-mail. Alguns contadores do Gmail são estimados pela API do Google.
+
+A migração `0037_mail_push.sql` cria as tabelas de varredura e a preferência `email_message`. **Aplicá-la ao Neon correto antes de publicar a API**, sem modificar dados das conexões existentes. A cada leitura ou movimentação, o backend atualiza o contador de entrada; os demais clientes sincronizam no próximo ciclo. O menu mobile usa gaveta lateral (sem barra inferior), igual aos módulos do desktop.
