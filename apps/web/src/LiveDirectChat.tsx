@@ -161,6 +161,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const lastThreadFallback = useRef(Date.now());
   const lastMessageFallback = useRef(Date.now());
   const scrollBox = useRef<HTMLDivElement>(null);
+  const messageContentRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -563,6 +564,42 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     if (atBottomRef.current || last.authorId === myId) jumpToLast('instant');
     else if (last.authorId !== myId) setNewBelow(n => n + 1);
   }, [activeId, messages, pendingMessages, messagesLoading, lastId, myId, jumpToLast]);
+
+  // Images, attachment previews and fonts can change the height of the history
+  // after the first "jump to latest". Follow that growth only while the user
+  // is at (or very near) the bottom; do not pull them away from older messages.
+  useLayoutEffect(() => {
+    const scroller=scrollBox.current;
+    const content=messageContentRef.current;
+    if (!activeId || messagesLoading || !positionedRef.current || !scroller || !content) return;
+    let priorHeight=scroller.scrollHeight;
+    let frame=0;
+    const followGrowth=()=>{
+      const nextHeight=scroller.scrollHeight;
+      const grew=nextHeight>priorHeight;
+      const wasNearBottom=priorHeight-scroller.scrollTop-scroller.clientHeight<NEAR_BOTTOM_PX;
+      priorHeight=nextHeight;
+      if (!atBottomRef.current && !(grew&&wasNearBottom)) return;
+      window.cancelAnimationFrame(frame);
+      frame=window.requestAnimationFrame(()=>{
+        if(activeIdRef.current!==activeId || !scroller.isConnected)return;
+        scroller.scrollTop=scroller.scrollHeight;
+      });
+    };
+    let observer:ResizeObserver|null=null;
+    if (typeof ResizeObserver!=='undefined'){
+      observer=new ResizeObserver(followGrowth);
+      observer.observe(content);
+      observer.observe(scroller);
+    }
+    // A frame after opening covers the first browser layout on mobile/PWA.
+    const openingFrame=window.requestAnimationFrame(followGrowth);
+    return ()=>{
+      observer?.disconnect();
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(openingFrame);
+    };
+  }, [activeId, messagesLoading]);
 
   // Read only when actual message content has been rendered AND the recipient
   // is viewing the bottom of that conversation; merely listing/selecting is
@@ -1086,7 +1123,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={scrollBox} onScroll={onMessagesScroll}
             data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
-            <div className="flex w-full min-w-0 flex-col gap-2.5">
+            <div ref={messageContentRef} className="flex w-full min-w-0 flex-col gap-2.5">
               {messagesLoading && <div className="space-y-3 py-4" role="status" aria-label={pt ? 'Carregando mensagens' : 'Loading messages'}>
                 <SkeletonRows rows={4} className="w-full px-3"/>
               </div>}
