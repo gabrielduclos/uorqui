@@ -749,7 +749,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
 
   return <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
     <nav data-uorqui-community-rail aria-label={pt?'Minhas comunidades':'My communities'}
-      className={cn('relative z-20 w-16 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-card/95 py-4',
+      className={cn('relative z-20 w-14 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-card/95 py-4',
         channelOpen?'hidden md:flex':'flex')}>
       {owned.map(group=><button type="button" key={group.id} title={group.name}
         aria-label={group.name+(unreadCommunities[group.id]?' · '+unreadCommunities[group.id]+(pt?' mensagens não lidas':' unread messages'):'')}
@@ -769,7 +769,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     </nav>
 
     <section aria-label={pt?'Comunidades e canais':'Communities and channels'}
-      className={cn('h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/25 md:flex md:w-72 md:shrink-0',channelOpen?'hidden':'flex')}>
+      className={cn('h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/25 md:flex md:w-64 md:shrink-0',channelOpen?'hidden':'flex')}>
       {createOpen||!selectedId?<div className="flex h-full min-h-0 flex-col">
         <div className="shrink-0 space-y-3 border-b border-border bg-card/95 p-4">
           <h2 className="text-base font-semibold">{createOpen?(pt?'Criar comunidade':'Create community'):(pt?'Minhas comunidades':'My communities')}</h2>

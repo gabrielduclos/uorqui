@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, Compass, LogOut, MessageCircle, ShieldCheck, Users,
+  Bell, ChevronRight, Compass, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BetaBadge } from './BetaBadge';
@@ -136,6 +136,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   }, []);
 
   const move=useCallback((next: Area) => {
+    const order:Area[]=['communities','conversations','discover','notifications','profile','moderation'];
+    setNavDirection(order.indexOf(next)>=order.indexOf(previousArea.current)?1:-1);
+    previousArea.current=next;
     setArea(next);
     setConversationOpened(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
@@ -205,51 +208,87 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:{communityId,channelId}}));
   },[]);
 
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{
+    try{return localStorage.getItem('uorqui:sidebar-collapsed:v1')==='1';}catch{return false;}
+  });
+  useEffect(()=>{
+    try{localStorage.setItem('uorqui:sidebar-collapsed:v1',sidebarCollapsed?'1':'0');}catch{}
+  },[sidebarCollapsed]);
+  const [navDirection,setNavDirection]=useState<1|-1>(1);
+  const previousArea=useRef<Area>(area);
+  useEffect(()=>{previousArea.current=area;},[area]);
+  const activeLabel=area==='profile'?'Perfil':area==='moderation'?(locale==='pt-BR'?'Moderação':'Moderation'):
+    navigation.find(item=>item.id===area)?.label??'Comunidades';
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened);
 
   return (
     <div data-uorqui-app-shell className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
-      <aside className="hidden h-full min-h-0 w-55 shrink-0 flex-col overflow-hidden border-r border-border bg-card/65 md:flex">
-        <button className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 text-left text-2xl font-bold tracking-tight focus-visible:outline-2 focus-visible:outline-ring" onClick={() => move('communities')} aria-label={t('Uorqui — ir para o início')}>
-          <UorquiWordmark className="h-[18px] w-auto max-w-full text-foreground" />
-          <BetaBadge />
-        </button>
-        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3" aria-label={t("Navegação principal")}>
-          {navigation.map(item => {
-            const Icon = item.icon;
-            return <Button type="button" data-uorqui-tour-target={item.id} key={item.id} variant={area === item.id ? 'secondary' : 'ghost'} onClick={() => move(item.id)} aria-current={area === item.id ? 'page' : undefined} className={cn('h-11 justify-start gap-3 text-sm', area === item.id && 'text-primary')}
-              aria-label={item.id === 'conversations' && unreadMessageCount ? t(item.label) + ': ' + unreadMessageCount + (locale === 'pt-BR' ? ' mensagens não lidas' : ' unread messages') : t(item.label)}>
-              <Icon aria-hidden="true" className="size-4" />{t(item.label)}
-              {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
-                className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unreadLabel}</span>}
-              {item.id === 'communities' && communityUnread.total>0 && <span aria-hidden="true"
-                className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{communityUnreadLabel}</span>}
-              {item.id==='notifications'&&activity.unread>0&&<span aria-hidden="true" className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{activity.unread>99?'99+':activity.unread}</span>}
+      <aside data-uorqui-dashboard-sidebar className={cn('hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-out md:flex',sidebarCollapsed?'w-16':'w-52')}>
+        <div className={cn('flex h-14 shrink-0 items-center border-b border-border',sidebarCollapsed?'justify-center gap-1 px-1':'justify-between gap-2 px-3')}>
+          <button type="button" className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left font-semibold focus-visible:outline-2 focus-visible:outline-ring" onClick={()=>move('communities')} aria-label={t('Uorqui — ir para o início')}>
+            {sidebarCollapsed?<span aria-hidden="true" className="grid size-8 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">U</span>:
+              <><UorquiWordmark className="h-[17px] w-auto max-w-full text-foreground"/><BetaBadge/></>}
+          </button>
+          <button type="button" className={cn('grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',sidebarCollapsed&&'absolute left-17 top-3 z-40 hidden')}
+            title={sidebarCollapsed?(locale==='pt-BR'?'Expandir menu':'Expand sidebar'):(locale==='pt-BR'?'Recolher menu':'Collapse sidebar')}
+            aria-label={sidebarCollapsed?(locale==='pt-BR'?'Expandir menu':'Expand sidebar'):(locale==='pt-BR'?'Recolher menu':'Collapse sidebar')}
+            aria-expanded={!sidebarCollapsed} onClick={()=>setSidebarCollapsed(old=>!old)}>
+            {sidebarCollapsed?<PanelLeftOpen className="size-4"/>:<PanelLeftClose className="size-4"/>}
+          </button>
+        </div>
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-2 py-3" aria-label={t('Navegação principal')}>
+          {!sidebarCollapsed&&<p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[.12em] text-muted-foreground">{locale==='pt-BR'?'ESPAÇO DE TRABALHO':'WORKSPACE'}</p>}
+          {navigation.map(item=>{
+            const Icon=item.icon;
+            const badge=item.id==='conversations'?unreadMessageCount:item.id==='communities'?communityUnread.total:item.id==='notifications'?activity.unread:0;
+            return <Button key={item.id} type="button" size="sm" variant={area===item.id?'secondary':'ghost'}
+              data-uorqui-tour-target={item.id} title={sidebarCollapsed?t(item.label):undefined}
+              aria-current={area===item.id?'page':undefined}
+              aria-label={t(item.label)+(badge?' · '+badge:'')}
+              onClick={()=>move(item.id)}
+              className={cn('relative h-9 w-full rounded-md text-[13px] transition-colors',sidebarCollapsed?'justify-center px-1':'justify-start gap-2.5 px-3',area===item.id&&'font-semibold text-foreground')}>
+              <Icon aria-hidden="true" className={cn('size-4 shrink-0',area===item.id?'text-primary':'text-muted-foreground')}/>
+              {!sidebarCollapsed&&<span className="truncate">{t(item.label)}</span>}
+              {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 shrink-0 place-items-center rounded-md bg-primary px-1 text-[10px] font-bold text-primary-foreground',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
             </Button>;
           })}
-          {platformModerator&&<Button type="button" variant={area==='moderation'?'secondary':'ghost'}
-            onClick={()=>move('moderation')} className="h-11 justify-start gap-3 text-sm">
-            <ShieldCheck className="size-4"/>{locale==='pt-BR'?'Moderação':'Moderation'}
+          {platformModerator&&<Button type="button" size="sm" variant={area==='moderation'?'secondary':'ghost'} title={sidebarCollapsed?(locale==='pt-BR'?'Moderação':'Moderation'):undefined}
+            onClick={()=>move('moderation')} className={cn('h-9 rounded-md text-[13px]',sidebarCollapsed?'justify-center px-1':'justify-start gap-2.5 px-3')}>
+            <ShieldCheck className="size-4 shrink-0"/>{!sidebarCollapsed&&(locale==='pt-BR'?'Moderação':'Moderation')}
           </Button>}
         </nav>
-        <div className="mt-auto space-y-3 border-t border-border p-3">
-          <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
-            <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} />
-            <span className="min-w-0"><span className="block truncate text-sm font-medium">{account.profile?.displayName ?? account.user.name}</span><span className="block truncate text-xs text-muted-foreground">{account.profile ? '@' + account.profile.handle : t('Conta Uorqui')}</span></span>
+        <div className="mt-auto border-t border-border p-2">
+          <button type="button" onClick={()=>move('profile')} title={sidebarCollapsed?t('Abrir meu perfil'):undefined}
+            aria-label={t('Abrir meu perfil')} className={cn('flex w-full min-w-0 items-center rounded-md py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring',sidebarCollapsed?'justify-center px-0':'gap-2 px-2')}>
+            <ProfileAvatar name={account.profile?.displayName??account.user.name} image={account.profile?.avatarUrl} className="size-8"/>
+            {!sidebarCollapsed&&<span className="min-w-0"><span className="block truncate text-xs font-semibold">{account.profile?.displayName??account.user.name}</span><span className="block truncate text-[11px] text-muted-foreground">{account.profile?'@'+account.profile.handle:t('Conta Uorqui')}</span></span>}
           </button>
-          <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => setLogoutConfirm(true)} disabled={loggingOut} aria-busy={loggingOut}>
-            {loggingOut ? <Spinner /> : <LogOut aria-hidden="true" className="size-4" />}{loggingOut ? t("Saindo…") : t('Sair')}
+          <Button type="button" variant="ghost" size="sm" title={sidebarCollapsed?t('Sair'):undefined}
+            className={cn('mt-1 h-8 w-full text-xs text-muted-foreground',sidebarCollapsed?'justify-center px-1':'justify-start gap-2 px-3')}
+            onClick={()=>setLogoutConfirm(true)} disabled={loggingOut} aria-busy={loggingOut}>
+            {loggingOut?<Spinner/>:<LogOut aria-hidden="true" className="size-4"/>}{!sidebarCollapsed&&(loggingOut?t('Saindo…'):t('Sair'))}
           </Button>
         </div>
       </aside>
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6 md:h-16 md:min-h-16 md:pt-0">
+        <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-5 md:h-14 md:min-h-14 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => move('communities')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
               <UorquiWordmark className="h-4 w-auto max-w-[34vw] text-foreground" />
               <BetaBadge compact />
             </button>
+            <button type="button" className="hidden size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:grid"
+              title={sidebarCollapsed?(locale==='pt-BR'?'Expandir menu':'Expand sidebar'):(locale==='pt-BR'?'Recolher menu':'Collapse sidebar')}
+              aria-label={sidebarCollapsed?(locale==='pt-BR'?'Expandir menu':'Expand sidebar'):(locale==='pt-BR'?'Recolher menu':'Collapse sidebar')}
+              aria-expanded={!sidebarCollapsed} onClick={()=>setSidebarCollapsed(old=>!old)}>
+              {sidebarCollapsed?<PanelLeftOpen className="size-4"/>:<PanelLeftClose className="size-4"/>}
+            </button>
+            <div className="hidden min-w-0 items-center gap-2 text-xs md:flex">
+              <span className="text-muted-foreground">Uorqui</span>
+              <ChevronRight className="size-3.5 text-muted-foreground"/>
+              <span className="truncate font-semibold text-foreground">{t(activeLabel)}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
              <PreferencesControls />
@@ -261,21 +300,21 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <div className="h-full min-h-0 overflow-hidden">
-            <div hidden={area!=='discover'} className="h-full min-h-0">
+            <div hidden={area!=='discover'} data-uorqui-panel={area==='discover'?'active':'inactive'} data-direction={navDirection} className="h-full min-h-0">
               <DiscoverHome active={area==='discover'} unreadLocations={communityUnread.locations}
                 onOpenCommunity={openDiscoveryCommunity}/>
             </div>
             {/* A persistent mount keeps the microphone, signaling and room state alive
                 when switching between Discover, Messages, Profile and Communities. */}
-            <div hidden={area!=='communities'} className="h-full min-h-0">
+            <div hidden={area!=='communities'} data-uorqui-panel={area==='communities'?'active':'inactive'} data-direction={navDirection} className="h-full min-h-0">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
                 initialCommunityId={invitedCommunityId}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
             </div>
-            {area!=='discover'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}
-              transition={{duration:0.16}} className="h-full min-h-0 overflow-hidden">
+            {area!=='discover'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
+              transition={{duration:0.18,ease:[0.22,1,0.36,1]}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
                 onMobileOpenChange={setConversationOpened}
