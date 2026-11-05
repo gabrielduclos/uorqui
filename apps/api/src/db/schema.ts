@@ -33,8 +33,8 @@ export const mailConnections = pgTable('mail_connections', {
   email: varchar('email', { length: 320 }).notNull(),
   tokens: text('tokens').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => [uniqueIndex('mail_connections_user_provider').on(t.userId, t.provider),
-  check('mail_connections_provider', sql`${t.provider} IN ('gmail','outlook')`)]);
+}, t => [uniqueIndex('mail_connections_user_provider_email').on(t.userId, t.provider, t.email),
+  check('mail_connections_provider', sql`${t.provider} IN ('gmail','outlook','manual')`)]);
 
 export const mailOauthStates = pgTable('mail_oauth_states', {
   stateHash: text('state_hash').primaryKey(),

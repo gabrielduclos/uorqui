@@ -7,12 +7,11 @@ import { cn } from '@/lib/utils';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
-type Provider = 'gmail' | 'outlook';
+type Provider = 'gmail' | 'outlook' | 'manual';
 type MailAccount = { id: string; provider: Provider; email: string };
 type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
 type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
 type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[]; webOrigin?: string };
-const providerName = (provider: Provider) => provider === 'gmail' ? 'Gmail' : 'Outlook';
 function mailOAuthFailureMessage(reason: string, pt: boolean): string {
   switch (reason) {
     case 'session': return pt
@@ -77,7 +76,19 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [replyError, setReplyError] = useState('');
-  const [remoteImages, setRemoteImages] = useState(false);
+  // Remote HTTPS images are loaded by default, as requested. The iframe still
+  // blocks scripts, forms, access to Uorqui cookies and parent DOM.
+  const [connectPicker, setConnectPicker] = useState(false);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
+  const [savingManual, setSavingManual] = useState(false);
+  const [manualDraft, setManualDraft] = useState({
+    email: '', imapHost: '', imapPort: 993,
+    smtpHost: '', smtpPort: 587, username: '', password: '',
+    smtpUsername: '', smtpPassword: '',
+  });
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [moving, setMoving] = useState(false);
   const [sending, setSending] = useState(false);
   const [replySending, setReplySending] = useState(false);
   const [draft, setDraft] = useState({ to: '', subject: '', body: '' });
@@ -123,9 +134,10 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     return () => controller.abort();
   }, [accountId, folder, filter, page, refresh, explainError]);
 
-  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setRemoteImages(false); setLoadingBody(false); }
-  function resetList() { closeDetail(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
-  async function connect(provider: Provider) {
+  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
+  function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
+  function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
+  async function connect(provider: 'gmail') {
     if (connecting) return;
     setConnecting(provider); setError('');
     try {
@@ -144,6 +156,23 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
       setConnecting(null);
     }
   }
+  async function submitManual(event: FormEvent) {
+    event.preventDefault();
+    if (savingManual || connecting) return;
+    setSavingManual(true); setError('');
+    try {
+      await requestMail('manual', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(manualDraft) });
+      setManualDraft(previous => ({...previous, password: '', smtpPassword: ''}));
+      setManualFormOpen(false); setConnectPicker(false); setNotice('connected');
+      setAccountRefresh(value => value + 1);
+    } catch (error) {
+      setError(error instanceof Error && error.message === 'MAIL_MANUAL_INVALID'
+        ? (pt ? 'Confira os dados: IMAP TLS usa porta 993; SMTP TLS usa 465, 587 ou 2525.' : 'Check your settings: IMAP TLS uses port 993; SMTP TLS uses 465, 587 or 2525.')
+        : (pt ? 'Não foi possível verificar o domínio do servidor ou salvar a conta. Confira os endereços e tente novamente.'
+          : 'Could not validate server hostname or save the mailbox. Check your settings and try again.'));
+    } finally { setSavingManual(false); }
+  }
   async function disconnect() {
     if (!account || disconnecting || !window.confirm(pt ? 'Desconectar ' + account.email + '? Seus emails continuarão no provedor.' : 'Disconnect ' + account.email + '? Your email will remain with the provider.')) return;
     setDisconnecting(true); setError('');
@@ -154,7 +183,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   async function showMessage(message: Message) {
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
-    setCompose(false); setReplying(false); setReplyBody(''); setRemoteImages(false);
+    setCompose(false); setReplying(false); setReplyBody('');
     setSelected(message); setLoadingBody(true); setError('');
     const chosenAccount = accountId;
     try {
@@ -201,24 +230,119 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
           : 'Reply could not be confirmed. Check Sent before trying again.'));
     } finally { setReplySending(false); }
   }
+  function toggleSelected(id: string) {
+    setSelectedIds(previous => previous.includes(id)
+      ? previous.filter(item => item !== id)
+      : previous.length >= 100 ? previous : [...previous, id]);
+  }
+  async function moveSelected(destination: 'trash' | 'spam') {
+    if (!account || selectedIds.length === 0 || moving) return;
+    setMoving(true); setError('');
+    const targetAccount = account.id;
+    const ids = [...selectedIds];
+    try {
+      const result = await requestMail<{ moved: string[]; failed: string[] }>(
+        'accounts/' + targetAccount + '/messages/move', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids, destination }),
+        });
+      const moved = new Set(result.moved.filter(id => ids.includes(id)));
+      const failed = ids.filter(id => !moved.has(id));
+      if (moved.size) {
+        setMessages(previous => previous.filter(message => !moved.has(message.id)));
+        if (selected && moved.has(selected.id)) closeDetail();
+      }
+      setSelectedIds(failed);
+      setSelectionMode(failed.length > 0);
+      if (failed.length) {
+        setError(pt
+          ? `${moved.size} movidos, ${failed.length} não puderam ser movidos. Tente novamente.`
+          : `${moved.size} moved, ${failed.length} could not be moved. Please retry.`);
+      } else {
+        setNotice(destination === 'trash' ? 'movedTrash' : 'movedSpam');
+      }
+      if (moved.size) { setPage(''); setNextPage(null); setRefresh(value => value + 1); }
+    } catch (error) { setError(explainError(error)); }
+    finally { setMoving(false); }
+  }
   function startCompose() { detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
-    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: ' +
-      (remoteImages ? 'https:' : '') + '; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: https:; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
     '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
+  const visibleIds = visible.map(message => message.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
+  function toggleVisible() {
+    setSelectedIds(previous => allVisibleSelected
+      ? previous.filter(id => !visibleIds.includes(id))
+      : [...new Set([...previous, ...visibleIds])].slice(0, 100));
+  }
   function date(value: string) { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString(locale, { day: 'numeric', month: 'short' }); }
-  const connectButtons = <div className="flex flex-wrap gap-2">{(['gmail', 'outlook'] as const).map(provider => {
-    const ready = providers.some(item => item.id === provider && item.configured);
-    return <Button key={provider} type="button" variant="outline" disabled={!ready || Boolean(connecting) || loadingAccounts}
-      onClick={() => void connect(provider)} title={!ready ? (pt ? 'A integração ainda não foi configurada' : 'Integration is not configured yet') : undefined} className="min-h-11 gap-2">
-      {connecting === provider ? <Spinner className="size-4" /> : <Plus className="size-4" />}{providerName(provider)}
-    </Button>;
-  })}</div>;
+  const connectButtons = <div className="flex flex-wrap gap-2">
+    <Button type="button" variant="outline" disabled={!providers.some(item => item.id === 'gmail' && item.configured) || Boolean(connecting) || savingManual || loadingAccounts}
+      onClick={() => void connect('gmail')} className="min-h-11 gap-2">
+      {connecting === 'gmail' ? <Spinner className="size-4" /> : <Plus className="size-4" />} Gmail
+    </Button>
+    <Button type="button" variant="outline" disabled={savingManual || Boolean(connecting)}
+      onClick={() => setManualFormOpen(open => !open)} className="min-h-11 gap-2">
+      <Plus className="size-4" />{pt ? 'Servidor manual' : 'Manual server'}
+    </Button>
+  </div>;
+  const manualForm = manualFormOpen && <form onSubmit={event => void submitManual(event)}
+    className="space-y-3 rounded-lg border border-border bg-card p-3 text-xs">
+    <h3 className="font-semibold">{pt ? 'Configuração IMAP / SMTP' : 'IMAP / SMTP setup'}</h3>
+    <label className="block space-y-1"><span>{pt ? 'E-mail' : 'Email address'}</span>
+      <Input type="email" autoComplete="email" required maxLength={320} value={manualDraft.email}
+        onChange={event => setManualDraft(old => ({...old,email:event.target.value}))} placeholder="contato@seudominio.com" />
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Servidor IMAP (entrada)' : 'IMAP (incoming) host'}</span>
+      <Input required maxLength={253} value={manualDraft.imapHost}
+        onChange={event => setManualDraft(old => ({...old,imapHost:event.target.value}))} placeholder="imap.seudominio.com" />
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Porta IMAP (SSL/TLS)' : 'IMAP SSL/TLS port'}</span>
+      <Input type="number" min="993" max="993" required value={manualDraft.imapPort}
+        onChange={event => setManualDraft(old => ({...old,imapPort:Number(event.target.value)}))} />
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Servidor SMTP (saída)' : 'SMTP (outgoing) host'}</span>
+      <Input required maxLength={253} value={manualDraft.smtpHost}
+        onChange={event => setManualDraft(old => ({...old,smtpHost:event.target.value}))} placeholder="smtp.seudominio.com" />
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Porta SMTP (TLS)' : 'SMTP TLS port'}</span>
+      <select required value={manualDraft.smtpPort}
+        onChange={event => setManualDraft(old => ({...old,smtpPort:Number(event.target.value)}))}
+        className="h-10 w-full rounded-md border border-input bg-background px-2">
+        <option value={587}>587 (STARTTLS)</option><option value={465}>465 (SSL/TLS)</option>
+        <option value={2525}>2525 (STARTTLS)</option>
+      </select>
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Usuário IMAP' : 'IMAP username'}</span>
+      <Input required maxLength={320} autoComplete="username" value={manualDraft.username}
+        onChange={event => setManualDraft(old => ({...old,username:event.target.value}))} placeholder="contato@seudominio.com" />
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Senha do aplicativo ou do servidor' : 'App or server password'}</span>
+      <Input type="password" required maxLength={1024} autoComplete="new-password" value={manualDraft.password}
+        onChange={event => setManualDraft(old => ({...old,password:event.target.value}))} />
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Usuário SMTP (opcional)' : 'SMTP username (optional)'}</span>
+      <Input maxLength={320} value={manualDraft.smtpUsername}
+        onChange={event => setManualDraft(old => ({...old,smtpUsername:event.target.value}))} placeholder={pt ? 'Igual ao IMAP se vazio' : 'Same as IMAP if blank'} />
+    </label>
+    <label className="block space-y-1"><span>{pt ? 'Senha SMTP (opcional)' : 'SMTP password (optional)'}</span>
+      <Input type="password" maxLength={1024} autoComplete="new-password" value={manualDraft.smtpPassword}
+        onChange={event => setManualDraft(old => ({...old,smtpPassword:event.target.value}))} />
+    </label>
+    <p className="leading-5 text-muted-foreground">{pt
+      ? 'Credenciais criptografadas no servidor. Outlook.com/Microsoft 365 exige OAuth2. Render gratuito bloqueia SMTP 465/587; o envio nessas portas pode falhar.'
+      : 'Credentials encrypted on the server. Outlook.com/Microsoft 365 requires OAuth2. Free Render blocks SMTP 465/587, so sending may fail.'}</p>
+    <div className="flex justify-end gap-2">
+      <Button type="button" variant="ghost" disabled={savingManual} onClick={() => setManualFormOpen(false)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
+      <Button type="submit" disabled={savingManual}>{savingManual ? <Spinner className="size-4" /> : (pt ? 'Salvar conta' : 'Save account')}</Button>
+    </div>
+  </form>;
 
   return <div data-uorqui-email className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
     <aside className={cn('flex h-full min-h-0 w-full min-w-0 flex-col border-r border-border bg-background md:w-[340px] md:shrink-0 xl:w-[380px]', open && 'max-md:hidden')}>
@@ -228,10 +352,32 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
             onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}><RefreshCw className="size-4" /></Button>
             <Button size="icon" variant="ghost" aria-label={pt ? 'Novo email' : 'New email'} disabled={!account} onClick={startCompose}><Plus className="size-4" /></Button></div>
         </div>
-        {account && <div className="flex items-center gap-1"><select aria-label={pt ? 'Conta de email' : 'Email account'} value={accountId} disabled={sending}
-          onChange={event => { resetList(); setAccountId(event.target.value); }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
-          {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
-        </select><Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'} disabled={disconnecting || sending} onClick={() => void disconnect()}><Unplug className="size-4" /></Button></div>}
+        {account && <>
+          <div className="flex items-center gap-1">
+            <select aria-label={pt ? 'Conta de email' : 'Email account'} value={accountId} disabled={sending || moving}
+              onChange={event => {
+                if (event.target.value === '__connect__') { setConnectPicker(true); return; }
+                resetList(); setAccountId(event.target.value); setConnectPicker(false);
+              }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
+              {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
+              <option value="__connect__">{pt ? '+ Conectar novo e-mail' : '+ Connect another email'}</option>
+            </select>
+            <Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'}
+              disabled={disconnecting || sending || moving} onClick={() => void disconnect()}><Unplug className="size-4" /></Button>
+          </div>
+          {connectPicker && <div className="space-y-2 rounded-md border border-border bg-card p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium">{pt ? 'Escolha o provedor' : 'Choose a provider'}</span>
+              <Button type="button" variant="ghost" size="icon" aria-label={pt ? 'Fechar conexão' : 'Close account connection'}
+                onClick={() => setConnectPicker(false)}><X className="size-4" /></Button>
+            </div>
+            {connectButtons}
+            {manualForm}
+            <p className="text-[11px] text-muted-foreground">
+              {pt ? 'Você pode conectar outro endereço, inclusive do mesmo provedor.' : 'You can connect another address, including from the same provider.'}
+            </p>
+          </div>}
+        </>}
         <div className="flex flex-wrap gap-x-4 gap-y-1" role="group" aria-label={pt ? 'Pastas de email' : 'Email folders'}>
           {(['inbox', 'sent', 'spam', 'trash'] as const).map(value => <button key={value} type="button" aria-pressed={folder === value} onClick={() => { resetList(); setFolder(value); }}
             className={cn('flex min-h-10 items-center gap-2 border-b-2 text-sm transition-colors', folder === value ? 'border-foreground font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
@@ -241,39 +387,71 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         </div>
         <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={event => setQuery(event.target.value)} placeholder={pt ? 'Buscar nos emails carregados…' : 'Search loaded emails…'} aria-label={pt ? 'Buscar nos emails carregados' : 'Search loaded emails'} className="h-10 bg-card pl-9 text-base md:text-sm" /></div>
-        <div className="uorqui-inbox-filters flex gap-1" role="group" aria-label={pt ? 'Filtrar emails' : 'Filter emails'}>
-          {(['all', 'unread', 'starred'] as const).map(value => <button key={value} type="button" aria-pressed={filter === value}
-            onClick={() => { resetList(); setFilter(value); }} className="min-h-9 rounded-md px-3 text-xs font-medium">
+        <div className="uorqui-inbox-filters flex flex-wrap items-center gap-1" role="group" aria-label={pt ? 'Filtrar emails' : 'Filter emails'}>
+          {(['all', 'unread', 'starred'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value}
+            disabled={moving} onClick={() => { resetList(); setFilter(value); }} className="min-h-9 rounded-md px-3 text-xs font-medium">
             {value === 'all' ? (pt ? 'Todos' : 'All') : value === 'unread' ? (pt ? 'Não lidos' : 'Unread') : (pt ? 'Favoritos' : 'Starred')}
           </button>)}
+          {account && <Button type="button" size="sm" variant={selectionMode ? 'secondary' : 'ghost'} className="ml-auto"
+            disabled={moving || loading} onClick={() => { setSelectionMode(value => !value); setSelectedIds([]); }}>
+            {selectionMode ? (pt ? 'Cancelar' : 'Cancel') : (pt ? 'Selecionar' : 'Select')}
+          </Button>}
         </div>
+        {selectionMode && account && <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-2 text-xs">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" disabled={moving || !visibleIds.length} checked={allVisibleSelected}
+              onChange={toggleVisible} aria-label={pt ? 'Selecionar todos os emails visíveis' : 'Select all visible emails'} />
+            {pt ? 'Selecionar todos' : 'Select all'}
+          </label>
+          <span className="ml-auto text-muted-foreground">{selectedIds.length}/100</span>
+          <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
+            onClick={() => void moveSelected('spam')} className="gap-1">
+            <ShieldAlert className="size-3.5" /> Spam
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
+            onClick={() => void moveSelected('trash')} className="gap-1">
+            {moving ? <Spinner className="size-3.5" /> : <Trash2 className="size-3.5" />}
+            {pt ? 'Lixeira' : 'Trash'}
+          </Button>
+        </div>}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.') : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.') : mailOAuthFailureMessage(mailFailureReason, pt)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
+        {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.')
+            : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.')
+            : notice === 'movedTrash' ? (pt ? 'Mensagens movidas para Lixeira.' : 'Messages moved to Trash.')
+            : notice === 'movedSpam' ? (pt ? 'Mensagens movidas para Spam.' : 'Messages moved to Spam.')
+            : mailOAuthFailureMessage(mailFailureReason, pt)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
         {error && <div role="alert" className="m-3 rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" className="mt-2" onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}>{pt ? 'Tentar novamente' : 'Retry'}</Button></div>}
         {(loadingAccounts || (loading && !messages.length)) &&
           <WorkspaceContentLoading label={pt?'Carregando emails':'Loading emails'} rows={4} className="p-4"/>}
         {!loadingAccounts && !account && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
           <h2 className="font-medium">{pt ? 'Seu email, por perto' : 'Your email, close by'}</h2>
-          <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail ou Outlook para acompanhar sua caixa de entrada e enviar emails sem sair do Uorqui.' : 'Connect Gmail or Outlook to follow your inbox and send email from Uorqui.'}</p>
+          <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail ou configure IMAP/SMTP para acompanhar sua caixa de entrada no Uorqui.' : 'Connect Gmail or set up IMAP/SMTP to use your mailbox in Uorqui.'}</p>
           {connectButtons}
+          {manualForm}
           {webOrigin && window.location.origin !== webOrigin && <p className="text-xs leading-5 text-muted-foreground">
             {pt ? 'Para vincular sua conta, acesse o domínio oficial: ' : 'To connect your mailbox, open the official domain: '}
             <a className="font-medium underline underline-offset-2" href={webOrigin}>{webOrigin}</a>
           </p>}
-          {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'A conexão estará disponível quando a integração OAuth for configurada pelo administrador.' : 'Connection will be available once the administrator configures OAuth.'}</p>}
-          <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Autorização pelo provedor, sem compartilhar sua senha com o Uorqui.' : 'Authorize through your provider without sharing your password with Uorqui.'}</p>
+          {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'Gmail OAuth indisponível; você pode usar um servidor manual.' : 'Gmail OAuth is unavailable; manual servers remain supported.'}</p>}
+          <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Gmail usa OAuth; servidores manuais usam uma senha de aplicativo, armazenada criptografada no Uorqui.' : 'Gmail uses OAuth; manual servers use an app password encrypted in Uorqui.'}</p>
         </div>}
-        {visible.map(message => <button type="button" key={message.id} onClick={() => void showMessage(message)} aria-current={selected?.id === message.id ? 'true' : undefined}
-          className={cn('uorqui-inbox-row w-full border-b border-border px-4 py-4 text-left transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', selected?.id === message.id && 'bg-secondary/70')}>
-          <div className="mb-1.5 flex items-center gap-2">{message.unread && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={pt ? 'Não lido' : 'Unread'} />}<span className={cn('min-w-0 flex-1 truncate text-xs', message.unread ? 'font-semibold' : 'text-muted-foreground')}>{message.from}</span><time className="shrink-0 text-[10px] text-muted-foreground">{date(message.date)}</time></div>
-          <p className="flex items-center gap-2 text-[13px] font-medium"><span className="truncate">{message.subject || (pt ? '(Sem assunto)' : '(No subject)')}</span>{message.starred && <Star className="size-3 shrink-0 fill-current text-muted-foreground" />}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.preview}</p>
-        </button>)}
+        {visible.map(message => <div key={message.id} className={cn('uorqui-inbox-row flex w-full min-w-0 items-center border-b border-border transition-colors hover:bg-muted/60', selected?.id === message.id && !selectionMode && 'bg-secondary/70', selectionMode && selectedIds.includes(message.id) && 'bg-muted/80')}>
+          {selectionMode && <label className="flex min-h-12 shrink-0 cursor-pointer items-center px-3" aria-label={pt ? 'Selecionar email' : 'Select email'}>
+            <input type="checkbox" checked={selectedIds.includes(message.id)} disabled={moving || (selectedIds.length >= 100 && !selectedIds.includes(message.id))}
+              onChange={() => toggleSelected(message.id)} aria-label={pt ? 'Selecionar ' + (message.subject || message.from) : 'Select ' + (message.subject || message.from)} />
+          </label>}
+          <button type="button" disabled={moving} onClick={() => selectionMode ? toggleSelected(message.id) : void showMessage(message)}
+            aria-current={selected?.id === message.id && !selectionMode ? 'true' : undefined}
+            className="min-w-0 flex-1 px-4 py-4 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+            <div className="mb-1.5 flex items-center gap-2">{message.unread && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={pt ? 'Não lido' : 'Unread'} />}<span className={cn('min-w-0 flex-1 truncate text-xs', message.unread ? 'font-semibold' : 'text-muted-foreground')}>{message.from}</span><time className="shrink-0 text-[10px] text-muted-foreground">{date(message.date)}</time></div>
+            <p className="flex items-center gap-2 text-[13px] font-medium"><span className="truncate">{message.subject || (pt ? '(Sem assunto)' : '(No subject)')}</span>{message.starred && <Star className="size-3 shrink-0 fill-current text-muted-foreground" />}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.preview}</p>
+          </button>
+        </div>)}
         {account && !loading && !error && visible.length === 0 && <div className="px-6 py-14 text-center"><Inbox className="mx-auto mb-3 size-7 text-muted-foreground" /><p className="text-sm font-medium">{pt ? 'Nenhum email por aqui' : 'No email here'}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{pt ? 'Tente outra pasta, filtro ou busca.' : 'Try a different folder, filter or search.'}</p></div>}
         {nextPage && !query && <Button variant="ghost" className="my-3 w-full" disabled={loading} onClick={() => setPage(nextPage)}>{loading ? <Spinner /> : (pt ? 'Carregar mais' : 'Load more')}</Button>}
       </div>
-      {account && <footer className="shrink-0 space-y-2 border-t border-border p-3"><p className="text-[11px] text-muted-foreground">{pt ? 'Conectar ou autorizar novamente' : 'Connect or authorize again'}</p>{connectButtons}</footer>}
     </aside>
 
     <section aria-label={pt ? 'Leitura de email' : 'Email reader'} className={cn('min-h-0 min-w-0 flex-1 flex-col bg-background', open ? 'flex' : 'hidden md:flex')}>
@@ -298,17 +476,9 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         <article key={selected.id} className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
           {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : framedHtml ? <>
-            <div className="mb-3 flex items-center justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={() => setRemoteImages(enabled => !enabled)} aria-pressed={remoteImages}>
-                {remoteImages ? (pt ? 'Bloquear imagens externas' : 'Block external images') : (pt ? 'Carregar imagens externas' : 'Load external images')}
-              </Button>
-            </div>
-            <iframe key={selected.id + ':' + String(remoteImages)} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
-              sandbox="allow-popups" referrerPolicy="no-referrer" srcDoc={framedHtml}
+            <iframe key={selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
+              sandbox="" referrerPolicy="no-referrer" srcDoc={framedHtml}
               className="h-[min(70vh,760px)] w-full rounded-md border border-border bg-white" />
-            <p className="mt-2 text-[11px] text-muted-foreground">{pt
-              ? 'Imagens incorporadas aparecem automaticamente. Imagens externas exigem sua autorização, para proteger sua privacidade.'
-              : 'Embedded images load automatically. External images require your permission to protect your privacy.'}</p>
           </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
           {replying && !loadingBody && <form onSubmit={event => void submitReply(event)} className="mt-6 space-y-3 border-t border-border pt-5">
             <p className="text-xs font-medium">{pt ? 'Responder a ' : 'Reply to '}{selected.from}</p>
