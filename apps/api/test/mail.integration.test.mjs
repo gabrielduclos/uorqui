@@ -23,15 +23,18 @@ const realFetch = globalThis.fetch;
 let calls = [];
 let tokenFailure = false;
 let mailboxFailure = false;
+let gmailEmail = 'alice@example.test';
 before(async () => {
   await getPool().query('INSERT INTO users (id,handle) VALUES ($1,$2),($3,$4)', [alice, 'mail_' + alice.slice(0, 8), bob, 'mail_' + bob.slice(0, 8)]);
   await app.ready();
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input)); calls.push({ url, init });
     if (url.hostname === 'oauth2.googleapis.com' || url.pathname.endsWith('/token')) return tokenFailure ? Response.json({ error: 'invalid_client' }, { status: 400 }) : Response.json({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 3600 });
-    if (url.pathname.endsWith('/profile')) return mailboxFailure ? Response.json({ error: 'forbidden' }, { status: 403 }) : Response.json({ emailAddress: 'alice@example.test' });
+    if (url.pathname.endsWith('/profile')) return mailboxFailure ? Response.json({ error: 'forbidden' }, { status: 403 }) : Response.json({ emailAddress: gmailEmail });
     if (url.pathname === '/v1.0/me') return Response.json({ mail: 'alice@outlook.test' });
     if (url.pathname.endsWith('/send') || url.pathname.endsWith('/sendMail') || url.pathname.endsWith('/reply')) return new Response(null, { status: 202 });
+    if (url.pathname.endsWith('/messages/batchModify')) return new Response(null, { status: 204 });
+    if (url.pathname.endsWith('/messages/outlook-id/move')) return Response.json({ id: 'new-outlook-id' });
     if (url.pathname.endsWith('/modify')) return Response.json({ id: 'abc123', labelIds: ['INBOX'] });
     if (init?.method === 'PATCH' && url.pathname.endsWith('/messages/outlook-id')) return Response.json({ id: 'outlook-id', isRead: true });
     if (url.pathname.endsWith('/messages/outlook-id')) return Response.json({ id: 'outlook-id', subject: 'Outlook mail', bodyPreview: 'Hello', isRead: false, body: { content: '<p>Microsoft <img src="https://example.com/pixel.png"></p>' } });
@@ -74,6 +77,60 @@ async function connect(provider = 'gmail') {
   assert.equal(callback.statusCode, 302); assert.match(callback.headers.location, /mail=connected/);
   return (await request('accounts')).json().accounts.find(account => account.provider === provider);
 }
+async function legacyOutlook() {
+  // Existing Outlook sessions remain readable even though new Outlook OAuth is disabled.
+  const encrypted = sealMailSecret(JSON.stringify({
+    access_token: 'test-access', refresh_token: 'test-refresh', expires_at: Date.now() + 60_000 * 60,
+  }));
+  await getPool().query(
+    "INSERT INTO mail_connections (user_id,provider,email,tokens) VALUES ($1,'outlook',$2,$3) ON CONFLICT (user_id,provider,email) DO UPDATE SET tokens=excluded.tokens",
+    [alice,'alice@outlook.test',encrypted]);
+  return (await request('accounts')).json().accounts.find(row => row.provider === 'outlook');
+}
+test('OAuth starts only for Gmail and preserves distinct addresses per user', async () => {
+  assert.equal((await request('oauth/outlook', { method: 'POST', body: {} })).statusCode, 400);
+  const first = await connect();
+  gmailEmail = 'alice-second@example.test';
+  try { await connect(); }
+  finally { gmailEmail = 'alice@example.test'; }
+  const list = (await request('accounts')).json();
+  assert.equal(list.providers.some(p => p.id === 'outlook'), false);
+  assert.ok(list.accounts.some(a => a.id === first.id));
+  assert.ok(list.accounts.some(a => a.email === 'alice-second@example.test'));
+  assert.equal(list.accounts.filter(a=>a.provider==='gmail').length, 2);
+});
+test('manual server config validates fields without exposing passwords', async () => {
+  const valid = { email: 'me@company.example.com', imapHost: 'localhost',
+    imapPort: 993, smtpHost: 'smtp.example.com', smtpPort: 587,
+    username: 'me@company.example.com', password: 'private-app-secret' };
+  const noAuth = await request('manual', { method: 'POST', body: valid, user: null });
+  assert.equal(noAuth.statusCode, 401);
+  assert.equal((await request('manual', { method: 'POST', body: valid, origin:'https://evil.test' })).statusCode, 403);
+  const wrongPort = await request('manual', { method: 'POST', body: {...valid, imapPort: 143} });
+  assert.equal(wrongPort.statusCode, 400);
+  const bad = await request('manual', { method: 'POST', body: {...valid, password: ''} });
+  assert.equal(bad.statusCode, 400);
+  const local = await request('manual', { method: 'POST', body: valid });
+  assert.equal(local.statusCode, 503);
+  assert.ok(!JSON.stringify(local.json()).includes('private-app-secret'));
+});
+test('selected messages move to spam/trash only for owner, valid origin and bounded IDs', async () => {
+  const account = await connect();
+  const path = 'accounts/' + account.id + '/messages/move';
+  const sample = { ids: ['abc123'], destination: 'spam' };
+  assert.equal((await request(path, {method:'POST',user:bob,body:sample})).statusCode,404);
+  assert.equal((await request(path, {method:'POST',origin:'https://evil.test',body:sample})).statusCode,403);
+  assert.equal((await request(path, {method:'POST',body:{...sample,destination:'delete_forever'}})).statusCode,400);
+  assert.equal((await request(path, {method:'POST',body:{...sample,ids:Array.from({length:101},(_,i)=>'id'+i)}})).statusCode,400);
+  calls=[];
+  const result = await request(path, {method:'POST',body:sample});
+  assert.equal(result.statusCode,200);assert.deepEqual(result.json(),{moved:['abc123'],failed:[]});
+  const operation = calls.find(c=>c.url.pathname.endsWith('/batchModify'));
+  assert.ok(operation);assert.deepEqual(JSON.parse(operation.init.body),{ids:['abc123'],addLabelIds:['SPAM'],removeLabelIds:['INBOX','TRASH']});
+  calls=[];
+  assert.equal((await request(path, {method:'POST',body:{...sample,destination:'trash'}})).statusCode,200);
+  assert.deepEqual(JSON.parse(calls.find(c=>c.url.pathname.endsWith('/batchModify')).init.body),{ids:['abc123'],addLabelIds:['TRASH'],removeLabelIds:['INBOX','SPAM']});
+});
 test('encrypted mail credentials reject tampering', () => {
   const sealed = sealMailSecret('private-refresh-token');
   assert.ok(!sealed.includes('private-refresh-token')); assert.equal(openMailSecret(sealed), 'private-refresh-token');
@@ -189,7 +246,7 @@ test('Gmail replies go to the server-verified sender and same thread, not client
   assert.doesNotMatch(raw, /attacker@example.test/);
 });
 test('Outlook spam, trash, read status and reply use Microsoft Graph', async () => {
-  const account = await connect('outlook');
+  const account = await legacyOutlook();
   calls = [];
   for (const [folder, knownName] of [['spam', 'junkemail'], ['trash', 'deleteditems']]) {
     assert.equal((await request('accounts/' + account.id + '/messages?folder=' + folder)).statusCode, 200);
@@ -222,7 +279,7 @@ test('send rejects header injection and cross-origin requests, refreshes tokens 
   assert.equal(JSON.parse(openMailSecret(stored.rows[0].tokens)).refresh_token, 'test-refresh');
 });
 test('Outlook uses Graph and constrained pagination, and supports disconnect', async () => {
-  const account = await connect('outlook'); calls = [];
+  const account = await legacyOutlook(); calls = [];
   const list = await request('accounts/' + account.id + '/messages?folder=sent&filter=starred&page=' + encodeURIComponent('$skip=20&host=https://evil.test'));
   assert.equal(list.statusCode, 200); assert.equal(list.json().messages[0].subject, 'Outlook mail');
   assert.ok(calls.every(call => call.url.hostname === 'graph.microsoft.com'));
