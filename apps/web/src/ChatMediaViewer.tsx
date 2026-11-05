@@ -52,6 +52,9 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
   // changes the hook order and can crash the chat.
   const url=active ? active.attachmentUrl || '/media/dm/'+active.conversationId+'/'+active.attachment.id : null;
   const cached=useCachedChatMedia(url,!!selectedId && !!active);
+  // For authorized private images, wait for the RAM blob rather than starting
+  // a second GET in the image viewer while the first one is still downloading.
+  const imageSrc=cached||(url&&!url.startsWith('/media/dm/')?url:null);
   const [videoPlaying,setVideoPlaying]=useState(false);
   const [videoSrc,setVideoSrc]=useState<string | null>(null);
   const [videoReadySrc,setVideoReadySrc]=useState<string | null>(null);
@@ -79,13 +82,13 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
             aria-label={pt?'Compartilhar mídia com contatos':'Share media with contacts'}>
             <Share2 className="size-4"/><span className="hidden sm:inline">{pt?'Compartilhar':'Share'}</span>
           </button>}
-          <a href={url} download={active.attachment.name} className="grid size-10 place-items-center hover:bg-white/15"
+          <a href={cached||url} download={active.attachment.name} className="grid size-10 place-items-center hover:bg-white/15"
             aria-label={pt?'Salvar mídia':'Download media'}><Download className="size-5"/></a>
           <button ref={closeRef} type="button" onClick={onClose}
             className="grid size-10 place-items-center hover:bg-white/15"
             aria-label={pt?'Fechar visualizador':'Close viewer'}><X className="size-5"/></button>
         </div>
-        {editing && image && onSendEdited ? <ChatImageEditor key={url} src={url}
+        {editing && image && onSendEdited ? <ChatImageEditor key={url} src={cached||url}
           onCancel={()=>setEditing(false)}
           onSave={blob=>{onSendEdited(new File([blob],active.attachment.name.replace(/\.[^.]+$/,'')+'-editada.png',{type:'image/png'}));setEditing(false);onClose();}}/> :
         <div className="flex min-h-0 flex-1 items-center justify-between gap-1 py-4 sm:gap-4">
@@ -93,7 +96,8 @@ export function ChatMediaViewer({ items, selectedId, onSelect, onClose, onSendEd
             className="grid size-10 shrink-0 place-items-center disabled:opacity-25"
             aria-label={pt?'Mídia anterior':'Previous media'}><ChevronLeft className="size-6"/></button>
           <div className="relative flex h-full min-h-0 min-w-0 flex-1 items-center justify-center">
-            {image?<ZoomableChatImage key={active.id} src={cached || url} alt={displayedName} locale={locale} />:
+            {image?(imageSrc?<ZoomableChatImage key={active.id} src={imageSrc} alt={displayedName} locale={locale} />:
+              <span role="status" aria-label={pt?'Carregando imagem':'Loading image'} className="grid flex-1 place-items-center"><Spinner className="size-7"/></span>):
               <>
                 <video key={active.id} src={videoSrc || url} controls playsInline preload="metadata"
                   onLoadedMetadata={()=>setVideoReadySrc(videoSrc || url)}

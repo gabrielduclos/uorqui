@@ -1,9 +1,10 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
 /**
- * Private conversation and community media: bounded tab-memory cache only. No Cache Storage, SW,
- * IndexedDB, localStorage, public CDN, or persistent authorization bypass.
- * The first fetch always passes the Worker's per-message membership check.
+ * Private DM and community media: bounded, account-scoped tab-memory cache only.
+ * No Cache Storage, SW, IndexedDB, localStorage, public CDN or persistent bytes.
+ * Every HTTP fetch passes the Worker's per-message authorization checks; cache
+ * entries are revoked on logout, account switches and message deletion.
  */
 const PRIVATE_MEDIA_URL = /^(?:\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}|\/media\/community-attachment\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36})$/i;
 // Allow more reusable private media on devices with sufficient RAM, without
@@ -34,6 +35,9 @@ type Item = {
   abort: AbortController | null;
 };
 const entries = new Map<string, Item>();
+// Private bytes are never persisted. Switching accounts revokes every Blob URL
+// and aborts ongoing transfers before the new account can render messages.
+let activeAccountId: string | null = null;
 const listeners = new Set<() => void>();
 const notify = () => { for (const fn of listeners) fn(); };
 const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
@@ -54,6 +58,12 @@ function remove(url: string) {
 export function clearChatMediaCache() {
   for(const key of [...entries.keys()])remove(key);
   notify();
+}
+/** Bind the RAM-only media cache to the authenticated account. */
+export function setChatMediaCacheAccount(accountId: string | null) {
+  if(activeAccountId === accountId)return;
+  activeAccountId=accountId;
+  clearChatMediaCache();
 }
 export function invalidateChatMedia(url: string | null | undefined) {
   if(url && entries.has(url)){remove(url);notify();}
@@ -79,6 +89,8 @@ function prune() {
 
 export async function ensureChatMediaCached(url: string): Promise<string | null> {
   if(!PRIVATE_MEDIA_URL.test(url))return url;
+  // A valid app session must exist before a private blob is retained in RAM.
+  if(!activeAccountId)return null;
   if(typeof document!=='undefined' && document.visibilityState==='hidden')return null;
   prune();
   const existing=entries.get(url);

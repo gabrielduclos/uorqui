@@ -13,6 +13,7 @@ function audioTime(seconds: number) {
 
 export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
   const player = useRef<HTMLAudioElement>(null);
+  const wrapper=useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -20,7 +21,23 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
   const [error, setError] = useState(false);
   const [loading,setLoading]=useState(false);
   const [requestedCache,setRequestedCache] = useState(false);
-  const cachedSrc=useCachedChatMedia(src,requestedCache);
+  const [nearViewport,setNearViewport]=useState(false);
+  // Preload only nearby voice messages; never download all audio in the thread.
+  useEffect(()=>{
+    setNearViewport(false);
+    const node=wrapper.current;
+    if(!node){return;}
+    if(typeof IntersectionObserver==='undefined'){setNearViewport(true);return;}
+    const observer=new IntersectionObserver(records=>{
+      if(records.some(entry=>entry.isIntersecting)){
+        setNearViewport(true);
+        observer.disconnect();
+      }
+    },{rootMargin:'180px'});
+    observer.observe(node);
+    return()=>observer.disconnect();
+  },[src]);
+  const cachedSrc=useCachedChatMedia(src,requestedCache||nearViewport);
 
   useEffect(() => {
     setPlaying(false);
@@ -30,8 +47,9 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
     setLoading(false);
     setRequestedCache(false);
     if (player.current) {
-      player.current.src=src;
       player.current.pause();
+      player.current.removeAttribute('src');
+      player.current.load();
       player.current.playbackRate = rate;
     }
   }, [src]);
@@ -48,18 +66,20 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
     setLoading(true);
     // Do not interrupt playing audio when cache fetch finishes. Reuse the
     // completed private Blob URL on the next explicit Play gesture.
-    if(cachedSrc && audio.getAttribute('src')!==cachedSrc){
+    const playSrc=cachedSrc||src;
+    if(audio.getAttribute('src')!==playSrc){
       const resumeAt=audio.currentTime;
-      audio.src=cachedSrc;
+      audio.src=playSrc;
       audio.load();
       if(Number.isFinite(resumeAt) && resumeAt>0)audio.currentTime=resumeAt;
     }
+    // Call play() inside the user gesture (before any await) for iOS Safari.
     try { await audio.play(); setError(false); setLoading(false); }
     catch { setError(true); setPlaying(false); setLoading(false); }
   }
 
-  return <div className="mt-1 flex w-full max-w-[340px] min-w-[min(280px,100%)] flex-col gap-2 border border-border bg-card px-3 py-2.5 text-foreground shadow-sm" aria-label="Mensagem de áudio">
-    <audio ref={player} src={src} preload="metadata"
+  return <div ref={wrapper} className="mt-1 flex w-full max-w-[340px] min-w-[min(280px,100%)] flex-col gap-2 border border-border bg-card px-3 py-2.5 text-foreground shadow-sm" aria-label="Mensagem de áudio">
+    <audio ref={player} preload="none"
       onLoadedMetadata={event => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0); event.currentTarget.playbackRate = rate; setLoading(false); }}
       onWaiting={()=>{if(requestedCache||playing)setLoading(true);}} onCanPlay={()=>setLoading(false)}
       onDurationChange={event => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }}
@@ -67,7 +87,7 @@ export function ChatAudioPlayer({ src }: { src: string; name?: string }) {
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
       onEnded={() => setPlaying(false)}
-      onError={() => { setError(true); setPlaying(false); setLoading(false); }} />
+      onError={() => { if(!player.current?.getAttribute('src'))return; setError(true); setPlaying(false); setLoading(false); }} />
     <div className="flex min-w-0 items-center gap-2">
       <button type="button" onClick={() => void toggle()} aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'} className="grid size-10 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground shadow-sm hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         {loading && !error ? <span role="status" aria-label="Carregando áudio"><Spinner className="size-4"/></span> :
