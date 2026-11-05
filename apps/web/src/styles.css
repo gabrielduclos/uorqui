@@ -168,3 +168,128 @@ body.uorqui-app-active {
 [data-uorqui-workspace-shortcuts] button[aria-current="page"] {
   box-shadow: inset 2px 0 0 var(--primary);
 }
+
+/* Sprintrix visual-fidelity pass — original implementation, not vendor code.
+   A pale application canvas, quiet navigation and a white inset work surface. */
+:root {
+  --radius: .5rem;
+  --background: #111216;
+  --foreground: #f2f2f3;
+  --card: #1b1c20;
+  --card-foreground: #f2f2f3;
+  --popover: #222328;
+  --popover-foreground: #f2f2f3;
+  --primary: #b8a9ff;
+  --primary-foreground: #17131f;
+  --secondary: #2c2d32;
+  --secondary-foreground: #f5f5f5;
+  --muted: #24252a;
+  --muted-foreground: #a4a5ac;
+  --accent: #34353b;
+  --accent-foreground: #f6f6f8;
+  --border: #35363d;
+  --input: #494a52;
+  --ring: #aaa1f1;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+:root.light {
+  --background: #f7f7f8;
+  --foreground: #161719;
+  --card: #ffffff;
+  --card-foreground: #161719;
+  --popover: #ffffff;
+  --popover-foreground: #161719;
+  --primary: #27272a;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f3f3f4;
+  --muted-foreground: #73757c;
+  --accent: #eeeeef;
+  --accent-foreground: #171717;
+  --destructive: #d7384c;
+  --border: #e5e5e8;
+  --input: #d8d9df;
+  --ring: #9696a0;
+}
+@media (min-width: 768px) {
+  [data-uorqui-dashboard-sidebar] {
+    border-right: 0;
+    background: var(--background);
+  }
+  [data-uorqui-inset-panel] {
+    border-radius: 16px;
+  }
+  /* Expanded sidebar already provides a linked tree of communities/channels.
+     Preserve the original secondary channel nav behind an explicit toggle for
+     creation, invitations, settings and moderation. */
+  [data-uorqui-app-shell][data-uorqui-sidebar-mode="expanded"][data-uorqui-channel-panel-open="false"] [data-uorqui-channel-nav] {
+    display: none;
+  }
+  [data-uorqui-app-shell][data-uorqui-sidebar-mode="expanded"] [data-uorqui-community-rail] {
+    display: none;
+  }
+  [data-uorqui-app-shell][data-uorqui-sidebar-mode="expanded"] [data-uorqui-channel-nav] {
+    flex-basis: 15.5rem;
+    width: 15.5rem;
+    background: var(--background);
+  }
+  [data-uorqui-app-shell] [data-uorqui-context-header] {
+    height: 3.25rem;
+    min-height: 3.25rem;
+    border-color: var(--border);
+    background: var(--card);
+  }
+  [data-uorqui-app-shell] [data-chat-conversation] [data-uorqui-context-header] {
+    background: var(--card);
+  }
+  [data-uorqui-app-shell] [data-uorqui-room-history] {
+    background: var(--card);
+  }
+  [data-uorqui-app-shell] [data-chat-conversation] [data-testid="messages-scroll"] {
+    background: var(--card);
+  }
+}
+[data-uorqui-dashboard-sidebar] .uorqui-sidebar-item {
+  transition: background-color .12s ease, color .12s ease;
+}
+[data-uorqui-dashboard-sidebar] .uorqui-sidebar-item[aria-current="page"] {
+  background: var(--foreground) !important;
+  color: var(--background) !important;
+}
+[data-uorqui-dashboard-sidebar] .uorqui-sidebar-item[aria-current="page"] svg {
+  color: inherit !important;
+}
+[data-uorqui-dashboard-sidebar] .uorqui-sidebar-item[aria-current="page"] span[aria-hidden="true"] {
+  color: inherit !important;
+}
+[data-uorqui-dashboard-sidebar] .uorqui-sidebar-item[aria-current="page"] [aria-hidden="true"].grid {
+  background: color-mix(in srgb, var(--background) 17%, transparent);
+}
+[data-uorqui-inset-panel] [data-uorqui-main-header] {
+  letter-spacing: -.005em;
+}
+@media (max-width: 767px) {
+  [data-uorqui-inset-panel] {
+    border: 0;
+    border-radius: 0;
+  }
+}
+/* Compact, row-oriented message lists instead of mobile-style stacked cards. */
+@media (min-width: 768px) {
+  [data-uorqui-app-shell] [data-uorqui-dm-list] {
+    background: var(--card);
+  }
+  [data-uorqui-app-shell] [data-uorqui-dm-row] {
+    min-height: 56px;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding-inline: 12px;
+  }
+  [data-uorqui-app-shell] [data-uorqui-dm-row]:hover {
+    background: var(--secondary);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-uorqui-dashboard-sidebar] .uorqui-sidebar-item { transition: none !important; }
+}

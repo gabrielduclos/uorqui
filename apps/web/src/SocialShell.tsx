@@ -241,7 +241,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   useEffect(()=>{
     const listener=(event:Event)=>{
       const detail=(event as CustomEvent<{id?:string}>).detail;
-      if(typeof detail?.id==='string')setSelectedChannelId(detail.id);
+      if(typeof detail?.id==='string'||detail?.id===null)setSelectedChannelId(detail.id);
     };
     window.addEventListener('uorqui:channel-selected',listener);
     return()=>window.removeEventListener('uorqui:channel-selected',listener);
