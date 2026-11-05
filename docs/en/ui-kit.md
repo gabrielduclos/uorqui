@@ -132,7 +132,8 @@ The UI kit now includes an original, reusable Sprintrix-inspired implementation,
 - `apps/web/src/ui-kit/sprintrix.css` — theme tokens scoped to the signed-in app; light canvas/sidebar `#fafafa`, dark canvas/sidebar `#181818`, white / `#0a0a0a` inset panel, subtle borders and contrast-aware selection.
 - `apps/web/src/ui-kit/components.tsx` — `UIKitSectionHeading`, `UIKitCount` and `UIKitChip`.
 - `apps/web/src/SocialShell.tsx` — compact single-sidebar navigation, instant full collapse, pixel wordmark without a circular icon, 53 px header, 7 px panel inset and 17 px corner radius on desktop.
-- The previous permanent server icon rail is now integrated into the main navigation through **real authorized communities** (`WorkspaceCommunityShortcuts`); Communities also appears in mobile navigation.
+- **Communities** stays in the primary sidebar, but individual communities are no longer listed there. Opening the Communities module reveals a **separate compact icon rail** with authorized communities, unread counts, and create/browse actions. On mobile, the rail hides while a channel is open. Communities also stays in the mobile bottom navigation.
+- The desktop header no longer shows the search magnifier or profile avatar; Ctrl/Cmd + K, sidebar search, and the settings/profile link remain. Mobile header controls are unchanged.
 
 This is a **visual migration only**: React/Vite, Fastify/Render, Better Auth, Neon, SSE, uploads and WebRTC remain in place. `LiveCommunities` stays mounted during module changes to preserve voice sessions. Mock preview data is never used in production.
 

@@ -25,7 +25,7 @@ import { resetDmInboxSession } from './dmEventStream';
 import { clearChatMediaCache } from './chatMediaCache';
 import { clearCommunityMessageCache } from './communityMessageCache';
 import {useCommunityUnread} from './useCommunityUnread';
-import { useWorkspaceCommunities, WorkspaceCommunityShortcuts } from './WorkspaceCommunities';
+import { useWorkspaceCommunities } from './WorkspaceCommunities';
 import { UIKitSectionHeading, UIKitCount } from './ui-kit/components';
 import { WorkspaceCommandPalette, type WorkspaceCommand } from './WorkspaceCommandPalette';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
@@ -331,26 +331,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 place-items-center rounded bg-muted px-1 text-[10px] font-medium',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
             </Button>;
           })}
-          {!sidebarCollapsed&&<section className="uorqui-kit-communities mt-5" aria-label={locale==='pt-BR'?'Suas comunidades':'Your communities'}>
-            <UIKitSectionHeading className="mb-2" action={<button type="button" onClick={createCommunity}
-              aria-label={locale==='pt-BR'?'Criar comunidade':'Create community'} title={locale==='pt-BR'?'Criar comunidade':'Create community'}
-              className="uorqui-kit-heading-action"><Plus className="size-4"/></button>}>
-              {locale==='pt-BR'?'Suas comunidades':'Your communities'}
-            </UIKitSectionHeading>
-            <WorkspaceCommunityShortcuts
-              communities={workspaceCommunities}
-              unread={communityUnread.communities}
-              channelUnread={communityUnread.channels}
-              selectedId={selectedCommunityId}
-              selectedChannelId={null}
-              active={area==='communities'}
-              onOpen={openDiscoveryCommunity}
-              onOpenChannel={(communityId,channelId)=>openDiscoveryCommunity(communityId,channelId)}
-              locale={locale}/>
-            <button type="button" className="uorqui-kit-explore" onClick={browseCommunities}>
-              <Plus className="size-3.5"/>{locale==='pt-BR'?'Explorar comunidades':'Explore communities'}
-            </button>
-          </section>}
           <section data-uorqui-administration className="mt-4" aria-label={locale==='pt-BR'?'Administração':'Administration'}>
             {!sidebarCollapsed&&<UIKitSectionHeading className="mb-2">{locale==='pt-BR'?'Administração':'Administration'}</UIKitSectionHeading>}
             <Button type="button" size="sm" variant="ghost" onClick={()=>move('notifications')}
@@ -385,6 +365,34 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         </div>
       </aside>
 
+      {area==='communities'&&<nav data-uorqui-community-icon-rail
+        aria-label={locale==='pt-BR'?'Barra de ícones das comunidades':'Community icon rail'}
+        className={cn('uorqui-kit-community-icon-rail z-20 h-full w-14 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border px-1.5 py-3 md:w-16',channelOpened?'hidden md:flex':'flex')}>
+        {workspaceCommunities.map(item=>{
+          const selected=selectedCommunityId===item.id;
+          const unread=communityUnread.communities[item.id]??0;
+          return <button type="button" key={item.id}
+            className={cn('uorqui-kit-community-icon relative grid size-10 shrink-0 place-items-center rounded-xl',selected&&'uorqui-kit-community-icon--active')}
+            title={item.name} aria-label={item.name+(unread?' · '+unread+' '+(locale==='pt-BR'?'mensagens não lidas':'unread messages'):'')}
+            aria-current={selected?'page':undefined}
+            onClick={()=>openDiscoveryCommunity(item.id)}>
+            {item.avatarUrl?<img src={item.avatarUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-full rounded-xl object-cover"/>:
+              <span aria-hidden="true" className="grid size-full place-items-center text-sm font-semibold">{item.name.trim().charAt(0).toUpperCase()||'C'}</span>}
+            {unread>0&&<span aria-hidden="true" className="uorqui-kit-community-unread">{unread>99?'99+':unread}</span>}
+          </button>;
+        })}
+        <button type="button" onClick={createCommunity} aria-label={locale==='pt-BR'?'Criar comunidade':'Create community'}
+          title={locale==='pt-BR'?'Criar comunidade':'Create community'}
+          className="uorqui-kit-community-utility grid size-10 shrink-0 place-items-center rounded-xl border border-dashed border-border">
+          <Plus className="size-5"/>
+        </button>
+        <button type="button" onClick={browseCommunities} aria-label={locale==='pt-BR'?'Buscar comunidades':'Browse communities'}
+          title={locale==='pt-BR'?'Buscar comunidades':'Browse communities'}
+          className="uorqui-kit-community-utility grid size-10 shrink-0 place-items-center rounded-xl">
+          <Search className="size-5"/>
+        </button>
+      </nav>}
+
       <div data-uorqui-inset-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card md:my-2 md:mr-2 md:h-auto md:rounded-2xl md:border md:border-border md:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] sm:px-5 md:h-13 md:min-h-13 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
@@ -406,11 +414,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             <button type="button" onClick={()=>setCommandOpen(true)}
               aria-label={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
               title={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
-              className="hidden size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring min-[400px]:flex">
+              className="uorqui-kit-mobile-header-control hidden size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring min-[400px]:flex">
               <Search className="size-[18px]"/>
             </button>
              <PreferencesControls />
-            <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="uorqui-kit-mobile-header-control rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} className="size-8" />
             </button>
           </div>

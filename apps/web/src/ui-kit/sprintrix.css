@@ -191,3 +191,58 @@
     transition:none!important;
   }
 }
+
+
+/* Communities are selected from the primary menu, then shown in their own
+ * icon rail. The primary sidebar never lists community/channel entries. */
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-community-icon-rail]{
+  background:var(--kit-sidebar);
+  border-color:var(--border);
+  scrollbar-width:none;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-community-icon-rail]::-webkit-scrollbar{display:none}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-icon{
+  background:var(--secondary);
+  color:var(--foreground);
+  border:1px solid transparent;
+  transition:background-color .12s ease;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-icon:hover{
+  background:var(--accent);
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-icon--active{
+  border-color:var(--foreground);
+  box-shadow:0 0 0 1px var(--foreground);
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-unread{
+  position:absolute;
+  top:-5px;
+  right:-5px;
+  min-width:17px;
+  min-height:17px;
+  display:grid;
+  place-items:center;
+  border:2px solid var(--kit-sidebar);
+  border-radius:999px;
+  background:#e15b5b;
+  color:white;
+  padding:0 3px;
+  font-size:10px;
+  font-weight:700;
+  line-height:1;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-utility{
+  background:transparent;
+  color:var(--muted-foreground);
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-community-utility:hover{
+  color:var(--foreground);
+  background:var(--accent);
+}
+/* The search magnifier and profile avatar remain in the mobile header only.
+ * On desktop, keyboard search and profile/settings navigation stay available. */
+@media(min-width:768px){
+  [data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-mobile-header-control{
+    display:none!important;
+  }
+}

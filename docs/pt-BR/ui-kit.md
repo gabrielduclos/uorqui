@@ -191,7 +191,8 @@ O UI Kit agora também possui uma implementação reutilizável em código próp
 - `apps/web/src/ui-kit/sprintrix.css` — variáveis semânticas escopadas ao workspace autenticado: canvas e sidebar claro `#fafafa` / escuro `#181818`, painel branco / `#0a0a0a`, bordas discretas e seleção contrastante.
 - `apps/web/src/ui-kit/components.tsx` — `UIKitSectionHeading`, `UIKitCount` e `UIKitChip`.
 - `apps/web/src/SocialShell.tsx` — aplica a paleta e a estrutura de sidebar compacta, com recolhimento total instantâneo, marca pixelada sem símbolo circular, 53 px de cabeçalho e painel com 7 px de margem e raio de 17 px no desktop.
-- A antiga barra permanente de servidores foi integrada ao menu com as comunidades **reais e autorizadas** (`WorkspaceCommunityShortcuts`), e Comunidades também aparece na navegação inferior do celular.
+- O item **Comunidades** permanece no menu principal, mas as comunidades foram removidas dessa lista. Ao acessar o módulo, uma **barra secundária de ícones** mostra apenas as comunidades reais e autorizadas, com avisos de não lidas, criar e buscar. Em telas pequenas, ela se recolhe ao abrir um canal para preservar a largura da conversa. Comunidades continua na navegação inferior mobile.
+- No desktop, o cabeçalho não exibe a lupa nem o avatar de perfil; a busca continua em `Ctrl/Cmd + K` e no botão da sidebar, e o perfil continua acessível em Configurações. No mobile, esses controles permanecem no cabeçalho.
 
 A migração visual **não troca** React/Vite por Next.js e **não modifica** API Fastify/Render, Better Auth, Neon, SSE, uploads ou WebRTC. `LiveCommunities` continua montado para preservar salas de voz ao navegar. Dados do protótipo não entram na produção.
 
