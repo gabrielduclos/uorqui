@@ -358,21 +358,18 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             aria-label={t('Uorqui — ir para o início')}>
             <UorquiWordmark className="h-[17px] w-auto max-w-[104px] text-foreground"/>
           </button>
-          {!sidebarCollapsed&&<div className="flex shrink-0 items-center gap-0.5">
-            <button type="button" onClick={()=>setCommandOpen(true)}
-              title={locale==='pt-BR'?'Buscar':'Search'} aria-label={locale==='pt-BR'?'Buscar':'Search'}
-              className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
-              <Search className="size-4"/>
-            </button>
-          </div>}
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 pb-3 pt-1" aria-label={t('Navegação principal')}>
-          {sidebarCollapsed&&<button type="button" aria-label={locale==='pt-BR'?'Abrir busca':'Open search'}
-            title={locale==='pt-BR'?'Buscar':'Search'} onClick={()=>setCommandOpen(true)}
-            className="mb-2 grid h-9 w-full place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
-            <Search className="size-4"/>
-          </button>}
+          <Button type="button" size="sm" variant="ghost"
+            title={sidebarCollapsed?(locale==='pt-BR'?'Buscar':'Search'):undefined}
+            aria-label={locale==='pt-BR'?'Buscar':'Search'}
+            onClick={()=>setCommandOpen(true)}
+            className={cn('uorqui-sidebar-item h-8 w-full rounded-md text-[13px] font-medium',
+              sidebarCollapsed?'justify-center px-1':'justify-start gap-3 px-2.5')}>
+            <Search aria-hidden="true" className="size-4 shrink-0"/>
+            {!sidebarCollapsed&&<span className="truncate">{locale==='pt-BR'?'Buscar':'Search'}</span>}
+          </Button>
           {/* Notification access stays in the header bell; the sidebar lists the other modules alphabetically. */}
           {navigation.filter(item=>item.id!=='notifications').map(item=>{
             const Icon=item.icon;
@@ -422,6 +419,14 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           </div>
           <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-3 py-3"
             aria-label={t('Navegação principal')}>
+            <Button type="button" size="sm" variant="ghost" onClick={()=>{
+              setMobileMenuOpen(false);
+              setCommandOpen(true);
+            }} aria-label={locale==='pt-BR'?'Buscar':'Search'}
+              className="uorqui-sidebar-item h-10 w-full justify-start gap-3 rounded-md px-3 text-[13px] font-medium">
+              <Search aria-hidden="true" className="size-4 shrink-0"/>
+              <span className="min-w-0 flex-1 truncate text-left">{locale==='pt-BR'?'Buscar':'Search'}</span>
+            </Button>
             {navigation.filter(item=>item.id!=='notifications').map(item=>{
               const Icon=item.icon;
               const badge=item.id==='conversations'?unreadMessageCount:item.id==='communities'?communityUnreadCount:item.id==='email'?unreadMailCount:0;
@@ -489,16 +494,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               <Bell className="size-[18px]"/>
               <UIKitCount count={notificationBadgeCount} className="uorqui-kit-notification-count"/>
             </button>
-            <button type="button" onClick={()=>setCommandOpen(true)}
-              aria-label={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
-              title={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
-              className="uorqui-kit-mobile-header-control hidden size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring min-[400px]:flex">
-              <Search className="size-[18px]"/>
-            </button>
-             <PreferencesControls />
-            <button type="button" onClick={() => move('profile')} aria-label={t('Abrir meu perfil')} title={t("Meu perfil")} className="uorqui-kit-mobile-header-control rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-              <ProfileAvatar name={account.profile?.displayName ?? account.user.name} image={account.profile?.avatarUrl} className="size-8" />
-            </button>
+            <PreferencesControls />
           </div>
         </header>
 
