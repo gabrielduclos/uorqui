@@ -330,3 +330,85 @@ body.uorqui-app-active {
 @media (prefers-reduced-motion: reduce) {
   [data-uorqui-dashboard-sidebar] .uorqui-sidebar-item { transition: none !important; }
 }
+
+/* Visual preview: Sprintrix-inspired compact corporate workspace. The skin is
+   scoped to this branch's authenticated shell and never touches production. */
+[data-uorqui-app-shell][data-uorqui-preview="1"] {
+  color-scheme: light;
+  --radius: .625rem;
+  --background: #f4f6fa;
+  --workspace-rail: #f0f2f7;
+  --foreground: #1d2433;
+  --card: #fff;
+  --card-foreground: #1d2433;
+  --popover: #fff;
+  --popover-foreground: #1d2433;
+  --primary: #4669e8;
+  --primary-foreground: #fff;
+  --secondary: #edf1f8;
+  --secondary-foreground: #293448;
+  --muted: #f5f7fb;
+  --muted-foreground: #7c8799;
+  --accent: #e8edf8;
+  --accent-foreground: #253653;
+  --border: #e5e9f1;
+  --input: #e1e6ef;
+  --ring: #6482f0;
+  background: var(--background);
+  color: var(--foreground);
+}
+[data-uorqui-preview="1"] [data-uorqui-dashboard-sidebar] {
+  background: var(--background) !important;
+  border-right: 0 !important;
+}
+[data-uorqui-preview="1"] [data-uorqui-dashboard-sidebar] nav button[aria-current="page"],
+[data-uorqui-preview="1"] [data-uorqui-dashboard-sidebar] .uorqui-sidebar-item[aria-current="page"] {
+  background: #e4eafc !important;
+  color: #3453b9 !important;
+  box-shadow: none !important;
+}
+[data-uorqui-preview="1"] [data-uorqui-dashboard-sidebar] nav button[aria-current="page"] svg {
+  color: inherit !important;
+}
+[data-uorqui-preview="1"] [data-uorqui-main-header] {
+  border-color: var(--border);
+  background: var(--card);
+}
+[data-uorqui-preview="1"] [data-uorqui-inset-panel] {
+  background: var(--card);
+}
+[data-uorqui-preview="1"] [data-sprintrix-context] button[aria-current="page"] {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+[data-uorqui-preview="1"] [data-sprintrix-preview] button {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+[data-uorqui-preview="1"] [data-sprintrix-preview] [data-sprintrix-context] {
+  background: #fff;
+}
+@media (min-width: 768px) {
+  [data-uorqui-preview="1"] [data-uorqui-stoat-rail] { display: none !important; }
+  [data-uorqui-preview="1"] [data-uorqui-dashboard-sidebar] { width: 238px; }
+  [data-uorqui-preview="1"][data-uorqui-sidebar-mode="collapsed"] [data-uorqui-dashboard-sidebar] { width: 0; }
+  [data-uorqui-preview="1"] [data-uorqui-inset-panel] {
+    margin: 12px 12px 12px 0;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    box-shadow: 0 3px 16px rgb(29 36 51 / 3%);
+  }
+}
+@media (max-width: 767px) {
+  [data-uorqui-preview="1"] [data-uorqui-stoat-rail] {
+    background: #edf0f7;
+  }
+  [data-uorqui-preview="1"] [data-uorqui-inset-panel] {
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-uorqui-preview="1"] [data-sprintrix-preview] button { transition: none; }
+}
