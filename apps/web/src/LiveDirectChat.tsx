@@ -15,6 +15,7 @@ import { clearDmConversation, listDmCommands, peekDmInbox, peekDmRoom, readDmInb
 import { enqueueDmMessage, retryDmMessage, type DmOutboxUpdate } from './dmOutbox';
 import { dmStreamConnected, invalidateDmInbox, loadDmInboxNetwork, subscribeDmStream } from './dmEventStream';
 import { navigateToPublicProfile } from './publicProfileNavigation';
+import { clearReadPush } from './readPushNotifications';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -211,6 +212,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     saveDmInbox(myId, result.conversations);
     lastThreadFallback.current = Date.now();
     setThreads(result.conversations);
+    // Reconcile stale delivered pushes after a read from another device.
+    const readConversations=result.conversations.filter(thread=>thread.unreadCount===0 && /^[0-9a-f-]{36}$/i.test(thread.id));
+    if(readConversations.length)clearReadPush(readConversations.slice(0,100).map(thread=>({kind:'dm' as const,conversationId:thread.id})));
     setConfirmedInboxPreviews(previous => previous.filter(({ pending, serverCreatedAt }) => {
       const canonical = result.conversations.find(thread => thread.id === pending.conversationId);
       if (!canonical || !serverCreatedAt) return false;
@@ -264,7 +268,6 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const openThread = useCallback((id: string) => {
     setConversationMenuOpen(false);setConversationConfirm(null);
     setActiveId(id);
-    try{navigator.serviceWorker?.controller?.postMessage({type:'uorqui:clear-dm-push',conversationId:id});}catch{}
     setMobileOpened(true);
     const cached = peekDmRoom(myId, id);
     setMessages(cached);
@@ -618,6 +621,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     reading.current = activeId;
     void api('/api/v1/dm/conversations/' + activeId + '/read', { method: 'POST' })
       .then(async () => {
+        clearReadPush({kind:'dm',conversationId:activeId});
         await Promise.all([loadMessages(activeId), loadThreads()]);
       }).catch(() => { lastReadFailure.current = Date.now(); })
       .finally(() => { reading.current = null; });
