@@ -34,6 +34,10 @@ export function putCommunityMessages<T>(
   }
 }
 
+export function forgetCommunityMessages(accountId: string, communityId: string, channelId: string) {
+  snapshots.delete(key(accountId, communityId, channelId));
+}
+
 export function clearCommunityMessageCache(accountId: string) {
   for (const cacheKey of snapshots.keys()) {
     try {

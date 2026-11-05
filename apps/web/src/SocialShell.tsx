@@ -314,7 +314,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
                 unreadLocations={communityUnread.locations}/>
             </div>
-            {area!=='discover'&&area!=='communities'&&<motion.div key={area} initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
+            {area!=='discover'&&area!=='communities'&&<motion.div key={area} data-uorqui-motion-panel initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
               transition={{duration:0.18,ease:[0.22,1,0.36,1]}} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}

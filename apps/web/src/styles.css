@@ -128,3 +128,26 @@ body.uorqui-app-active {
   [data-uorqui-panel="active"] { animation: none !important; }
   [data-uorqui-dashboard-sidebar] { transition: none !important; }
 }
+
+/* Entering a channel and returning to the channel list is directional on
+   mobile, while desktop channel switches have a smaller, faster movement. */
+@keyframes uorqui-channel-in {
+  from { opacity: .7; transform: translate3d(12px,0,0); }
+  to { opacity: 1; transform: translate3d(0,0,0); }
+}
+@keyframes uorqui-channel-back {
+  from { opacity: .75; transform: translate3d(-12px,0,0); }
+  to { opacity: 1; transform: translate3d(0,0,0); }
+}
+[data-uorqui-room-history] { animation: uorqui-channel-in 175ms cubic-bezier(.22,1,.36,1) both; }
+@media (max-width: 767px) {
+  [data-uorqui-channel-nav] { animation: uorqui-channel-back 190ms cubic-bezier(.22,1,.36,1) both; }
+}
+@media (min-width: 768px) {
+  [data-uorqui-room-history] { animation-duration: 145ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-uorqui-room-history],
+  [data-uorqui-channel-nav] { animation: none !important; }
+  [data-uorqui-motion-panel] { animation: none !important; transition: none !important; transform: none !important; opacity: 1 !important; }
+}

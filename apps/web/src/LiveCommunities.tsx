@@ -21,7 +21,7 @@ import type {UnreadLocation} from './useCommunityUnread';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
-import { peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
+import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 
 type Visibility='public'|'approval'|'private';
 type Community={
@@ -445,10 +445,19 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           setPendingMessages(old=>old.filter(p=>p.channelId!==roomId||!result.messages.some(m=>m.clientId===p.clientId)));
           setMessagesLoading(false);setMessagesLoadFailed(false);
         }
-      }catch{
+      }catch(reason){
         if(mounted){
+          const code=reason instanceof Error?reason.message:'';
+          // A cached protected channel must disappear immediately when the
+          // authoritative API revokes access; temporary outages keep the cache.
+          const accessDenied=['MEMBERS_ONLY','CHANNEL_PASSWORD_REQUIRED',
+            'CHANNEL_PERMISSION_REQUIRED','CHANNEL_NOT_FOUND','Unauthorized','UNAUTHORIZED'].includes(code);
+          if(accessDenied){
+            forgetCommunityMessages(myId,communityId,roomId);
+            setMessages([]);setMessagesForKey(null);
+          }
           setMessagesLoading(false);
-          if(!cached)setMessagesLoadFailed(true);
+          if(!cached||accessDenied)setMessagesLoadFailed(true);
         }
       }finally{
         inFlight=false;
@@ -818,7 +827,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       </button>
     </nav>
 
-    <section aria-label={pt?'Comunidades e canais':'Communities and channels'}
+    <section data-uorqui-channel-nav aria-label={pt?'Comunidades e canais':'Communities and channels'}
       className={cn('h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-card/25 md:flex md:w-64 md:shrink-0',channelOpen?'hidden':'flex')}>
       {createOpen||!selectedId?<div className="flex h-full min-h-0 flex-col">
         <div className="shrink-0 space-y-3 border-b border-border bg-card/95 p-4">
@@ -1190,7 +1199,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         </button>}
         {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind!=='text'?'uorqui-voice-text-panel':undefined}
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div ref={scrollRef}
+          <div key={currentMessageKey} data-uorqui-room-history ref={scrollRef}
             onScroll={event=>{
               const element=event.currentTarget,key=currentMessageKey;
               if(!key||messagesForKey!==key)return;
