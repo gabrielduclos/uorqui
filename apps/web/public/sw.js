@@ -1,28 +1,77 @@
-/* Uorqui Social service worker: network-first app shell, account-bound push.
- * Adapted from the separate Uorqui Chat PWA. Never cache API/session/media. */
-const CACHE='uorqui-social-shell-v1';
-self.addEventListener('install',event=>{event.waitUntil(self.skipWaiting());});
-self.addEventListener('activate',event=>{event.waitUntil((async()=>{
-  const keys=await caches.keys();
-  await Promise.all(keys.filter(key=>key.startsWith('uorqui-social-shell-')&&key!==CACHE).map(key=>caches.delete(key)));
-  await self.clients.claim();
-})());});
+/* Uorqui PWA: cache static public assets, not account data.
+ * Account-bound profile/community avatars use IndexedDB in the signed-in app;
+ * private conversation attachments use a bounded tab-memory cache only.
+ * Never put /api, /auth, /media or navigation responses in Cache Storage. */
+const CACHE='uorqui-social-shell-v2';
+const STATIC_ASSET=/^\/assets\/[a-z0-9._-]+\.(?:js|css|woff2?|svg|png|jpg|jpeg|webp|avif|gif|ico|mp3|ogg|wav|mp4|webm)$/i;
+const PUBLIC_BRANDING=new Set([
+  '/icon.svg','/icon-192.png','/icon-512.png',
+  '/notification-badge.png','/notification-badge.svg','/manifest.webmanifest'
+]);
+const MAX_STATIC_ENTRIES=100;
+const MAX_STATIC_BYTES=8*1024*1024;
+
+self.addEventListener('install',event=>{
+  event.waitUntil((async()=>{
+    const cache=await caches.open(CACHE);
+    await Promise.all([...PUBLIC_BRANDING].map(async path=>{
+      try{
+        const response=await fetch(path,{cache:'no-store'});
+        if(response.ok)await cache.put(path,response).catch(()=>{});
+      }catch{/* Offline installs still succeed. */}
+    }));
+    await self.skipWaiting();
+  })());
+});
+self.addEventListener('activate',event=>{
+  event.waitUntil((async()=>{
+    const keys=await caches.keys();
+    await Promise.all(keys.filter(key=>key.startsWith('uorqui-social-shell-')&&key!==CACHE)
+      .map(key=>caches.delete(key)));
+    await self.clients.claim();
+  })());
+});
+async function storePublic(cache,req,response){
+  if(!response.ok || response.status!==200 || response.type==='opaque')return;
+  if((response.headers.get('cache-control')||'').includes('no-store'))return;
+  const size=Number(response.headers.get('content-length')||0);
+  if(Number.isFinite(size)&&size>MAX_STATIC_BYTES)return;
+  try{
+    await cache.put(req,response.clone());
+    const keys=await cache.keys();
+    if(keys.length>MAX_STATIC_ENTRIES)
+      await Promise.all(keys.slice(0,keys.length-MAX_STATIC_ENTRIES).map(key=>cache.delete(key)));
+  }catch{/* Private-mode and storage-pressure failures are safe to ignore. */}
+}
 self.addEventListener('fetch',event=>{
   const req=event.request;
-  if(req.method!=='GET')return;
+  if(req.method!=='GET'||req.headers.has('range'))return;
   const url=new URL(req.url);
   if(url.origin!==self.location.origin)return;
   if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/health/')||
      url.pathname.startsWith('/media/')||url.pathname.startsWith('/auth/')||
-     url.pathname==='/index.html'||req.mode==='navigate')return;
-  if(!/^\/assets\/[\w.-]+\.(js|css|woff2?|svg|png)$/.test(url.pathname))return;
+     url.pathname==='/index.html'||url.pathname==='/sw.js'||req.mode==='navigate')return;
+  const hashed=STATIC_ASSET.test(url.pathname);
+  const branding=PUBLIC_BRANDING.has(url.pathname);
+  if(!hashed&&!branding)return;
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);
     const cached=await cache.match(req);
-    if(cached)return cached;
-    const response=await fetch(req);
-    if(response.ok)await cache.put(req,response.clone()).catch(()=>{});
-    return response;
+    if(hashed){
+      // Vite-hashed assets are immutable and can be used instantly on revisits.
+      if(cached)return cached;
+      const network=await fetch(req);
+      await storePublic(cache,req,network);
+      return network;
+    }
+    // Same-named PWA branding files can change; refresh without blocking UI.
+    if(cached){
+      event.waitUntil(fetch(req).then(res=>storePublic(cache,req,res)).catch(()=>{}));
+      return cached;
+    }
+    const network=await fetch(req);
+    await storePublic(cache,req,network);
+    return network;
   })());
 });
 const uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
