@@ -2,12 +2,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
 import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady,
-  openMailSecret, randomSecret, sealMailSecret, sendMail, stateHash, type MailProvider, type MailTokens } from './mail-providers.js';
+  openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, stateHash, type MailFolder, type MailProvider, type MailTokens } from './mail-providers.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 type Connection = { id: string; provider: MailProvider; email: string; tokens: string };
 const uuid = { type: 'string', format: 'uuid' };
 const accountParams = { type: 'object', required: ['accountId'], properties: { accountId: uuid } };
+const accountMessageParams = { type: 'object', required: ['accountId', 'messageId'], properties: {
+  accountId: uuid, messageId: { type: 'string', minLength: 1, maxLength: 1024, pattern: '^[A-Za-z0-9_=+/\-]+$' },
+} };
 
 export function registerMailRoutes(app: FastifyInstance, readSession: SessionReader) {
   async function user(request: FastifyRequest, reply: FastifyReply) {
@@ -126,24 +129,63 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
   });
 
   app.get('/api/v1/mail/accounts/:accountId/messages', { schema: { params: accountParams, querystring: {
-    type: 'object', additionalProperties: false, properties: { folder: { enum: ['inbox', 'sent'], default: 'inbox' }, filter: { enum: ['all', 'unread', 'starred'], default: 'all' }, page: { type: 'string', maxLength: 4096 } },
+    type: 'object', additionalProperties: false, properties: { folder: { enum: ['inbox', 'sent', 'spam', 'trash'], default: 'inbox' }, filter: { enum: ['all', 'unread', 'starred'], default: 'all' }, page: { type: 'string', maxLength: 4096 } },
   } } }, async (request, reply) => {
     try {
       const id = await user(request, reply); if (!id) return;
       const { accountId } = request.params as { accountId: string };
-      const query = request.query as { folder: 'inbox' | 'sent'; filter: 'all' | 'unread' | 'starred'; page?: string };
+      const query = request.query as { folder: MailFolder; filter: 'all' | 'unread' | 'starred'; page?: string };
       const result = await withMailbox(id, accountId, (connection, token) => listMail(connection.provider, token, query.folder, query.filter, query.page));
       return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
     } catch (error) { return unavailable(reply, error); }
   });
 
-  app.get('/api/v1/mail/accounts/:accountId/messages/:messageId', { schema: { params: { ...accountParams, required: ['accountId', 'messageId'], properties: {
-    accountId: uuid, messageId: { type: 'string', minLength: 1, maxLength: 1024, pattern: '^[A-Za-z0-9_=+/\\-]+$' },
-  } } } }, async (request, reply) => {
+  app.get('/api/v1/mail/accounts/:accountId/messages/:messageId', { schema: { params: accountMessageParams } }, async (request, reply) => {
     try {
       const id = await user(request, reply); if (!id) return;
       const { accountId, messageId } = request.params as { accountId: string; messageId: string };
       const result = await withMailbox(id, accountId, (connection, token) => getMailMessage(connection.provider, token, messageId));
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+
+
+  app.post('/api/v1/mail/accounts/:accountId/messages/:messageId/read', { schema: { params: accountMessageParams } }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId, messageId } = request.params as { accountId: string; messageId: string };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        await markMailRead(connection.provider, token, messageId);
+        return { ok: true };
+      });
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+
+  app.post('/api/v1/mail/accounts/:accountId/messages/:messageId/reply', {
+    // Reject unexpected recipient/subject before Fastify's schema validation can
+    // strip extra fields. Replies must derive the recipient from the provider.
+    preValidation: async (request, reply) => {
+      const body = request.body;
+      if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some(key => key !== 'body')) {
+        return reply.code(400).send({ error: 'MAIL_INVALID_REPLY_BODY' });
+      }
+    },
+    schema: {
+    params: accountMessageParams,
+    body: { type: 'object', additionalProperties: false, required: ['body'],
+      properties: { body: { type: 'string', minLength: 1, maxLength: 30000, pattern: '\\S' } } },
+  } }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId, messageId } = request.params as { accountId: string; messageId: string };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        await replyToMail(connection.provider, token, connection.email, messageId, (request.body as { body: string }).body);
+        return { ok: true };
+      });
       return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
     } catch (error) { return unavailable(reply, error); }
   });

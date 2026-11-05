@@ -31,12 +31,26 @@ before(async () => {
     if (url.hostname === 'oauth2.googleapis.com' || url.pathname.endsWith('/token')) return tokenFailure ? Response.json({ error: 'invalid_client' }, { status: 400 }) : Response.json({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 3600 });
     if (url.pathname.endsWith('/profile')) return mailboxFailure ? Response.json({ error: 'forbidden' }, { status: 403 }) : Response.json({ emailAddress: 'alice@example.test' });
     if (url.pathname === '/v1.0/me') return Response.json({ mail: 'alice@outlook.test' });
-    if (url.pathname.endsWith('/send') || url.pathname.endsWith('/sendMail')) return new Response(null, { status: 202 });
+    if (url.pathname.endsWith('/send') || url.pathname.endsWith('/sendMail') || url.pathname.endsWith('/reply')) return new Response(null, { status: 202 });
+    if (url.pathname.endsWith('/modify')) return Response.json({ id: 'abc123', labelIds: ['INBOX'] });
+    if (init?.method === 'PATCH' && url.pathname.endsWith('/messages/outlook-id')) return Response.json({ id: 'outlook-id', isRead: true });
+    if (url.pathname.endsWith('/messages/outlook-id')) return Response.json({ id: 'outlook-id', subject: 'Outlook mail', bodyPreview: 'Hello', isRead: false, body: { content: '<p>Microsoft <img src="https://example.com/pixel.png"></p>' } });
+    if (url.pathname.endsWith('/attachments/test-attachment')) return Response.json({ data: Buffer.from('png-test').toString('base64url'), size: 8 });
     if (url.hostname === 'graph.microsoft.com' && url.pathname.endsWith('/messages')) return Response.json({ value: [{ id: 'outlook-id', subject: 'Outlook mail', bodyPreview: 'hello', isRead: true }], '@odata.nextLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$skip=20' });
     if (url.pathname.endsWith('/messages')) return Response.json({ messages: [{ id: 'abc123' }], nextPageToken: 'page-2' });
-    if (url.pathname.endsWith('/messages/abc123')) return Response.json({ id: 'abc123', internalDate: '1700000000000', labelIds: ['UNREAD', 'STARRED'], snippet: 'Test email', payload: {
-      mimeType: 'multipart/alternative', headers: [{ name: 'From', value: 'Sender <sender@example.test>' }, { name: 'To', value: 'alice@example.test' }, { name: 'Subject', value: 'Olá' }],
-      parts: [{ mimeType: 'text/html', body: { data: Buffer.from('<script>alert(1)</script>').toString('base64url') } }, { mimeType: 'text/plain', body: { data: Buffer.from('Mensagem em texto').toString('base64url') } }],
+    if (url.pathname.endsWith('/messages/abc123')) return Response.json({ id: 'abc123', threadId: 'gmail-thread-1', internalDate: '1700000000000', labelIds: ['UNREAD', 'STARRED'], snippet: 'Test email', payload: {
+      mimeType: 'multipart/mixed', headers: [
+        { name: 'From', value: 'Sender <sender@example.test>' }, { name: 'To', value: 'alice@example.test' },
+        { name: 'Subject', value: 'Olá' }, { name: 'Message-ID', value: '<original@example.test>' },
+        { name: 'References', value: '<parent@example.test>' },
+      ],
+      parts: [
+        { mimeType: 'multipart/alternative', parts: [
+          { mimeType: 'text/html', body: { data: Buffer.from('<p>Texto com imagem <img src="cid:picture-1"></p><script>alert(1)</script>').toString('base64url') } },
+          { mimeType: 'text/plain', body: { data: Buffer.from('Mensagem em texto').toString('base64url') } },
+        ] },
+        { mimeType: 'image/png', headers: [{ name: 'Content-ID', value: '<picture-1>' }], body: { attachmentId: 'test-attachment', size: 8 } },
+      ],
     } });
     throw Error('Unexpected provider URL: ' + url.origin + url.pathname);
   };
@@ -71,6 +85,7 @@ test('OAuth requires session, trusted origin, PKCE and a single-use account-boun
   assert.equal((await request('oauth/gmail', { method: 'POST', body: {}, origin: 'https://evil.test' })).statusCode, 403);
   const url = await start(); const state = url.searchParams.get('state');
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256'); assert.ok(url.searchParams.get('code_challenge'));
+  assert.ok(url.searchParams.get('scope').includes('https://www.googleapis.com/auth/gmail.modify'));
   assert.equal(url.searchParams.get('redirect_uri'), 'http://localhost:5173/api/v1/mail/oauth/gmail/callback');
   assert.equal((await request('accounts')).json().webOrigin, 'http://localhost:5173');
   const wrongUser = await request('oauth/gmail/callback?state=' + state + '&code=test', { user: bob });
@@ -121,11 +136,76 @@ test('mail reads isolate accounts and return plain text only', async () => {
   const list = await request('accounts/' + account.id + '/messages?folder=inbox&filter=unread');
   assert.equal(list.statusCode, 200); assert.equal(list.json().messages[0].subject, 'Olá'); assert.equal(list.json().nextPage, 'page-2');
   const detail = await request('accounts/' + account.id + '/messages/abc123');
-  assert.equal(detail.json().body, 'Mensagem em texto'); assert.ok(!detail.body.includes('<script>'));
+  assert.equal(detail.json().body, 'Mensagem em texto');
+  assert.match(detail.json().html, /data:image\/png;base64,/);
+  assert.ok(!detail.json().html.includes('cid:picture-1'));
   assert.equal(detail.headers['cache-control'], 'private, no-store');
   const forbidden = await request('accounts/' + account.id, { user: bob, method: 'DELETE' }); assert.equal(forbidden.statusCode, 200);
   assert.equal((await request('accounts/' + account.id + '/messages')).statusCode, 200);
 });
+
+test('Gmail spam, trash and read-only-folder views are scoped to the connected mailbox', async () => {
+  const account = await connect();
+  calls = [];
+  assert.equal((await request('accounts/' + account.id + '/messages?folder=spam')).statusCode, 200);
+  assert.equal((await request('accounts/' + account.id + '/messages?folder=trash')).statusCode, 200);
+  const lists = calls.filter(c => c.url.hostname === 'gmail.googleapis.com' && c.url.pathname.endsWith('/messages'));
+  assert.equal(lists[0].url.searchParams.get('labelIds'), 'SPAM');
+  assert.equal(lists[0].url.searchParams.get('includeSpamTrash'), 'true');
+  assert.equal(lists[1].url.searchParams.get('labelIds'), 'TRASH');
+  assert.equal(lists[1].url.searchParams.get('includeSpamTrash'), 'true');
+  assert.equal((await request('accounts/' + account.id + '/messages?folder=unknown')).statusCode, 400);
+});
+test('marking a Gmail email read sends UNREAD removal only for the owner and trusted origin', async () => {
+  const account = await connect();
+  const path = 'accounts/' + account.id + '/messages/abc123/read';
+  assert.equal((await request(path, { method: 'POST', user: bob })).statusCode, 404);
+  assert.equal((await request(path, { method: 'POST', origin: 'https://evil.test' })).statusCode, 403);
+  calls = [];
+  assert.equal((await request(path, { method: 'POST' })).statusCode, 200);
+  const change = calls.find(c => c.url.pathname.endsWith('/messages/abc123/modify'));
+  assert.ok(change);
+  assert.deepEqual(JSON.parse(change.init.body), { removeLabelIds: ['UNREAD'] });
+  assert.equal(change.init.method, 'POST');
+});
+test('Gmail replies go to the server-verified sender and same thread, not client-controlled addresses', async () => {
+  const account = await connect();
+  const path = 'accounts/' + account.id + '/messages/abc123/reply';
+  assert.equal((await request(path, { method: 'POST', user: bob, body: { body: 'Hello!' } })).statusCode, 404);
+  assert.equal((await request(path, { method: 'POST', origin: 'https://evil.test', body: { body: 'Hello!' } })).statusCode, 403);
+  assert.equal((await request(path, { method: 'POST', body: { body: '  ' } })).statusCode, 400);
+  assert.equal((await request(path, { method: 'POST', body: { body: 'Hello!', to: 'attacker@example.test' } })).statusCode, 400);
+  calls = [];
+  const reply = await request(path, { method: 'POST', body: { body: 'Obrigado, recebido!' } });
+  assert.equal(reply.statusCode, 200, 'Mailbox provider paths: ' + calls.map(c => c.url.pathname).join(' | '));
+  const sent = calls.find(c => c.url.pathname.endsWith('/send'));
+  assert.ok(sent);
+  const payload = JSON.parse(sent.init.body);
+  assert.equal(payload.threadId, 'gmail-thread-1');
+  const raw = Buffer.from(payload.raw, 'base64url').toString('utf8');
+  assert.match(raw, /To: sender@example.test/);
+  assert.match(raw, /In-Reply-To: <original@example.test>/);
+  assert.match(raw, /References: <parent@example.test> <original@example.test>/);
+  assert.doesNotMatch(raw, /attacker@example.test/);
+});
+test('Outlook spam, trash, read status and reply use Microsoft Graph', async () => {
+  const account = await connect('outlook');
+  calls = [];
+  for (const [folder, knownName] of [['spam', 'junkemail'], ['trash', 'deleteditems']]) {
+    assert.equal((await request('accounts/' + account.id + '/messages?folder=' + folder)).statusCode, 200);
+    assert.ok(calls.some(c => c.url.pathname.includes('/mailFolders/' + knownName + '/messages')));
+  }
+  assert.equal((await request('accounts/' + account.id + '/messages/outlook-id')).statusCode, 200);
+  const detail = (await request('accounts/' + account.id + '/messages/outlook-id')).json();
+  assert.match(detail.html, /Microsoft/);
+  calls = [];
+  assert.equal((await request('accounts/' + account.id + '/messages/outlook-id/read', { method: 'POST' })).statusCode, 200);
+  assert.ok(calls.some(c => c.url.pathname.endsWith('/messages/outlook-id') && c.init.method === 'PATCH' && JSON.parse(c.init.body).isRead === true));
+  calls = [];
+  assert.equal((await request('accounts/' + account.id + '/messages/outlook-id/reply', { method: 'POST', body: { body: 'My answer' } })).statusCode, 200);
+  assert.ok(calls.some(c => c.url.pathname.endsWith('/messages/outlook-id/reply') && JSON.parse(c.init.body).comment === 'My answer'));
+});
+
 test('send rejects header injection and cross-origin requests, refreshes tokens and delivers through the provider', async () => {
   const account = await connect(); const path = 'accounts/' + account.id + '/send';
   const body = { to: 'receiver@example.test', subject: 'Olá', body: 'Teste de envio' };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowUpRight, Inbox, Link2, Mail, Plus, RefreshCw, Search, Send, ShieldCheck, Star, Unplug, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Inbox, Link2, Mail, Plus, RefreshCw, Reply, Search, Send, ShieldAlert, ShieldCheck, Star, Trash2, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -9,7 +9,8 @@ import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
 type Provider = 'gmail' | 'outlook';
 type MailAccount = { id: string; provider: Provider; email: string };
-type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string };
+type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
+type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
 type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[]; webOrigin?: string };
 const providerName = (provider: Provider) => provider === 'gmail' ? 'Gmail' : 'Outlook';
 function mailOAuthFailureMessage(reason: string, pt: boolean): string {
@@ -54,7 +55,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const [accountId, setAccountId] = useState('');
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [accountRefresh, setAccountRefresh] = useState(0);
-  const [folder, setFolder] = useState<'inbox' | 'sent'>('inbox');
+  const [folder, setFolder] = useState<MailFolder>('inbox');
   const [filter, setFilter] = useState<'all' | 'unread' | 'starred'>('all');
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -73,7 +74,12 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   const [connecting, setConnecting] = useState<Provider | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [compose, setCompose] = useState(false);
+  const [replying, setReplying] = useState(false);
+  const [replyBody, setReplyBody] = useState('');
+  const [replyError, setReplyError] = useState('');
+  const [remoteImages, setRemoteImages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [replySending, setReplySending] = useState(false);
   const [draft, setDraft] = useState({ to: '', subject: '', body: '' });
   const [sendError, setSendError] = useState('');
   const detailAbort = useRef<AbortController | null>(null);
@@ -117,7 +123,7 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     return () => controller.abort();
   }, [accountId, folder, filter, page, refresh, explainError]);
 
-  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setLoadingBody(false); }
+  function closeDetail() { detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setRemoteImages(false); setLoadingBody(false); }
   function resetList() { closeDetail(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
   async function connect(provider: Provider) {
     if (connecting) return;
@@ -148,10 +154,26 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
   async function showMessage(message: Message) {
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
-    setCompose(false); setSelected(message); setLoadingBody(true); setError('');
+    setCompose(false); setReplying(false); setReplyBody(''); setRemoteImages(false);
+    setSelected(message); setLoadingBody(true); setError('');
+    const chosenAccount = accountId;
     try {
-      const data = await requestMail<Message>('accounts/' + accountId + '/messages/' + encodeURIComponent(message.id), { signal: controller.signal });
-      if (!controller.signal.aborted) setSelected(data);
+      const data = await requestMail<Message>('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id), { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setSelected(data);
+      if (data.unread) {
+        try {
+          await requestMail('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id) + '/read',
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          if (controller.signal.aborted) return;
+          setMessages(old => old.map(row => row.id === data.id ? { ...row, unread: false } : row));
+          setSelected(old => old?.id === data.id ? { ...old, unread: false } : old);
+        } catch {
+          if (!controller.signal.aborted)
+            setError(pt ? 'Mensagem aberta, mas não foi possível marcá-la como lida. Reconecte a conta para conceder permissão de edição.'
+              : 'Message opened, but it could not be marked as read. Reconnect the account to grant write access.');
+        }
+      }
     } catch (error) { if (!controller.signal.aborted) setError(explainError(error)); }
     finally { if (!controller.signal.aborted) setLoadingBody(false); }
   }
@@ -164,7 +186,30 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
     } catch { setSendError(pt ? 'Não foi possível confirmar o envio. Verifique a pasta Enviados antes de tentar novamente.' : 'Could not confirm delivery. Check Sent before trying again.'); }
     finally { setSending(false); }
   }
-  function startCompose() { detailAbort.current?.abort(); setSelected(null); setCompose(true); setSendError(''); }
+  async function submitReply(event: FormEvent) {
+    event.preventDefault();
+    if (!selected || !account || !replyBody.trim() || replySending) return;
+    setReplySending(true); setReplyError('');
+    try {
+      await requestMail('accounts/' + account.id + '/messages/' + encodeURIComponent(selected.id) + '/reply',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: replyBody.trim() }) });
+      setReplying(false); setReplyBody(''); setNotice('sent'); setPage(''); setRefresh(value => value + 1);
+    } catch (error) {
+      setReplyError(error instanceof Error && error.message === 'MAIL_RECONNECT'
+        ? (pt ? 'Reconecte sua conta para autorizar o envio.' : 'Reconnect your account to authorize sending.')
+        : (pt ? 'Não foi possível confirmar a resposta. Confira Enviados antes de tentar novamente.'
+          : 'Reply could not be confirmed. Check Sent before trying again.'));
+    } finally { setReplySending(false); }
+  }
+  function startCompose() { detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
+  const framedHtml = selected?.html ? [
+    '<!doctype html><html><head><meta charset="utf-8">',
+    '<meta name="referrer" content="no-referrer">',
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: ' +
+      (remoteImages ? 'https:' : '') + '; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
+    '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}</style>',
+    '</head><body>', selected.html, '</body></html>',
+  ].join('') : '';
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
   function date(value: string) { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString(locale, { day: 'numeric', month: 'short' }); }
   const connectButtons = <div className="flex flex-wrap gap-2">{(['gmail', 'outlook'] as const).map(provider => {
@@ -187,10 +232,11 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
           onChange={event => { resetList(); setAccountId(event.target.value); }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
           {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
         </select><Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'} disabled={disconnecting || sending} onClick={() => void disconnect()}><Unplug className="size-4" /></Button></div>}
-        <div className="flex gap-4" role="group" aria-label={pt ? 'Pastas de email' : 'Email folders'}>
-          {(['inbox', 'sent'] as const).map(value => <button key={value} type="button" aria-pressed={folder === value} onClick={() => { resetList(); setFolder(value); }}
+        <div className="flex flex-wrap gap-x-4 gap-y-1" role="group" aria-label={pt ? 'Pastas de email' : 'Email folders'}>
+          {(['inbox', 'sent', 'spam', 'trash'] as const).map(value => <button key={value} type="button" aria-pressed={folder === value} onClick={() => { resetList(); setFolder(value); }}
             className={cn('flex min-h-10 items-center gap-2 border-b-2 text-sm transition-colors', folder === value ? 'border-foreground font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-            {value === 'inbox' ? <Inbox className="size-4" /> : <Send className="size-4" />}{value === 'inbox' ? (pt ? 'Caixa de entrada' : 'Inbox') : (pt ? 'Enviados' : 'Sent')}
+            {value === 'inbox' ? <Inbox className="size-4" /> : value === 'sent' ? <Send className="size-4" /> : value === 'spam' ? <ShieldAlert className="size-4" /> : <Trash2 className="size-4" />}
+            {value === 'inbox' ? (pt ? 'Entrada' : 'Inbox') : value === 'sent' ? (pt ? 'Enviados' : 'Sent') : value === 'spam' ? 'Spam' : (pt ? 'Lixeira' : 'Trash')}
           </button>)}
         </div>
         <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -242,10 +288,42 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         <footer className="flex justify-end border-t border-border p-4"><Button disabled={sending} className="min-h-11 gap-2" type="submit">{sending ? <Spinner className="size-4" /> : <Send className="size-4" />}{pt ? 'Enviar email' : 'Send email'}</Button></footer>
       </form> : selected ? <>
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
-          <span className="truncate text-xs text-muted-foreground">{account?.email}</span><Button size="sm" variant="ghost" onClick={startCompose} className="gap-2"><Plus className="size-4" />{pt ? 'Novo' : 'New'}</Button></header>
+          <span className="truncate text-xs text-muted-foreground">{account?.email}</span>
+          <div className="flex shrink-0 gap-1">
+            <Button size="sm" variant="ghost" onClick={() => { setReplying(true); setReplyError(''); }} className="gap-2" disabled={loadingBody || replySending}>
+              <Reply className="size-4" />{pt ? 'Responder' : 'Reply'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={startCompose} className="gap-2"><Plus className="size-4" />{pt ? 'Novo' : 'New'}</Button>
+          </div></header>
         <article key={selected.id} className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
-          {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
+          {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : framedHtml ? <>
+            <div className="mb-3 flex items-center justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setRemoteImages(enabled => !enabled)} aria-pressed={remoteImages}>
+                {remoteImages ? (pt ? 'Bloquear imagens externas' : 'Block external images') : (pt ? 'Carregar imagens externas' : 'Load external images')}
+              </Button>
+            </div>
+            <iframe key={selected.id + ':' + String(remoteImages)} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
+              sandbox="allow-popups" referrerPolicy="no-referrer" srcDoc={framedHtml}
+              className="h-[min(70vh,760px)] w-full rounded-md border border-border bg-white" />
+            <p className="mt-2 text-[11px] text-muted-foreground">{pt
+              ? 'Imagens incorporadas aparecem automaticamente. Imagens externas exigem sua autorização, para proteger sua privacidade.'
+              : 'Embedded images load automatically. External images require your permission to protect your privacy.'}</p>
+          </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
+          {replying && !loadingBody && <form onSubmit={event => void submitReply(event)} className="mt-6 space-y-3 border-t border-border pt-5">
+            <p className="text-xs font-medium">{pt ? 'Responder a ' : 'Reply to '}{selected.from}</p>
+            <textarea value={replyBody} onChange={event => setReplyBody(event.target.value)} required maxLength={30000}
+              autoFocus disabled={replySending} rows={6} placeholder={pt ? 'Escreva sua resposta…' : 'Write your reply…'}
+              className="w-full resize-y rounded-md border border-input bg-background p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" />
+            {replyError && <p role="alert" className="text-sm text-destructive">{replyError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={replySending} onClick={() => setReplying(false)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
+              <Button type="submit" disabled={replySending || !replyBody.trim()} className="gap-2">
+                {replySending ? <Spinner className="size-4" /> : <Reply className="size-4" />}
+                {pt ? 'Enviar resposta' : 'Send reply'}
+              </Button>
+            </div>
+          </form>}
         </article>
       </> : <div className="flex min-h-0 flex-1 items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl border border-border bg-card"><Mail className="size-6 text-muted-foreground" /></div>
         <h2 className="mt-5 text-lg font-medium tracking-tight">{pt ? 'Um espaço para cada conversa' : 'A space for every conversation'}</h2>
