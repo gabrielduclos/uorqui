@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {clearReadPush} from './readPushNotifications';
 
 export type UnreadLocation={communityId:string;communityName:string;channelId:string;channelName:string;
   channelKind:'text'|'voice'|'meeting';count:number};
@@ -12,17 +13,32 @@ export function useCommunityUnread(){
   const [unread,setUnread]=useState<Unread>(empty);
   useEffect(()=>{
     let mounted=true, requestId=0;
+    let lastSuccessfulSnapshot:{channels:Record<string,number>;invites:string[]}|null=null;
     const refresh=async()=>{
       const id=++requestId;
       try{
         const res=await fetch('/api/v1/communities/unread',{credentials:'same-origin',cache:'no-store'});
         if(!res.ok)throw Error('UNREAD_UNAVAILABLE');
         const data=await res.json() as Unread;
-        if(mounted&&id===requestId)setUnread({
+        if(mounted&&id===requestId){
+          const currentChannels=data.channels??{};
+          const currentInvites=Array.isArray(data.invites)?data.invites:[];
+          if(lastSuccessfulSnapshot){
+            const cleared=Object.entries(lastSuccessfulSnapshot.channels)
+              .filter(([channelId,count])=>count>0 && !(Number(currentChannels[channelId])>0))
+              .map(([channelId])=>({kind:'community' as const,channelId}));
+            const invitationIds=new Set(currentInvites.map(invite=>invite.communityId));
+            for(const communityId of lastSuccessfulSnapshot.invites)
+              if(!invitationIds.has(communityId))cleared.push({kind:'community-invite',communityId} as never);
+            if(cleared.length)clearReadPush(cleared);
+          }
+          lastSuccessfulSnapshot={channels:currentChannels,invites:currentInvites.map(invite=>invite.communityId)};
+          setUnread({
           initialized:true,total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{},
           locations:Array.isArray(data.locations)?data.locations:[],
-          invites:Array.isArray(data.invites)?data.invites:[]
+          invites:currentInvites
         });
+        }
       }catch{/* Keep the last known badge if offline or if migration is pending. */}
     };
     const read=(event:Event)=>{
