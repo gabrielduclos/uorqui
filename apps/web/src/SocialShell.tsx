@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, Mail, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, ShieldCheck, Users,
+  Bell, ContactRound, Mail, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { useVisualViewportFrame } from './useVisualViewportFrame';
 import { ProfileEditor, type UserProfileData } from './UserProfiles';
 import { useCachedProfileImage } from './profileImageCache';
 import LiveDirectChat from './LiveDirectChat';
+import { FriendsPanel } from './FriendsPanel';
 import LiveCommunities from './LiveCommunities';
 import EmailInbox from './EmailInbox';
 import ModerationPanel from './ModerationPanel';
@@ -38,11 +39,11 @@ export type SignedInAccount = {
   user: { id: string; name: string; email: string };
   profile: UserProfileData | null;
 };
-type Area = 'email' | 'conversations' | 'communities' | 'notifications' | 'profile' | 'moderation';
+type Area = 'email' | 'conversations' | 'contacts' | 'communities' | 'notifications' | 'profile' | 'moderation';
 
 // Remember the last main app module per account on this device. Direct links
 // and invitations remain authoritative over the restored selection.
-const rememberedAreas: readonly Area[] = ['email', 'conversations', 'communities', 'notifications', 'profile', 'moderation'];
+const rememberedAreas: readonly Area[] = ['email', 'conversations', 'contacts', 'communities', 'notifications', 'profile', 'moderation'];
 const lastAreaKey = (userId: string) => 'uorqui:last-area:v1:' + userId;
 function readLastArea(userId: string): Area {
   try {
@@ -58,6 +59,7 @@ const WORKSPACE_PAGE_MOTION = { duration: 0.18, ease: [0.22, 1, 0.36, 1] as [num
 
 const navigation = [
   { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
+  { id: 'contacts', label: 'Contatos', icon: ContactRound },
   { id: 'communities', label: 'Comunidades', icon: Users },
   { id: 'email', label: 'Email', icon: Mail },
   { id: 'notifications', label: 'Notificações', icon: Bell },
@@ -183,7 +185,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   }, []);
 
   const move=useCallback((next: Area) => {
-    const order:Area[]=['conversations','communities','email','notifications','profile','moderation'];
+    const order:Area[]=['conversations','contacts','communities','email','notifications','profile','moderation'];
     if(next==='notifications'&&previousArea.current!=='notifications')
       notificationReturnArea.current=previousArea.current;
     setNavDirection(order.indexOf(next)>=order.indexOf(previousArea.current)?1:-1);
@@ -337,8 +339,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 place-items-center rounded bg-muted px-1 text-[10px] font-medium',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
             </Button>;
           })}
-          {/* Communities and Email belong to the main navigation, not a business-only workspace. */}
-          {navigation.filter(item=>item.id==='communities'||item.id==='email').map(item=>{
+          {/* Contacts, communities and Email belong to the main navigation. */}
+          {navigation.filter(item=>item.id==='contacts'||item.id==='communities'||item.id==='email').map(item=>{
             const Icon=item.icon;
             const badge=item.id==='communities'?communityUnreadCount:0;
             return <Button key={item.id} type="button" size="sm" variant="ghost"
@@ -362,13 +364,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               <ShieldCheck className="size-4 shrink-0"/>{!sidebarCollapsed&&(locale==='pt-BR'?'Moderação':'Moderation')}
             </Button>
           </section>}
-          <div className="mt-auto pt-4">
-            <Button type="button" size="sm" variant="ghost" onClick={()=>move('profile')}
-              title={sidebarCollapsed?t('Perfil'):undefined} aria-current={area==='profile'?'page':undefined}
-              className={cn('uorqui-sidebar-item h-8 w-full rounded-md text-[13px]',sidebarCollapsed?'justify-center px-1':'justify-start gap-3 px-2.5')}>
-              <Settings2 className="size-4"/>{!sidebarCollapsed&&(locale==='pt-BR'?'Configurações':'Settings')}
-            </Button>
-          </div>
         </nav>
 
         <div className="flex shrink-0 flex-col px-3 pb-3 pt-2">
@@ -465,10 +460,11 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               transition={WORKSPACE_PAGE_MOTION} className="h-full min-h-0 overflow-hidden">
             {area === 'conversations' && (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
-                onMobileOpenChange={setConversationOpened}
+                onMobileOpenChange={setConversationOpened} onOpenContacts={()=>move('contacts')}
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
             {area === 'email' && <EmailInbox onMobileOpenChange={setEmailOpened} />}
+            {area === 'contacts' && <div className="h-full overflow-y-auto overscroll-contain bg-background"><div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-7"><FriendsPanel onMessage={async handle => { setRequestedChatHandle(handle); move('conversations'); }} /></div></div>}
 
             {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
               items={activity.items} unread={activity.unread} loading={activity.loading}
