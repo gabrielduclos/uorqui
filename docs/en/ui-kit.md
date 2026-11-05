@@ -167,3 +167,11 @@ Verify avatar reuse across screens, logout/account switch purging, real chat med
 - **Caveat:** media visible during an authenticated session can still be inspected by anyone controlling that browser/profile. Private attachments do not persist after a tab is closed. Persisted **avatar** storage is separate and follows a different policy.
 
 Manually test iOS Safari and desktop audio/video playback, image viewers, PDFs, account switches and logout, and confirm `/media/dm/*` never reaches Cache Storage/IndexedDB.
+
+## Anchor to the latest message on chat open (2026-11-05)
+
+- **Private DMs:** open at the latest message and use `ResizeObserver` to track media-driven layout growth only while at/near the bottom. Reading older messages does not force a jump, and existing new-message indicators remain intact.
+- **Text channels and voice-room text chats:** opening/reopening always lands on the latest message rather than restoring an old scroll position. Media growth and first mobile layout frames are handled without disrupting manual history reading.
+- No changes to read-receipt eligibility, SSE, caching, API authorization, or WebRTC.
+
+Check long histories, delayed image loads, inbound messages while scrolled up, repeated open/close and iOS Safari.
