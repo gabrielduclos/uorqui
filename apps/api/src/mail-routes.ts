@@ -3,7 +3,7 @@ import { getPool } from './db/client.js';
 import { withMailbox } from './mail-account-access.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
 import { validateManualMailSettings, validateManualHosts } from './manual-mail.js';
-import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady,
+import { authorizationUrl, exchangeTokens, getMailMessage, isMailProvider, listMail, mailboxEmail, mailProviderReady, countInboxUnread,
   openMailSecret, randomSecret, sealMailSecret, sendMail, markMailRead, replyToMail, moveMailMessages, stateHash, type OAuthMailProvider, type MailFolder } from './mail-providers.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
@@ -195,8 +195,16 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const id = await user(request, reply); if (!id) return;
       const { accountId } = request.params as { accountId: string };
       const { ids, destination } = request.body as { ids: string[]; destination: 'trash' | 'spam' };
-      const result = await withMailbox(id, accountId, (connection, token) =>
-        moveMailMessages(connection.provider, token, ids, destination));
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        const moved = await moveMailMessages(connection.provider, token, ids, destination);
+        if (moved.moved.length) {
+          try {
+            const unread = await countInboxUnread(connection.provider, token);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1',[accountId,unread]);
+          } catch { /* Existing provider move succeeded; a subsequent scan updates the count. */ }
+        }
+        return moved;
+      });
       return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
     } catch (error) { return unavailable(reply, error); }
   });
@@ -208,6 +216,10 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const { accountId, messageId } = request.params as { accountId: string; messageId: string };
       const result = await withMailbox(id, accountId, async (connection, token) => {
         await markMailRead(connection.provider, token, messageId);
+        try {
+          const unread = await countInboxUnread(connection.provider, token);
+          await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1',[accountId,unread]);
+        } catch { /* Marking read succeeded; the next scan refreshes badge counts. */ }
         return { ok: true };
       });
       return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
