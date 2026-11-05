@@ -7,6 +7,7 @@ import {UserAvatar} from './UserProfiles';
 import {NotificationSettings} from './NotificationSettings';
 import {useUorquiPreferences} from './UorquiPreferences';
 import type {ActivityNotification} from './useActivityNotifications';
+import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
 type Props={items:ActivityNotification[];unread:number;loading:boolean;error:boolean;accountId:string;
   onRefresh:()=>void;onReadAll:()=>Promise<void>;onDelete:(id:string)=>Promise<void>;onOpen:(item:ActivityNotification)=>void};
@@ -62,8 +63,8 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
   const icons={friend_request:UserPlus,friend_accepted:UserRoundCheck,community_join_request:UserPlus,meeting_join_request:Users};
   const all=async()=>{setBusy(true);setActionError(false);
     try{await onReadAll();}catch{setActionError(true);}finally{setBusy(false);}};
-  if(settingsOpen)return <NotificationSettings accountId={accountId} onBack={()=>setSettingsOpen(false)}/>;
-  return <div className="h-full min-h-0 overflow-y-auto overscroll-contain bg-background">
+  if(settingsOpen)return <div className="uorqui-kit-content-enter h-full min-h-0"><NotificationSettings accountId={accountId} onBack={()=>setSettingsOpen(false)}/></div>;
+  return <div className="uorqui-kit-content-enter h-full min-h-0 overflow-y-auto overscroll-contain bg-background">
     <div className="mx-auto max-w-2xl px-4 py-5 sm:px-6">
       <div className="mb-5 flex items-center justify-between gap-2">
         <div><h2 className="text-lg font-semibold">{pt?'Notificações':'Notifications'}</h2>
@@ -81,8 +82,7 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
       {error&&<div className="mb-4 rounded-xl border border-border p-3 text-sm">
         {pt?'Não foi possível carregar as notificações.':'Could not load notifications.'}
         <Button variant="ghost" size="sm" onClick={onRefresh}>{pt?'Tentar novamente':'Retry'}</Button></div>}
-      {loading&&!items.length?<p role="status" className="flex items-center gap-3 py-7 text-sm text-muted-foreground">
-        <Spinner className="size-4"/>{pt?'Carregando notificações…':'Loading notifications…'}</p>:
+      {loading&&!items.length?<WorkspaceContentLoading label={pt?'Carregando notificações':'Loading notifications'} rows={4} className="py-4"/>:
       !items.length&&!error?<div className="flex flex-col items-center gap-2 rounded-xl border border-border p-8 text-center text-muted-foreground">
         <Bell className="size-9"/><p className="text-sm">{pt?'Ainda não há notificações.':'No notifications yet.'}</p></div>:
       <div className="space-y-1">{items.map(item=>{
