@@ -58,8 +58,8 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
     finally{setFriendBusy(null);}
   }
   const verbs={
-    friend_request:pt?'enviou uma solicitação de amizade':'sent you a friend request',
-    friend_accepted:pt?'aceitou sua solicitação de amizade':'accepted your friend request',
+    friend_request:pt?'enviou uma solicitação de contato':'sent you a contact request',
+    friend_accepted:pt?'aceitou sua solicitação de contato':'accepted your contact request',
     community_join_request:pt?'solicitou entrada em uma comunidade':'requested to join a community',
     meeting_join_request:pt?'solicitou participar de uma reunião':'requested to join a meeting'
   };
@@ -164,14 +164,14 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
           </p>}
           {item.kind==='friend_request'&&(pendingFriendHandles.has(item.actorHandle)||!!friendDone[item.id])&&<div className="flex w-full items-center justify-end gap-2 pl-12">
             {friendDone[item.id]?<span role="status" className="text-xs text-muted-foreground">
-              {friendDone[item.id]==='accept'?(pt?'Amizade aceita':'Friend request accepted'):(pt?'Solicitação recusada':'Request declined')}
+              {friendDone[item.id]==='accept'?(pt?'Contato adicionado':'Contact request accepted'):(pt?'Solicitação recusada':'Request declined')}
             </span>:<>
               <Button type="button" size="sm" disabled={!!friendBusy} onClick={()=>void respondToFriend(item,'accept')}
-                aria-label={pt?'Aceitar amizade de '+item.actorName:'Accept friend request from '+item.actorName}>
+                aria-label={pt?'Aceitar contato de '+item.actorName:'Accept contact request from '+item.actorName}>
                 {friendBusy===item.id?<Spinner className="size-3.5"/>:<Check className="size-3.5"/>}{pt?'Aceitar':'Accept'}
               </Button>
               <Button type="button" size="sm" variant="outline" disabled={!!friendBusy} onClick={()=>void respondToFriend(item,'decline')}
-                aria-label={pt?'Recusar amizade de '+item.actorName:'Decline friend request from '+item.actorName}>
+                aria-label={pt?'Recusar contato de '+item.actorName:'Decline contact request from '+item.actorName}>
                 <X className="size-3.5"/>{pt?'Recusar':'Decline'}
               </Button>
             </>}
