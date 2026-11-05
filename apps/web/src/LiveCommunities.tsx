@@ -331,8 +331,20 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   },[]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
   useEffect(()=>{
-    if(selectedId) window.dispatchEvent(new CustomEvent('uorqui:community-selected',{detail:{id:selectedId}}));
+    window.dispatchEvent(new CustomEvent('uorqui:community-selected',{detail:{id:selectedId}}));
   },[selectedId]);
+  useEffect(()=>{
+    window.dispatchEvent(new CustomEvent('uorqui:channel-selected',{detail:{id:channelId}}));
+  },[channelId]);
+  useEffect(()=>{
+    const create=()=>{
+      externalSelection.current=true;
+      setCreateOpen(true);setSelectedId(null);setChannelId(null);setChannelOpen(false);
+      setDetail(null);setError('');setNotice('');
+    };
+    window.addEventListener('uorqui:create-community',create);
+    return()=>window.removeEventListener('uorqui:create-community',create);
+  },[]);
   // The main room roster is refreshed immediately by the shared community SSE.
   // Retain a slow fallback only for disconnected browsers or expired sessions.
   useEffect(()=>{
