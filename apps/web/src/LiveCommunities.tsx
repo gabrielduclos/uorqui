@@ -20,6 +20,7 @@ import { LiveMessageComposer } from './LiveMessageComposer';
 import { MessageText } from './MessageText';
 import { LinkPreview } from './LinkPreview';
 import type {UnreadLocation} from './useCommunityUnread';
+import {clearReadPush} from './readPushNotifications';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
@@ -631,6 +632,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         body({lastMessageId})).then(()=>{
         if(cancelled)return;
         acknowledged.current.set(key,lastMessageId);
+        clearReadPush({kind:'community',channelId});
         window.dispatchEvent(new CustomEvent('uorqui:community-channel-read',{
           detail:{channelId,communityId:selectedId}}));
       }).catch(()=>{/* Leave badge intact and retry after next successful load. */});

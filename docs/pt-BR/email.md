@@ -65,3 +65,7 @@ A migração `0037_mail_push.sql` cria as tabelas de varredura e a preferência 
 ## Imagens no leitor de e-mail
 
 Imagens incorporadas ou externas HTTPS são exibidas com largura máxima de 420 px e altura máxima de 280 px, respeitando a largura disponível no mobile. Toque ou pressione Enter sobre a imagem para abrir uma visualização ampliada em primeiro plano; feche pelo X, Escape ou fundo. O conteúdo HTML continua em um iframe isolado **sem execução de scripts ou formulários**. O isolamento de mesma origem é usado somente para permitir ao aplicativo detectar o clique em imagens. Links e outras ações do HTML não ganham privilégios adicionais.
+
+## Formulário de servidor manual com conta conectada
+
+Quando já existe uma conta vinculada, escolher **+ Conectar novo e-mail → Servidor manual** abre os campos IMAP/SMTP na área rolável da lista de e-mails, e não mais no cabeçalho fixo. Assim todos os campos, incluindo senha SMTP opcional e **Salvar conta**, permanecem acessíveis no mobile sem alterar as contas existentes.

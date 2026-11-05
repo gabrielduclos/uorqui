@@ -197,10 +197,34 @@ self.addEventListener('notificationclick',event=>{
     await self.clients.openWindow(url);
   })());
 });
+// A read receipt removes the corresponding visible OS notification. This is
+// separate from dismissing a push on click: only server-confirmed reads send it.
 self.addEventListener('message',event=>{
-  if(event.data?.type!=='uorqui:clear-dm-push')return;
-  const id=String(event.data.conversationId||'');
-  if(!uuid.test(id))return;
-  event.waitUntil(self.registration.getNotifications({tag:'uorqui-dm-'+id})
-    .then(notifications=>notifications.forEach(notification=>notification.close())).catch(()=>{}));
+  if(event.data?.type!=='uorqui:clear-read-push')return;
+  const targets=Array.isArray(event.data.targets)?event.data.targets.slice(0,100):[];
+  const tags=new Set();
+  let clearAllActivities=false;
+  for(const target of targets){
+    if(!target||typeof target!=='object')continue;
+    if(target.kind==='dm'&&uuid.test(String(target.conversationId||'')))
+      tags.add('uorqui-dm-'+target.conversationId);
+    else if(target.kind==='community'&&uuid.test(String(target.channelId||'')))
+      tags.add('uorqui-community-'+target.channelId);
+    else if(target.kind==='community-invite'&&uuid.test(String(target.communityId||'')))
+      tags.add('uorqui-invite-'+target.communityId);
+    else if(target.kind==='activity'&&uuid.test(String(target.notificationId||'')))
+      tags.add('uorqui-activity-'+target.notificationId);
+    else if(target.kind==='activity-all')clearAllActivities=true;
+    else if(target.kind==='mail'&&uuid.test(String(target.accountId||''))&&
+      /^[A-Za-z0-9_=+\/\-]{1,1024}$/.test(String(target.messageId||'')))
+      tags.add('uorqui-mail-'+target.accountId+'-'+target.messageId.slice(0,64));
+  }
+  if(!tags.size&&!clearAllActivities)return;
+  event.waitUntil(self.registration.getNotifications().then(notifications=>{
+    notifications.forEach(notification=>{
+      if(tags.has(notification.tag)||(clearAllActivities&&(
+        notification.tag==='uorqui-activity'||notification.tag.startsWith('uorqui-activity-'))))
+        notification.close();
+    });
+  }).catch(()=>{/* Unsupported platform keeps native notifications until dismissed. */}));
 });

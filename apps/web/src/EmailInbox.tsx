@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
+import { clearReadPush } from './readPushNotifications';
 
 type Provider = 'gmail' | 'outlook' | 'manual';
 type MailAccount = { id: string; provider: Provider; email: string };
@@ -84,6 +85,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   // blocks scripts, forms, access to Uorqui cookies and parent DOM.
   const [connectPicker, setConnectPicker] = useState(false);
   const [manualFormOpen, setManualFormOpen] = useState(false);
+  const mailListScrollRef=useRef<HTMLDivElement|null>(null);
+  useEffect(()=>{if(connectPicker)mailListScrollRef.current?.scrollTo({top:0});},[connectPicker,manualFormOpen]);
   const [savingManual, setSavingManual] = useState(false);
   const [manualDraft, setManualDraft] = useState({
     email: '', imapHost: '', imapPort: 993,
@@ -204,11 +207,15 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           setMessages(old => old.map(row => row.id === data.id ? { ...row, unread: false } : row));
           setSelected(old => old?.id === data.id ? { ...old, unread: false } : old);
           window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:1}}));
+          clearReadPush({kind:'mail',accountId:chosenAccount,messageId:data.id});
         } catch {
           if (!controller.signal.aborted)
             setError(pt ? 'Mensagem aberta, mas não foi possível marcá-la como lida. Reconecte a conta para conceder permissão de edição.'
               : 'Message opened, but it could not be marked as read. Reconnect the account to grant write access.');
         }
+      } else {
+        // The provider may already have marked it read on another device.
+        clearReadPush({kind:'mail',accountId:chosenAccount,messageId:data.id});
       }
     } catch (error) { if (!controller.signal.aborted) setError(explainError(error)); }
     finally { if (!controller.signal.aborted) setLoadingBody(false); }
@@ -278,6 +285,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           if (unreadMoved) window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:unreadMoved}}));
         }
         setMessages(previous => previous.filter(message => !moved.has(message.id)));
+        clearReadPush([...moved].map(messageId=>({kind:'mail' as const,accountId:targetAccount,messageId})));
         if (selected && moved.has(selected.id)) closeDetail();
       }
       setSelectedIds(failed);
@@ -393,18 +401,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             <Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'}
               disabled={disconnecting || sending || moving} onClick={() => void disconnect()}><Unplug className="size-4" /></Button>
           </div>
-          {connectPicker && <div className="space-y-2 rounded-md border border-border bg-card p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium">{pt ? 'Escolha o provedor' : 'Choose a provider'}</span>
-              <Button type="button" variant="ghost" size="icon" aria-label={pt ? 'Fechar conexão' : 'Close account connection'}
-                onClick={() => setConnectPicker(false)}><X className="size-4" /></Button>
-            </div>
-            {connectButtons}
-            {manualForm}
-            <p className="text-[11px] text-muted-foreground">
-              {pt ? 'Você pode conectar outro endereço, inclusive do mesmo provedor.' : 'You can connect another address, including from the same provider.'}
-            </p>
-          </div>}
+
         </>}
         <div className="flex flex-wrap gap-x-4 gap-y-1" role="group" aria-label={pt ? 'Pastas de email' : 'Email folders'}>
           {(['inbox', 'sent', 'spam', 'trash'] as const).map(value => <button key={value} type="button" aria-pressed={folder === value} onClick={() => { resetList(); setFolder(value); }}
@@ -443,7 +440,20 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           </Button>
         </div>}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div ref={mailListScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {account&&connectPicker&&<section aria-label={pt?'Conectar outro e-mail':'Connect another email'}
+          className="space-y-3 border-b border-border bg-background p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">{pt?'Conectar novo e-mail':'Connect another email'}</h2>
+            <Button type="button" variant="ghost" size="icon" aria-label={pt?'Fechar conexão':'Close connection'}
+              onClick={()=>{setConnectPicker(false);setManualFormOpen(false);}}><X className="size-4"/></Button>
+          </div>
+          {connectButtons}
+          {manualForm}
+          <p className="text-[11px] leading-5 text-muted-foreground">{pt?
+            'É possível conectar outro endereço, inclusive do mesmo provedor. Role para preencher todos os campos.':
+            'You can connect another address, including from the same provider. Scroll to reach all fields.'}</p>
+        </section>}
         {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.')
             : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.')
             : notice === 'movedTrash' ? (pt ? 'Mensagens movidas para Lixeira.' : 'Messages moved to Trash.')

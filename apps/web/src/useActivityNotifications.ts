@@ -1,5 +1,6 @@
 
 import {useCallback,useEffect,useRef,useState} from 'react';
+import {clearReadPush} from './readPushNotifications';
 export type ActivityNotification={
   id:string;kind:'friend_request'|'friend_accepted'|'community_join_request'|'meeting_join_request';
   communityId?:string|null;communityName?:string|null;meetingName?:string|null;
@@ -18,7 +19,11 @@ export function useActivityNotifications(accountId:string){
       if(!res.ok)throw Error('UNAVAILABLE');
       const body=await res.json() as {notifications:ActivityNotification[];unreadCount:number};
       if(current!==seq.current)return;
-      setItems(Array.isArray(body.notifications)?body.notifications:[]);
+      const rows=Array.isArray(body.notifications)?body.notifications:[];
+      setItems(rows);
+      // A read on another device may leave an older OS push visible here.
+      const alreadyRead=rows.filter(item=>item.readAt).slice(0,100);
+      if(alreadyRead.length)clearReadPush(alreadyRead.map(item=>({kind:'activity' as const,notificationId:item.id})));
       setUnread(Math.max(0,Number(body.unreadCount)||0));setError(false);
     }catch{if(current===seq.current)setError(true);}
     finally{if(current===seq.current)setLoading(false);}
@@ -44,6 +49,7 @@ export function useActivityNotifications(accountId:string){
       const already=items.find(n=>n.id===id)?.readAt;
       setItems(old=>old.map(n=>n.id===id?{...n,readAt:n.readAt??new Date().toISOString()}:n));
       if(!already)setUnread(old=>Math.max(0,old-1));
+      clearReadPush({kind:'activity',notificationId:id});
     }catch{void refresh();}
   },[items,refresh]);
   const remove=useCallback(async(id:string)=>{
@@ -56,11 +62,13 @@ export function useActivityNotifications(accountId:string){
     seq.current++;
     setItems(old=>old.filter(item=>item.id!==id));
     if(result.wasUnread)setUnread(old=>Math.max(0,old-1));
+    clearReadPush({kind:'activity',notificationId:id});
   },[]);
   const markAllRead=useCallback(async()=>{
     const res=await fetch('/api/v1/notifications/read-all',{method:'POST',credentials:'same-origin'});
     if(!res.ok)throw Error('UNAVAILABLE');
     setUnread(0);
+    clearReadPush({kind:'activity-all'});
     setItems(old=>old.map(n=>({...n,readAt:n.readAt??new Date().toISOString()})));
   },[]);
   return {items,unread,loading,error,refresh,markRead,markAllRead,remove};

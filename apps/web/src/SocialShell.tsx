@@ -34,6 +34,7 @@ import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
 import {ActivityNotifications} from './ActivityNotifications';
 import {useActivityNotifications,type ActivityNotification} from './useActivityNotifications';
+import type {ReadPushTarget} from './readPushNotifications';
 import {subscribeDmStream} from './dmEventStream';
 
 export type SignedInAccount = {
@@ -318,6 +319,33 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     const timer=window.setTimeout(()=>dismissNotice(id),6500);
     noticeTimers.current.set(id,timer);
   },[dismissNotice]);
+  // A confirmed read also retracts any matching foreground toast. Keep each
+  // notification's link (not its title) as the source of destination identity.
+  useEffect(()=>{
+    const onRead=(event:Event)=>{
+      const targets=(event as CustomEvent<ReadPushTarget[]>).detail;
+      if(!Array.isArray(targets)||!targets.length)return;
+      setInAppNotices(old=>old.filter(notice=>{
+        let params:URLSearchParams;
+        try{params=new URL(notice.url,window.location.origin).searchParams;}catch{return true;}
+        const matched=targets.some(target=>
+          target.kind==='dm'?params.get('conversation')===target.conversationId:
+          target.kind==='community'?params.get('channel')===target.channelId:
+          target.kind==='community-invite'?params.get('communityInvite')===target.communityId:
+          target.kind==='mail'?params.get('mailAccount')===target.accountId&&params.get('mailMessage')===target.messageId:
+          target.kind==='activity'?params.get('notification')===target.notificationId:
+          target.kind==='activity-all'?params.has('notification'):false);
+        if(matched){
+          const timer=noticeTimers.current.get(notice.id);
+          if(timer!==undefined)window.clearTimeout(timer);
+          noticeTimers.current.delete(notice.id);
+        }
+        return !matched;
+      }));
+    };
+    window.addEventListener('uorqui:push-read',onRead);
+    return()=>window.removeEventListener('uorqui:push-read',onRead);
+  },[]);
   useEffect(()=>()=>{
     noticeTimers.current.forEach(timer=>window.clearTimeout(timer));
     noticeTimers.current.clear();
