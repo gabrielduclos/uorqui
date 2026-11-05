@@ -175,3 +175,14 @@ Manually test iOS Safari and desktop audio/video playback, image viewers, PDFs, 
 - No changes to read-receipt eligibility, SSE, caching, API authorization, or WebRTC.
 
 Check long histories, delayed image loads, inbound messages while scrolled up, repeated open/close and iOS Safari.
+
+
+## Content-only page transitions and loading (2026-11-05)
+
+- The **main sidebar, community icon rail and workspace header remain static**. Switching among Messages, Communities, Email, Notifications, Profile and Moderation animates **only the central content surface**, using the same 180 ms fade-and-14 px slide with `cubic-bezier(.22,1,.36,1)`.
+- Communities remains mounted (even when inactive) to keep its live microphone and WebRTC state; returning to the module animates its content without remounting it.
+- Opening direct conversations, channels, email details and notification settings uses the same content-only entry animation; chat headers remain steady.
+- Shared `WorkspaceContentLoading` skeletons are used for real data loading within conversations, messages, communities, channels, email, notifications and moderation. Navigation is never covered by a global loading overlay or blocked by artificial delays.
+- Motion is disabled for `prefers-reduced-motion`; SSE, read receipts, caching, scroll anchoring and active calls are unaffected.
+
+Check module navigation, long history, channel switching, email details, mobile/PWA, reduced motion and ongoing voice rooms.
