@@ -5,7 +5,8 @@ import { VoicePortalShell } from './VoicePortalShell';
 import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Hash, Headphones, LockKeyhole, LockKeyholeOpen, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Pencil, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
+import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from './UserProfiles';
@@ -962,7 +963,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <Button type="submit" className="w-full" loading={busyAction==='create'} disabled={busy||createName.trim().length<2||!allowedSlug.test(createSlug)}>
               <Plus className="size-4"/>{pt?'Criar comunidade':'Create community'}</Button>
           </form>:<div className="space-y-2">
-            {loading&&<SkeletonRows className="p-3" rows={4}/>}
+            {loading&&<WorkspaceContentLoading label={pt?'Carregando comunidades':'Loading communities'} rows={4} className="p-3"/>}
             {homeGroups.map(group=><button type="button" key={group.id} onClick={()=>selectCommunity(group.id)}
               className="flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring">
               <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-primary/15 font-bold text-primary">{communityAvatar(group,'size-full rounded-xl')}</div>
@@ -1302,12 +1303,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               followBottomRef.current=atBottom;
               if(atBottom)setNewBelow(old=>old?0:old);
             }}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
+            className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
             {!messagesLoading&&!visibleMessages.length&&!pendingMessages.some(p=>p.channelId===channelId)&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{pt?'Compartilhe textos, fotos e links com os membros da sala.':'Share text, photos and links with room members.'}</p>
             </div>}
-            {messagesLoading&&!visibleMessages.length&&<SkeletonRows rows={4} className="mb-5"/>}
+            {messagesLoading&&!visibleMessages.length&&<WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'} rows={4} className="mb-5"/>}
             {messagesLoadFailed&&!messagesLoading&&<div role="status" className="mb-4 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
               {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
@@ -1461,7 +1462,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </div>
             {channelInviteError&&<p role="alert" className="text-xs text-destructive">{channelInviteError}</p>}
             {channelInviteSuccess&&<p role="status" className="text-xs text-primary">{channelInviteSuccess}</p>}
-            {channelInviteLoading?<SkeletonRows rows={3}/>:channelInviteContacts.length===0?
+            {channelInviteLoading?<WorkspaceContentLoading label={pt?'Carregando membros':'Loading members'} rows={3}/>:channelInviteContacts.length===0?
               <p className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
                 {pt?'Não há outros membros desta comunidade para convidar.':'No other members of this community are available to invite.'}
               </p>:<div className="space-y-1">
