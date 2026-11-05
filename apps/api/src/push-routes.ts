@@ -255,8 +255,8 @@ export async function pushActivityNotification(notificationId:string){
   if(!row.rowCount)return;
   const n=row.rows[0];
   const verb:Record<string,string>={
-    friend_request:'enviou uma solicitação de amizade',
-    friend_accepted:'aceitou sua solicitação de amizade',
+    friend_request:'enviou uma solicitação de contato',
+    friend_accepted:'aceitou sua solicitação de contato',
     community_join_request:'solicitou entrada na comunidade',
     meeting_join_request:'solicitou participar de uma reunião'
   };
