@@ -350,3 +350,26 @@
     max-width:64px;
   }
 }
+
+
+/* Workspace v1 page transitions: animate the CONTENT ONLY, never the sidebar,
+ * header, voice portal, or the persistent app frame. A mounted subpage gets the
+ * same short fade/slide as switching modules. Loading states are local. */
+@keyframes uorqui-kit-content-arrive{
+  from{opacity:0;transform:translate3d(14px,0,0)}
+  to{opacity:1;transform:translate3d(0,0,0)}
+}
+[data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-content-enter,
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-content-loading]{
+  animation:uorqui-kit-content-arrive .18s cubic-bezier(.22,1,.36,1) both;
+}
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-content-loading]{
+  max-width:100%;
+  pointer-events:none;
+}
+@media(prefers-reduced-motion:reduce){
+  [data-uorqui-ui-kit="sprintrix-v1"] .uorqui-kit-content-enter,
+  [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-content-loading]{
+    animation:none!important;
+  }
+}

@@ -226,3 +226,22 @@ Verificação: abrir diversas comunidades, trocar de módulo, inspecionar a aba 
 - **Atenção:** qualquer mídia exibida durante uma sessão autenticada pode ser inspecionada por alguém que controle o mesmo navegador/perfil. Não há cache persistente de anexos privados, por isso eles não ficam disponíveis após encerrar a aba. O cache persistente de **avatares** é separado e tem outra política.
 
 Testar no desktop e no Safari iOS: tocar/reproduzir áudio e vídeo, alternar mensagens, reabrir imagem, baixar PDF, trocar contas e sair; verificar que `/media/dm/*` nunca consta no Cache Storage/IndexedDB nem no Service Worker.
+
+## Ancoragem de mensagens na abertura (05/11/2026)
+
+- **Mensagens privadas:** ao abrir uma conversa, rola imediatamente para a última mensagem. Um `ResizeObserver` acompanha mudanças tardias de altura de fotos, mídias e conteúdo, mantendo o fim visível **somente se o usuário estiver no fim**. Quando a pessoa sobe para ler histórico antigo, a posição não é forçada para baixo; novas mensagens continuam gerando o aviso já existente.
+- **Canais de texto e chat das salas de voz:** reabrir um canal inicia na última mensagem, sem restaurar a rolagem antiga. O scroll segue o fim enquanto a pessoa está próxima dele, inclusive ao expandir anexos; ao rolar para cima, mantém a posição. No celular, um ajuste após o primeiro frame cobre a disposição responsiva.
+- As mudanças afetam apenas a apresentação e não enviam recibos de leitura por abertura da lista nem modificam SSE, cache, API ou WebRTC.
+
+Validar com históricos longos, mídia de carregamento tardio, mensagens recebidas enquanto lê o histórico e abertura repetida no Safari iOS e desktop.
+
+
+## Transições e carregamento por área de conteúdo (05/11/2026)
+
+- O **menu principal, a barra de comunidades e o cabeçalho do workspace permanecem estáveis**. Ao navegar entre Mensagens, Comunidades, E-mail, Notificações, Perfil e Moderação, **somente o painel central** usa a mesma transição de entrada: opacidade 0 → 1, deslocamento horizontal de 14 px → 0, 180 ms e curva `cubic-bezier(.22,1,.36,1)`.
+- **Comunidades continua montado** quando o usuário muda de módulo, para não desconectar o microfone/WebRTC. Apenas sua superfície de conteúdo fica oculta e é animada novamente ao retornar.
+- Dentro dos módulos, entrar em conversa privada, canal ou mensagem de e-mail usa o mesmo efeito no conteúdo, sem animar o cabeçalho do chat. A tela de ajustes de notificações também usa a transição.
+- Um único `WorkspaceContentLoading` (`apps/web/src/ui-kit/WorkspaceContentLoading.tsx`) padroniza skeletons de **conversas, mensagens, canais, comunidades, e-mails, notificações e moderação**, exibidos apenas na região que aguarda dados reais. Nenhum timer artificial ou bloqueio da navegação é introduzido.
+- O movimento é removido quando o sistema solicita **redução de animações** (`prefers-reduced-motion`). SSE, posicionamento da última mensagem, uso do cache, recibos de leitura e chamadas permanecem independentes da transição.
+
+Validar ida e volta entre módulos, troca de canais, abertura de conversa, e-mail e notificações, bem como PWA/mobile, redução de movimento e voz ativa durante a navegação.
