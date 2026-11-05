@@ -337,10 +337,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 place-items-center rounded bg-muted px-1 text-[10px] font-medium',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
             </Button>;
           })}
-          {!sidebarCollapsed&&<UIKitSectionHeading className="mt-5">
-            {locale==='pt-BR'?'Espaço de trabalho':'Workspace'}
-            <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true"/>
-          </UIKitSectionHeading>}
+          {/* Communities and Email belong to the main navigation, not a business-only workspace. */}
           {navigation.filter(item=>item.id==='communities'||item.id==='email').map(item=>{
             const Icon=item.icon;
             const badge=item.id==='communities'?communityUnreadCount:0;
