@@ -1170,7 +1170,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           {active.canMessage ? <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
             onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/> :
             <div role="status" className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-center text-sm text-muted-foreground">
-              {pt ? 'Mensagens indisponíveis: perfil privado sem amizade ou conta bloqueada.' : 'Messaging unavailable: private profile without friendship or blocked account.'}
+              {pt ? 'Mensagens indisponíveis: perfil privado sem contato aceito ou conta bloqueada.' : 'Messaging unavailable: private profile without an accepted contact or blocked account.'}
               <div className="mt-2"><button type="button" className="text-primary underline" onClick={() => { closeThread(); onOpenContacts?.(); }}>
                 {pt ? 'Ver solicitações de contato' : 'View contact requests'}
               </button></div>
