@@ -10,7 +10,7 @@ import SocialShell from './SocialShell';
 import { PublicProfilePage } from './UserProfiles';
 import { publicProfileHandle } from './publicProfileNavigation';
 import { clearProfileImageCache, setProfileImageCacheAccount } from './profileImageCache';
-import { clearChatMediaCache } from './chatMediaCache';
+import { clearChatMediaCache, setChatMediaCacheAccount } from './chatMediaCache';
 import { deactivatePush } from './useSocialPush';
 import EmailVerificationResult from './EmailVerificationResult';
 import { UorquiPreferences, useUorquiPreferences } from './UorquiPreferences';
@@ -134,6 +134,7 @@ function AppContent() {
           const verified = await response.json() as Account;
           if (!controller.signal.aborted) {
             setProfileImageCacheAccount(verified.user.id);
+            setChatMediaCacheAccount(verified.user.id);
             setAccount(verified);
           }
         }
@@ -191,6 +192,7 @@ function AppContent() {
   },[account?.profile,inviteToken]);
   const onAuthenticated = useCallback((next: Account) => {
     setProfileImageCacheAccount(next.user.id);
+    setChatMediaCacheAccount(next.user.id);
     clearChatMediaCache();
     setAccount(next);
   }, []);
@@ -206,7 +208,7 @@ function AppContent() {
     if (!response.ok) throw new Error('Logout failed');
     await clearProfileImageCache();
     setProfileImageCacheAccount(null);
-    clearChatMediaCache();
+    setChatMediaCacheAccount(null);
     setAccount(null);
     setInvitedCommunity(null);
   }, []);
