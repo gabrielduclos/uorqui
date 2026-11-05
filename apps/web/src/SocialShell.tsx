@@ -30,6 +30,7 @@ import { WorkspaceCommandPalette, type WorkspaceCommand } from './WorkspaceComma
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
 import {ActivityNotifications} from './ActivityNotifications';
+import ShellPreviewContent from './ShellPreviewContent';
 import {useActivityNotifications,type ActivityNotification} from './useActivityNotifications';
 
 export type SignedInAccount = {
@@ -54,6 +55,7 @@ function readLastArea(userId: string): Area {
 
 const navigation = [
   { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
+  { id: 'communities', label: 'Comunidades', icon: Users },
   { id: 'email', label: 'Email', icon: Mail },
   { id: 'notifications', label: 'Notificações', icon: Bell },
 ] as const;
@@ -96,7 +98,13 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const unreadMessageCount = useUnreadDirectMessages(account.user.id);
   useEffect(() => startDmOutbox(account.user.id), [account.user.id]);
   const communityUnread = useCommunityUnread();
-  const workspaceCommunities = useWorkspaceCommunities(account.user.id);
+  const fetchedWorkspaceCommunities = useWorkspaceCommunities(account.user.id);
+  const isShellPreview = import.meta.env.VITE_SHELL_PREVIEW === '1';
+  const workspaceCommunities = isShellPreview ? [
+    { id: '00000000-0000-4000-8000-000000000001', name: 'Equipe geral', avatarUrl: null, myRole: 'owner' },
+    { id: '00000000-0000-4000-8000-000000000002', name: 'Projetos', avatarUrl: null, myRole: 'owner' },
+    { id: '00000000-0000-4000-8000-000000000003', name: 'Clientes', avatarUrl: null, myRole: 'owner' },
+  ] : fetchedWorkspaceCommunities;
   const [selectedCommunityId, setSelectedCommunityId] = useState<string|null>(() => {
     try { return localStorage.getItem('uorqui:last-community:' + account.user.id); } catch { return null; }
   });
@@ -316,9 +324,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             className="mb-2 grid h-9 w-full place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
             <Search className="size-4"/>
           </button>}
-          {navigation.filter(item=>item.id==='conversations').map(item=>{
+          {navigation.filter(item=>item.id==='conversations'||item.id==='communities').map(item=>{
             const Icon=item.icon;
-            const badge=item.id==='conversations'?unreadMessageCount:activity.unread;
+            const badge=item.id==='conversations'?unreadMessageCount:item.id==='communities'?Object.values(communityUnread.communities).reduce((sum, count)=>sum+count,0):activity.unread;
             return <Button key={item.id} type="button" size="sm" variant="ghost"
               data-uorqui-tour-target={item.id} title={sidebarCollapsed?t(item.label):undefined}
               aria-current={area===item.id?'page':undefined}
@@ -348,6 +356,26 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 place-items-center rounded bg-muted px-1 text-[10px] font-medium',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
             </Button>;
           })}
+          {!sidebarCollapsed&&<section data-sprintrix-community-list className="mt-5 min-h-0" aria-label={locale==='pt-BR'?'Comunidades':'Communities'}>
+            <div className="mb-1 flex items-center justify-between gap-2 px-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-[.11em] text-muted-foreground">{t('Comunidades')}</span>
+              <button type="button" onClick={createCommunity} title={locale==='pt-BR'?'Criar comunidade':'Create community'} aria-label={locale==='pt-BR'?'Criar comunidade':'Create community'}
+                className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"><Plus className="size-3.5"/></button>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {workspaceCommunities.map(item=><button type="button" key={item.id} onClick={()=>openDiscoveryCommunity(item.id)}
+                aria-current={area==='communities'&&selectedCommunityId===item.id?'page':undefined} title={item.name}
+                className={cn('uorqui-sidebar-item flex h-8 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground',area==='communities'&&selectedCommunityId===item.id&&'bg-secondary font-semibold text-foreground')}>
+                <span className="grid size-5 shrink-0 place-items-center rounded-[5px] border border-border bg-card text-[10px] font-semibold text-foreground">
+                  {item.avatarUrl?<img src={item.avatarUrl} alt="" className="size-full rounded-[5px] object-cover"/>:item.name.charAt(0).toUpperCase()}
+                </span><span className="min-w-0 flex-1 truncate">{item.name}</span>
+                {!!communityUnread.communities[item.id]&&<span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-foreground">{communityUnread.communities[item.id]>99?'99+':communityUnread.communities[item.id]}</span>}
+              </button>)}
+              <button type="button" onClick={browseCommunities} className="flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground">
+                <Plus className="size-4"/>{locale==='pt-BR'?'Explorar comunidades':'Explore communities'}
+              </button>
+            </div>
+          </section>}
           <section data-uorqui-administration className="mt-4" aria-label={locale==='pt-BR'?'Administração':'Administration'}>
             {!sidebarCollapsed&&<p className="mb-1 px-2.5 text-[12px] font-medium text-muted-foreground">{locale==='pt-BR'?'Administração':'Administration'}</p>}
             <Button type="button" size="sm" variant="ghost" onClick={()=>move('notifications')}
@@ -416,31 +444,32 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <div className="h-full min-h-0 overflow-hidden">
-            {/* A persistent mount keeps the microphone, signaling and room state alive
-                when switching between Email, Messages, Profile and Communities. */}
+            {/* Keep real voice rooms mounted across modules; demo previews contain no live connections. */}
             <div hidden={area!=='communities'} data-uorqui-panel={area==='communities'?'active':'inactive'} data-direction={navDirection} className="h-full min-h-0">
+              {isShellPreview ? <ShellPreviewContent area="communities" /> :
               <LiveCommunities myId={account.user.id} active={area==='communities'}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
                 initialCommunityId={invitedCommunityId}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
-                unreadLocations={communityUnread.locations}/>
+                unreadLocations={communityUnread.locations}/>}
             </div>
             {area!=='communities'&&<motion.div key={area} data-uorqui-motion-panel initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
               transition={{duration:0.18,ease:[0.22,1,0.36,1]}} className="h-full min-h-0 overflow-hidden">
-            {area === 'conversations' && (
+            {area === 'conversations' && (isShellPreview ? <ShellPreviewContent area="conversations" /> : (
               <LiveDirectChat myId={account.user.id} initialHandle={requestedChatHandle} initialConversationId={requestedConversationId}
                 onMobileOpenChange={setConversationOpened}
                 onStarted={() => setRequestedChatHandle(null)} />
-            )}
-            {area === 'email' && <EmailInbox onMobileOpenChange={setEmailOpened} />}
+            ))}
+            {area === 'email' && (isShellPreview?<ShellPreviewContent area="email"/>:<EmailInbox onMobileOpenChange={setEmailOpened} />)}
 
-            {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
+            {area==='notifications'&&(isShellPreview?<ShellPreviewContent area="notifications"/>:<ActivityNotifications accountId={account.user.id}
               items={activity.items} unread={activity.unread} loading={activity.loading}
               error={activity.error} onRefresh={()=>void activity.refresh()}
-              onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>}
+              onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>)}
             {area === 'moderation' && platformModerator === null && <div className="grid h-full place-items-center"><Spinner /></div>}
             {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
-            {area === 'profile' && account.profile && (
+            {area === 'profile' && isShellPreview && <ShellPreviewContent area="profile" />}
+            {area === 'profile' && !isShellPreview && account.profile && (
               <ScrollArea className="h-full">
                 <div className="mx-auto flex w-full max-w-3xl justify-end gap-2 px-4 pt-4 sm:px-7">
                   {platformModerator&&<Button type="button" variant="outline" onClick={()=>move('moderation')}
@@ -498,7 +527,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       </div>
       <WorkspaceCommandPalette open={commandOpen} onOpenChange={setCommandOpen}
         commands={commands} locale={locale}/>
-      {!tourVisible&&<PwaFirstRun accountId={account.user.id}/>}
+      {!isShellPreview&&!tourVisible&&<PwaFirstRun accountId={account.user.id}/>}
       {tourVisible&&account.profile&&<OnboardingTour userId={account.user.id} profile={account.profile}
         onNavigate={move}
         onProfileSaved={next=>onAccountUpdate({...account,profile:next})}
