@@ -80,7 +80,7 @@ function safeUrl(payload){
   if(payload?.kind==='community'&&uuid.test(String(payload.communityId||''))&&uuid.test(String(payload.channelId||'')))
     return '/?community='+encodeURIComponent(payload.communityId)+'&channel='+encodeURIComponent(payload.channelId);
   if(payload?.kind==='dm'&&uuid.test(String(payload.conversationId||'')))return '/?conversation='+encodeURIComponent(payload.conversationId);
-  if(payload?.kind==='community-invite'&&uuid.test(String(payload.communityId||'')))return '/?community='+encodeURIComponent(payload.communityId);
+  if(payload?.kind==='community-invite'&&uuid.test(String(payload.communityId||'')))return '/?communityInvite='+encodeURIComponent(payload.communityId);
   if(payload?.kind==='activity'&&uuid.test(String(payload.notificationId||'')))return '/?notification='+encodeURIComponent(payload.notificationId);
   if(payload?.kind==='mail'&&uuid.test(String(payload.accountId||''))&&
      /^[A-Za-z0-9_=+\/\-]{1,1024}$/.test(String(payload.messageId||'')))
@@ -147,6 +147,22 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
         ?'uorqui-activity-'+payload.notificationId:'uorqui-activity';
   const url=safeUrl(payload);
   try{
+    // Foreground pages get a compact in-app alert instead of both an OS
+    // notification and a duplicate UI alert. The PWA keeps normal OS push
+    // behavior when minimized, locked, or closed.
+    const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    const visible=pages.filter(client=>client.visibilityState==='visible');
+    if(visible.length){
+      const notice={type:'uorqui:foreground-push',recipientId:payload.recipientId,
+        kind:payload.kind,title,body,url,messageId:payload.messageId||'',
+        channelId:payload.channelId||'',notificationId:payload.notificationId||''};
+      visible.forEach(client=>client.postMessage(notice));
+      if(payload.kind==='activity'||payload.kind==='community'||payload.kind==='community-invite'||payload.kind==='mail'){
+        const type=payload.kind==='mail'?'uorqui:mail-push-update':payload.kind==='activity'?'uorqui:activity-update':'uorqui:community-push-update';
+        visible.forEach(client=>client.postMessage({type}));
+      }
+      return;
+    }
     // Confirm receipt only after the browser accepts the visible notification.
     await self.registration.showNotification(title,{
       body,icon:'/icon-192.png',badge:'/notification-badge.png',tag,renotify:false,
@@ -163,13 +179,22 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
 self.addEventListener('notificationclick',event=>{
   event.notification.close();
   event.waitUntil((async()=>{
-    const url=event.notification.data?.url||'/';
-    const clientsList=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-    const open=clientsList.find(client=>new URL(client.url).origin===self.location.origin);
-    if(open){
-      await open.focus();
-      open.postMessage({type:'uorqui:push-open',url});
-    }else await self.clients.openWindow(url);
+    const path=event.notification.data?.url||'/';
+    const destination=new URL(path,self.location.origin);
+    if(destination.origin!==self.location.origin)return;
+    const url=destination.href;
+    const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    const client=pages.find(page=>page.focused)||pages.find(page=>page.visibilityState==='visible')||pages[0];
+    if(client){
+      // postMessage after focus is unreliable on iOS: a frozen/terminated PWA
+      // may silently discard it. Navigate the client with the deep link so
+      // its URL survives a process restart and the app can restore the target.
+      try{
+        const navigated=await client.navigate(url);
+        if(navigated){await navigated.focus();return;}
+      }catch{/* Some browsers reject navigate() for stale clients. */}
+    }
+    await self.clients.openWindow(url);
   })());
 });
 self.addEventListener('message',event=>{
