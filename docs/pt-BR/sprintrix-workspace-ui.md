@@ -4,9 +4,8 @@ A interface adapta padrões gerais observados na [caixa de entrada pública do S
 
 ## Escopo
 - Visual shadcn mais neutro e compacto, com barra lateral de 256px no desktop.
-- Seção Principal com módulos e contadores reais; seção Suas comunidades com vínculos autorizados, acesso aos canais existentes e destaque para a comunidade selecionada.
-- Navegação principal: Mensagens, Comunidades e Email; notificações e perfil continuam disponíveis. Descobrir foi retirado da navegação e do tour. Preferências antigas de Descobrir abrem Mensagens.
-- Barra lateral expandida substitui a coluna duplicada de ícones no desktop; barra recolhida preserva a coluna. No mobile, a navegação inferior usa as mesmas superfícies neutras, divisórias e destaque de seleção. Conversas, canais e emails abrem em painéis com retorno à lista.
+- Menus principal e mobile: Mensagens, Email e notificações; perfil continua disponível. Comunidades ficam em uma coluna própria de ícones no estilo Stoat, com contadores, criação e acesso às públicas. Descobrir permanece removido.
+- Selecionar um servidor abre seus canais independentemente do menu geral. A coluna permanece acessível nos outros módulos e fica oculta durante a leitura de conversas, canais ou emails no mobile; voltar restaura a coluna.
 - Mensagens e Email usam filtros discretos, busca, lista lateral e painel de leitura. O filtro Públicas dentro de Comunidades permite encontrar comunidades pelo fluxo existente de entrada/aprovação.
 - [Email via OAuth](email.md): Gmail e Outlook, caixa de entrada/enviados, filtros, leitura em texto e envio. Requer configuração privada no Fastify antes de conectar contas reais.
 - Paleta com Ctrl/Cmd+K ou botões de busca: navega por módulos e comunidades existentes, sem prometer busca global ainda não implementada.
@@ -18,8 +17,10 @@ A interface adapta padrões gerais observados na [caixa de entrada pública do S
 - Fundo/canvas cinza muito claro e barra lateral contínua de 256 px, sem cartões decorativos no menu.
 - Superfície de trabalho principal branca, afastada 8 px da borda superior/direita, com borda e raio de 16 px.
 - Cabeçalho de 52 px com separador e trilha de navegação, seleção escura com texto claro e linhas compactas.
-- Barra lateral com blocos principais e área de trabalho, comunidades autorizadas expandidas em uma árvore de canais aninhados e indicador de não lidas.
-- Histórico de canais e mensagens na área principal, com a coluna de gerenciamento de canais acessível por botão, não aberta por padrão com a barra lateral expandida.
+- Navegação geral separada da coluna de servidores no estilo Stoat e dos canais existentes de texto, voz e reuniões.
+- Histórico ao lado da lista de canais. Recolher o menu geral o esconde por completo e amplia o conteúdo, como na referência; trocar de módulo preserva essa escolha e a coluna de servidores permanece independente.
+- Notificações ficam em Administração para todas as contas; Moderação continua condicionada à permissão.
+- Paleta base neutra: fundo cinza, área branca, seleção preta e coluna de servidores discretamente mais escura no tema claro; superfícies escuras neutras com seleção clara no tema escuro, incluindo mobile.
 - Conversas privadas com lista mais densa, divisórias, pesquisa e filtros compactos.
 - Tema claro como padrão para novas instalações; preferência claro/escuro salva anteriormente é respeitada.
 - Em telas móveis, mantém-se o padrão nativo do Uorqui/PWA, inclusive botão voltar e teclado.

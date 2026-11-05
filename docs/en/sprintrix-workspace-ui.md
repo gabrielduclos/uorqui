@@ -4,9 +4,8 @@ This UI adapts general workspace-dashboard patterns visible in the [Sprintrix pu
 
 ## Scope
 - Existing signed-in shell uses a more compact, neutral shadcn palette and a 256px workspace sidebar.
-- "Main" contains real modules with unread counters; "Your communities" lists actual authorized memberships, opens the existing channel system, and keeps the current community highlighted.
-- Main navigation contains Messages, Communities and Email; notifications and profile remain available. Discover is removed from navigation and onboarding. Old Discover preferences fall back to Messages.
-- Expanded desktop sidebar replaces the duplicate icon rail; collapsed sidebar keeps it. Mobile bottom navigation shares neutral surfaces, separators and selection states. Conversations, channels and emails open in panels with a return to the list.
+- Main and mobile navigation contain Messages, Email and notifications; profile remains available. Communities are accessed through a separate Stoat-style column of server icons, with unread badges, creation and public browsing controls. Discover remains removed.
+- Selecting a server opens its channel list independently of the general menu. The icon column stays reachable from other modules and hides on mobile while reading a conversation, channel or email; back controls restore it.
 - Messages and Email use quiet filters, search, a sidebar list and a reading pane. The Public filter in Communities finds communities through the existing join/approval flow.
 - [OAuth email](email.md): Gmail and Outlook, inbox/sent, filters, plain-text reading and sending. Private Fastify configuration is required before connecting real accounts.
 - Search palette opens with Ctrl/Cmd+K or the header/sidebar search buttons. It navigates to modules and your joined communities only, not to unimplemented server-wide search.
@@ -18,8 +17,10 @@ This UI adapts general workspace-dashboard patterns visible in the [Sprintrix pu
 - Light gray app canvas, continuous 256 px sidebar and no decorative cards in navigation.
 - White inset workspace with an 8 px top/right gutter, subtle border and 16 px corners.
 - 52 px header with breadcrumb, dark selected menu items and compact list rows.
-- Primary/workspace navigation and expandable joined-community trees containing real channels and unread badges.
-- Channel history in the main work surface; its secondary management list is opened explicitly, not permanent when the desktop sidebar is expanded.
+- Primary/workspace navigation stays separate from the Stoat-style server column and existing text, voice and meeting channels.
+- Channel history sits beside the channel list. Collapsing the general menu hides it completely and expands the content, matching the reference; switching modules preserves that choice and the server column remains independent.
+- Notifications live in Administration for every account; Moderation remains permission-gated.
+- Neutral base palette: gray canvas, white work surface, black selection and a slightly darker server column in light mode; neutral dark surfaces with light selection in dark mode, including mobile.
 - Denser, divider-oriented private conversation list and smaller filters/search.
 - Light mode is the default for new installations; previously stored light/dark preferences are retained.
 - Native mobile Uorqui/PWA navigation, back controls and keyboard behavior are preserved.

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, ChevronDown, ChevronRight, Mail, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, PanelRightOpen, Plus, Search, Settings2, ShieldCheck, Users,
+  Bell, ChevronDown, ChevronRight, Mail, LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, ShieldCheck, Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { BetaBadge } from './BetaBadge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
@@ -26,7 +25,7 @@ import { resetDmInboxSession } from './dmEventStream';
 import { clearChatMediaCache } from './chatMediaCache';
 import { clearCommunityMessageCache } from './communityMessageCache';
 import {useCommunityUnread} from './useCommunityUnread';
-import { useWorkspaceCommunities, WorkspaceCommunityShortcuts } from './WorkspaceCommunities';
+import { useWorkspaceCommunities } from './WorkspaceCommunities';
 import { WorkspaceCommandPalette, type WorkspaceCommand } from './WorkspaceCommandPalette';
 import {OnboardingTour,onboardingStorageKey} from './OnboardingTour';
 import {PwaFirstRun} from './PwaFirstRun';
@@ -55,7 +54,6 @@ function readLastArea(userId: string): Area {
 
 const navigation = [
   { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
-  { id: 'communities', label: 'Comunidades', icon: Users },
   { id: 'email', label: 'Email', icon: Mail },
   { id: 'notifications', label: 'Notificações', icon: Bell },
 ] as const;
@@ -124,7 +122,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     return () => window.removeEventListener('keydown', open);
   }, []);
   const activity = useActivityNotifications(account.user.id);
-  const communityUnreadLabel=communityUnread.total>99?'99+':String(communityUnread.total);
   // Joining through an invite takes priority; present the tour on a later normal visit.
   const [tourVisible,setTourVisible]=useState(()=>{
     if(deferOnboarding)return false;
@@ -239,23 +236,14 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:{communityId,channelId}}));
   },[]);
 
-  const [channelPanelOpen,setChannelPanelOpen]=useState(false);
-  const hasSelectedMembership = workspaceCommunities.some(item => item.id === selectedCommunityId);
-  const showChannelPanel = channelPanelOpen || !hasSelectedMembership;
-  const [selectedChannelId,setSelectedChannelId]=useState<string|null>(null);
-  useEffect(()=>{
-    const listener=(event:Event)=>{
-      const detail=(event as CustomEvent<{id?:string}>).detail;
-      if(typeof detail?.id==='string'||detail?.id===null)setSelectedChannelId(detail.id);
-    };
-    window.addEventListener('uorqui:channel-selected',listener);
-    return()=>window.removeEventListener('uorqui:channel-selected',listener);
-  },[]);
   const createCommunity=useCallback(()=>{
-    setChannelPanelOpen(true);
     move('communities');
     window.dispatchEvent(new Event('uorqui:create-community'));
   },[move]);
+  const browseCommunities=()=>{
+    move('communities');
+    window.dispatchEvent(new Event('uorqui:browse-communities'));
+  };
   const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{
     try{return localStorage.getItem('uorqui:sidebar-collapsed:v1')==='1';}catch{return false;}
   });
@@ -283,11 +271,31 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened) || (area === 'email' && emailOpened);
 
   return (
-    <div data-uorqui-app-shell data-uorqui-channel-panel-open={showChannelPanel?'true':'false'} data-uorqui-sidebar-mode={sidebarCollapsed?'collapsed':'expanded'} className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
+    <div data-uorqui-app-shell data-uorqui-sidebar-mode={sidebarCollapsed?'collapsed':'expanded'} className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
+      <nav data-uorqui-stoat-rail data-uorqui-tour-target="communities" aria-label={locale==='pt-BR'?'Servidores e comunidades':'Servers and communities'}
+        className={cn('z-40 h-full w-14 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-background px-1.5 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))] md:w-16',showSubpage?'hidden md:flex':'flex')}>
+        <button type="button" onClick={()=>move('conversations')} aria-label={t('Mensagens')} title={t('Mensagens')}
+          className={cn('grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-transparent transition-colors hover:bg-secondary',area==='conversations'&&'border-border bg-secondary')}>
+          <img src="/icon-192.png" alt="" className="size-8 rounded-lg"/>
+        </button>
+        <div className="h-px w-7 shrink-0 bg-border"/>
+        {workspaceCommunities.map(item=><button type="button" key={item.id} title={item.name} aria-label={item.name}
+          aria-current={area==='communities'&&selectedCommunityId===item.id?'page':undefined}
+          onClick={()=>openDiscoveryCommunity(item.id)}
+          className={cn('relative grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',area==='communities'&&selectedCommunityId===item.id&&'ring-2 ring-primary')}>
+          {item.avatarUrl?<img src={item.avatarUrl} alt="" className="size-full rounded-xl object-cover"/>:item.name.charAt(0).toUpperCase()}
+          {!!communityUnread.communities[item.id]&&<span className="absolute -right-1 -top-1 rounded-full bg-destructive px-1 text-[9px] font-bold text-white">{communityUnread.communities[item.id]>99?'99+':communityUnread.communities[item.id]}</span>}
+        </button>)}
+        <button type="button" onClick={createCommunity} aria-label={locale==='pt-BR'?'Criar comunidade':'Create community'} title={locale==='pt-BR'?'Criar comunidade':'Create community'}
+          className="grid size-10 shrink-0 place-items-center rounded-xl border border-dashed border-border text-muted-foreground hover:bg-secondary hover:text-foreground"><Plus className="size-5"/></button>
+        <button type="button" onClick={browseCommunities} aria-label={locale==='pt-BR'?'Comunidades públicas':'Public communities'} title={locale==='pt-BR'?'Comunidades públicas':'Public communities'}
+          className="grid size-10 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground"><Users className="size-5"/></button>
+      </nav>
       <aside data-uorqui-dashboard-sidebar
-        className={cn('hidden h-full min-h-0 shrink-0 flex-col overflow-hidden bg-muted/50 transition-[width] duration-200 ease-out md:flex',sidebarCollapsed?'w-16':'w-64')}>
+        inert={sidebarCollapsed} aria-hidden={sidebarCollapsed||undefined}
+        className={cn('hidden h-full min-h-0 shrink-0 flex-col overflow-hidden bg-muted/50 transition-[width,opacity] duration-200 ease-out md:flex',sidebarCollapsed?'pointer-events-none w-0 opacity-0':'w-64 opacity-100')}>
         <div className={cn('flex h-15 shrink-0 items-center',sidebarCollapsed?'justify-center px-2':'gap-2 px-4')}>
-          <button type="button" onClick={()=>move('communities')}
+          <button type="button" onClick={()=>move('conversations')}
             className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
             aria-label={t('Uorqui — ir para o início')}>
             <img src="/icon-192.png" alt="" aria-hidden="true" className="size-7 shrink-0 rounded-full object-cover"/>
@@ -299,12 +307,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
               <Search className="size-4"/>
             </button>
-            <button type="button" onClick={createCommunity}
-              title={locale==='pt-BR'?'Nova comunidade':'New community'}
-              aria-label={locale==='pt-BR'?'Criar comunidade':'Create community'}
-              className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
-              <Plus className="size-4"/>
-            </button>
           </div>}
         </div>
 
@@ -314,7 +316,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             className="mb-2 grid h-9 w-full place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
             <Search className="size-4"/>
           </button>}
-          {navigation.filter(item=>item.id==='conversations'||item.id==='notifications').map(item=>{
+          {navigation.filter(item=>item.id==='conversations').map(item=>{
             const Icon=item.icon;
             const badge=item.id==='conversations'?unreadMessageCount:activity.unread;
             return <Button key={item.id} type="button" size="sm" variant="ghost"
@@ -332,9 +334,9 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             <span className="text-[12px] font-medium text-muted-foreground">{locale==='pt-BR'?'Espaço de trabalho':'Workspace'}</span>
             <ChevronDown className="size-3.5 text-muted-foreground"/>
           </div>}
-          {navigation.filter(item=>item.id==='communities'||item.id==='email').map(item=>{
+          {navigation.filter(item=>item.id==='email').map(item=>{
             const Icon=item.icon;
-            const badge=item.id==='communities'?communityUnread.total:0;
+            const badge=0;
             return <Button key={item.id} type="button" size="sm" variant="ghost"
               data-uorqui-tour-target={item.id} title={sidebarCollapsed?t(item.label):undefined}
               aria-current={area===item.id?'page':undefined}
@@ -346,33 +348,22 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
               {badge>0&&<span aria-hidden="true" className={cn('grid min-h-4 min-w-4 place-items-center rounded bg-muted px-1 text-[10px] font-medium',sidebarCollapsed?'absolute -right-1 -top-1':'ml-auto')}>{badge>99?'99+':badge}</span>}
             </Button>;
           })}
-          {!sidebarCollapsed&&<section className="mt-5" aria-label={locale==='pt-BR'?'Suas comunidades':'Your communities'}>
-            <div className="mb-1 flex items-center justify-between gap-2 px-2.5">
-              <h2 className="text-[12px] font-medium text-muted-foreground">{locale==='pt-BR'?'Suas comunidades':'Your communities'}</h2>
-              <button type="button" onClick={createCommunity}
-                title={locale==='pt-BR'?'Nova comunidade':'New community'}
-                aria-label={locale==='pt-BR'?'Criar comunidade':'Create community'}
-                className="grid size-5 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
-                <Plus className="size-3.5"/>
-              </button>
-            </div>
-            <WorkspaceCommunityShortcuts communities={workspaceCommunities}
-              unread={communityUnread.communities} channelUnread={communityUnread.channels}
-              selectedId={selectedCommunityId} selectedChannelId={selectedChannelId}
-              active={area==='communities'} onOpen={communityId=>{setChannelPanelOpen(false);openDiscoveryCommunity(communityId);}}
-              onOpenChannel={(communityId,channelId)=>{setChannelPanelOpen(false);openDiscoveryCommunity(communityId,channelId);}}
-              locale={locale}/>
-          </section>}
-          {platformModerator&&<div className="mt-4">
+          <section data-uorqui-administration className="mt-4" aria-label={locale==='pt-BR'?'Administração':'Administration'}>
             {!sidebarCollapsed&&<p className="mb-1 px-2.5 text-[12px] font-medium text-muted-foreground">{locale==='pt-BR'?'Administração':'Administration'}</p>}
-            <Button type="button" size="sm" variant="ghost"
+            <Button type="button" size="sm" variant="ghost" onClick={()=>move('notifications')}
+              title={sidebarCollapsed?t('Notificações'):undefined} aria-current={area==='notifications'?'page':undefined}
+              className={cn('uorqui-sidebar-item h-8 w-full rounded-md text-[13px]',sidebarCollapsed?'justify-center px-1':'justify-start gap-3 px-2.5')}>
+              <Bell className="size-4 shrink-0"/>{!sidebarCollapsed&&t('Notificações')}
+              {activity.unread>0&&<span className="ml-auto rounded bg-muted px-1 text-[10px]">{activity.unread>99?'99+':activity.unread}</span>}
+            </Button>
+            {platformModerator&&<Button type="button" size="sm" variant="ghost"
               aria-current={area==='moderation'?'page':undefined}
               title={sidebarCollapsed?(locale==='pt-BR'?'Moderação':'Moderation'):undefined}
               onClick={()=>move('moderation')}
               className={cn('uorqui-sidebar-item h-8 w-full rounded-md text-[13px]',sidebarCollapsed?'justify-center px-1':'justify-start gap-3 px-2.5')}>
               <ShieldCheck className="size-4 shrink-0"/>{!sidebarCollapsed&&(locale==='pt-BR'?'Moderação':'Moderation')}
-            </Button>
-          </div>}
+            </Button>}
+          </section>
           <div className="mt-auto pt-4">
             <Button type="button" size="sm" variant="ghost" onClick={()=>move('profile')}
               title={sidebarCollapsed?t('Perfil'):undefined} aria-current={area==='profile'?'page':undefined}
@@ -394,9 +385,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
       <div data-uorqui-inset-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card md:my-2 md:mr-2 md:h-auto md:rounded-2xl md:border md:border-border md:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] sm:px-5 md:h-13 md:min-h-13 md:pt-0">
           <div className="flex min-w-0 items-center gap-3">
-            <button type="button" onClick={() => move('communities')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
-              <UorquiWordmark className="h-4 w-auto max-w-[34vw] text-foreground" />
-              <BetaBadge compact />
+            <button type="button" onClick={() => move('conversations')} aria-label={t('Uorqui — voltar ao início')} className="flex shrink-0 items-center gap-1.5 text-xl font-bold tracking-tight focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+              <span className="max-w-[22vw] truncate text-sm font-medium">{t(activeLabel)}</span>
             </button>
             <button type="button" className="hidden size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:grid"
               title={sidebarCollapsed?(locale==='pt-BR'?'Expandir menu':'Expand sidebar'):(locale==='pt-BR'?'Recolher menu':'Collapse sidebar')}
@@ -411,13 +401,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {area==='communities'&&hasSelectedMembership&&<button type="button" onClick={()=>setChannelPanelOpen(old=>!old)}
-              aria-pressed={channelPanelOpen}
-              aria-label={locale==='pt-BR'?'Mostrar ou ocultar painel de canais':'Toggle channel panel'}
-              title={locale==='pt-BR'?'Painel de canais':'Channel panel'}
-              className="hidden size-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground md:flex">
-              <PanelRightOpen className="size-4"/>
-            </button>}
             <button type="button" onClick={()=>setCommandOpen(true)}
               aria-label={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
               title={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
@@ -507,8 +490,6 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 <Icon aria-hidden="true" className="size-5" />
                 {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
                   className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{unreadLabel}</span>}
-                {item.id === 'communities' && communityUnread.total>0 && <span aria-hidden="true"
-                  className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{communityUnreadLabel}</span>}
                 {item.id==='notifications'&&activity.unread>0&&<span aria-hidden="true" className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{activity.unread>99?'99+':activity.unread}</span>}
               </span>{t(item.label)}
             </Button>;

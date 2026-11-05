@@ -347,6 +347,15 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     window.addEventListener('uorqui:create-community',create);
     return()=>window.removeEventListener('uorqui:create-community',create);
   },[]);
+  useEffect(()=>{
+    const browse=()=>{
+      externalSelection.current=true;
+      setCreateOpen(false);setSelectedId(null);setChannelId(null);setChannelOpen(false);
+      setDetail(null);setDirectory(true);setCommunitySearch('');setError('');setNotice('');
+    };
+    window.addEventListener('uorqui:browse-communities',browse);
+    return()=>window.removeEventListener('uorqui:browse-communities',browse);
+  },[]);
   // The main room roster is refreshed immediately by the shared community SSE.
   // Retain a slow fallback only for disconnected browsers or expired sessions.
   useEffect(()=>{

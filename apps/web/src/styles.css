@@ -171,7 +171,7 @@ body.uorqui-app-active {
 
 /* The same inbox surfaces, separators and active states apply at every size. */
 [data-uorqui-app-shell] { font-size: 0.875rem; }
-[data-uorqui-app-shell] [data-uorqui-main-header] { background: var(--background); }
+[data-uorqui-app-shell] [data-uorqui-main-header] { background: var(--card); }
 [data-uorqui-dashboard-sidebar] nav button[aria-current="page"] {
   background: var(--secondary);
   box-shadow: inset 0 0 0 1px var(--border);
@@ -196,45 +196,47 @@ body.uorqui-app-active {
 /* Sprintrix visual-fidelity pass — original implementation, not vendor code.
    A pale application canvas, quiet navigation and a white inset work surface. */
 :root {
-  --radius: .5rem;
-  --background: #111216;
-  --foreground: #f2f2f3;
-  --card: #1b1c20;
-  --card-foreground: #f2f2f3;
-  --popover: #222328;
-  --popover-foreground: #f2f2f3;
-  --primary: #b8a9ff;
-  --primary-foreground: #17131f;
-  --secondary: #2c2d32;
+  --radius: .625rem;
+  --background: #111111;
+  --workspace-rail: #1c1c1c;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --popover: #202020;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #171717;
+  --secondary: #262626;
   --secondary-foreground: #f5f5f5;
-  --muted: #24252a;
-  --muted-foreground: #a4a5ac;
-  --accent: #34353b;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --accent: #303030;
   --accent-foreground: #f6f6f8;
-  --border: #35363d;
-  --input: #494a52;
-  --ring: #aaa1f1;
+  --border: #333333;
+  --input: #404040;
+  --ring: #a3a3a3;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 :root.light {
-  --background: #f7f7f8;
-  --foreground: #161719;
+  --background: #f5f5f5;
+  --workspace-rail: #ebebeb;
+  --foreground: #0a0a0a;
   --card: #ffffff;
-  --card-foreground: #161719;
+  --card-foreground: #0a0a0a;
   --popover: #ffffff;
   --popover-foreground: #161719;
-  --primary: #27272a;
+  --primary: #171717;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
+  --secondary: #f5f5f5;
   --secondary-foreground: #18181b;
-  --muted: #f3f3f4;
-  --muted-foreground: #73757c;
-  --accent: #eeeeef;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f0f0f0;
   --accent-foreground: #171717;
   --destructive: #d7384c;
-  --border: #e5e5e8;
-  --input: #d8d9df;
-  --ring: #9696a0;
+  --border: #e5e5e5;
+  --input: #d4d4d4;
+  --ring: #a3a3a3;
 }
 @media (min-width: 768px) {
   [data-uorqui-dashboard-sidebar] {
@@ -244,12 +246,7 @@ body.uorqui-app-active {
   [data-uorqui-inset-panel] {
     border-radius: 16px;
   }
-  /* Expanded sidebar already provides a linked tree of communities/channels.
-     Preserve the original secondary channel nav behind an explicit toggle for
-     creation, invitations, settings and moderation. */
-  [data-uorqui-app-shell][data-uorqui-sidebar-mode="expanded"][data-uorqui-channel-panel-open="false"] [data-uorqui-channel-nav] {
-    display: none;
-  }
+  /* Community channels sit beside the dedicated Stoat-style server rail. */
   [data-uorqui-app-shell][data-uorqui-sidebar-mode="expanded"] [data-uorqui-community-rail] {
     display: none;
   }
@@ -273,6 +270,22 @@ body.uorqui-app-active {
   [data-uorqui-app-shell] [data-chat-conversation] [data-testid="messages-scroll"] {
     background: var(--card);
   }
+}
+
+/* Server navigation lives in the shell so communities stay reachable from
+   messages and email, including when the regular desktop menu is collapsed. */
+[data-uorqui-app-shell] [data-uorqui-community-rail] { display: none; }
+[data-uorqui-stoat-rail] { background: var(--workspace-rail); }
+[data-uorqui-email] > section { background: var(--card); }
+[data-uorqui-stoat-rail] button[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -.5rem;
+  top: .5rem;
+  bottom: .5rem;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--foreground);
 }
 [data-uorqui-dashboard-sidebar] .uorqui-sidebar-item {
   transition: background-color .12s ease, color .12s ease;
