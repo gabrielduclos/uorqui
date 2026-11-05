@@ -245,3 +245,14 @@ Validar com históricos longos, mídia de carregamento tardio, mensagens recebid
 - O movimento é removido quando o sistema solicita **redução de animações** (`prefers-reduced-motion`). SSE, posicionamento da última mensagem, uso do cache, recibos de leitura e chamadas permanecem independentes da transição.
 
 Validar ida e volta entre módulos, troca de canais, abertura de conversa, e-mail e notificações, bem como PWA/mobile, redução de movimento e voz ativa durante a navegação.
+
+## Moderação de canais e notificações autorizadas (05/11/2026)
+
+- O modal **Moderação → Canais** agora permite editar **nome** (2–64 caracteres), **acesso** aberto/restrito e **senha** (definir/substituir/remover), além de excluir o canal com confirmação. Cada ação usa a rota já existente do servidor e exige cargo de **administrador ou proprietário**. A lista de membros da moderação é usada para liberar acesso a canais restritos; senha e permissão são controles independentes.
+- A **central de notificações** reúne atividades existentes, convites pendentes para comunidades e avisos de canais com mensagens não lidas. As informações são buscadas de `/api/v1/communities/unread` e filtradas pelo **servidor** considerando associação, senha e concessões de canais restritos. Convites de comunidades privadas aparecem somente ao destinatário, sem nomes de canais internos.
+- O sino do desktop e o aviso de notificações no celular somam uma entrada por canal com mensagens novas, cada convite pendente e os eventos de atividade. Abrir um canal não cria recibo de leitura antecipadamente: vale a regra atual de visualização real. **Marcar todas como lidas** continua limitado às atividades persistidas, sem marcar canais ainda não visualizados.
+- O push já existente de mensagens de comunidades respeita a preferência `community_message`, a participação do destinatário, senhas, acesso restrito, banimentos e bloqueios mútuos; o destinatário da mensagem não inclui seu próprio envio. Os push de convites respeitam `community_request`. Os avisos abrem diretamente a comunidade e o canal quando aplicável.
+- **Push enfileirado:** antes de exibir o nome da comunidade/canal, o Service Worker confirma que a conta autenticada ainda tem autorização usando endpoints de verificação somente de leitura. Após revogação, retirada de convite, logout ou indisponibilidade da API, o aviso é suprimido (falha segura). Nenhum conteúdo privado é cacheado pelo Service Worker.
+- As mesmas animações curtas de troca de página e os skeletons internos à área de conteúdo continuam sendo usados; menu, cabeçalho e salas de voz persistentes não são desmontados em navegações.
+
+Testar com duas contas: enviar mensagem em canal aberto/fechado, revogar acesso antes do recebimento do push, aceitar/recusar convite, renomear/restringir/proteger canais e confirmar que a central e os badges mostram apenas recursos autorizados.

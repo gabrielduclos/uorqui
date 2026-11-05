@@ -76,11 +76,11 @@ self.addEventListener('fetch',event=>{
 });
 const uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 function safeUrl(payload){
-  // Invitation pushes open their community channel without going through the DM list.
-  if(payload?.kind==='dm'&&uuid.test(String(payload.communityId||''))&&uuid.test(String(payload.channelId||'')))
+  // Go directly to the authorized channel, not merely the community home.
+  if(payload?.kind==='community'&&uuid.test(String(payload.communityId||''))&&uuid.test(String(payload.channelId||'')))
     return '/?community='+encodeURIComponent(payload.communityId)+'&channel='+encodeURIComponent(payload.channelId);
   if(payload?.kind==='dm'&&uuid.test(String(payload.conversationId||'')))return '/?conversation='+encodeURIComponent(payload.conversationId);
-  if((payload?.kind==='community'||payload?.kind==='community-invite')&&uuid.test(String(payload.communityId||'')))return '/?community='+encodeURIComponent(payload.communityId);
+  if(payload?.kind==='community-invite'&&uuid.test(String(payload.communityId||'')))return '/?community='+encodeURIComponent(payload.communityId);
   if(payload?.kind==='activity'&&uuid.test(String(payload.notificationId||'')))return '/?notification='+encodeURIComponent(payload.notificationId);
   return '/';
 }
@@ -107,6 +107,22 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
   if(!payload||!uuid.test(String(payload.recipientId||'')))return;
   // A queued push must never reveal another account's activity after sign out.
   if(await account()!==payload.recipientId)return;
+  if(payload.kind==='community'||payload.kind==='community-invite'){
+    const communityId=String(payload.communityId||'');
+    const channelId=String(payload.channelId||'');
+    if(!uuid.test(communityId)||(payload.kind==='community'&&!uuid.test(channelId)))return;
+    // Delayed pushes must be authorized at display time, not only when queued.
+    // Invitation or closed-channel access can be revoked in the meantime.
+    const endpoint=payload.kind==='community'
+      ?'/api/v1/communities/'+encodeURIComponent(communityId)+'/channels/'+encodeURIComponent(channelId)+'/notification-access'
+      :'/api/v1/communities/'+encodeURIComponent(communityId)+'/invite/notification-access';
+    try{
+      const result=await fetch(endpoint,{credentials:'include',cache:'no-store'});
+      if(!result.ok)return;
+      const access=await result.json();
+      if(access?.authorized!==true)return;
+    }catch{return;} // Fail closed when offline or authorization is unavailable.
+  }
   const title=typeof payload.title==='string'?payload.title.slice(0,80):'Uorqui';
   const body=typeof payload.body==='string'?payload.body.slice(0,180):'Nova atividade';
   const tag=payload.kind==='dm'&&uuid.test(String(payload.conversationId||''))
@@ -123,9 +139,10 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
       data:{url,kind:payload.kind,conversationId:payload.conversationId||'',messageId:payload.messageId||''}
     });
     await acknowledge(payload);
-    if(payload.kind==='activity'){
+    if(payload.kind==='activity'||payload.kind==='community'||payload.kind==='community-invite'){
       const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-      pages.forEach(client=>client.postMessage({type:'uorqui:activity-update'}));
+      const type=payload.kind==='activity'?'uorqui:activity-update':'uorqui:community-push-update';
+      pages.forEach(client=>client.postMessage({type}));
     }
   }catch{/* Unsupported browser notifications cannot claim delivery. */}
 })());});

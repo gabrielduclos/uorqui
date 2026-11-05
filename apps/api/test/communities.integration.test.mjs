@@ -252,17 +252,28 @@ test('private communities are hidden until invitation and accepted membership',a
   assert.equal((await member('/api/v1/communities/'+id+'/join','POST')).status,404);
   assert.equal((await member('/api/v1/communities/'+id+'/invite','POST',{handle:'comm_outsider'})).status,403);
   assert.equal((await owner('/api/v1/communities/'+id+'/invite','POST',{handle:'comm_member'})).status,201);
+  assert.equal((await member('/api/v1/communities/'+id+'/invite/notification-access')).status,200);
+  assert.equal((await outsider('/api/v1/communities/'+id+'/invite/notification-access')).status,403);
+  assert.ok((await member('/api/v1/communities/unread')).data.invites.some(invite=>invite.communityId===id),
+    'pending private invitations are visible to the recipient only');
+  assert.ok(!(await outsider('/api/v1/communities/unread')).data.invites.some(invite=>invite.communityId===id));
   const invited=await member('/api/v1/communities');
   const invitation=invited.data.communities.find(c=>c.id===id);
   assert.equal(invitation.requestKind,'invite');
   const invitationDetail=await member('/api/v1/communities/'+id);
   assert.equal(invitationDetail.data.channels.length,0);
   assert.equal((await member('/api/v1/communities/'+id+'/invite/accept','POST')).status,200);
+  assert.equal((await member('/api/v1/communities/'+id+'/invite/notification-access')).status,403,
+    'queued invite pushes cannot display after acceptance');
+  assert.ok(!(await member('/api/v1/communities/unread')).data.invites.some(invite=>invite.communityId===id));
   assert.equal((await member('/api/v1/communities/'+id)).data.channels.length,2);
   assert.equal((await outsider('/api/v1/communities')).data.communities.some(c=>c.id===id),false);
   assert.equal((await outsider('/api/v1/communities/'+id)).status,404);
   assert.equal((await owner('/api/v1/communities/'+id+'/invite','POST',{handle:'comm_outsider'})).status,201);
+  assert.equal((await outsider('/api/v1/communities/'+id+'/invite/notification-access')).status,200);
   assert.equal((await outsider('/api/v1/communities/'+id+'/invite/decline','POST')).status,200);
+  assert.equal((await outsider('/api/v1/communities/'+id+'/invite/notification-access')).status,403,
+    'revoked invites cannot create visible push notifications');
   assert.equal((await outsider('/api/v1/communities/'+id)).status,404);
 });
 
@@ -539,6 +550,10 @@ test('restricted channels: hidden by default, per-member grants and revocation b
   assert.equal((await owner(root)).data.channels.find(x=>x.id===channelId).accessMode,'restricted');
   assert.ok(!(await member(root)).data.channels.some(x=>x.id===channelId),'closed channel is not listed to unapproved members');
   assert.ok(!(await outsider(root)).data.channels.some(x=>x.id===channelId));
+  assert.equal((await owner(channel+'/notification-access')).status,200);
+  assert.equal((await member(channel+'/notification-access')).status,403);
+  assert.equal((await outsider(channel+'/notification-access')).status,403);
+  assert.equal((await anonymous(channel+'/notification-access')).status,401);
   assert.equal((await member(channel+'/messages')).status,403);
   assert.equal((await member(channel+'/messages','POST',{clientId:crypto.randomUUID(),body:'not allowed'})).status,403);
   assert.equal((await member(channel+'/attachments/allowed')).status,403);
@@ -554,17 +569,21 @@ test('restricted channels: hidden by default, per-member grants and revocation b
   assert.ok(moderation.members.find(x=>x.handle==='comm_member').restrictedChannelIds.includes(channelId));
   assert.ok(!(moderation.members.find(x=>x.handle==='comm_outsider').restrictedChannelIds??[]).includes(channelId));
   assert.ok((await member(root)).data.channels.some(x=>x.id===channelId));
+  assert.equal((await member(channel+'/notification-access')).status,200,'grant permits notification');
   assert.equal((await member(channel+'/messages')).status,200);
   assert.ok((await member('/api/v1/communities/discover/activity')).data.recent.some(x=>x.channelId===channelId));
   assert.equal((await outsider(channel+'/messages')).status,403);
 
   // Password and explicit member grants are independent checks.
   assert.equal((await owner(channel+'/password','PUT',{password:'secret-password-123'})).status,200);
+  assert.equal((await member(channel+'/notification-access')).status,403,'protected push requires current password grant');
   assert.equal((await member(channel+'/messages')).data.error,'CHANNEL_PASSWORD_REQUIRED');
   assert.equal((await outsider(channel+'/unlock','POST',{password:'secret-password-123'})).data.error,'CHANNEL_PERMISSION_REQUIRED');
   assert.equal((await member(channel+'/unlock','POST',{password:'secret-password-123'})).status,200);
+  assert.equal((await member(channel+'/notification-access')).status,200);
   assert.equal((await member(channel+'/messages')).status,200);
   assert.equal((await owner(grantPath,'PUT',{allowed:false})).status,200);
+  assert.equal((await member(channel+'/notification-access')).status,403,'revoking access suppresses delayed push');
   assert.ok(!(await member(root)).data.channels.some(x=>x.id===channelId));
   assert.equal((await member(channel+'/messages')).data.error,'CHANNEL_PERMISSION_REQUIRED',
     'previous password unlock must not bypass revoked membership grant');

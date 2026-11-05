@@ -1,17 +1,20 @@
 
 import {useEffect,useState} from 'react';
-import {Bell,Check,CheckCheck,Settings,UserPlus,UserRoundCheck,Users,X} from 'lucide-react';
+import {Bell,Check,CheckCheck,Hash,Headphones,Settings,UserPlus,UserRoundCheck,Users,Video,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar} from './UserProfiles';
 import {NotificationSettings} from './NotificationSettings';
 import {useUorquiPreferences} from './UorquiPreferences';
 import type {ActivityNotification} from './useActivityNotifications';
+import type {UnreadLocation,CommunityInviteAlert} from './useCommunityUnread';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
 type Props={items:ActivityNotification[];unread:number;loading:boolean;error:boolean;accountId:string;
+  channelAlerts:UnreadLocation[];communityInvites:CommunityInviteAlert[];
+  onOpenChannel:(communityId:string,channelId:string)=>void;onOpenCommunity:(communityId:string)=>void;
   onRefresh:()=>void;onReadAll:()=>Promise<void>;onDelete:(id:string)=>Promise<void>;onOpen:(item:ActivityNotification)=>void};
-export function ActivityNotifications({items,unread,loading,error,accountId,onRefresh,onReadAll,onDelete,onOpen}:Props){
+export function ActivityNotifications({items,unread,loading,error,accountId,channelAlerts,communityInvites,onOpenChannel,onOpenCommunity,onRefresh,onReadAll,onDelete,onOpen}:Props){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -68,9 +71,11 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
     <div className="mx-auto max-w-2xl px-4 py-5 sm:px-6">
       <div className="mb-5 flex items-center justify-between gap-2">
         <div><h2 className="text-lg font-semibold">{pt?'Notificações':'Notifications'}</h2>
-          <p className="text-xs text-muted-foreground">{unread>0?
-            (pt?unread+' não lida'+(unread===1?'':'s'):unread+' unread'):
-            (pt?'Tudo em dia':'All caught up')}</p></div>
+          <p className="text-xs text-muted-foreground">
+            {unread>0?(pt?unread+' atividade'+(unread===1?'':'s')+' não lida'+(unread===1?'':'s'):unread+' unread activities'):(pt?'Atividades em dia':'Activity caught up')}
+            {channelAlerts.length>0?' · '+channelAlerts.length+(pt?' canal'+(channelAlerts.length===1?'':'is')+' com mensagens novas':' channels with new messages'):''}
+            {communityInvites.length>0?' · '+communityInvites.length+(pt?' convite'+(communityInvites.length===1?'':'s')+' pendente'+(communityInvites.length===1?'':'s'):' pending invitations'):''}
+          </p></div>
         <Button type="button" size="sm" variant="outline" onClick={()=>setSettingsOpen(true)} className="gap-2">
           <Settings className="size-4"/>{pt?'Ajustes':'Settings'}</Button>
       </div>
@@ -82,8 +87,49 @@ export function ActivityNotifications({items,unread,loading,error,accountId,onRe
       {error&&<div className="mb-4 rounded-xl border border-border p-3 text-sm">
         {pt?'Não foi possível carregar as notificações.':'Could not load notifications.'}
         <Button variant="ghost" size="sm" onClick={onRefresh}>{pt?'Tentar novamente':'Retry'}</Button></div>}
+      {communityInvites.length>0&&<section aria-label={pt?'Convites para comunidades':'Community invitations'} className="mb-5 space-y-2">
+        <h3 className="text-sm font-semibold">{pt?'Convites para comunidades':'Community invitations'}</h3>
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {communityInvites.map(invite=><button type="button" key={invite.communityId}
+            onClick={()=>onOpenCommunity(invite.communityId)}
+            className="flex min-h-14 w-full items-center gap-3 border-b border-border/70 px-3 py-2.5 text-left last:border-0 hover:bg-secondary/70">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary"><Users className="size-4"/></span>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-sm">{invite.communityName}</strong>
+              <span className="block text-xs text-muted-foreground">{pt?'Convite pendente — abrir para aceitar ou recusar':'Pending invitation — open to accept or decline'}</span>
+            </span>
+          </button>)}
+        </div>
+      </section>}
+      {channelAlerts.length>0&&<section aria-label={pt?'Canais com mensagens não lidas':'Channels with unread messages'}
+        className="mb-5 space-y-2">
+        <h3 className="text-sm font-semibold">{pt?'Mensagens das comunidades e canais':'Community and channel messages'}</h3>
+        <p className="text-xs text-muted-foreground">{pt?
+          'Aparecem somente canais que sua conta pode acessar. Ao abrir um canal, as mensagens podem ser marcadas como lidas.':
+          'Only channels your account can access are shown. Opening a channel lets you read its messages.'}</p>
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {channelAlerts.map(alert=>{
+            const Icon=alert.channelKind==='voice'?Headphones:alert.channelKind==='meeting'?Video:Hash;
+            return <button key={alert.channelId} type="button"
+              onClick={()=>onOpenChannel(alert.communityId,alert.channelId)}
+              aria-label={(pt?'Abrir canal ':'Open channel ')+alert.channelName+' · '+alert.communityName}
+              className="flex min-h-14 w-full items-center gap-3 border-b border-border/70 px-3 py-2.5 text-left last:border-0 hover:bg-secondary/70">
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-foreground">
+                <Icon aria-hidden="true" className="size-4"/>
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm">{alert.channelName}</strong>
+                <span className="block truncate text-xs text-muted-foreground">{alert.communityName}</span>
+              </span>
+              <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                {alert.count>99?'99+':alert.count}
+              </span>
+            </button>;
+          })}
+        </div>
+      </section>}
       {loading&&!items.length?<WorkspaceContentLoading label={pt?'Carregando notificações':'Loading notifications'} rows={4} className="py-4"/>:
-      !items.length&&!error?<div className="flex flex-col items-center gap-2 rounded-xl border border-border p-8 text-center text-muted-foreground">
+      !items.length&&!error&&!channelAlerts.length&&!communityInvites.length?<div className="flex flex-col items-center gap-2 rounded-xl border border-border p-8 text-center text-muted-foreground">
         <Bell className="size-9"/><p className="text-sm">{pt?'Ainda não há notificações.':'No notifications yet.'}</p></div>:
       <div className="space-y-1">{items.map(item=>{
         const Icon=icons[item.kind]??Bell;

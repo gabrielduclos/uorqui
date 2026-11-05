@@ -219,6 +219,9 @@ export async function pushCommunityMessage(messageId:string){
     "WHERE (NOT $4::boolean OR cm.role IN ('owner','admin') OR grant_access.user_id IS NOT NULL) "+
     "AND ($5::text='open' OR cm.role IN ('owner','admin') OR member_grant.user_id IS NOT NULL) "+
     "AND s.user_id<>$2 AND COALESCE(np.community_message,true)=true AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=s.user_id) "+
+    "AND NOT EXISTS (SELECT 1 FROM user_blocks block WHERE "+
+    "(block.blocker_id=s.user_id AND block.blocked_id=$2) OR "+
+    "(block.blocker_id=$2 AND block.blocked_id=s.user_id)) "+
     'ORDER BY s.endpoint LIMIT 200',[m.community_id,m.author_id,m.channel_id,m.protected,m.access_mode]);
   await Promise.allSettled(recipients.rows.map(async sub=>{
     try{

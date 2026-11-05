@@ -156,6 +156,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   }, [area, account.user.id, tourVisible]);
   const unreadLabel = unreadMessageCount > 99 ? '99+' : String(unreadMessageCount);
   const communityUnreadCount = Object.values(communityUnread.communities).reduce((sum, count) => sum + count, 0);
+  // Count unread channel locations once per channel, not once per message.
+  const notificationBadgeCount = activity.unread + communityUnread.locations.length + communityUnread.invites.length;
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [requestedConversationId,setRequestedConversationId]=useState<string|null>(null);
   const [conversationOpened, setConversationOpened] = useState(false);
@@ -215,6 +217,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     const onMessage=(event:MessageEvent)=>{
       if(event.data?.type==='uorqui:push-open'&&typeof event.data.url==='string')open(event.data.url);
       if(event.data?.type==='uorqui:activity-update')window.dispatchEvent(new Event('uorqui:activity-update'));
+      if(event.data?.type==='uorqui:community-push-update')window.dispatchEvent(new Event('uorqui:community-push-update'));
     };
     navigator.serviceWorker?.addEventListener('message',onMessage);
     const current=new URL(window.location.href);
@@ -389,12 +392,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={()=>move('notifications')}
-              aria-label={t('Notificações')+(activity.unread?' · '+activity.unread+' '+(locale==='pt-BR'?'não lidas':'unread'):'')}
+              aria-label={t('Notificações')+(notificationBadgeCount?' · '+notificationBadgeCount+' '+(locale==='pt-BR'?'avisos não lidos':'unread alerts'):'')}
               title={t('Notificações')}
               aria-current={area==='notifications'?'page':undefined}
               className="uorqui-kit-header-notifications relative hidden size-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:grid">
               <Bell className="size-[18px]"/>
-              <UIKitCount count={activity.unread} className="uorqui-kit-notification-count"/>
+              <UIKitCount count={notificationBadgeCount} className="uorqui-kit-notification-count"/>
             </button>
             <button type="button" onClick={()=>setCommandOpen(true)}
               aria-label={locale==='pt-BR'?'Buscar no Uorqui':'Search Uorqui'}
@@ -462,8 +465,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
 
             {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
               items={activity.items} unread={activity.unread} loading={activity.loading}
+              channelAlerts={communityUnread.locations}
+              communityInvites={communityUnread.invites}
+              onOpenChannel={(communityId,channelId)=>openDiscoveryCommunity(communityId,channelId)}
+              onOpenCommunity={communityId=>openDiscoveryCommunity(communityId)}
               error={activity.error} onRefresh={()=>void activity.refresh()}
-              onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>}
+              onReadAll={activity.markAllRead} onDelete={activity.remove} onOpen={openActivity}/>} 
             {area === 'moderation' && platformModerator === null &&
               <WorkspaceContentLoading label={locale==='pt-BR'?'Carregando moderação':'Loading moderation'} className="mx-auto max-w-4xl p-6" />}
             {area === 'moderation' && platformModerator && <ModerationPanel locale={locale}/>}
@@ -517,7 +524,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 <Icon aria-hidden="true" className="size-5" />
                 {item.id === 'conversations' && unreadMessageCount > 0 && <span aria-hidden="true"
                   className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{unreadLabel}</span>}
-                {item.id==='notifications'&&activity.unread>0&&<span aria-hidden="true" className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{activity.unread>99?'99+':activity.unread}</span>}
+                {item.id==='notifications'&&notificationBadgeCount>0&&<span aria-hidden="true" className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{notificationBadgeCount>99?'99+':notificationBadgeCount}</span>}
                 {item.id==='communities'&&communityUnreadCount>0&&<span aria-hidden="true" className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">{communityUnreadCount>99?'99+':communityUnreadCount}</span>}
               </span>{t(item.label)}
             </Button>;
