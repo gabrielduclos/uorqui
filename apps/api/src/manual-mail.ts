@@ -85,7 +85,7 @@ async function transport(raw: string) {
     auth: { user: conf.smtpUsername || conf.username, pass: conf.smtpPassword || conf.password },
     connectionTimeout: 12_000, greetingTimeout: 10_000, socketTimeout: 12_000,
     pool: false,
-  }) };
+  } as any) };
 }
 type Entry = { path: string; specialUse?: string };
 async function resolveMailbox(client: ImapFlow, folder: Folder): Promise<string | null> {
@@ -150,7 +150,7 @@ export async function listManualMail(raw: string, folder: Folder, filter: 'all'|
         .slice(0, 20).map(m => ({
           id: encodeId(path, m.uid), from: displayAddress(m.envelope?.from),
           to: displayAddress(m.envelope?.to), subject: m.envelope?.subject ?? '', preview: '',
-          date: (m.internalDate ?? new Date(0)).toISOString(), unread: !m.flags?.has('\\Seen'),
+          date: new Date(m.internalDate ?? 0).toISOString(), unread: !m.flags?.has('\\Seen'),
           starred: Boolean(m.flags?.has('\\Flagged')),
         }));
       return { messages, nextPage: lower > 1 ? String(offset + 50) : null };
@@ -163,8 +163,8 @@ export async function getManualMessage(raw: string, id: string): Promise<MailSum
     const lock = await openVerified(client, path);
     try {
       const item = await client.fetchOne(uid, { source: { start: 0, maxLength: 2_000_000 }, flags: true, internalDate: true }, { uid: true });
-      if (!item?.source) throw Error('MAIL_MANUAL_ID');
-      return parsedMail(item.source, id, item.flags ?? new Set(), item.internalDate);
+      if (!item || !item.source) throw Error('MAIL_MANUAL_ID');
+      return parsedMail(item.source, id, item.flags ?? new Set(), item.internalDate ? new Date(item.internalDate) : undefined);
     } finally { lock.release(); }
   });
 }
@@ -216,7 +216,7 @@ export async function replyManualMail(raw: string, id: string, body: string) {
     const lock = await openVerified(client, path);
     try {
       const item = await client.fetchOne(uid, { source: {start: 0,maxLength: 2_000_000} }, { uid:true });
-      if (!item?.source) throw Error('MAIL_MANUAL_ID');
+      if (!item || !item.source) throw Error('MAIL_MANUAL_ID');
       return simpleParser(item.source);
     } finally { lock.release(); }
   });
