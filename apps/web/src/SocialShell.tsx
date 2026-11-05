@@ -233,6 +233,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     setMobileMenuOpen(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
   }, []);
+  const tourNavigate=useCallback((tab:'email'|'conversations'|'communities')=>{
+    move(tab);
+    if(window.matchMedia('(max-width: 767px)').matches)setMobileMenuOpen(true);
+  },[move]);
   const toggleNotifications=()=>{
     if(area==='notifications')move(notificationReturnArea.current==='notifications'?'conversations':notificationReturnArea.current);
     else move('notifications');
@@ -608,7 +612,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
         commands={commands} locale={locale}/>
       {!tourVisible&&<PwaFirstRun accountId={account.user.id}/>}
       {tourVisible&&account.profile&&<OnboardingTour userId={account.user.id} profile={account.profile}
-        onNavigate={area=>{move(area);if(window.matchMedia('(max-width: 767px)').matches)setMobileMenuOpen(true);}}
+        onNavigate={tourNavigate}
         onProfileSaved={next=>onAccountUpdate({...account,profile:next})}
         onFinish={()=>{setTourVisible(false);setMobileMenuOpen(false);move('communities');}}/>}
     </div>
