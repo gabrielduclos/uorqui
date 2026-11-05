@@ -2,8 +2,10 @@ import {useEffect,useState} from 'react';
 
 export type UnreadLocation={communityId:string;communityName:string;channelId:string;channelName:string;
   channelKind:'text'|'voice'|'meeting';count:number};
-type Unread={total:number;channels:Record<string,number>;communities:Record<string,number>;locations:UnreadLocation[]};
-const empty:Unread={total:0,channels:{},communities:{},locations:[]};
+export type CommunityInviteAlert={communityId:string;communityName:string};
+type Unread={total:number;channels:Record<string,number>;communities:Record<string,number>;
+  locations:UnreadLocation[];invites:CommunityInviteAlert[]};
+const empty:Unread={total:0,channels:{},communities:{},locations:[],invites:[]};
 
 /** A single signed-in poller powers badges in the app navigation and channel lists. */
 export function useCommunityUnread(){
@@ -18,7 +20,8 @@ export function useCommunityUnread(){
         const data=await res.json() as Unread;
         if(mounted&&id===requestId)setUnread({
           total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{},
-          locations:Array.isArray(data.locations)?data.locations:[]
+          locations:Array.isArray(data.locations)?data.locations:[],
+          invites:Array.isArray(data.invites)?data.invites:[]
         });
       }catch{/* Keep the last known badge if offline or if migration is pending. */}
     };
@@ -39,6 +42,7 @@ export function useCommunityUnread(){
     };
     const onFocus=()=>{if(document.visibilityState==='visible')void refresh();};
     window.addEventListener('uorqui:community-channel-read',read);
+    window.addEventListener('uorqui:community-push-update',onFocus);
     window.addEventListener('focus',onFocus);
     document.addEventListener('visibilitychange',onFocus);
     // Reuse the DM realtime transport pattern: a single authenticated SSE
@@ -79,6 +83,7 @@ export function useCommunityUnread(){
     return ()=>{mounted=false;requestId++;window.clearInterval(timer);
       source?.close();
       window.removeEventListener('uorqui:community-channel-read',read);
+      window.removeEventListener('uorqui:community-push-update',onFocus);
       window.removeEventListener('focus',onFocus);
       document.removeEventListener('visibilitychange',onFocus);
       document.removeEventListener('visibilitychange',visibility);
