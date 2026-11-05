@@ -29,3 +29,9 @@ Após a publicação, reabra o PWA para atualizar o service worker e receba um n
 ## Notificações de e-mail
 
 O push de e-mails usa o mesmo service worker e inscrições VAPID. Gmail e IMAP são monitorados pelo backend, e contas Outlook conectadas anteriormente continuam elegíveis. A categoria **Novos e-mails** é controlada por `notification_preferences.email_message`, criada na migração `0037_mail_push.sql`. O usuário recebe remetente/assunto, sem corpo de mensagem; ao tocar, abre a mensagem na caixa conectada. O primeiro ciclo não notifica mensagens antigas; a API não promete entrega imediata quando a hospedagem estiver suspensa.
+
+## Abertura de notificações e avisos dentro do app
+
+Ao tocar um push do sistema, o service worker navega a janela do PWA para o link persistente da conversa, canal, e-mail ou atividade; isso corrige eventos de abertura perdidos ao retomar o iOS. Links de comunidade usam os identificadores reais de comunidade/canal, sem ingressar automaticamente em salas de voz; um convite abre a central de notificações. Uma atividade abre o pedido ou perfil vinculado assim que os dados autenticados chegam.
+
+Com o app **visível**, novas mensagens privadas (SSE), canais com mensagens novas, convites e atividades geram um aviso interno clicável somente quando o módulo correspondente não está ativo. Push recebido com o PWA visível é encaminhado ao aviso interno, evitando dois alertas simultâneos; em segundo plano, mantém o aviso do sistema. Os avisos são temporários, dispensáveis e limitados a três na tela, sem alterar os contadores de não lidos.
