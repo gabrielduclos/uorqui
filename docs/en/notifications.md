@@ -29,3 +29,9 @@ After deployment, reopen the installed PWA to update its service worker and rece
 ## Email notifications
 
 New Gmail and manual IMAP messages use the same account-bound VAPID push subscription; legacy connected Outlook accounts remain eligible. The **New emails** switch controls `notification_preferences.email_message` (migration `0037_mail_push.sql`). Push shows sender and subject, never the full body, and opens the connected message. The initial mailbox scan is silent to prevent an old-email flood, and delivery may be delayed when the API host is asleep.
+
+## Deep links and in-app alerts
+
+Tapping an operating-system push navigates the PWA directly to the persistent link for its conversation, channel, message, or activity; unlike a post-focus message, URL navigation survives suspended iOS apps. Community links retain the actual channel ID and never auto-join voice rooms; invitations open Notifications. Activity links open the associated request or profile after authenticated data loads.
+
+While the app is **visible**, DM SSE updates, newly unread community channels, invitations, and activity items create temporary clickable in-app alerts only when their module is not currently active. A foreground Web Push is forwarded into this in-app UI instead of displaying a duplicate operating-system alert. Background/system push remains unchanged. Alerts are dismissible and capped at three; unread counters are unaffected.
