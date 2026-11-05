@@ -50,3 +50,11 @@ References: [Google OAuth](https://developers.google.com/identity/protocols/oaut
 - Multi-select up to 100 messages, then move to Spam/Trash via Gmail batchModify, legacy Microsoft Graph move or IMAP MOVE. No permanent deletion action is exposed.
 - External HTTPS images load by default in a sandboxed iframe without scripts or forms. This may expose view activity to tracking pixels despite no-referrer policy.
 - Outlook.com/Microsoft 365 require OAuth2, and password-based manual setup does not substitute for that authentication.
+
+## New mail push notifications
+
+The Render API periodically polls connected Gmail and manual IMAP inboxes (120-second default, configurable with `MAIL_POLL_INTERVAL_MS` between 60 seconds and an hour). Previously connected legacy Outlook accounts are scanned too. The first successful scan establishes a **silent baseline**, while observed message IDs are persisted in `mail_seen_messages` to prevent duplicate pushes after restarts. `mail_inbox_state` stores per-account unread badge counts.
+
+Only mail arriving after the baseline is eligible for a push. The payload contains sender and subject (not the message body), is restricted to the signed-in recipient, is reauthorized if the account has been disconnected, and opens the correct account/message when tapped. The **New emails** notification category can be switched off. Background delivery is best-effort: if the Render API is asleep/unavailable, scans are delayed. Gmail unread totals are provider estimates.
+
+Apply `0037_mail_push.sql` to the correct Neon database **before deploying the API**; existing mailbox connections and credentials are preserved. Read/move actions refresh the cached counts. The mobile footer navigation has been replaced by the desktop-style side drawer.
