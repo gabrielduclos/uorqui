@@ -297,6 +297,27 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }catch(error){request.log.error({err:error},'Community unread counts');return reply.code(503).send({error:'Unavailable'});}
   });
 
+  /** Called by the Service Worker before showing a queued channel push.
+   * Re-check current membership, channel password and restricted grants, rather
+   * than revealing a channel's name after permission is revoked. */
+  app.get('/api/v1/communities/:id/channels/:channelId/notification-access',{
+    schema:{params:channelParams}
+  },async(request,reply)=>{
+    try{
+      const me=await self(request);
+      if(!me)return reply.code(401).header('Cache-Control',noCache).send({authorized:false});
+      const {id,channelId}=request.params as {id:string;channelId:string};
+      const gate=await channelGate(id,channelId,me);
+      if(gate!=='allowed')return reply.code(403).header('Cache-Control',noCache).send({authorized:false});
+      const blocked=await getPool().query('SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2',[id,me]);
+      if(blocked.rowCount)return reply.code(403).header('Cache-Control',noCache).send({authorized:false});
+      return reply.header('Cache-Control',noCache).send({authorized:true});
+    }catch(error){
+      request.log.error({err:error},'Authorize channel notification');
+      return reply.code(503).header('Cache-Control',noCache).send({authorized:false});
+    }
+  });
+
   /** A channel is only marked read up to a message the member actually received. */
   app.post('/api/v1/communities/:id/channels/:channelId/read',{
     schema:{params:channelParams,body:{type:'object',required:['lastMessageId'],additionalProperties:false,properties:{lastMessageId:uuid}}}
