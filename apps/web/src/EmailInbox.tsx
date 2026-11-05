@@ -309,12 +309,33 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
         </div>
         <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={event => setQuery(event.target.value)} placeholder={pt ? 'Buscar nos emails carregados…' : 'Search loaded emails…'} aria-label={pt ? 'Buscar nos emails carregados' : 'Search loaded emails'} className="h-10 bg-card pl-9 text-base md:text-sm" /></div>
-        <div className="uorqui-inbox-filters flex gap-1" role="group" aria-label={pt ? 'Filtrar emails' : 'Filter emails'}>
-          {(['all', 'unread', 'starred'] as const).map(value => <button key={value} type="button" aria-pressed={filter === value}
-            onClick={() => { resetList(); setFilter(value); }} className="min-h-9 rounded-md px-3 text-xs font-medium">
+        <div className="uorqui-inbox-filters flex flex-wrap items-center gap-1" role="group" aria-label={pt ? 'Filtrar emails' : 'Filter emails'}>
+          {(['all', 'unread', 'starred'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value}
+            disabled={moving} onClick={() => { resetList(); setFilter(value); }} className="min-h-9 rounded-md px-3 text-xs font-medium">
             {value === 'all' ? (pt ? 'Todos' : 'All') : value === 'unread' ? (pt ? 'Não lidos' : 'Unread') : (pt ? 'Favoritos' : 'Starred')}
           </button>)}
+          {account && <Button type="button" size="sm" variant={selectionMode ? 'secondary' : 'ghost'} className="ml-auto"
+            disabled={moving || loading} onClick={() => { setSelectionMode(value => !value); setSelectedIds([]); }}>
+            {selectionMode ? (pt ? 'Cancelar' : 'Cancel') : (pt ? 'Selecionar' : 'Select')}
+          </Button>}
         </div>
+        {selectionMode && account && <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-2 text-xs">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" disabled={moving || !visibleIds.length} checked={allVisibleSelected}
+              onChange={toggleVisible} aria-label={pt ? 'Selecionar todos os emails visíveis' : 'Select all visible emails'} />
+            {pt ? 'Selecionar todos' : 'Select all'}
+          </label>
+          <span className="ml-auto text-muted-foreground">{selectedIds.length}/100</span>
+          <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
+            onClick={() => void moveSelected('spam')} className="gap-1">
+            <ShieldAlert className="size-3.5" /> Spam
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
+            onClick={() => void moveSelected('trash')} className="gap-1">
+            {moving ? <Spinner className="size-3.5" /> : <Trash2 className="size-3.5" />}
+            {pt ? 'Lixeira' : 'Trash'}
+          </Button>
+        </div>}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.')
@@ -336,12 +357,19 @@ export default function EmailInbox({ onMobileOpenChange }: { onMobileOpenChange:
           {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'A conexão estará disponível quando a integração OAuth for configurada pelo administrador.' : 'Connection will be available once the administrator configures OAuth.'}</p>}
           <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Autorização pelo provedor, sem compartilhar sua senha com o Uorqui.' : 'Authorize through your provider without sharing your password with Uorqui.'}</p>
         </div>}
-        {visible.map(message => <button type="button" key={message.id} onClick={() => void showMessage(message)} aria-current={selected?.id === message.id ? 'true' : undefined}
-          className={cn('uorqui-inbox-row w-full border-b border-border px-4 py-4 text-left transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', selected?.id === message.id && 'bg-secondary/70')}>
-          <div className="mb-1.5 flex items-center gap-2">{message.unread && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={pt ? 'Não lido' : 'Unread'} />}<span className={cn('min-w-0 flex-1 truncate text-xs', message.unread ? 'font-semibold' : 'text-muted-foreground')}>{message.from}</span><time className="shrink-0 text-[10px] text-muted-foreground">{date(message.date)}</time></div>
-          <p className="flex items-center gap-2 text-[13px] font-medium"><span className="truncate">{message.subject || (pt ? '(Sem assunto)' : '(No subject)')}</span>{message.starred && <Star className="size-3 shrink-0 fill-current text-muted-foreground" />}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.preview}</p>
-        </button>)}
+        {visible.map(message => <div key={message.id} className={cn('uorqui-inbox-row flex w-full min-w-0 items-center border-b border-border transition-colors hover:bg-muted/60', selected?.id === message.id && !selectionMode && 'bg-secondary/70', selectionMode && selectedIds.includes(message.id) && 'bg-muted/80')}>
+          {selectionMode && <label className="flex min-h-12 shrink-0 cursor-pointer items-center px-3" aria-label={pt ? 'Selecionar email' : 'Select email'}>
+            <input type="checkbox" checked={selectedIds.includes(message.id)} disabled={moving || (selectedIds.length >= 100 && !selectedIds.includes(message.id))}
+              onChange={() => toggleSelected(message.id)} aria-label={pt ? 'Selecionar ' + (message.subject || message.from) : 'Select ' + (message.subject || message.from)} />
+          </label>}
+          <button type="button" disabled={moving} onClick={() => selectionMode ? toggleSelected(message.id) : void showMessage(message)}
+            aria-current={selected?.id === message.id && !selectionMode ? 'true' : undefined}
+            className="min-w-0 flex-1 px-4 py-4 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+            <div className="mb-1.5 flex items-center gap-2">{message.unread && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={pt ? 'Não lido' : 'Unread'} />}<span className={cn('min-w-0 flex-1 truncate text-xs', message.unread ? 'font-semibold' : 'text-muted-foreground')}>{message.from}</span><time className="shrink-0 text-[10px] text-muted-foreground">{date(message.date)}</time></div>
+            <p className="flex items-center gap-2 text-[13px] font-medium"><span className="truncate">{message.subject || (pt ? '(Sem assunto)' : '(No subject)')}</span>{message.starred && <Star className="size-3 shrink-0 fill-current text-muted-foreground" />}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.preview}</p>
+          </button>
+        </div>)}
         {account && !loading && !error && visible.length === 0 && <div className="px-6 py-14 text-center"><Inbox className="mx-auto mb-3 size-7 text-muted-foreground" /><p className="text-sm font-medium">{pt ? 'Nenhum email por aqui' : 'No email here'}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{pt ? 'Tente outra pasta, filtro ou busca.' : 'Try a different folder, filter or search.'}</p></div>}
         {nextPage && !query && <Button variant="ghost" className="my-3 w-full" disabled={loading} onClick={() => setPage(nextPage)}>{loading ? <Spinner /> : (pt ? 'Carregar mais' : 'Load more')}</Button>}
       </div>
