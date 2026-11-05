@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { UorquiWordmark } from './UorquiWordmark';
 import {
   ArrowLeft, Bell, Check, CheckCheck, ChevronDown, ChevronRight, CircleHelp,
   Command, ContactRound, FileText, FolderKanban, Globe2, Hash, Inbox,
@@ -196,7 +197,7 @@ export default function HomePage() {
     {mobileNav&&<button type="button" className="sidebar-scrim" aria-label="Fechar navegação" onClick={()=>setMobileNav(false)}/>}
     <aside className={'sidebar '+(mobileNav?'sidebar--open':'')}>
       <div className="brandbar">
-        <button type="button" className="brand" onClick={()=>navigate('canais')} title="Workspace Uorqui"><span className="brand-badge">U</span><span className="brand-name sidebar-label">uorqui</span><ChevronDown size={14} className="brand-chevron sidebar-label"/></button>
+        <button type="button" className="brand" onClick={()=>navigate('canais')} title="Workspace Uorqui"><UorquiWordmark className="brand-wordmark" /></button>
         <div className="brand-actions"><button type="button" className="mini-icon" aria-label="Buscar" title="Buscar (Ctrl+K)" onClick={()=>setSearchOpen(true)}><Search size={17}/></button><button type="button" className="mini-icon" aria-label="Criar canal" title="Criar canal" onClick={()=>setCreateOpen(true)}><Plus size={18}/></button></div>
       </div>
       <div className="sidebar-scroll">
