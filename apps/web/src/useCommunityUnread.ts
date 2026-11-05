@@ -3,9 +3,9 @@ import {useEffect,useState} from 'react';
 export type UnreadLocation={communityId:string;communityName:string;channelId:string;channelName:string;
   channelKind:'text'|'voice'|'meeting';count:number};
 export type CommunityInviteAlert={communityId:string;communityName:string};
-type Unread={total:number;channels:Record<string,number>;communities:Record<string,number>;
+type Unread={initialized:boolean;total:number;channels:Record<string,number>;communities:Record<string,number>;
   locations:UnreadLocation[];invites:CommunityInviteAlert[]};
-const empty:Unread={total:0,channels:{},communities:{},locations:[],invites:[]};
+const empty:Unread={initialized:false,total:0,channels:{},communities:{},locations:[],invites:[]};
 
 /** A single signed-in poller powers badges in the app navigation and channel lists. */
 export function useCommunityUnread(){
@@ -19,7 +19,7 @@ export function useCommunityUnread(){
         if(!res.ok)throw Error('UNREAD_UNAVAILABLE');
         const data=await res.json() as Unread;
         if(mounted&&id===requestId)setUnread({
-          total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{},
+          initialized:true,total:Math.max(0,Number(data.total)||0),channels:data.channels??{},communities:data.communities??{},
           locations:Array.isArray(data.locations)?data.locations:[],
           invites:Array.isArray(data.invites)?data.invites:[]
         });
@@ -35,7 +35,7 @@ export function useCommunityUnread(){
         const channels={...old.channels},communities={...old.communities};
         delete channels[ids.channelId];
         communities[ids.communityId]=Math.max(0,(communities[ids.communityId]??0)-previous);
-        return {total:Math.max(0,old.total-previous),channels,communities,
+        return {...old,total:Math.max(0,old.total-previous),channels,communities,
           locations:old.locations.filter(location=>location.channelId!==ids.channelId),invites:old.invites};
       });
       void refresh();

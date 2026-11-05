@@ -58,3 +58,7 @@ The Render API periodically polls connected Gmail and manual IMAP inboxes (120-s
 Only mail arriving after the baseline is eligible for a push. The payload contains sender and subject (not the message body), is restricted to the signed-in recipient, is reauthorized if the account has been disconnected, and opens the correct account/message when tapped. The **New emails** notification category can be switched off. Background delivery is best-effort: if the Render API is asleep/unavailable, scans are delayed. Gmail unread totals are provider estimates.
 
 Apply `0037_mail_push.sql` to the correct Neon database **before deploying the API**; existing mailbox connections and credentials are preserved. Read/move actions refresh the cached counts. The mobile footer navigation has been replaced by the desktop-style side drawer.
+
+## Email image preview and enlargement
+
+Inline/CID and remote HTTPS images are constrained to 420 px wide, 280 px high, and the available mobile reading width. Click or press Enter on an image to open a full-screen enlarged viewer; dismiss with X, Escape, or the backdrop. HTML remains inside a sandboxed iframe with scripts and forms **disabled**; same-origin DOM access lets the parent handle image clicks without allowing email-provided scripts to run.
