@@ -96,7 +96,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   },[account.user.id]);
   useEffect(()=>{if(invitedCommunityId)setArea('communities');},[invitedCommunityId]);
   const unreadMessageCount = useUnreadDirectMessages(account.user.id);
-  useEffect(() => startDmOutbox(account.user.id), [account.user.id]);
+  useEffect(() => {
+    if (import.meta.env.VITE_SHELL_PREVIEW === '1') return;
+    return startDmOutbox(account.user.id);
+  }, [account.user.id]);
   const communityUnread = useCommunityUnread();
   const fetchedWorkspaceCommunities = useWorkspaceCommunities(account.user.id);
   const isShellPreview = import.meta.env.VITE_SHELL_PREVIEW === '1';
@@ -132,6 +135,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const activity = useActivityNotifications(account.user.id);
   // Joining through an invite takes priority; present the tour on a later normal visit.
   const [tourVisible,setTourVisible]=useState(()=>{
+    if(import.meta.env.VITE_SHELL_PREVIEW === '1')return false;
     if(deferOnboarding)return false;
     try{return localStorage.getItem(onboardingStorageKey(account.user.id))!=='done';}catch{return true;}
   });
@@ -279,7 +283,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const showSubpage = (area === 'conversations' && conversationOpened) || (area === 'communities' && channelOpened) || (area === 'email' && emailOpened);
 
   return (
-    <div data-uorqui-app-shell data-uorqui-sidebar-mode={sidebarCollapsed?'collapsed':'expanded'} className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
+    <div data-uorqui-app-shell data-uorqui-preview={isShellPreview?'1':undefined} data-uorqui-sidebar-mode={sidebarCollapsed?'collapsed':'expanded'} className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] flex h-[var(--uorqui-app-height,100dvh)] min-h-0 w-full overflow-hidden overscroll-none bg-background text-foreground">
       <nav data-uorqui-stoat-rail data-uorqui-tour-target="communities" aria-label={locale==='pt-BR'?'Servidores e comunidades':'Servers and communities'}
         className={cn('z-40 h-full w-14 shrink-0 flex-col items-center gap-3 overflow-y-auto overscroll-contain border-r border-border bg-background px-1.5 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))] md:w-16',showSubpage?'hidden md:flex':'flex')}>
         <button type="button" onClick={()=>move('conversations')} aria-label={t('Mensagens')} title={t('Mensagens')}
