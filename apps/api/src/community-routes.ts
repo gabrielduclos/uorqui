@@ -293,7 +293,16 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
             channelId:item.channelId,channelName:item.channelName,channelKind:item.channelKind,count});
         }
       }
-      return reply.header('Cache-Control',noCache).send({total,channels,communities,locations});
+      // Pending invitations are visible to their recipient even for private
+      // communities. No private channel names or contents are included.
+      const pending=await getPool().query(
+        'SELECT c.id AS "communityId",c.name AS "communityName" '+
+        'FROM community_join_requests invite JOIN communities c ON c.id=invite.community_id '+
+        "WHERE invite.user_id=$1 AND invite.kind='invite' AND invite.status='pending' "+
+        'AND NOT EXISTS(SELECT 1 FROM community_members m WHERE m.community_id=c.id AND m.user_id=$1) '+
+        'AND NOT EXISTS(SELECT 1 FROM community_bans ban WHERE ban.community_id=c.id AND ban.user_id=$1) '+
+        'ORDER BY invite.updated_at DESC LIMIT 40',[me]);
+      return reply.header('Cache-Control',noCache).send({total,channels,communities,locations,invites:pending.rows});
     }catch(error){request.log.error({err:error},'Community unread counts');return reply.code(503).send({error:'Unavailable'});}
   });
 
