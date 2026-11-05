@@ -82,6 +82,9 @@ function safeUrl(payload){
   if(payload?.kind==='dm'&&uuid.test(String(payload.conversationId||'')))return '/?conversation='+encodeURIComponent(payload.conversationId);
   if(payload?.kind==='community-invite'&&uuid.test(String(payload.communityId||'')))return '/?community='+encodeURIComponent(payload.communityId);
   if(payload?.kind==='activity'&&uuid.test(String(payload.notificationId||'')))return '/?notification='+encodeURIComponent(payload.notificationId);
+  if(payload?.kind==='mail'&&uuid.test(String(payload.accountId||''))&&
+     /^[A-Za-z0-9_=+\/\-]{1,1024}$/.test(String(payload.messageId||'')))
+    return '/?mailAccount='+encodeURIComponent(payload.accountId)+'&mailMessage='+encodeURIComponent(payload.messageId);
   return '/';
 }
 async function account(){
@@ -123,13 +126,24 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
       if(access?.authorized!==true)return;
     }catch{return;} // Fail closed when offline or authorization is unavailable.
   }
+  if(payload.kind==='mail'){
+    // The account could have been disconnected between enqueue and delivery.
+    if(!uuid.test(String(payload.accountId||'')) ||
+       !/^[A-Za-z0-9_=+\/\-]{1,1024}$/.test(String(payload.messageId||'')))return;
+    try{
+      const access=await fetch('/api/v1/mail/accounts/'+encodeURIComponent(payload.accountId)+'/notification-access',
+        {credentials:'include',cache:'no-store'});
+      if(!access.ok||(await access.json())?.authorized!==true)return;
+    }catch{return;}
+  }
   const title=typeof payload.title==='string'?payload.title.slice(0,80):'Uorqui';
   const body=typeof payload.body==='string'?payload.body.slice(0,180):'Nova atividade';
   const tag=payload.kind==='dm'&&uuid.test(String(payload.conversationId||''))
     ?'uorqui-dm-'+payload.conversationId
     :payload.kind==='community'&&uuid.test(String(payload.channelId||''))
       ?'uorqui-community-'+payload.channelId:payload.kind==='community-invite'&&uuid.test(String(payload.communityId||''))
-        ?'uorqui-invite-'+payload.communityId:payload.kind==='activity'&&uuid.test(String(payload.notificationId||''))
+        ?'uorqui-invite-'+payload.communityId:payload.kind==='mail'&&uuid.test(String(payload.accountId||''))
+        ?'uorqui-mail-'+payload.accountId+'-'+String(payload.messageId||'').slice(0,64):payload.kind==='activity'&&uuid.test(String(payload.notificationId||''))
         ?'uorqui-activity-'+payload.notificationId:'uorqui-activity';
   const url=safeUrl(payload);
   try{
@@ -139,9 +153,9 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
       data:{url,kind:payload.kind,conversationId:payload.conversationId||'',messageId:payload.messageId||''}
     });
     await acknowledge(payload);
-    if(payload.kind==='activity'||payload.kind==='community'||payload.kind==='community-invite'){
+    if(payload.kind==='activity'||payload.kind==='community'||payload.kind==='community-invite'||payload.kind==='mail'){
       const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-      const type=payload.kind==='activity'?'uorqui:activity-update':'uorqui:community-push-update';
+      const type=payload.kind==='mail'?'uorqui:mail-push-update':payload.kind==='activity'?'uorqui:activity-update':'uorqui:community-push-update';
       pages.forEach(client=>client.postMessage({type}));
     }
   }catch{/* Unsupported browser notifications cannot claim delivery. */}
