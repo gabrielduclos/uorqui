@@ -40,3 +40,13 @@ References: [Google OAuth](https://developers.google.com/identity/protocols/oaut
 - HTML is rendered inside a separate, sandboxed iframe with no JavaScript, form submissions, or access to the Uorqui document. Gmail CID embedded pictures are loaded with per-message/per-image size bounds. External HTTPS images are disabled until the user chooses **Load external images** for that message to avoid tracking pixels.
 - Reply uses the original provider message: Gmail preserves `threadId` plus RFC822 `In-Reply-To`/`References` and derives the recipient server-side; Outlook uses Microsoft Graph `/reply`. User-supplied recipients cannot override replies.
 - **Reconnect Gmail or Outlook once** after deployment to grant the new `gmail.modify` / `Mail.ReadWrite` scopes. Update the Google consent screen / Microsoft Entra permissions accordingly. Existing connections are not deleted, but old read-only grants cannot persist read status.
+
+## Manual servers, account switcher and bulk mail actions
+
+- Accounts may include multiple distinct Gmail addresses and manual IMAP/SMTP mailboxes. The account selector contains **Connect another email**, with Gmail OAuth or manual IMAP/SMTP setup. Existing Outlook accounts remain readable while their prior OAuth credentials work, but new Outlook OAuth connections are disabled.
+- Migration `0036_mail_multiple_accounts.sql` updates uniqueness to (user, provider, email) and allows the `manual` provider. Apply before use; existing connections are preserved.
+- Manual mail settings are encrypted and never returned by the list API. Connections require public DNS targets, verified TLS, IMAP 993, SMTP 465/587 or 2525. SMTP login is not tested at account creation.
+- Render Free blocks outbound SMTP ports 25/465/587; manual sending on those ports requires alternative hosting, or SMTP 2525 where the provider supports STARTTLS.
+- Multi-select up to 100 messages, then move to Spam/Trash via Gmail batchModify, legacy Microsoft Graph move or IMAP MOVE. No permanent deletion action is exposed.
+- External HTTPS images load by default in a sandboxed iframe without scripts or forms. This may expose view activity to tracking pixels despite no-referrer policy.
+- Outlook.com/Microsoft 365 require OAuth2, and password-based manual setup does not substitute for that authentication.
