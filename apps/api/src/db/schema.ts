@@ -19,6 +19,19 @@ import {
 } from 'drizzle-orm/pg-core';
 
 // Database schema shared by authentication, profiles, communities, and direct messages.
+/** Durable purge queue contains only random storage keys after an account is erased. */
+export const accountMediaCleanupJobs = pgTable('account_media_cleanup_jobs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  bucket: varchar('bucket',{length:24}).notNull(),
+  prefix: text('prefix').notNull(),
+  createdAt: timestamp('created_at',{withTimezone:true}).defaultNow().notNull(),
+  completedAt: timestamp('completed_at',{withTimezone:true}),
+},table=>[
+  uniqueIndex('account_media_cleanup_bucket_prefix_key').on(table.bucket,table.prefix),
+  index('account_media_cleanup_pending_idx').on(table.createdAt),
+  check('account_media_cleanup_bucket_chk',sql`${table.bucket} IN ('PROFILE_MEDIA','DM_ATTACHMENTS')`),
+]);
+
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   handle: varchar('handle', { length: 32 }).notNull().unique(),
