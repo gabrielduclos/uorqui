@@ -61,7 +61,7 @@ Apply `0037_mail_push.sql` to the correct Neon database **before deploying the A
 
 ## Email image preview and enlargement
 
-Inline/CID and remote HTTPS images are constrained to 180 px wide, 120 px high, and the available mobile reading width. The limit is also applied directly to image styles to override email template inline dimensions. Click or press Enter on an image to open a full-screen enlarged viewer; dismiss with X, Escape, or the backdrop. HTML remains inside a sandboxed iframe with scripts and forms **disabled**; same-origin DOM access lets the parent handle image clicks without allowing email-provided scripts to run.
+The reader adapts **the entire HTML email iframe** to the available mobile width, including newsletters with fixed 600–800px tables. Frame height follows the document so scrolling normally happens in the email reader. Images retain their intended layout size and aspect ratio, rather than an artificial thumbnail limit; tap or press Enter to open an enlarged viewer. The email remains isolated inside a sandboxed iframe with scripts and forms disabled. The fit updates when images load or the viewport width changes.
 
 ## Account configuration modal
 
