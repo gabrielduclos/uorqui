@@ -55,7 +55,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
   app.get('/api/v1/mail/accounts', async (request, reply) => {
     try {
       const id = await user(request, reply); if (!id) return;
-      const providers = [{ id: 'gmail', configured: mailProviderReady('gmail') }];
+      const providers = [{ id: 'gmail', configured: mailProviderReady('gmail') }, { id: 'outlook', configured: mailProviderReady('outlook') }];
       try {
         const accounts = await getPool().query('SELECT id,provider,email FROM mail_connections WHERE user_id=$1 ORDER BY provider,email', [id]);
         return { accounts: accounts.rows, providers, webOrigin: new URL(process.env.WEB_ORIGIN ?? 'http://localhost:5173').origin };
@@ -68,7 +68,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     } catch (error) { return unavailable(reply, error); }
   });
 
-  app.post('/api/v1/mail/oauth/:provider', { schema: { params: { type: 'object', required: ['provider'], properties: { provider: { enum: ['gmail'] } } } } }, async (request, reply) => {
+  app.post('/api/v1/mail/oauth/:provider', { schema: { params: { type: 'object', required: ['provider'], properties: { provider: { enum: ['gmail','outlook'] } } } } }, async (request, reply) => {
     if (!originAllowed(request, reply)) return;
     try {
       const id = await user(request, reply); if (!id) return;
