@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowUpRight, Inbox, Link2, Mail, Plus, RefreshCw, Reply, Search, Send, ShieldAlert, ShieldCheck, Star, Trash2, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,8 +86,52 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   // blocks scripts, forms, access to Uorqui cookies and parent DOM.
   const [connectPicker, setConnectPicker] = useState(false);
   const [manualFormOpen, setManualFormOpen] = useState(false);
-  const mailListScrollRef=useRef<HTMLDivElement|null>(null);
-  useEffect(()=>{if(connectPicker)mailListScrollRef.current?.scrollTo({top:0});},[connectPicker,manualFormOpen]);
+  const [connectError,setConnectError]=useState('');
+  const mailDialogRef=useRef<HTMLDivElement|null>(null);
+  const mailDialogScrollRef=useRef<HTMLDivElement|null>(null);
+  const mailDialogReturnFocus=useRef<HTMLElement|null>(null);
+  const mailDialogTitleId='uorqui-mail-configuration-heading';
+  function openMailConfiguration(){
+    mailDialogReturnFocus.current=document.activeElement as HTMLElement|null;
+    setConnectError('');
+    setManualFormOpen(false);
+    setConnectPicker(true);
+  }
+  function closeMailConfiguration(){
+    if(savingManual||connecting)return;
+    setConnectPicker(false);
+    setManualFormOpen(false);
+    setConnectError('');
+    setManualDraft(previous=>({...previous,password:'',smtpPassword:''}));
+    window.requestAnimationFrame(()=>mailDialogReturnFocus.current?.focus());
+  }
+  useEffect(()=>{
+    if(!connectPicker)return;
+    const previousOverflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    mailDialogRef.current?.focus();
+    return()=>{document.body.style.overflow=previousOverflow;};
+  },[connectPicker]);
+  useEffect(()=>{
+    if(connectPicker&&manualFormOpen)mailDialogScrollRef.current?.scrollTo({top:0});
+  },[connectPicker,manualFormOpen]);
+  function modalKeyDown(event:ReactKeyboardEvent<HTMLDivElement>){
+    if(event.key==='Escape'){
+      event.preventDefault();event.stopPropagation();
+      closeMailConfiguration();
+      return;
+    }
+    if(event.key!=='Tab')return;
+    const root=mailDialogRef.current;
+    if(!root)return;
+    const focusable=Array.from(root.querySelectorAll<HTMLElement>(
+      'a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])'
+    )).filter(node=>node.getClientRects().length>0);
+    if(!focusable.length){event.preventDefault();root.focus();return;}
+    const first=focusable[0],last=focusable[focusable.length-1],current=document.activeElement;
+    if(event.shiftKey&&(current===first||current===root)){event.preventDefault();last.focus();}
+    else if(!event.shiftKey&&(current===last||current===root)){event.preventDefault();first.focus();}
+  }
   const [savingManual, setSavingManual] = useState(false);
   const [manualDraft, setManualDraft] = useState({
     email: '', imapHost: '', imapPort: 993,
@@ -147,7 +192,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
   async function connect(provider: 'gmail') {
     if (connecting) return;
-    setConnecting(provider); setError('');
+    setConnecting(provider); setConnectError('');
     try {
       // OAuth callbacks use WEB_ORIGIN. Different hosts do not share session cookies.
       if (webOrigin && window.location.origin !== webOrigin)
@@ -157,7 +202,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
       if (url.protocol !== 'https:' || !['accounts.google.com', 'login.microsoftonline.com'].includes(url.hostname)) throw Error('MAIL_UNAVAILABLE');
       window.location.assign(url.toString());
     } catch (error) {
-      setError(error instanceof Error && error.message === 'MAIL_ORIGIN_MISMATCH'
+      setConnectError(error instanceof Error && error.message === 'MAIL_ORIGIN_MISMATCH'
         ? (pt ? 'Abra ' + webOrigin + ', faça login e conecte seu email por esse endereço. A sessão de outro domínio não é compartilhada.'
           : 'Open ' + webOrigin + ', sign in and connect your email there. Sessions cannot be shared between domains.')
         : explainError(error));
@@ -167,16 +212,16 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   async function submitManual(event: FormEvent) {
     event.preventDefault();
     if (savingManual || connecting) return;
-    setSavingManual(true); setError('');
+    setSavingManual(true); setConnectError('');
     try {
       await requestMail('manual', { method: 'POST',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(manualDraft) });
       setManualDraft(previous => ({...previous, password: '', smtpPassword: ''}));
-      setManualFormOpen(false); setConnectPicker(false); setNotice('connected');
+      setManualFormOpen(false); setConnectPicker(false); setConnectError('');setNotice('connected');
       setAccountRefresh(value => value + 1);
       window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
     } catch (error) {
-      setError(error instanceof Error && error.message === 'MAIL_MANUAL_INVALID'
+      setConnectError(error instanceof Error && error.message === 'MAIL_MANUAL_INVALID'
         ? (pt ? 'Confira os dados: IMAP TLS usa porta 993; SMTP TLS usa 465, 587 ou 2525.' : 'Check your settings: IMAP TLS uses port 993; SMTP TLS uses 465, 587 or 2525.')
         : (pt ? 'Não foi possível verificar o domínio do servidor ou salvar a conta. Confira os endereços e tente novamente.'
           : 'Could not validate server hostname or save the mailbox. Check your settings and try again.'));
@@ -324,7 +369,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
       {connecting === 'gmail' ? <Spinner className="size-4" /> : <Plus className="size-4" />} Gmail
     </Button>
     <Button type="button" variant="outline" disabled={savingManual || Boolean(connecting)}
-      onClick={() => setManualFormOpen(open => !open)} className="min-h-11 gap-2">
+      onClick={() => {setConnectError('');setManualFormOpen(open => !open);}} className="min-h-11 gap-2">
       <Plus className="size-4" />{pt ? 'Servidor manual' : 'Manual server'}
     </Button>
   </div>;
@@ -375,7 +420,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
       ? 'Credenciais criptografadas no servidor. Outlook.com/Microsoft 365 exige OAuth2. Render gratuito bloqueia SMTP 465/587; o envio nessas portas pode falhar.'
       : 'Credentials encrypted on the server. Outlook.com/Microsoft 365 requires OAuth2. Free Render blocks SMTP 465/587, so sending may fail.'}</p>
     <div className="flex justify-end gap-2">
-      <Button type="button" variant="ghost" disabled={savingManual} onClick={() => setManualFormOpen(false)}>{pt ? 'Cancelar' : 'Cancel'}</Button>
+      <Button type="button" variant="ghost" disabled={savingManual} onClick={() => {setConnectError('');setManualFormOpen(false);}}>{pt ? 'Voltar' : 'Back'}</Button>
       <Button type="submit" disabled={savingManual}>{savingManual ? <Spinner className="size-4" /> : (pt ? 'Salvar conta' : 'Save account')}</Button>
     </div>
   </form>;
@@ -392,8 +437,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           <div className="flex items-center gap-1">
             <select aria-label={pt ? 'Conta de email' : 'Email account'} value={accountId} disabled={sending || moving}
               onChange={event => {
-                if (event.target.value === '__connect__') { setConnectPicker(true); return; }
-                resetList(); setAccountId(event.target.value); setConnectPicker(false);
+                if (event.target.value === '__connect__') { openMailConfiguration();return; }
+                resetList(); setAccountId(event.target.value);
               }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
               {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
               <option value="__connect__">{pt ? '+ Conectar novo e-mail' : '+ Connect another email'}</option>
@@ -440,20 +485,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           </Button>
         </div>}
       </header>
-      <div ref={mailListScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {account&&connectPicker&&<section aria-label={pt?'Conectar outro e-mail':'Connect another email'}
-          className="space-y-3 border-b border-border bg-background p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">{pt?'Conectar novo e-mail':'Connect another email'}</h2>
-            <Button type="button" variant="ghost" size="icon" aria-label={pt?'Fechar conexão':'Close connection'}
-              onClick={()=>{setConnectPicker(false);setManualFormOpen(false);}}><X className="size-4"/></Button>
-          </div>
-          {connectButtons}
-          {manualForm}
-          <p className="text-[11px] leading-5 text-muted-foreground">{pt?
-            'É possível conectar outro endereço, inclusive do mesmo provedor. Role para preencher todos os campos.':
-            'You can connect another address, including from the same provider. Scroll to reach all fields.'}</p>
-        </section>}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+
         {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.')
             : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.')
             : notice === 'movedTrash' ? (pt ? 'Mensagens movidas para Lixeira.' : 'Messages moved to Trash.')
@@ -465,8 +498,9 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         {!loadingAccounts && !account && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
           <h2 className="font-medium">{pt ? 'Seu email, por perto' : 'Your email, close by'}</h2>
           <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail ou configure IMAP/SMTP para acompanhar sua caixa de entrada no Uorqui.' : 'Connect Gmail or set up IMAP/SMTP to use your mailbox in Uorqui.'}</p>
-          {connectButtons}
-          {manualForm}
+          <Button type="button" variant="outline" onClick={openMailConfiguration} className="min-h-11 gap-2">
+            <Plus className="size-4"/>{pt?'Conectar e-mail':'Connect email'}
+          </Button>
           {webOrigin && window.location.origin !== webOrigin && <p className="text-xs leading-5 text-muted-foreground">
             {pt ? 'Para vincular sua conta, acesse o domínio oficial: ' : 'To connect your mailbox, open the official domain: '}
             <a className="font-medium underline underline-offset-2" href={webOrigin}>{webOrigin}</a>
@@ -568,6 +602,36 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         {account && <Button variant="outline" className="mt-5 gap-2" onClick={startCompose}>{pt ? 'Escrever email' : 'Write email'}<ArrowUpRight className="size-4" /></Button>}
       </div></div>}
     </section>
+    {connectPicker&&createPortal(
+      <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/65 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        onMouseDown={event=>{if(event.target===event.currentTarget)closeMailConfiguration();}}>
+        <div ref={mailDialogRef} role="dialog" aria-modal="true" aria-labelledby={mailDialogTitleId}
+          tabIndex={-1} onKeyDown={modalKeyDown}
+          className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-2xl outline-none">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+            <div className="min-w-0">
+              <h2 id={mailDialogTitleId} className="text-base font-semibold">{pt?'Configuração de e-mail':'Email configuration'}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">{pt?
+                'Conecte uma conta Gmail ou configure um servidor IMAP/SMTP.':
+                'Connect Gmail or configure an IMAP/SMTP server.'}</p>
+            </div>
+            <Button type="button" size="icon" variant="ghost" className="shrink-0"
+              disabled={savingManual||Boolean(connecting)} aria-label={pt?'Fechar configuração':'Close configuration'}
+              onClick={closeMailConfiguration}><X className="size-5"/></Button>
+          </header>
+          <div ref={mailDialogScrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">{pt?'Escolha como conectar':'Choose how to connect'}</h3>
+              {connectButtons}
+            </div>
+            {connectError&&<p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{connectError}</p>}
+            {manualForm}
+            <p className="text-xs leading-5 text-muted-foreground">{pt?
+              'Você pode adicionar outro endereço, inclusive do mesmo provedor. As credenciais manuais são armazenadas criptografadas.':
+              'You can add another address, even from the same provider. Manual credentials are stored encrypted.'}</p>
+          </div>
+        </div>
+      </div>,document.body)}
     {expandedImage&&<div role="dialog" aria-modal="true" aria-label={pt?'Imagem ampliada':'Enlarged image'}
       className="fixed inset-0 z-[210] flex flex-col bg-black/90 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       onKeyDown={event=>{if(event.key==='Escape')setExpandedImage(null);}}>

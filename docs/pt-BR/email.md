@@ -69,3 +69,7 @@ Imagens incorporadas ou externas HTTPS são exibidas com largura máxima de 420 
 ## Formulário de servidor manual com conta conectada
 
 Quando já existe uma conta vinculada, escolher **+ Conectar novo e-mail → Servidor manual** abre os campos IMAP/SMTP na área rolável da lista de e-mails, e não mais no cabeçalho fixo. Assim todos os campos, incluindo senha SMTP opcional e **Salvar conta**, permanecem acessíveis no mobile sem alterar as contas existentes.
+
+## Modal de configuração de contas
+
+A configuração de novos e-mails fica em um **dialog centralizado com rolagem própria**, tanto no primeiro acesso quanto ao selecionar **+ Conectar novo e-mail** em uma caixa já vinculada. O modal reúne Gmail OAuth e o formulário IMAP/SMTP, com cabeçalho fixo, fechamento por X, Escape ou clique no fundo (exceto enquanto salva), rolagem dos campos no mobile e retorno do foco ao controle anterior. A lista de e-mails permanece independente do formulário.

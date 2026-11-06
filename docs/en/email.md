@@ -62,3 +62,7 @@ Apply `0037_mail_push.sql` to the correct Neon database **before deploying the A
 ## Email image preview and enlargement
 
 Inline/CID and remote HTTPS images are constrained to 420 px wide, 280 px high, and the available mobile reading width. Click or press Enter on an image to open a full-screen enlarged viewer; dismiss with X, Escape, or the backdrop. HTML remains inside a sandboxed iframe with scripts and forms **disabled**; same-origin DOM access lets the parent handle image clicks without allowing email-provided scripts to run.
+
+## Account configuration modal
+
+New mail accounts are set up in a **scrollable dialog**, both for first-time setup and when selecting **+ Connect another email** with existing accounts. The dialog contains Gmail OAuth and IMAP/SMTP credentials with a fixed heading, dismissal via X, Escape or backdrop (disabled during submission), mobile-friendly scrolling and focus restoration. The inbox list remains separate from the form.
