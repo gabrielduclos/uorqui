@@ -14,6 +14,19 @@ A oferta continua limitada a **uma vez por dia por conta e navegador**, usando a
 
 Em mobile, a regra anterior permanece: no iPhone/iPad é necessário instalar o PWA para receber push. Em todos os dispositivos, há um controle manual em **Notificações → Ajustes → Permissão neste dispositivo**.
 
+## Abas da central de notificações (`0.1.0-beta.5`)
+
+A central reúne as abas **Todas**, **Mensagens**, **Menções**, **E-mail**, **Convites** e **Contatos**. No desktop e no mobile, as abas têm rolagem horizontal, foco acessível e navegação por setas, Home e End.
+
+- **Todas** reúne as categorias e preserva os avisos persistentes de solicitações.
+- **Mensagens** lista conversas privadas e canais com não lidas e abre a conversa/canal; a leitura é feita no respectivo módulo.
+- **Menções** reúne `@usuário` gravados no banco mesmo sem push. O servidor verifica participação, acesso de canal, senha, bloqueios e banimentos antes de expor cada aviso. Não são criados eventos retroativos de mensagens antigas.
+- **E-mail** mostra novos e-mails após o monitoramento inicial, com remetente, assunto e link para o leitor. O total de e-mails não lidos também abre a caixa de entrada, mesmo quando não houver aviso recente.
+- **Convites** une convites pendentes e pedidos de entrada em comunidade/reunião; **Contatos** reúne solicitações e confirmações de amizade.
+- Atividades e avisos persistentes podem ser dispensados; em **Todas**, a ação de leitura afeta atividades, menções e alertas de e-mail, **não** marca todas as mensagens e os e-mails reais como lidos.
+
+A migração aditiva `0042_notification_inbox_events.sql` deve ser aplicada antes do deploy da API/Worker. Eventos são exclusivos de cada destinatário e apagam em cascata se o usuário, a conta de e-mail ou a mensagem/canal forem excluídos. O histórico na central independe da permissão de push.
+
 ## Push
 
 O Web Push usa as mesmas chaves VAPID, inscrições por conta e service worker já utilizados nas mensagens. Somente inscrições com permissão concedida podem receber avisos. No iOS, é necessário instalar o PWA na tela inicial e conceder permissão. O push é uma entrega de melhor esforço; a atividade permanece na central se o push falhar.
