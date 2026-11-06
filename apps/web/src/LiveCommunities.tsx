@@ -1,3 +1,4 @@
+import { apiRequest as api } from './lib/apiClient';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog } from 'radix-ui';
@@ -59,15 +60,6 @@ function groupedWithPrevious(messages:(Message|PendingMessage)[],index:number){
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
 const allowedSlug=/^[a-z][a-z0-9-]{2,63}$/;
 
-async function api<T>(url:string,options?:RequestInit):Promise<T>{
-  const response=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});
-  if(!response.ok){
-    const detail=await response.json().catch(()=>null) as {error?:string}|null;
-    throw new Error(detail?.error??'HTTP_'+response.status);
-  }
-  if(response.status===204)return undefined as T;
-  return response.json() as Promise<T>;
-}
 function body(value:unknown):RequestInit{
   return {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)};
 }
