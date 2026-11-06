@@ -119,6 +119,28 @@ test('official Uorqui custom domain has ready API and authenticated meetings', {
   assert.equal(response.status,401,'Official domain must reject anonymous meeting access');
 });
 
+// Anonymous checks do not read, download or modify any conversation data.
+// A 401 confirms both endpoints are deployed; older API versions return 404.
+test('DM gallery and pinned message endpoints are deployed and deny anonymous access', { timeout: 180_000 }, async () => {
+  const fakeId='00000000-0000-0000-0000-000000000000';
+  const base='/api/v1/dm/conversations/'+fakeId;
+  const paths=[base+'/attachments?kind=media',base+'/pinned'];
+  for (const origin of [backend,frontend]) {
+    await ready(origin);
+    for (const path of paths) {
+      let response;
+      for (let attempt=0;attempt<12;attempt++) {
+        response=await request(origin,path);
+        if (response.status===401 || response.status!==404)break;
+        await new Promise(resolve=>setTimeout(resolve,8000));
+      }
+      assert.equal(response.status,401,
+        'DM API route must require authentication on '+origin+path+
+        ': '+response.status+' '+JSON.stringify(response.data));
+    }
+  }
+});
+
 test('production signup configuration and anonymous profile', { timeout: 120_000 }, async () => {
   const r = await request(frontend, '/api/v1/status');
   assert.equal(r.status, 200);
