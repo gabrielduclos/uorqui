@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.6` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.7` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -58,7 +58,7 @@ The project has automated CI for the API, UI and integration flows. Passing CI d
 - **Voice:** WebRTC peer-to-peer; TURN is optional and connectivity must be tested across networks.
 - **Deployment:** Cloudflare Builds and Render, with GitHub Actions verification.
 
-This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.6`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
+This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.7`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
 
 ## Documentation
 
