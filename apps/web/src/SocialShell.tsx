@@ -101,9 +101,10 @@ function ProfileAvatar({ name, image, className }: { name: string; image?: strin
   return <Avatar className={cn('size-9', className)}>{source && <AvatarImage src={source} alt={name} referrerPolicy="no-referrer" className="object-cover" />}<AvatarFallback className="bg-primary/20 font-semibold text-primary">{initials}</AvatarFallback></Avatar>;
 }
 
-export default function SocialShell({ account, onLogout, onAccountUpdate, invitedCommunityId, deferOnboarding = false }: {
+export default function SocialShell({ account, onLogout, onAccountDeleted, onAccountUpdate, invitedCommunityId, deferOnboarding = false }: {
   account: SignedInAccount;
   onLogout: () => Promise<void>;
+  onAccountDeleted: () => Promise<void>;
   onAccountUpdate: (next: SignedInAccount) => void;
   invitedCommunityId?: string | null;
   deferOnboarding?: boolean;
@@ -773,7 +774,15 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                     <LogOut className="size-4"/>{t('Sair da conta')}
                   </Button>
                 </div>
-                <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })} />
+                <ProfileEditor initial={account.profile} onSaved={profile => onAccountUpdate({ ...account, profile })}
+                  onDeleted={async()=>{
+                    updatePwaAppBadge(0);
+                    resetDmInboxSession();
+                    clearChatMediaCache();
+                    clearCommunityMessageCache(account.user.id);
+                    await clearDmAccount(account.user.id).catch(()=>{});
+                    await onAccountDeleted();
+                  }}/>
                 <nav className="mx-auto mb-10 flex max-w-3xl flex-wrap justify-center gap-4 border-t border-border px-4 pt-5 text-xs text-primary sm:gap-6"
                   aria-label={locale==='pt-BR'?'Documentos legais':'Legal documents'}>
                   <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline">{locale==='pt-BR'?'Termos de Uso':'Terms of Use'}</a>
