@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.4] — 06/11/2026
+
+- **Notificações no desktop:** o convite diário para ativar o push passa a ter prioridade sobre a oferta de instalar o PWA. Antes, o aviso de instalação surgia primeiro e cancelava o lembrete de notificações.
+- **Sem sobreposição:** a instalação poderá ser oferecida em outro acesso, sem interromper a permissão de notificações já apresentada durante a visita.
+- **Permissão do navegador:** o pedido nativo continua acontecendo somente após clicar em **Ativar notificações**. Em caso de bloqueio, o usuário recebe orientação para alterar a permissão nas configurações do site.
+- **Mobile preservado:** no iOS o push continua exigindo PWA instalado; avisos móveis e limite de uma oferta por conta/dia não mudam. A ativação manual permanece em Notificações → Ajustes.
+
 ## [0.1.0-beta.3] — 06/11/2026
 
 - **Outlook OAuth restaurado:** a conexão de novas contas Outlook.com, Hotmail e Microsoft 365 volta a ser aceita por Microsoft Entra e Graph, com PKCE, estado de uso único, renovação de tokens e armazenamento criptografado. Contas já conectadas permanecem preservadas.

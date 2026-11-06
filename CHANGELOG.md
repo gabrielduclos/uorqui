@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.4] — 2026-11-06
+
+- **Desktop notifications:** the daily push opt-in prompt has priority over the PWA installation offer in desktop browsers. Before this change, the install banner appeared earlier and cancelled the push reminder.
+- **No overlapping requests:** the desktop install prompt may appear in a later visit, not immediately after the user has been offered notifications in the current session.
+- **Browser permissions:** the native notification permission request is still triggered only by clicking **Enable notifications**; users with denied permissions see guidance instead of repeated native permission dialogs.
+- **Mobile behavior preserved:** iOS still requires the Home Screen PWA for Web Push; mobile install and notification prompts retain their previous scheduling and per-account, per-day limits. The manual device control remains under Notifications → Settings.
+
 ## [0.1.0-beta.3] — 2026-11-06
 
 - **Outlook OAuth restored:** new Outlook.com, Hotmail and Microsoft 365 mailbox connections can use Microsoft Entra and Graph again with PKCE, one-use state, refreshed credentials and encrypted token storage. Existing connections are preserved.

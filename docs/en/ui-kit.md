@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.3
+# Uorqui UI Kit · Design System v0.1.0-beta.4
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -7,6 +7,9 @@
 - **Invites:** explicit join confirmation only after authentication, never blocking signup.
 
 ## Principles
+
+- **Desktop permission prompts:** the daily push opt-in offer takes priority over optional PWA installation; never stack both prompts, and request native permission only after a click. Preserve mobile-specific installation rules.
+
 
 - Email configuration provides Gmail OAuth, Outlook OAuth and manual IMAP/SMTP in one scrollable modal. OAuth options reflect per-provider configuration; the Outlook action remains disabled until Microsoft Entra credentials are present in Render.
 
@@ -76,4 +79,4 @@ Before merging, check **mobile/desktop × Dark/Light × PT/EN**, keyboard focus,
 
 ## Version and maintenance
 
-This document captures **`v0.1.0-beta.3`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
+This document captures **`v0.1.0-beta.4`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).

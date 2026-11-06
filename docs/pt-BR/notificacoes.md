@@ -6,6 +6,14 @@ Os eventos registrados são: curtidas e comentários em publicações, novos seg
 
 Ao tocar em um evento de publicação, abre-se o post no feed. Os demais eventos levam ao perfil do autor. O histórico e o estado de leitura ficam no PostgreSQL, e a interface é atualizada por eventos autenticados e uma consulta periódica como contingência.
 
+## Oferta de notificações no desktop
+
+Nos navegadores desktop (janela de pelo menos 768 px, exceto iOS), a oferta diária **Ativar notificações** aparece antes do banner opcional de instalação do PWA quando o push é compatível, mas ainda não está ativo. O banner de instalação não pode mais cancelar a oferta de notificações; se o pedido de push foi exibido durante a visita, a instalação só pode ser sugerida em outro acesso.
+
+A oferta continua limitada a **uma vez por dia por conta e navegador**, usando armazenamento local. A janela de permissão do sistema somente é aberta após o clique em **Ativar notificações**. Caso o navegador já tenha bloqueado o acesso, exibimos orientação para alterar a permissão do site, sem ficar pedindo autorização repetidamente.
+
+Em mobile, a regra anterior permanece: no iPhone/iPad é necessário instalar o PWA para receber push. Em todos os dispositivos, há um controle manual em **Notificações → Ajustes → Permissão neste dispositivo**.
+
 ## Push
 
 O Web Push usa as mesmas chaves VAPID, inscrições por conta e service worker já utilizados nas mensagens. Somente inscrições com permissão concedida podem receber avisos. No iOS, é necessário instalar o PWA na tela inicial e conceder permissão. O push é uma entrega de melhor esforço; a atividade permanece na central se o push falhar.

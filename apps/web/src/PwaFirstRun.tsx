@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {Bell,Download,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
@@ -16,6 +16,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
   const [installVisible,setInstallVisible]=useState(false);
   const [askPush,setAskPush]=useState(false);
   const [busy,setBusy]=useState(false);
+  const pushOfferedThisVisit=useRef(false);
   useEffect(()=>subscribePwaInstall(setInstallEvent),[]);
   useEffect(()=>{
     const installed=()=>setInstallVisible(false);
@@ -24,6 +25,16 @@ export function PwaFirstRun({accountId}:{accountId:string}){
   },[]);
   useEffect(()=>{
     if(!accountId||installedPwa()){setInstallVisible(false);return;}
+    const desktop=!iosBrowser()&&window.matchMedia('(min-width: 768px)').matches;
+    let pushAskedToday=false;
+    try{pushAskedToday=localStorage.getItem('uorqui:social:push-ask:'+accountId)===today();}catch{}
+    // Desktop browsers support push without installing the PWA. Offer push first,
+    // then offer installation on a later visit (never stack prompts together).
+    // Previously the installation prompt preempted and cancelled the push offer.
+    if(pushOfferedThisVisit.current||
+      (desktop&&push.supported&&push.status!=='ready'&&!pushAskedToday)){
+      setInstallVisible(false);return;
+    }
     const id='uorqui:social:install-invite:'+accountId;
     try{if(localStorage.getItem(id)===today())return;}catch{}
     const timer=window.setTimeout(()=>{
@@ -31,7 +42,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
       setInstallVisible(true);
     },1300);
     return()=>window.clearTimeout(timer);
-  },[accountId]);
+  },[accountId,push.status,push.supported]);
   useEffect(()=>{
     if(!accountId||installVisible||!push.supported||push.status==='ready'||push.status==='busy'||push.status==='checking'){
       setAskPush(false);return;
@@ -44,6 +55,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
         if(localStorage.getItem(id)===today())return;
         localStorage.setItem(id,today());
       }catch{}
+      pushOfferedThisVisit.current=true;
       setAskPush(true);
     },1600);
     return()=>window.clearTimeout(timer);
