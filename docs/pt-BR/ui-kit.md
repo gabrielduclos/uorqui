@@ -272,3 +272,7 @@ O componente `FriendsPanel` segue o mesmo padrão visual do mensageiro: cabeçal
 ## Superfície global e contraste das respostas
 
 Mensagens, E-mail e Contatos compartilham a superfície `data-uorqui-workspace-surface`, cujo fundo e texto são definidos **apenas** pelas variáveis globais `--card` e `--card-foreground` em `styles.css`; a página de Contatos não define uma cor de fundo própria. A prévia de uma resposta nos balões e no compositor usa as classes globais `uorqui-reply-quote` e `uorqui-reply-draft`: contraste reforçado, inclusive no tema escuro, por combinações de `--primary`, `--primary-foreground`, `--foreground`, `--secondary` e `--ring`. O tema claro utiliza a mesma regra sem cores isoladas no componente.
+
+## Confirmação de exclusão de canal em Moderação
+
+Na aba **Moderação > Canais**, avisos, erros e orientações de confirmação ficam em uma área fixa abaixo das abas, fora da lista rolável. Quando o administrador solicita **Excluir canal**, o próprio cartão do canal exibe o aviso contextual e as ações **Cancelar** e **Confirmar exclusão**, sem deslocar o usuário para o topo. O aviso respeita o tema global, permanece visível ao rolar em mobile/desktop e só a segunda ação realiza a exclusão.
