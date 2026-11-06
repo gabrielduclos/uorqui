@@ -272,3 +272,9 @@ O componente `FriendsPanel` segue o mesmo padrão visual do mensageiro: cabeçal
 ## Superfície global e contraste das respostas
 
 Mensagens, E-mail e Contatos compartilham a superfície `data-uorqui-workspace-surface`, cujo fundo e texto são definidos **apenas** pelas variáveis globais `--card` e `--card-foreground` em `styles.css`; a página de Contatos não define uma cor de fundo própria. A prévia de uma resposta nos balões e no compositor usa as classes globais `uorqui-reply-quote` e `uorqui-reply-draft`: contraste reforçado, inclusive no tema escuro, por combinações de `--primary`, `--primary-foreground`, `--foreground`, `--secondary` e `--ring`. O tema claro utiliza a mesma regra sem cores isoladas no componente.
+
+## Mídias e arquivos de mensagens diretas
+
+O cabeçalho da conversa individual e seu menu de três pontos oferecem **Mídias e arquivos**. A galeria tem as abas **Mídias** (imagens, vídeos e áudios) e **Arquivos** (PDF, TXT, ZIP etc.), utiliza paginação do histórico completo (48 itens por página), prévias das imagens privadas pelo cache temporário/autorizado do chat e opção de abrir, baixar ou saltar para a mensagem original. Um anexo só pode ser exibido se o usuário participa da conversa e não apagou aquele trecho do histórico; mensagens canceladas nunca são listadas.
+
+Pelo menu da própria mensagem o participante pode **Fixar mensagem**. Há **uma única mensagem fixada por conversa**, compartilhada por seus dois participantes, com prévia acima do histórico e atalho para ir à mensagem no chat, mesmo se ela estiver fora da página carregada. Qualquer participante pode substituir ou desafixar. A fixação fica registrada no PostgreSQL (migração `0038_dm_pins_gallery.sql`) e se atualiza por eventos de DM. Se a conversa foi apagada somente para um usuário, ele não enxerga o pin antigo, mas não altera o histórico do outro.

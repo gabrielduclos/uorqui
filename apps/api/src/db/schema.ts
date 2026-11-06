@@ -150,6 +150,16 @@ export const directMessages = pgTable('direct_messages', {
   )),
 ]);
 
+/** Single shared pin per direct conversation. Every change is validated by the API. */
+export const directMessagePins = pgTable('direct_message_pins', {
+  conversationId: uuid('conversation_id').primaryKey().references(() => directConversations.id, { onDelete: 'cascade' }),
+  messageId: uuid('message_id').notNull().references(() => directMessages.id, { onDelete: 'cascade' }),
+  pinnedBy: uuid('pinned_by').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  pinnedAt: timestamp('pinned_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index('direct_message_pins_message_idx').on(table.messageId),
+]);
+
 export const directMessageReactions = pgTable('direct_message_reactions', {
   messageId: uuid('message_id').notNull().references(() => directMessages.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),

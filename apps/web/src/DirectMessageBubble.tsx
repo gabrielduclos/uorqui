@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Download, FileText, Flag, Forward, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Flag, Forward, MapPin, Newspaper, MoreHorizontal, Pencil, Pin, PinOff, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { Spinner } from '@/components/ui/spinner';
 import { MessageText } from './MessageText';
@@ -56,7 +56,7 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onReport, onRetry, onOpenMedia, disabled, highlighted }: {
+export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onReport, onRetry, onOpenMedia, onPin, onUnpin, pinnedMessageId, pinBusy, disabled, highlighted }: {
   message: DirectChatMessage; mine: boolean; locale: string; myId: string; peerName: string;
   onReply: (message: DirectChatMessage) => void;
   onJumpToReply: (messageId: string) => void;
@@ -67,6 +67,10 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   onReact: (message: DirectChatMessage, emoji: string | null) => void;
   onRetry: (message: DirectChatMessage) => void;
   onOpenMedia?: (messageId:string)=>void;
+  onPin: (message:DirectChatMessage)=>void;
+  onUnpin: ()=>void;
+  pinnedMessageId?:string|null;
+  pinBusy?:boolean;
   disabled?: boolean;
   highlighted?: boolean;
 }) {
@@ -306,6 +310,12 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         </div>}
         <button role="menuitem" type="button" onClick={() => { setOpen(false); onReply(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Reply className="size-4"/>{pt ? 'Responder' : 'Reply'}</button>
+        <button role="menuitem" type="button" disabled={pinBusy}
+          onClick={()=>{setOpen(false);if(pinnedMessageId===message.id)onUnpin();else onPin(message);}}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent disabled:opacity-50">
+          {pinnedMessageId===message.id?<PinOff className="size-4"/>:<Pin className="size-4"/>}
+          {pinnedMessageId===message.id?(pt?'Desafixar mensagem':'Unpin message'):(pt?'Fixar mensagem':'Pin message')}
+        </button>
         {!!message.body && <button role="menuitem" type="button" onClick={() => void copyText()}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Copy className="size-4"/>{pt ? 'Copiar' : 'Copy'}</button>}
         <button role="menuitem" type="button" onClick={() => { setOpen(false); onForward(message); }}

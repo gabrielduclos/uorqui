@@ -814,3 +814,66 @@ test('web push: opt-in authorization and signed device receipt without a read re
     assert.equal(result.rows[0].n,0);
   }finally{await client.end();}
 });
+
+test('DM pins and full media/files history are shared but private and respect local clearing',async()=>{
+  const sender=visitor(),recipient=visitor(),outsider=visitor();
+  await createUser(sender,'Gallery Sender','dm_gallery_sender');
+  await createUser(recipient,'Gallery Recipient','dm_gallery_receiver');
+  await createUser(outsider,'Gallery Outsider','dm_gallery_outsider');
+  const created=await sender('/api/v1/dm/conversations','POST',{handle:'dm_gallery_receiver'});
+  assert.equal(created.status,200,JSON.stringify(created.data));
+  const basePath='/api/v1/dm/conversations/'+created.data.id;
+  const plain=await sender(basePath+'/messages','POST',{body:'Do not lose this note',clientId:crypto.randomUUID()});
+  assert.equal(plain.status,201,JSON.stringify(plain.data));
+  const media={id:crypto.randomUUID(),name:'holiday-photo.jpg',type:'image/jpeg',size:14612};
+  const file={id:crypto.randomUUID(),name:'receipt.pdf',type:'application/pdf',size:19504};
+  async function attach(person,attachment,body){
+    const clientId=crypto.randomUUID();
+    return person(basePath+'/messages','POST',{body,clientId,attachment},true,{
+      'x-uorqui-attachment-proof':proof(created.data.id,clientId,attachment)
+    });
+  }
+  const photo=await attach(sender,media,'Shared image');
+  const pdf=await attach(recipient,file,'Shared file');
+  assert.equal(photo.status,201,JSON.stringify(photo.data));
+  assert.equal(pdf.status,201,JSON.stringify(pdf.data));
+  assert.equal((await outsider(basePath+'/attachments?kind=media')).status,404);
+  assert.equal((await outsider(basePath+'/pin')).status,404);
+  assert.equal((await outsider(basePath+'/pin','PUT',{messageId:plain.data.message.id})).status,404);
+  assert.equal((await outsider(basePath+'/pin','DELETE')).status,404);
+  assert.equal((await visitor()(basePath+'/attachments?kind=files')).status,401);
+  const mediaPage=await recipient(basePath+'/attachments?kind=media');
+  const filePage=await sender(basePath+'/attachments?kind=files');
+  assert.equal(mediaPage.status,200,JSON.stringify(mediaPage.data));
+  assert.equal(filePage.status,200,JSON.stringify(filePage.data));
+  assert.equal(mediaPage.data.items.length,1);
+  assert.equal(mediaPage.data.items[0].id,photo.data.message.id);
+  assert.equal(mediaPage.data.items[0].attachment.name,media.name);
+  assert.equal(mediaPage.data.nextCursor,null);
+  assert.equal(filePage.data.items.length,1);
+  assert.equal(filePage.data.items[0].attachment.name,file.name);
+  assert.equal(filePage.data.nextCursor,null);
+  assert.equal((await sender(basePath+'/attachments?kind=media&before='+crypto.randomUUID())).status,404);
+  assert.equal((await sender(basePath+'/pin')).data.pinned,null);
+  assert.equal((await sender(basePath+'/pin','PUT',{messageId:plain.data.message.id},false)).status,403);
+  const pinned=await sender(basePath+'/pin','PUT',{messageId:plain.data.message.id});
+  assert.equal(pinned.status,200,JSON.stringify(pinned.data));
+  assert.equal(pinned.data.pinned.id,plain.data.message.id);
+  assert.equal((await recipient(basePath+'/pin')).data.pinned.id,plain.data.message.id);
+  const replaced=await recipient(basePath+'/pin','PUT',{messageId:photo.data.message.id});
+  assert.equal(replaced.status,200,JSON.stringify(replaced.data));
+  assert.equal((await sender(basePath+'/pin')).data.pinned.id,photo.data.message.id);
+  assert.equal((await recipient(basePath+'/pin','DELETE',undefined,false)).status,403);
+  assert.equal((await recipient(basePath+'/pin','DELETE')).status,200);
+  assert.equal((await sender(basePath+'/pin')).data.pinned,null);
+  assert.equal((await sender(basePath+'/pin','PUT',{messageId:pdf.data.message.id})).status,200);
+  // Local removal hides old files and pins for the clearing user only.
+  assert.equal((await sender(basePath,'DELETE')).status,200);
+  assert.equal((await sender(basePath+'/attachments?kind=media')).data.items.length,0);
+  assert.equal((await sender(basePath+'/attachments?kind=files')).data.items.length,0);
+  assert.equal((await sender(basePath+'/pin')).data.pinned,null);
+  assert.equal((await recipient(basePath+'/pin')).data.pinned.id,pdf.data.message.id);
+  assert.equal((await recipient(basePath+'/attachments?kind=media')).data.items.length,1);
+  assert.equal((await recipient(basePath+'/attachments?kind=files')).data.items.length,1);
+});
+

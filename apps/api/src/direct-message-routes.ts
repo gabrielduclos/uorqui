@@ -240,6 +240,90 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       return reply.header('Cache-Control',noCache).send({messages:r.rows});
     }catch(e){request.log.error({err:e},'DM messages');return reply.code(503).send({error:'Unavailable'});}
   });
+  // Paginate the full authorized conversation history, not just the latest
+  // messages currently loaded in the client. Never expose deleted or cleared files.
+  app.get('/api/v1/dm/conversations/:id/attachments',{
+    schema:{params:pathParams,querystring:{type:'object',additionalProperties:false,
+      properties:{kind:{type:'string',enum:['media','files']},before:uuidParam}}}
+  },async(request,reply)=>{
+    try{
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const {kind='media',before}=request.query as {kind?:'media'|'files';before?:string};
+      let cursor:{created_at:Date;id:string}|undefined;
+      if(before){
+        const anchor=await getPool().query(
+          'SELECT created_at,id FROM direct_messages WHERE conversation_id=$1 AND id=$2 AND attachment_id IS NOT NULL',
+          [id,before]);
+        if(!anchor.rowCount)return reply.code(404).send({error:'Cursor unavailable'});
+        cursor=anchor.rows[0];
+      }
+      const isMedia="(attachment_type LIKE 'image/%' OR attachment_type LIKE 'video/%' OR attachment_type LIKE 'audio/%')";
+      const filter=kind==='files'?'NOT '+isMedia:isMedia;
+      const sql='SELECT '+messageColumns+' FROM direct_messages WHERE conversation_id=$1 AND attachment_id IS NOT NULL '+
+        "AND deleted_at IS NULL AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),'-infinity'::timestamptz) "+
+        'AND '+filter+
+        (cursor?' AND (created_at,id) < ($3::timestamptz,$4::uuid)':'')+
+        ' ORDER BY created_at DESC,id DESC LIMIT 49';
+      const r=await getPool().query(sql,cursor?[id,me,cursor.created_at,cursor.id]:[id,me]);
+      const items=r.rows.slice(0,48);
+      return reply.header('Cache-Control',noCache).send({
+        items,nextCursor:r.rows.length>48?(items.at(-1)?.id??null):null
+      });
+    }catch(e){request.log.error({err:e},'DM attachment gallery');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  // One shared pinned message per DM, visible to either participant. Soft-deleted
+  // or account-cleared messages are never disclosed to that account.
+  const pinnedMessageSql='SELECT dm.*,p.pinned_at AS "pinnedAt",p.pinned_by AS "pinnedBy" '+
+    'FROM direct_message_pins p JOIN LATERAL (SELECT '+messageColumns+
+    ' FROM direct_messages WHERE id=p.message_id AND conversation_id=p.conversation_id AND deleted_at IS NULL '+
+    "AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=p.conversation_id AND user_id=$2),'-infinity'::timestamptz)) dm ON true "+
+    'WHERE p.conversation_id=$1';
+  app.get('/api/v1/dm/conversations/:id/pin',{schema:{params:pathParams}},async(request,reply)=>{
+    try{
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const r=await getPool().query(pinnedMessageSql,[id,me]);
+      return reply.header('Cache-Control',noCache).send({pinned:r.rows[0]??null});
+    }catch(e){request.log.error({err:e},'DM pinned message');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.put('/api/v1/dm/conversations/:id/pin',{
+    schema:{params:pathParams,body:{type:'object',additionalProperties:false,required:['messageId'],properties:{messageId:uuidParam}}}
+  },async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      if(!await canMessage(id,me))return reply.code(403).send({error:'PRIVATE_PROFILE_FRIENDS_ONLY'});
+      const {messageId}=request.body as {messageId:string};
+      const r=await getPool().query(
+        'INSERT INTO direct_message_pins(conversation_id,message_id,pinned_by,pinned_at) '+
+        'SELECT $1,m.id,$3,now() FROM direct_messages m WHERE m.conversation_id=$1 AND m.id=$2 AND m.deleted_at IS NULL '+
+        "AND m.created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$3),'-infinity'::timestamptz) "+
+        'ON CONFLICT(conversation_id) DO UPDATE SET message_id=EXCLUDED.message_id,pinned_by=EXCLUDED.pinned_by,pinned_at=EXCLUDED.pinned_at RETURNING message_id',
+        [id,messageId,me]);
+      if(!r.rowCount)return reply.code(404).send({error:'Message unavailable'});
+      await publishDmConversationEvent(id,'update').catch(()=>{});
+      const pinned=await getPool().query(pinnedMessageSql,[id,me]);
+      return reply.header('Cache-Control',noCache).send({pinned:pinned.rows[0]??null});
+    }catch(e){request.log.error({err:e},'Pin DM message');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.delete('/api/v1/dm/conversations/:id/pin',{schema:{params:pathParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      await getPool().query('DELETE FROM direct_message_pins WHERE conversation_id=$1',[id]);
+      await publishDmConversationEvent(id,'update').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({pinned:null});
+    }catch(e){request.log.error({err:e},'Unpin DM message');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   // The Worker owns private R2 uploads. Its upload request is checked here
   // before bytes enter the bucket, and downloads are authorized per message.
   app.get('/api/v1/dm/conversations/:id/attachments/allowed',{schema:{params:pathParams}},async(request,reply)=>{

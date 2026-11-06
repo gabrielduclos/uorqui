@@ -213,3 +213,9 @@ The Contacts view follows the shared messenger styling: compact fixed header, se
 ## Shared workspace surface and readable replies
 
 Messages, Email and Contacts use `data-uorqui-workspace-surface`, which inherits its background and text colors from the **global** `--card` and `--card-foreground` tokens in `styles.css` instead of per-page colors. Embedded reply quotes and composer reply previews use globally themed `uorqui-reply-quote` and `uorqui-reply-draft` styles, mixing semantic `--primary`, `--primary-foreground`, `--foreground`, `--secondary` and `--ring` tokens to strengthen contrast in dark and light themes alike.
+
+## Direct message gallery and pinned messages
+
+The DM header and conversation menu expose **Media and files**, a paginated history browser with **Media** (photos, video, audio) and **Files** (PDF and other attachments). It fetches 48 authorized items per page beyond the loaded chat window; private thumbnails reuse the ephemeral DM media cache. Users can preview, download, or jump back to the original message. Canceled or locally cleared attachments are not exposed.
+
+A message context menu action **Pin message** stores one shared pinned message per conversation in PostgreSQL (migration `0038_dm_pins_gallery.sql`). Both participants see the pinned preview above the chat, can navigate to it even when it is outside the current loaded history, and can replace or unpin it. A locally cleared history hides its old pinned content only from the clearing user. DM events synchronize pin changes between devices.

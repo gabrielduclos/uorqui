@@ -1,13 +1,14 @@
 import { Spinner } from '@/components/ui/spinner';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
-import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, MessageCircle, MoreHorizontal, Images, Pin, PinOff, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { clearChatMediaCache, invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
+import { DirectConversationAttachments } from './DirectConversationAttachments';
 import { InternalShareDialog } from './InternalShareDialog';
 import { ContentReportDialog } from './ContentReportDialog';
 import { clearProfileImageCache } from './profileImageCache';
@@ -29,6 +30,7 @@ type Conversation = {
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
+type PinnedMessage = Message & {pinnedAt:string;pinnedBy:string};
 type PendingMessage = Message & { clientId: string; pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
 type ConfirmedInboxPreview = { pending: PendingMessage; serverCreatedAt: string | null };
 type PreviewConversation = Conversation & { optimisticStatus?: PendingMessage['pendingStatus'] };
@@ -144,6 +146,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [mediaViewerId,setMediaViewerId] = useState<string | null>(null);
+  const [galleryOpen,setGalleryOpen] = useState(false);
+  const [pinnedMessage,setPinnedMessage] = useState<PinnedMessage|null>(null);
+  const [pinBusy,setPinBusy] = useState(false);
   useEffect(()=>{setMediaViewerId(null);},[activeId]);
   const highlightTimer = useRef<number | null>(null);
   const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
@@ -173,6 +178,17 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const previousLastRef = useRef('');
   const handledHandle = useRef<string | null>(null);
   activeIdRef.current = activeId;
+  const loadPinnedMessage=useCallback(async(id:string)=>{
+    try{
+      const result=await api<{pinned:PinnedMessage|null}>('/api/v1/dm/conversations/'+encodeURIComponent(id)+'/pin');
+      if(activeIdRef.current===id)setPinnedMessage(result.pinned??null);
+    }catch{/* Pin API unavailable must not prevent the chat from loading. */}
+  },[]);
+  useEffect(()=>{
+    setPinnedMessage(null);
+    setGalleryOpen(false);
+    if(activeId)void loadPinnedMessage(activeId);
+  },[activeId,loadPinnedMessage]);
   mobileOpenedRef.current = mobileOpened;
   atBottomRef.current = atBottom;
 
@@ -267,6 +283,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 
   const openThread = useCallback((id: string) => {
     setConversationMenuOpen(false);setConversationConfirm(null);
+    setGalleryOpen(false);
     setActiveId(id);
     setMobileOpened(true);
     const cached = peekDmRoom(myId, id);
@@ -293,6 +310,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   },[initialConversationId,requestedOpenNonce,openThread]);
   const closeThread = useCallback(() => {
     setConversationMenuOpen(false);setConversationConfirm(null);
+    setGalleryOpen(false);setPinnedMessage(null);
     setActiveId(null);
     activeIdRef.current = null;
     setMobileOpened(false);
@@ -635,13 +653,14 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         void loadMessages(activeIdRef.current).catch(() => {});
     };
     const unsubscribe = subscribeDmStream(data => {
-      if (data.kind === 'ready') { onReady(); return; }
+      if (data.kind === 'ready') { onReady();if(activeIdRef.current)void loadPinnedMessage(activeIdRef.current);return; }
       if (data.kind === 'friendship-update') {
         clearProfileImageCache(); invalidateDmInbox();
         void loadThreads().catch(() => {}); return;
       }
       if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind)) return;
       const conversationId = data.conversationId;
+      if(data.kind==='update' && activeIdRef.current===conversationId)void loadPinnedMessage(conversationId);
       const isOpen = isConversationVisible(conversationId);
       // Project a new message at once rather than waiting for an entire HTTP page.
       if (data.kind === 'message' && data.message?.id && isOpen) {
@@ -687,7 +706,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     });
     window.addEventListener('uorqui:friends-updated', onReady);
     return () => { unsubscribe(); window.removeEventListener('uorqui:friends-updated', onReady); };
-  }, [loadThreads, loadMessages, isConversationVisible, myId, pt, locale]);
+  }, [loadThreads, loadMessages, loadPinnedMessage, isConversationVisible, myId, pt, locale]);
   // Delivery is not reading: receiving an inbox update never clears the unread badge.
   const receiving = useRef(new Set<string>());
   const receivedIds = useRef(new Set<string>());
@@ -897,6 +916,29 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setReplySource(message);
     textareaRef.current?.focus({ preventScroll: true });
   }
+  async function pinMessage(message:Message){
+    if(pinBusy||!activeId||message.pendingStatus)return;
+    const id=activeId;
+    setPinBusy(true);setChatError('');
+    try{
+      const result=await api<{pinned:PinnedMessage}>('/api/v1/dm/conversations/'+encodeURIComponent(id)+'/pin',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({messageId:message.id})
+      });
+      if(activeIdRef.current===id)setPinnedMessage(result.pinned);
+    }catch{setChatError(pt?'Não foi possível fixar esta mensagem.':'Could not pin this message.');}
+    finally{setPinBusy(false);}
+  }
+  async function unpinMessage(){
+    if(pinBusy||!activeId)return;
+    const id=activeId;
+    setPinBusy(true);setChatError('');
+    try{
+      await api('/api/v1/dm/conversations/'+encodeURIComponent(id)+'/pin',{method:'DELETE'});
+      if(activeIdRef.current===id)setPinnedMessage(null);
+    }catch{setChatError(pt?'Não foi possível desafixar a mensagem.':'Could not unpin the message.');}
+    finally{setPinBusy(false);}
+  }
   async function archiveConversation(thread:Conversation){
     if(conversationBusy)return;
     setConversationBusy(true);setConversationMenuOpen(false);setChatError('');
@@ -1084,6 +1126,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <span className="min-w-0"><span className="block truncate text-sm font-semibold">{active.peerName}</span>
               <span className="block truncate text-xs text-muted-foreground">@{active.peerHandle}</span></span>
           </a>
+          <Button type="button" variant="ghost" size="icon" className="shrink-0"
+            aria-label={pt?'Ver mídias e arquivos da conversa':'View conversation media and files'}
+            onClick={()=>setGalleryOpen(true)}><Images className="size-5"/></Button>
           <div className="relative shrink-0" ref={conversationMenuRef}>
             <Button type="button" variant="ghost" size="icon" aria-haspopup="menu"
               aria-expanded={conversationMenuOpen} aria-label={pt?'Opções da conversa':'Conversation options'}
@@ -1092,6 +1137,10 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             </Button>
             {conversationMenuOpen&&<div role="menu" aria-label={pt?'Opções da conversa':'Conversation options'}
               className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
+              <button type="button" role="menuitem" onClick={()=>{setConversationMenuOpen(false);setGalleryOpen(true);}}
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm hover:bg-accent">
+                <Images className="size-4"/>{pt?'Mídias e arquivos':'Media and files'}
+              </button>
               <button type="button" role="menuitem" onClick={()=>void archiveConversation(active)}
                 className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm hover:bg-accent">
                 {active.archived?<ArchiveRestore className="size-4"/>:<Archive className="size-4"/>}
@@ -1112,6 +1161,21 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           </div>
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {pinnedMessage&&<div data-uorqui-pinned-message
+            className="flex shrink-0 items-center gap-2 border-b border-border bg-secondary/60 px-3 py-2 sm:px-5">
+            <Pin className="size-4 shrink-0 text-foreground" aria-hidden="true"/>
+            <button type="button" onClick={()=>void jumpToRepliedMessage(pinnedMessage.id)}
+              className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-ring">
+              <span className="block text-[11px] font-semibold text-foreground">{pt?'Mensagem fixada':'Pinned message'}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {pinnedMessage.body||attachmentLabel(pinnedMessage.attachment?.type,locale)}
+              </span>
+            </button>
+            <Button type="button" variant="ghost" size="icon" disabled={pinBusy}
+              aria-label={pt?'Desafixar mensagem':'Unpin message'} onClick={()=>void unpinMessage()}>
+              {pinBusy?<Spinner className="size-4"/>:<PinOff className="size-4"/>}
+            </Button>
+          </div>}
           <div ref={scrollBox} onScroll={onMessagesScroll}
             data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             <div ref={messageContentRef} key={activeId} className="uorqui-kit-content-enter flex w-full min-w-0 flex-col gap-2.5">
@@ -1125,6 +1189,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                     onOpenMedia={setMediaViewerId}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
+                    onPin={message=>void pinMessage(message)} onUnpin={()=>void unpinMessage()}
+                    pinnedMessageId={pinnedMessage?.id} pinBusy={pinBusy}
                     disabled={!active.canMessage || actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
                     onForward={message => { setActionNotice(''); setForwardTarget(message); }}
                      onReport={message=>setReportMessageId(message.id)}
@@ -1228,6 +1294,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 
     <ContentReportDialog target={reportMessageId?{targetKind:'direct_message',targetId:reportMessageId}:null}
       locale={locale} onClose={()=>setReportMessageId(null)}/>
+    {activeId&&active&&galleryOpen&&<DirectConversationAttachments key={activeId}
+      conversationId={activeId} peerName={active.peerName} locale={locale}
+      onClose={()=>setGalleryOpen(false)} onJump={id=>void jumpToRepliedMessage(id)}/>}
     <ChatMediaViewer items={mediaItems} selectedId={mediaViewerId} onSelect={setMediaViewerId}
       onClose={()=>setMediaViewerId(null)} onSendEdited={file=>sendAttachment(file,'')}
       onShareMedia={message=>{setMediaViewerId(null);setForwardTarget(message);setActionNotice('');}}
