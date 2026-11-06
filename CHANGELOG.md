@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.6] — 2026-11-06
+
+- **Discord-style reply presentation:** both community channels and private chats now show a single compact reference line with a curved connector, the original author's name and a truncated message preview, rather than an inset quote card.
+- **Position:** channel reply references appear above the message author's heading/content, while private chats keep the reference immediately before their message body. Both remain linked to the existing jump-to-original behavior.
+- **Composer:** shared one-line reply preview above the input, with a cancel action, responsive truncation, and sensible previews for GIFs, deleted messages and attachments.
+- **Styling:** one shared React component and global semantic CSS styles for Light/Dark contrast, keyboard focus and mobile widths. Legacy text-quote replies remain readable. No API or database migrations.
+
 ## [0.1.0-beta.5] — 2026-11-06
 
 - **Notification center tabs:** the same responsive page now has **All, Messages, Mentions, Email, Invites, Contacts** tabs with keyboard navigation and tab-specific unread counters. All collects the categories without hiding the original activity history.
