@@ -247,6 +247,7 @@ export const communityMessages = pgTable('community_messages', {
   authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   clientId: uuid('client_id').notNull().unique(),
   body: text('body').notNull(),
+  replyToId: uuid('reply_to_id').references((): AnyPgColumn => communityMessages.id, { onDelete: 'set null' }),
   attachmentId: uuid('attachment_id'),
   attachmentName: varchar('attachment_name', { length: 180 }),
   attachmentType: varchar('attachment_type', { length: 100 }),
