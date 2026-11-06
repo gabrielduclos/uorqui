@@ -138,6 +138,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [messagesLoadFailed,setMessagesLoadFailed]=useState(false);
   const [detailLoading,setDetailLoading]=useState(false);
   const [draft,setDraft]=useState('');
+  const [mentionMembers,setMentionMembers]=useState<{handle:string;displayName:string;avatarUrl:string|null}[]>([]);
+  const [mentionAt,setMentionAt]=useState<{start:number;end:number;query:string}|null>(null);
+  const [mentionIndex,setMentionIndex]=useState(0);
   const [mediaPicker,setMediaPicker]=useState<'emoji'|'gif'|null>(null);
   const [reactionPickerId,setReactionPickerId]=useState<string|null>(null);
   const [reactionBusyId,setReactionBusyId]=useState<string|null>(null);
@@ -185,6 +188,35 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const descriptionNeedsMore=channelDescription.length>180||channelDescription.split('\n').length>3;
   useEffect(()=>setDescriptionExpanded(false),[channelId,selectedId]);
   const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
+  const mentionOptions=mentionAt?mentionMembers.filter(member=>
+    (member.handle+' '+member.displayName).toLowerCase().includes(mentionAt.query.toLowerCase())).slice(0,7):[];
+  function mentionChanged(value:string){
+    setDraft(value);
+    const caret=composerRef.current?.selectionStart??value.length;
+    const preceding=value.slice(0,caret);
+    const found=/(?:^|[\\s(])@([a-zA-Z0-9_]{0,31})$/.exec(preceding);
+    setMentionAt(found?{start:caret-found[1].length-1,end:caret,query:found[1]}:null);
+    setMentionIndex(0);
+  }
+  function insertMention(handle:string){
+    if(!mentionAt)return;
+    const next=draft.slice(0,mentionAt.start)+'@'+handle+' '+draft.slice(mentionAt.end);
+    const caret=mentionAt.start+handle.length+2;
+    setDraft(next);setMentionAt(null);setMentionIndex(0);
+    requestAnimationFrame(()=>{
+      composerRef.current?.focus();
+      composerRef.current?.setSelectionRange(caret,caret);
+    });
+  }
+  useEffect(()=>{
+    if(!selectedId||!channelId||channelLocked){setMentionMembers([]);return;}
+    let live=true;
+    void api<{members:{handle:string;displayName:string;avatarUrl:string|null}[]}>(
+      '/api/v1/communities/'+selectedId+'/invitable-members'
+    ).then(data=>{if(live)setMentionMembers(data.members);})
+      .catch(()=>{if(live)setMentionMembers([]);});
+    return ()=>{live=false;};
+  },[selectedId,channelId,channelLocked]);
   const community=detail?.community??null;
   // A revoked grant removes a closed room from the authorized channel list.
   // Unmount its WebRTC component rather than keeping a stale floating call.
@@ -413,7 +445,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         'Could not send. Check the username and direct-message permissions.');
     }finally{setChannelInviteSending(false);}
   }
-  const closeChannel=()=>{setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{setMentionAt(null);setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||!activeChannel||!community?.myRole||
@@ -1165,7 +1197,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                     <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" decoding="async" referrerPolicy="no-referrer"
                       className="mt-2 block h-auto max-h-64 max-w-full rounded-xl object-contain"/>:
                     <div className="mt-1 min-w-0">
-                      <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''}/></p>
+                      <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''} mentions/></p>
                       {!!message.body&&<LinkPreview text={message.body} locale={locale}/>}
                     </div>}
                 {message.attachment&&!message.deletedAt&&selectedId&&channelId&&
@@ -1210,13 +1242,34 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               onClose={()=>setMediaPicker(null)}
               onEmoji={symbol=>{setDraft(old=>old+symbol);setMediaPicker(null);}}
               onGif={url=>{queueText(url);setMediaPicker(null);}}/>}
-            <LiveMessageComposer key={selectedId+'/'+channelId} value={draft} onChange={setDraft}
+            {!!mentionOptions.length&&<div role="listbox" aria-label={pt?'Mencionar membro':'Mention member'}
+              className="absolute bottom-full left-3 z-40 mb-2 max-h-[min(42dvh,290px)] w-[min(350px,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-xl">
+              {mentionOptions.map((member,index)=><button type="button" key={member.handle}
+                role="option" aria-selected={mentionIndex===index}
+                onPointerDown={event=>event.preventDefault()}
+                onClick={()=>insertMention(member.handle)}
+                className={cn('flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left hover:bg-secondary',
+                  mentionIndex===index&&'bg-secondary')}>
+                <UserAvatar name={member.displayName} image={member.avatarUrl} size="sm"/>
+                <span className="min-w-0 flex-1 truncate text-xs"><strong>@{member.handle}</strong>
+                  <span className="ml-2 text-muted-foreground">{member.displayName}</span></span>
+              </button>)}
+            </div>}
+            <div onKeyDownCapture={event=>{
+              if(!mentionAt||!mentionOptions.length)return;
+              if(event.key==='ArrowDown'){event.preventDefault();event.stopPropagation();setMentionIndex(old=>(old+1)%mentionOptions.length);}
+              if(event.key==='ArrowUp'){event.preventDefault();event.stopPropagation();setMentionIndex(old=>(old-1+mentionOptions.length)%mentionOptions.length);}
+              if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();event.stopPropagation();insertMention(mentionOptions[mentionIndex]?.handle??mentionOptions[0].handle);}
+              if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setMentionAt(null);}
+            }}>
+            <LiveMessageComposer key={selectedId+'/'+channelId} value={draft} onChange={mentionChanged}
               onSubmit={send} onAttach={sendAttachment}
               onShareLocation={(latitude,longitude,caption)=>{
                 enqueueMessage((caption?caption+'\n':'')+'https://www.google.com/maps?q='+latitude+','+longitude);
               }}
               sending={false} locale={locale} textareaRef={composerRef}
               onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'}/>
+            </div>
           </div>
         </div>}
         </div>
