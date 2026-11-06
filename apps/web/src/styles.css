@@ -331,24 +331,28 @@ body.uorqui-app-active {
   border-left:2px solid currentColor;
   border-top-left-radius:.6rem;
   opacity:.55;
-  transform:translateY(.16rem);
+  transform:none;
+  margin-top:.3rem;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference__author {
-  flex:0 1 auto;
+  display:block;
   min-width:0;
-  max-width:42%;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  max-width:100%;
+  overflow-wrap:anywhere;
   font-weight:700;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference__excerpt {
-  flex:1 1 auto;
+  display:-webkit-box;
   min-width:0;
+  max-width:100%;
   overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-  opacity:.78;
+  overflow-wrap:anywhere;
+  white-space:normal;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:4;
+  line-clamp:4;
+  line-height:1.35rem;
+  opacity:.86;
 }
 [data-uorqui-app-shell] button.uorqui-reply-reference:hover .uorqui-reply-reference__excerpt {
   text-decoration:underline;
