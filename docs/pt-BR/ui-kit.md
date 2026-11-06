@@ -8,6 +8,9 @@
 
 ## Princípios
 
+- **Convites de permissão no desktop:** a oferta diária de push tem prioridade sobre a instalação opcional do PWA; nunca sobrepor os dois avisos, e abrir a permissão nativa apenas mediante clique. No mobile, manter as regras próprias de instalação.
+
+
 - O modal de e-mail reúne Gmail OAuth, Outlook OAuth e IMAP/SMTP manual, com rolagem independente. A disponibilidade do botão Outlook depende das credenciais Microsoft Entra no Render; isso não bloqueia os outros provedores.
 
 - Interface compacta, orientada a comunicação, com referências de organização visual a painéis de trabalho; **não** restringir o Uorqui ao público empresarial.
