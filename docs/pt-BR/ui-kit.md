@@ -2,6 +2,10 @@
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
+- **Chats dos canais:** respostas com mensagem original, `@usuário` com sugestões, GIFs e lista de reagentes por emoji; não mostrar membros sem permissão.
+- **Privacidade:** cartão de exclusão definitiva no Perfil com duas confirmações (senha e `EXCLUIR`), estados de erro e aviso de mídia em limpeza posterior.
+- **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro.
+
 ## Princípios
 
 - Interface compacta, orientada a comunicação, com referências de organização visual a painéis de trabalho; **não** restringir o Uorqui ao público empresarial.
