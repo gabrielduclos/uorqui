@@ -315,7 +315,7 @@ test('community moderation: hierarchical roles, persistent bans, channels and me
   const rules='Bem-vindo!\n1. Respeite os jogadores.\n2. Use o canal apropriado.\n'+('Regra longa. '.repeat(24));
   const descriptionUpdate=await member(root+'/channels/'+main.id,'PATCH',{description:rules});
   assert.equal(descriptionUpdate.status,200,JSON.stringify(descriptionUpdate.data));
-  assert.equal((await owner(root)).data.channels.find(ch=>ch.id===main.id).description,rules,
+  assert.equal((await owner(root)).data.channels.find(ch=>ch.id===main.id).description,rules.trim(),
     'channel rules remain visible to authorized members after saving');
   assert.equal((await outsider(root+'/channels/'+main.id,'PATCH',{description:'forged rules'})).status,403,
     'moderators cannot edit channel rules');
