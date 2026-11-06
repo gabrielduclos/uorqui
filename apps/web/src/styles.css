@@ -402,6 +402,16 @@ body.uorqui-app-active {
   border-radius:3px;
 }
 [data-uorqui-app-shell] .uorqui-reply-draft__preview {
+  display:-webkit-box;
+  max-width:100%;
+  margin-top:.15rem;
+  overflow:hidden;
+  overflow-wrap:anywhere;
+  white-space:normal;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  line-clamp:3;
+  line-height:1.35rem;
   color:var(--muted-foreground);
 }
 /* iOS WebKit zooms the viewport when focusing controls smaller than 16px.
