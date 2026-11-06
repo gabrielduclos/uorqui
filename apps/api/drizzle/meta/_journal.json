@@ -281,6 +281,13 @@
       "when": 1793990001000,
       "tag": "0039_channel_descriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793990002000,
+      "tag": "0040_community_message_replies",
+      "breakpoints": true
     }
   ]
 }
