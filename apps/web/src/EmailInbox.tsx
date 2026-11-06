@@ -81,6 +81,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [expandedImage,setExpandedImage]=useState<{src:string;alt:string}|null>(null);
+  const mailFrameCleanup=useRef<(()=>void)|null>(null);
+  useEffect(()=>()=>{mailFrameCleanup.current?.();mailFrameCleanup.current=null;},[]);
   const [replyError, setReplyError] = useState('');
   // Remote HTTPS images are loaded by default, as requested. The iframe still
   // blocks scripts, forms, access to Uorqui cookies and parent DOM.
@@ -350,8 +352,9 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
     '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: https:; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
-    '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:min(100%,180px)!important;max-height:120px!important;width:auto!important;height:auto!important;object-fit:contain!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
+    '<style>html,body{margin:0;padding:0;overflow-wrap:anywhere}img{max-width:100%!important;height:auto!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
@@ -553,8 +556,60 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
               onLoad={event=>{
                 // The frame is never allowed to execute scripts or forms. The parent
                 // attaches an image-only click handler to its inert document.
-                const doc=event.currentTarget.contentDocument;
+                const frame=event.currentTarget;
+                const doc=frame.contentDocument;
                 if(!doc)return;
+                // Many promotional emails use fixed 600-800px tables. Fit the
+                // whole HTML layout into the frame, not each individual photo.
+                mailFrameCleanup.current?.();
+                const fitFrame=()=>{
+                  if(!frame.isConnected||!doc.body||!doc.documentElement)return;
+                  const root=doc.documentElement,body=doc.body;
+                  const availableWidth=Math.max(1,frame.clientWidth-2);
+                  // Re-measure without the previous scale or height: otherwise
+                  // the old iframe dimensions distort our next calculation.
+                  frame.style.height='1px';
+                  body.style.transform='none';
+                  body.style.width='';
+                  const layoutWidth=Math.max(body.scrollWidth,root.scrollWidth,availableWidth);
+                  if(layoutWidth>availableWidth)body.style.width=layoutWidth+'px';
+                  const contentWidth=Math.max(layoutWidth,body.scrollWidth);
+                  const scale=Math.min(1,availableWidth/contentWidth);
+                  body.style.transformOrigin='top left';
+                  body.style.transform=scale<0.999?'scale('+scale+')':'none';
+                  root.style.setProperty('overflow-x','hidden','important');
+                  const naturalHeight=Math.max(body.scrollHeight,body.offsetHeight);
+                  // Let the email reader do the vertical scrolling. Cap only
+                  // extraordinarily tall HTML to avoid excessive browser surfaces.
+                  frame.style.height=Math.max(120,Math.min(24000,Math.ceil(naturalHeight*scale+12)))+'px';
+                };
+                let fitRaf=0;
+                const scheduleFit=()=>{
+                  if(fitRaf)window.cancelAnimationFrame(fitRaf);
+                  fitRaf=window.requestAnimationFrame(()=>{fitRaf=0;fitFrame();});
+                };
+                const images=Array.from(doc.images);
+                for(const image of images){
+                  image.addEventListener('load',scheduleFit);
+                  image.addEventListener('error',scheduleFit);
+                }
+                let lastFrameWidth=frame.clientWidth;
+                const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{
+                  const width=frame.clientWidth;
+                  if(width!==lastFrameWidth){lastFrameWidth=width;scheduleFit();}
+                }):null;
+                observer?.observe(frame.parentElement??frame);
+                window.addEventListener('resize',scheduleFit);
+                mailFrameCleanup.current=()=>{
+                  observer?.disconnect();
+                  window.removeEventListener('resize',scheduleFit);
+                  if(fitRaf)window.cancelAnimationFrame(fitRaf);
+                  for(const image of images){
+                    image.removeEventListener('load',scheduleFit);
+                    image.removeEventListener('error',scheduleFit);
+                  }
+                };
+                fitFrame();
                 const openImage=(target:EventTarget|null)=>{
                   // iframe elements belong to another window realm, so the
                   // parent's HTMLImageElement instanceof checks are unreliable.
@@ -568,14 +623,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                   return true;
                 };
                 doc.querySelectorAll('img').forEach(img=>{
-                  // Email templates often use inline !important widths that win
-                  // against our iframe CSS. Keep every inline image thumbnail-sized
-                  // even in those cases, without changing the actual image URL.
-                  img.style.setProperty('max-width','min(100%, 180px)','important');
-                  img.style.setProperty('max-height','120px','important');
-                  img.style.setProperty('width','auto','important');
-                  img.style.setProperty('height','auto','important');
-                  img.style.setProperty('object-fit','contain','important');
+                  // Keep the image at its intended size inside the scaled email.
                   img.style.setProperty('cursor','zoom-in','important');
                   img.setAttribute('tabindex','0');
                   img.setAttribute('role','button');
@@ -588,7 +636,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                   }
                 });
               }}
-              className="h-[min(70vh,760px)] w-full rounded-md border border-border bg-white" />
+              className="min-h-[120px] w-full rounded-md border border-border bg-white" style={{height:240}} />
           </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
           {replying && !loadingBody && <form onSubmit={event => void submitReply(event)} className="mt-6 space-y-3 border-t border-border pt-5">
             <p className="text-xs font-medium">{pt ? 'Responder a ' : 'Reply to '}{selected.from}</p>
