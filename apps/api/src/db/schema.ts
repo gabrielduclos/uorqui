@@ -432,6 +432,29 @@ export const activityNotifications = pgTable('activity_notifications', {
   check('activity_notifications_kind',sql`${t.kind} IN ('friend_request','friend_accepted','community_join_request','meeting_join_request')`),
 ]);
 
+/** Durable, user-scoped notification records for newly received email and @mentions. */
+export const notificationInboxEvents = pgTable('notification_inbox_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  recipientId: uuid('recipient_id').notNull().references(() => users.id, {onDelete:'cascade'}),
+  actorId: uuid('actor_id').references(() => users.id, {onDelete:'cascade'}),
+  kind: varchar('kind',{length:16}).notNull(),
+  eventKey: text('event_key').notNull().unique(),
+  communityMessageId: uuid('community_message_id').references(() => communityMessages.id, {onDelete:'cascade'}),
+  mailAccountId: uuid('mail_account_id').references(() => mailConnections.id, {onDelete:'cascade'}),
+  mailMessageId: varchar('mail_message_id',{length:1024}),
+  sender: varchar('sender',{length:180}),
+  subject: varchar('subject',{length:240}),
+  createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+  readAt: timestamp('read_at',{withTimezone:true}),
+},t=>[
+  index('notification_inbox_events_recipient_date_idx').on(t.recipientId,t.createdAt),
+  index('notification_inbox_events_recipient_unread_idx').on(t.recipientId,t.readAt),
+  check('notification_inbox_events_kind_chk',sql`(
+    (${t.kind}='mention' AND ${t.actorId} IS NOT NULL AND ${t.communityMessageId} IS NOT NULL AND ${t.mailAccountId} IS NULL AND ${t.mailMessageId} IS NULL)
+    OR (${t.kind}='email' AND ${t.mailAccountId} IS NOT NULL AND ${t.mailMessageId} IS NOT NULL AND ${t.actorId} IS NULL AND ${t.communityMessageId} IS NULL)
+  )`),
+]);
+
 /** Browser Web Push subscriptions are account-bound and never reused for the next sign-in. */
 export const pushSubscriptions = pgTable('push_subscriptions', {
   id: uuid('id').defaultRandom().primaryKey(),

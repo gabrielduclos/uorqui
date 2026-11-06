@@ -198,6 +198,35 @@ test('persistent communities: discover, create, join, channels and real messages
   assert.equal((await owner(path.replace('/messages','/read'),'POST',{lastMessageId:nextMessage.data.id})).status,200);
   assert.equal((await owner(unread)).data.channels[text.id]??0,0);
 
+  // Mention alerts persist even when Web Push is disabled; the endpoint
+  // must return only alerts addressed to the current community member.
+  const mention=await member(path,'POST',{clientId:crypto.randomUUID(),body:'Olá @comm_owner, confira este aviso'});
+  assert.equal(mention.status,201,JSON.stringify(mention.data));
+  const mentionsPath='/api/v1/notifications/inbox-events';
+  let mentions;
+  for(let attempt=0;attempt<30;attempt++){
+    const inbox=await owner(mentionsPath);
+    assert.equal(inbox.status,200,JSON.stringify(inbox.data));
+    mentions=inbox.data.events.filter(event=>event.kind==='mention'&&event.communityMessageId===mention.data.id);
+    if(mentions.length)break;
+    await delay(75);
+  }
+  assert.equal(mentions.length,1,'an @mention creates exactly one durable notification');
+  assert.equal(mentions[0].actorHandle,'comm_member');
+  assert.equal(mentions[0].channelId,text.id);
+  assert.equal(mentions[0].communityId,id);
+  assert.equal(mentions[0].readAt,null);
+  assert.equal((await anonymous(mentionsPath)).status,401);
+  assert.equal((await outsider(mentionsPath)).data.events.some(event=>event.communityMessageId===mention.data.id),false);
+  assert.equal((await member(mentionsPath)).data.events.some(event=>event.communityMessageId===mention.data.id),false);
+  const eventPath=mentionsPath+'/'+mentions[0].id;
+  assert.equal((await member(eventPath+'/read','PATCH')).status,404,'another user cannot mark a mention read');
+  assert.equal((await owner(eventPath+'/read','PATCH',undefined,false)).status,403);
+  assert.equal((await owner(eventPath+'/read','PATCH')).status,200);
+  assert.ok((await owner(mentionsPath)).data.events.find(event=>event.id===mentions[0].id).readAt);
+  assert.equal((await member(eventPath,'DELETE')).status,404,'another user cannot delete a mention');
+  assert.equal((await owner(eventPath,'DELETE')).status,200);
+  assert.equal((await owner(mentionsPath)).data.events.some(event=>event.id===mentions[0].id),false);
   assert.equal((await outsider(path,'POST',{clientId:crypto.randomUUID(),body:'outsider'})).status,403);
   assert.equal((await member(path,'POST',{clientId:crypto.randomUUID(),body:' '})).status,400);
   assert.equal((await owner('/api/v1/communities/'+id+'/membership','DELETE')).status,409);

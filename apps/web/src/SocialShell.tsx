@@ -756,6 +756,10 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
               items={activity.items} unread={activity.unread} loading={activity.loading}
               channelAlerts={communityUnread.locations}
               communityInvites={communityUnread.invites}
+              unreadMailCount={unreadMailCount} onOpenEmailInbox={()=>move('email')}
+              onOpenDm={conversationId=>openPushDestination('/?conversation='+encodeURIComponent(conversationId))}
+              onOpenMail={(mailAccountId,mailMessageId)=>openPushDestination(
+                '/?mailAccount='+encodeURIComponent(mailAccountId)+'&mailMessage='+encodeURIComponent(mailMessageId))}
               onOpenChannel={(communityId,channelId)=>openDiscoveryCommunity(communityId,channelId)}
               onOpenCommunity={communityId=>openDiscoveryCommunity(communityId)}
               error={activity.error} onRefresh={()=>void activity.refresh()}

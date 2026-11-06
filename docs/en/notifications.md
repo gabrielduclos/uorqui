@@ -14,6 +14,19 @@ The daily prompt is **per account and browser** using local storage. The operati
 
 The permanent device-level action remains available at **Notifications → Settings → Permission on this device**.
 
+## Notification center tabs (`0.1.0-beta.5`)
+
+The notification center is organized into **All**, **Messages**, **Mentions**, **Email**, **Invites**, and **Contacts**. The desktop and mobile experience share the same responsive, horizontally scrollable tabs; Arrow keys, Home and End navigate tabs.
+
+- **All** combines the available categories and preserves the existing persistent friend/community request history.
+- **Messages** links to unread 1:1 conversations and community channels; opening a conversation/channel handles its message read status.
+- **Mentions** contains durable server-verified `@handles` in community messages; older messages are not retroactively backfilled. Visibility is rechecked for member/channel access, bans and blocks.
+- **Email** shows newly arrived messages detected after monitoring initializes and their account-specific links. The total unread shortcut opens the full mailbox. No provider API call is required to open the notification list.
+- **Invites** groups pending community invitations with requests to join communities/meetings; **Contacts** contains friendship requests and acceptances.
+- Activity records and durable email/mention items can be dismissed; the All action marks their records as read without bulk-reading private chats or emails.
+
+Additive migration `0042_notification_inbox_events.sql` must be applied before the new API/Worker deployment. Events are scoped to the signed-in recipient; mail account disconnect, deleted messages/channels and deleted users cascade their respective records. Browser push remains independent of inbox history.
+
 ## Web Push
 
 Activity notifications reuse the existing VAPID keys, account-bound subscriptions and service worker already used for messaging. Delivery requires the user's permission. On iOS, users must install the PWA to their Home Screen and grant permission. Push is best-effort; the activity remains in the inbox if delivery fails.

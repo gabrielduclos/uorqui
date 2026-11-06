@@ -295,6 +295,13 @@
       "when": 1793990003000,
       "tag": "0041_account_media_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794000001000,
+      "tag": "0042_notification_inbox_events",
+      "breakpoints": true
     }
   ]
 }

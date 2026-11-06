@@ -4,6 +4,7 @@ import { after, before, test } from 'node:test';
 import Fastify from 'fastify';
 import { getPool, closeDatabase } from '../dist/db/client.js';
 import { registerMailRoutes } from '../dist/mail-routes.js';
+import { registerNotificationRoutes } from '../dist/notification-routes.js';
 import { openMailSecret, sealMailSecret } from '../dist/mail-providers.js';
 
 // This suite must only run against disposable local/CI PostgreSQL.
@@ -17,7 +18,9 @@ for (const provider of ['GOOGLE', 'MICROSOFT']) {
   process.env['MAIL_' + provider + '_CLIENT_SECRET'] = 'test-only-client-secret';
 }
 const app = Fastify();
-registerMailRoutes(app, async request => request.headers['x-test-user'] ? { user: { id: request.headers['x-test-user'] } } : null);
+const readTestSession=async request=>request.headers['x-test-user'] ? { user: { id: request.headers['x-test-user'] } } : null;
+registerMailRoutes(app,readTestSession);
+registerNotificationRoutes(app,readTestSession);
 const alice = randomUUID(), bob = randomUUID();
 const realFetch = globalThis.fetch;
 let calls = [];
@@ -65,6 +68,11 @@ after(async () => {
 });
 function request(path, { user = alice, method = 'GET', body, origin = 'http://localhost:5173' } = {}) {
   return app.inject({ method, url: '/api/v1/mail/' + path, headers: { ...(user ? { 'x-test-user': user } : {}), ...(origin ? { origin } : {}) }, ...(body ? { payload: body } : {}) });
+}
+function notificationRequest(path,{user=alice,method='GET',body,origin='http://localhost:5173'}={}){
+  return app.inject({method,url:'/api/v1/notifications'+path,
+    headers:{...(user?{'x-test-user':user}:{}),...(origin?{origin}:{})},
+    ...(body?{payload:body}:{})});
 }
 async function start(provider = 'gmail') {
   const result = await request('oauth/' + provider, { method: 'POST', body: {} });
@@ -325,4 +333,40 @@ test('Outlook uses Graph and constrained pagination, and supports disconnect', a
   assert.ok(calls.some(call => call.url.pathname === '/v1.0/me/sendMail'));
   assert.equal((await request('accounts/' + account.id, { method: 'DELETE' })).statusCode, 200);
   assert.equal((await request('accounts/' + account.id + '/messages')).statusCode, 404);
+});
+
+test('email notification inbox supports ownership, read, delete and mailbox cascade',async()=>{
+  const account=await connect('gmail');
+  const messageId='new-mail-2026';
+  const inserted=await getPool().query(
+    "INSERT INTO notification_inbox_events(recipient_id,kind,event_key,mail_account_id,mail_message_id,sender,subject) "+
+    "VALUES($1,'email',$2,$3,$4,$5,$6) RETURNING id",
+    [alice,'email:'+account.id+':'+messageId,account.id,messageId,'Sender <sender@example.test>','Hello from Gmail']);
+  const id=inserted.rows[0].id;
+  assert.equal((await notificationRequest('/inbox-events',{user:null})).statusCode,401);
+  const owner=await notificationRequest('/inbox-events');
+  assert.equal(owner.statusCode,200,owner.body);
+  const event=owner.json().events.find(item=>item.id===id);
+  assert.equal(event.mailAccountId,account.id);
+  assert.equal(event.mailMessageId,messageId);
+  assert.equal(event.mailAddress,account.email);
+  assert.equal(event.subject,'Hello from Gmail');
+  assert.equal((await notificationRequest('/inbox-events',{user:bob})).json().events.some(item=>item.id===id),false);
+  assert.equal((await notificationRequest('/inbox-events/'+id+'/read',{user:bob,method:'PATCH'})).statusCode,404);
+  assert.equal((await notificationRequest('/inbox-events/'+id+'/read',{method:'PATCH',origin:'https://untrusted.example'})).statusCode,403);
+  assert.equal((await notificationRequest('/inbox-events/'+id+'/read',{method:'PATCH'})).statusCode,200);
+  assert.ok((await notificationRequest('/inbox-events')).json().events.find(item=>item.id===id).readAt);
+  assert.equal((await notificationRequest('/inbox-events/'+id,{user:bob,method:'DELETE'})).statusCode,404);
+  assert.equal((await notificationRequest('/inbox-events/read-all',{method:'POST'})).statusCode,200);
+  assert.equal((await notificationRequest('/inbox-events/'+id,{method:'DELETE'})).statusCode,200);
+  assert.equal((await notificationRequest('/inbox-events')).json().events.some(item=>item.id===id),false);
+
+  const second=await getPool().query(
+    "INSERT INTO notification_inbox_events(recipient_id,kind,event_key,mail_account_id,mail_message_id) "+
+    "VALUES($1,'email',$2,$3,$4) RETURNING id",
+    [alice,'email:'+account.id+':another',account.id,'another']);
+  const cascade=second.rows[0].id;
+  assert.equal((await request('accounts/'+account.id,{method:'DELETE'})).statusCode,200);
+  assert.equal((await notificationRequest('/inbox-events')).json().events.some(item=>item.id===cascade),false,
+    'disconnecting the mailbox removes its notification data');
 });

@@ -2,7 +2,7 @@ import { validRequestOrigin as originValid } from './request-origin.js';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import {createCipheriv,createECDH,createHmac,createPrivateKey,randomBytes,sign,timingSafeEqual} from 'node:crypto';
 import {getPool} from './db/client.js';
-import {publishDmConversationEvent} from './dm-events.js';
+import {publishDmConversationEvent,publishDmUserEvent} from './dm-events.js';
 
 type SessionReader=(request:FastifyRequest)=>Promise<{user:{id:string}}|null>;
 type Subscription={endpoint:string;p256dh:string;auth:string;user_id:string};
@@ -201,13 +201,37 @@ export async function pushCommunityInvite(recipientId:string,communityId:string,
   }));
 }
 export async function pushCommunityMessage(messageId:string){
-  if(!enabled())return;
   const row=await getPool().query(
     'SELECT m.id,m.body,m.channel_id,ch.community_id,c.name,ch.name AS channel_name,m.author_id,(ch.password_hash IS NOT NULL) AS protected,ch.access_mode AS access_mode '+
     'FROM community_messages m JOIN community_channels ch ON ch.id=m.channel_id '+
     'JOIN communities c ON c.id=ch.community_id WHERE m.id=$1 AND m.deleted_at IS NULL',[messageId]);
   if(!row.rowCount)return;
   const m=row.rows[0];
+  // Store only explicit valid @handles, even when Web Push is disabled.
+  // Membership, channel permissions, bans and blocks are verified on the server.
+  const handles=[...new Set(Array.from(String(m.body??'').matchAll(
+    /(^|[^A-Za-z0-9_])@([a-z][a-z0-9_]{2,31})(?![A-Za-z0-9_])/gi),
+    match=>match[2].toLowerCase()))].slice(0,15);
+  if(handles.length){
+    try{
+      const mentioned=await getPool().query<{recipient_id:string}>(
+        'INSERT INTO notification_inbox_events(recipient_id,actor_id,kind,event_key,community_message_id) '+
+        "SELECT u.id,$1,'mention','mention:'||$2::uuid::text||':'||u.id::text,$2::uuid "+
+        'FROM users u JOIN community_members cm ON cm.user_id=u.id AND cm.community_id=$3 '+
+        'LEFT JOIN community_channel_password_access gate ON gate.channel_id=$4 AND gate.user_id=u.id '+
+        'LEFT JOIN community_channel_member_access access ON access.channel_id=$4 AND access.user_id=u.id '+
+        'WHERE u.handle=ANY($5::text[]) AND u.id<>$1 '+
+        "AND (NOT $6::boolean OR cm.role IN ('owner','admin') OR gate.user_id IS NOT NULL) "+
+        "AND ($7::text='open' OR cm.role IN ('owner','admin') OR access.user_id IS NOT NULL) "+
+        'AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=$3 AND b.user_id=u.id) '+
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=u.id AND b.blocked_id=$1) '+
+        'OR (b.blocker_id=$1 AND b.blocked_id=u.id)) '+
+        'ON CONFLICT(event_key) DO NOTHING RETURNING recipient_id',
+        [m.author_id,m.id,m.community_id,m.channel_id,handles,m.protected,m.access_mode]);
+      await Promise.allSettled(mentioned.rows.map(user=>publishDmUserEvent(user.recipient_id,'notification')));
+    }catch{/* Mention inbox retry is independent of normal channel delivery. */}
+  }
+  if(!enabled())return;
   // Limit per message to avoid unbounded network calls on large public communities.
   const recipients=await getPool().query<Subscription & {handle:string}>(
     'SELECT DISTINCT ON (s.endpoint) s.endpoint,s.p256dh,s.auth,s.user_id,u.handle '+
