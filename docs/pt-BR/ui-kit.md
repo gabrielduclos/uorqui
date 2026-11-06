@@ -8,6 +8,9 @@
 
 ## Princípios
 
+- **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes.
+
+
 - **Convites de permissão no desktop:** a oferta diária de push tem prioridade sobre a instalação opcional do PWA; nunca sobrepor os dois avisos, e abrir a permissão nativa apenas mediante clique. No mobile, manter as regras próprias de instalação.
 
 
