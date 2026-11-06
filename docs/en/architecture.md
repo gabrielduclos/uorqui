@@ -92,3 +92,15 @@ Versioned schema migrations; automated linting, unit/integration/E2E tests; CI o
 ## Isolation from the old product
 
 The earlier enterprise messenger remains separate. `uorqui.app` is now attached to the new Worker `main`, but the prior enterprise messenger remains separate. Never reuse its databases, credentials, push keys or Worker bindings.
+
+## Versioned consolidation baseline — v0.1.0-beta.1 (2026-11-06)
+
+This beta baseline consolidates **without replacing** the deployed architecture: React/Vite/Tailwind in Cloudflare Workers Static Assets, Node 22/Fastify on Render, Neon PostgreSQL with Drizzle, R2 private media, Better Auth, SSE and WebRTC. No routes, database schema, permissions, worker routing or database credentials change in this code consolidation.
+
+**CSS:** `apps/web/src/styles.css` has one global Dark/Light token pair; `apps/web/src/ui-kit/sprintrix.css` provides deliberate scoped workspace overrides. Every page uses the semantic tokens; read the [current UI Kit](ui-kit.md) rather than historical mockup color tables.
+
+**Frontend:** `apps/web/src/lib/apiClient.ts` is the centralized same-origin, no-store JSON transport for direct messages, communities and moderation. Domain-specific error contracts are preserved. Message, channel, media and realtime caches remain independent and access-aware, not merged into a global cache.
+
+**Backend:** `apps/api/src/request-origin.ts` centralizes the same exact-match `WEB_ORIGIN` guard used by protected DM/community/voice/moderation/push writes. Session lookup, membership checks, rate limits, Drizzle migrations and Fastify endpoint behavior remain in their existing domains.
+
+**Release policy:** [v0.1.0-beta.1](../../CHANGELOG.md) is the baseline. Every later PR, including docs-only changes, must increment the three npm workspace manifest versions and both changelogs. The [version workflow and tag policy](versions.md) manage release tracking; require the version check in branch protection to prevent bypasses.
