@@ -1268,7 +1268,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </button>
           </div>}
           <div className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-            {replySource&&<ReplyComposerPreview author={'@'+replySource.authorHandle}
+            {replySource&&<ReplyComposerPreview key={replySource.id} author={'@'+replySource.authorHandle}
               body={replySource.body||replySource.attachment?.name} locale={locale}
               onCancel={()=>setReplySource(null)}/>}
             {mediaPicker==='gif'&&<CommunityMediaPicker key="gif" tab="gif" pt={pt}
