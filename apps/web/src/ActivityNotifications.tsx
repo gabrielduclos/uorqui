@@ -85,6 +85,11 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
   const showContacts=allTab||activeTab==='contacts';
   const visibleActivities=[...(showInvites?inviteActivities:[]),...(showContacts?contactActivities:[])]
     .sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt));
+  const hasContent=Boolean(
+    (showMessages&&(directUnread.length||channelAlerts.length))||
+    (showMentions&&mentions.length)||(showEmail&&(emails.length||unreadMailCount))||
+    (showInvites&&communityInvites.length)||visibleActivities.length);
+
   const tabs:{key:Tab;pt:string;en:string;icon:typeof Bell;count:number}[]=[
     {key:'all',pt:'Todas',en:'All',icon:Bell,count:0},
     {key:'messages',pt:'Mensagens',en:'Messages',icon:MessageCircle,count:directUnread.length+channelAlerts.length},
@@ -181,15 +186,44 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
         <Button type="button" size="sm" variant="outline" onClick={()=>setSettingsOpen(true)} className="gap-2">
           <Settings className="size-4"/>{pt?'Ajustes':'Settings'}</Button>
       </div>
-      {unread>0&&<div className="mb-4 flex justify-end"><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void all()}>
-        {busy?<Spinner className="size-4"/>:<CheckCheck className="size-4"/>}
-        {pt?'Marcar todas como lidas':'Mark all read'}</Button></div>}
+      <div role="tablist" aria-label={pt?'Filtrar notificações por tipo':'Filter notifications by type'}
+        className="-mx-4 mb-5 flex gap-1.5 overflow-x-auto border-b border-border px-4 pb-3 [scrollbar-width:thin] sm:mx-0 sm:px-0"
+        onKeyDown={event=>{
+          const current=tabs.findIndex(tab=>tab.key===activeTab);
+          let nextIndex:number;
+          if(event.key==='ArrowRight')nextIndex=(current+1)%tabs.length;
+          else if(event.key==='ArrowLeft')nextIndex=(current-1+tabs.length)%tabs.length;
+          else if(event.key==='Home')nextIndex=0;
+          else if(event.key==='End')nextIndex=tabs.length-1;
+          else return;
+          event.preventDefault();
+          setActiveTab(tabs[nextIndex].key);
+          event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus();
+        }}>
+        {tabs.map(tab=>{
+          const Icon=tab.icon,selected=activeTab===tab.key;
+          return <button key={tab.key} type="button" role="tab" aria-selected={selected}
+            tabIndex={selected?0:-1} onClick={()=>setActiveTab(tab.key)}
+            className={'inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring '+
+              (selected?'border-primary bg-primary/10 text-foreground':'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground')}>
+            <Icon aria-hidden="true" className="size-4"/>
+            {pt?tab.pt:tab.en}
+            {tab.count>0&&<span className={'rounded-full px-1.5 py-0.5 text-[11px] tabular-nums '+
+              (selected?'bg-primary text-primary-foreground':'bg-secondary text-foreground')}>
+              {tab.count>99?'99+':tab.count}</span>}
+          </button>;
+        })}
+      </div>
+      {allTab&&(unread>0||inboxEvents.some(event=>!event.readAt))&&
+        <div className="mb-4 flex justify-end"><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void all()}>
+          {busy?<Spinner className="size-4"/>:<CheckCheck className="size-4"/>}
+          {pt?'Marcar atividades como lidas':'Mark activity as read'}</Button></div>}
       {actionError&&<p role="alert" className="mb-3 text-sm text-destructive">
         {pt?'Não foi possível atualizar as notificações.':'Could not update notifications.'}</p>}
       {error&&<div className="mb-4 rounded-xl border border-border p-3 text-sm">
         {pt?'Não foi possível carregar as notificações.':'Could not load notifications.'}
         <Button variant="ghost" size="sm" onClick={onRefresh}>{pt?'Tentar novamente':'Retry'}</Button></div>}
-      {communityInvites.length>0&&<section aria-label={pt?'Convites para comunidades':'Community invitations'} className="mb-5 space-y-2">
+      {showInvites&&communityInvites.length>0&&<section aria-label={pt?'Convites para comunidades':'Community invitations'} className="mb-5 space-y-2">
         <h3 className="text-sm font-semibold">{pt?'Convites para comunidades':'Community invitations'}</h3>
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           {communityInvites.map(invite=><button type="button" key={invite.communityId}
@@ -203,7 +237,7 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
           </button>)}
         </div>
       </section>}
-      {channelAlerts.length>0&&<section aria-label={pt?'Canais com mensagens não lidas':'Channels with unread messages'}
+      {showMessages&&channelAlerts.length>0&&<section aria-label={pt?'Canais com mensagens não lidas':'Channels with unread messages'}
         className="mb-5 space-y-2">
         <h3 className="text-sm font-semibold">{pt?'Mensagens das comunidades e canais':'Community and channel messages'}</h3>
         <p className="text-xs text-muted-foreground">{pt?
@@ -230,10 +264,89 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
           })}
         </div>
       </section>}
-      {loading&&!items.length?<WorkspaceContentLoading label={pt?'Carregando notificações':'Loading notifications'} rows={4} className="py-4"/>:
-      !items.length&&!error&&!channelAlerts.length&&!communityInvites.length?<div className="flex flex-col items-center gap-2 rounded-xl border border-border p-8 text-center text-muted-foreground">
-        <Bell className="size-9"/><p className="text-sm">{pt?'Ainda não há notificações.':'No notifications yet.'}</p></div>:
-      <div className="space-y-1">{items.map(item=>{
+      {showMessages&&directUnread.length>0&&<section aria-label={pt?'Mensagens privadas não lidas':'Unread private messages'}
+        className="mb-5 space-y-2">
+        <h3 className="text-sm font-semibold">{pt?'Mensagens privadas':'Private messages'}</h3>
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {directUnread.map(chat=><button key={chat.id} type="button" onClick={()=>onOpenDm(chat.id)}
+            className="flex min-h-14 w-full min-w-0 items-center gap-3 border-b border-border/70 px-3 py-2.5 text-left last:border-0 hover:bg-secondary/70">
+            <UserAvatar name={chat.peerName} image={chat.peerAvatarUrl} size="sm"/>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-sm">{chat.peerName}</strong>
+              <span className="block truncate text-xs text-muted-foreground">{chat.lastBody||'@'+chat.peerHandle}</span>
+            </span>
+            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+              {chat.unreadCount>99?'99+':chat.unreadCount}</span>
+          </button>)}
+        </div>
+      </section>}
+      {showMentions&&mentions.length>0&&<section aria-label={pt?'Menções a você':'Mentions of you'}
+        className="mb-5 space-y-2">
+        <h3 className="text-sm font-semibold">{pt?'Menções a você':'Mentions of you'}</h3>
+        <div className="space-y-1">{mentions.map(event=><div key={event.id}
+          className={'flex min-h-16 items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors hover:bg-secondary/70 '+
+            (event.readAt?'border-border':'border-primary/25 bg-primary/5')}>
+          <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            onClick={()=>{
+              void eventRead(event.id);
+              if(event.communityId&&event.channelId)onOpenChannel(event.communityId,event.channelId);
+            }}>
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary">
+              <AtSign className="size-4"/></span>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-sm">@{event.actorHandle||'usuario'}</strong>
+              <span className="block truncate text-xs text-muted-foreground">
+                {pt?'Mencionou você em ':'Mentioned you in '}#{event.channelName} · {event.communityName}
+              </span>
+              <span className="text-[11px] text-muted-foreground">{new Intl.DateTimeFormat(locale,
+                {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(event.createdAt))}</span>
+            </span>{!event.readAt&&<span className="size-2 shrink-0 rounded-full bg-primary"/>}
+          </button>
+          <button type="button" aria-label={pt?'Excluir menção':'Dismiss mention'} disabled={!!deletingId}
+            onClick={()=>void eventDelete(event.id)}
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+            {deletingId===event.id?<Spinner className="size-4"/>:<X className="size-4"/>}</button>
+        </div>)}</div>
+      </section>}
+      {showEmail&&(emails.length>0||unreadMailCount>0)&&<section aria-label={pt?'Notificações de e-mail':'Email notifications'}
+        className="mb-5 space-y-2">
+        <h3 className="text-sm font-semibold">{pt?'E-mails':'Email'}</h3>
+        {unreadMailCount>0&&<button type="button" onClick={onOpenEmailInbox}
+          className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left hover:bg-secondary/70">
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary"><Mail className="size-4"/></span>
+          <span className="min-w-0 flex-1 text-sm font-medium">{pt?
+            unreadMailCount+' e-mail'+(unreadMailCount===1?'':'s')+' não lido'+(unreadMailCount===1?'':'s')+' nas contas conectadas':
+            unreadMailCount+' unread email'+(unreadMailCount===1?'':'s')+' in linked mailboxes'}</span>
+        </button>}
+        <div className="space-y-1">{emails.map(event=><div key={event.id}
+          className={'flex min-h-16 items-center gap-2 rounded-xl border px-3 py-2.5 hover:bg-secondary/70 '+
+            (event.readAt?'border-border':'border-primary/25 bg-primary/5')}>
+          <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            onClick={()=>{
+              void eventRead(event.id);
+              if(event.mailAccountId&&event.mailMessageId)onOpenMail(event.mailAccountId,event.mailMessageId);
+            }}>
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary"><Mail className="size-4"/></span>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-sm">{event.subject|| (pt?'(Sem assunto)':'(No subject)')}</strong>
+              <span className="block truncate text-xs text-muted-foreground">
+                {event.sender||event.mailAddress||''}{event.mailAddress?' · '+event.mailAddress:''}
+              </span>
+              <span className="text-[11px] text-muted-foreground">{new Intl.DateTimeFormat(locale,
+                {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(event.createdAt))}</span>
+            </span>{!event.readAt&&<span className="size-2 shrink-0 rounded-full bg-primary"/>}
+          </button>
+          <button type="button" aria-label={pt?'Excluir aviso de e-mail':'Dismiss email notification'} disabled={!!deletingId}
+            onClick={()=>void eventDelete(event.id)}
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+            {deletingId===event.id?<Spinner className="size-4"/>:<X className="size-4"/>}</button>
+        </div>)}</div>
+      </section>}
+      {visibleActivities.length>0&&<section aria-label={pt?'Atividades':'Activity'} className="mb-5 space-y-2">
+        <h3 className="text-sm font-semibold">{activeTab==='contacts'?(pt?'Contatos':'Contacts'):
+          activeTab==='invites'?(pt?'Solicitações e convites':'Requests and invitations'):
+          (pt?'Outras atividades':'Other activity')}</h3>
+        <div className="space-y-1">{visibleActivities.map(item=>{
         const Icon=icons[item.kind]??Bell;
         const isCommunityRequest=item.kind==='community_join_request'||item.kind==='meeting_join_request';
         const destination=isCommunityRequest&&item.communityName
@@ -280,7 +393,18 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
             {friendError===item.id&&<span role="alert" className="text-xs text-destructive">{pt?'Pedido indisponível':'Request unavailable'}</span>}
           </div>}
         </div>;
-      })}</div>}
+      })}</div>
+      </section>}
+      {(loading||inboxLoading||directLoading)&&!hasContent&&
+        <WorkspaceContentLoading label={pt?'Carregando notificações':'Loading notifications'} rows={3} className="py-4"/>}
+      {inboxError&&<p role="alert" className="mb-3 rounded-lg border border-border p-3 text-xs text-muted-foreground">
+        {pt?'Não foi possível carregar as menções e os avisos de e-mail.':'Could not load mentions and email notifications.'}</p>}
+      {!loading&&!inboxLoading&&!directLoading&&!hasContent&&!error&&!inboxError&&
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-border p-8 text-center text-muted-foreground">
+          <Bell className="size-9"/><p className="text-sm">{pt?
+            (activeTab==='all'?'Todas as notificações estão em dia.': 'Nenhuma notificação nesta categoria.'):
+            (activeTab==='all'?'You’re all caught up.':'No notifications in this category.')}</p>
+        </div>}
     </div>
   </div>;
 }
