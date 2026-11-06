@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useDragControls, useMotionValue, useTransform } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Copy, Download, FileText, Flag, Forward, MapPin, Newspaper, MoreHorizontal, Pencil, Play, Reply, Trash2, X } from 'lucide-react';
+import { Copy, Download, FileText, Flag, Forward, MapPin, Newspaper, MoreHorizontal, Pencil, Pin, PinOff, Play, Reply, Trash2, X } from 'lucide-react';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { Spinner } from '@/components/ui/spinner';
 import { MessageText } from './MessageText';
@@ -56,7 +56,7 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onReport, onRetry, onOpenMedia, disabled, highlighted }: {
+export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onReport, onRetry, onPin, isPinned, onOpenMedia, disabled, highlighted }: {
   message: DirectChatMessage; mine: boolean; locale: string; myId: string; peerName: string;
   onReply: (message: DirectChatMessage) => void;
   onJumpToReply: (messageId: string) => void;
@@ -66,6 +66,8 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   onReport: (message: DirectChatMessage) => void;
   onReact: (message: DirectChatMessage, emoji: string | null) => void;
   onRetry: (message: DirectChatMessage) => void;
+  onPin?: (message:DirectChatMessage)=>void;
+  isPinned?: boolean;
   onOpenMedia?: (messageId:string)=>void;
   disabled?: boolean;
   highlighted?: boolean;
@@ -310,6 +312,11 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Copy className="size-4"/>{pt ? 'Copiar' : 'Copy'}</button>}
         <button role="menuitem" type="button" onClick={() => { setOpen(false); onForward(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Forward className="size-4"/>{pt ? 'Compartilhar / Encaminhar' : 'Share / Forward'}</button>
+        {onPin&&<button role="menuitem" type="button" onClick={()=>{setOpen(false);onPin(message);}}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent">
+          {isPinned?<PinOff className="size-4"/>:<Pin className="size-4"/>}
+          {isPinned?(pt?'Desafixar mensagem':'Unpin message'):(pt?'Fixar mensagem':'Pin message')}
+        </button>}
         {mine && !asset && <button role="menuitem" type="button" onClick={() => { setOpen(false); onEdit(message); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><Pencil className="size-4"/>{pt ? 'Editar' : 'Edit'}</button>}
         {mine && !message.readAt && <button role="menuitem" type="button" onClick={() => { setOpen(false); onCancel(message); }}
