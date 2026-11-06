@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.5
+# Uorqui UI Kit · Design System v0.1.0-beta.6
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
@@ -7,6 +7,9 @@
 - **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro.
 
 ## Princípios
+
+- **Respostas em mensagens (estilo Discord):** referência compacta com conector, autor e trecho truncado **acima** da mensagem em conversas privadas e canais; clique leva à mensagem original. Editor exibe prévia discreta e cancelar. Sem cartão dentro de outro balão; cores vêm do CSS global para contraste Light/Dark. Inclui fallback para mensagem excluída, GIF e arquivos.
+
 
 - **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes.
 
@@ -82,4 +85,4 @@ Antes de mesclar: validar **mobile/desktop × Dark/Light × PT/EN**, navegação
 
 ## Versão e manutenção
 
-Este documento corresponde ao marco **`v0.1.0-beta.5`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).
+Este documento corresponde ao marco **`v0.1.0-beta.6`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).
