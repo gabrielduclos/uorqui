@@ -70,3 +70,7 @@ New mail accounts are set up in a **scrollable dialog**, both for first-time set
 ## External links in HTML email
 
 HTTP(S) links within an HTML email — including linked images and banners — open **in the external browser in a new tab/window** rather than inside the iframe or over Uorqui. The parent reader handles the actual user click, while the email iframe remains sandboxed (no scripts or forms). Unlinked images still open the enlarged viewer. Relative URLs without a trustworthy sender base and unsafe schemes such as `javascript:` and `data:` are blocked. External pages do not receive the Uorqui referrer (`noopener,noreferrer`).
+
+## Native external link navigation and full HTML rendering
+
+Absolute HTTP(S) links in HTML messages are normalized as native `target="_blank"` anchors with `rel="noopener noreferrer"`. The browser handles external navigation, rather than a parent-side `window.open` (unreliable in iOS PWAs). The iframe stays script-free, form-free and unable to navigate the top page, with only `allow-popups` and `allow-popups-to-escape-sandbox` added for external links. Relative and unsafe-scheme links have their `href` removed. Linked banners follow their link; unlinked images still open the zoom viewer. The skeleton remains until the document, fonts, images and two responsive layout measurement frames are ready. A 15-second failsafe prevents broken remote assets from freezing the reader; late images still resize the iframe.
