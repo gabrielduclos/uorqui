@@ -913,7 +913,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       replyTo:optimisticReplyReference(replySource),
     };
     setPendingMessages(prev => [...prev,pending]);
-    setDraft(''); setReplySource(null);
+    if(forcedBody===undefined)setDraft('');
+    setReplySource(null);
     jumpToLast('smooth');
     textareaRef.current?.focus({preventScroll:true});
     void submitPending(pending);
