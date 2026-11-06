@@ -22,6 +22,7 @@ import { LinkPreview } from './LinkPreview';
 import type {UnreadLocation} from './useCommunityUnread';
 import {clearReadPush} from './readPushNotifications';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
+import { invalidateChatMedia, invalidateCommunityMedia } from './chatMediaCache';
 import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
@@ -500,6 +501,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       try{
         const result=await api<{messages:Message[]}>(`/api/v1/communities/${communityId}/channels/${roomId}/messages`);
         if(mounted){
+          // A deleted attachment must not remain readable through its cached
+          // Blob URL, even if another member removed the message over SSE.
+          const existing=peekCommunityMessages<Message>(myId,communityId,roomId)??[];
+          const revised=new Map(result.messages.map(message=>[message.id,message]));
+          for(const prior of existing){
+            if(prior.attachment&&!prior.deletedAt&&revised.get(prior.id)?.deletedAt){
+              invalidateChatMedia(prior.attachmentUrl||
+                '/media/community-attachment/'+communityId+'/'+roomId+'/'+prior.attachment.id);
+            }
+          }
           putCommunityMessages(myId,communityId,roomId,result.messages);
           setMessages(old=>reconcileCommunityMessages(old,result.messages));
           setPendingMessages(old=>old.filter(p=>p.channelId!==roomId||!result.messages.some(m=>m.clientId===p.clientId)));
@@ -513,6 +524,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           const accessDenied=['MEMBERS_ONLY','CHANNEL_PASSWORD_REQUIRED',
             'CHANNEL_PERMISSION_REQUIRED','CHANNEL_NOT_FOUND','Unauthorized','UNAUTHORIZED'].includes(code);
           if(accessDenied){
+            invalidateCommunityMedia(communityId,roomId);
             forgetCommunityMessages(myId,communityId,roomId);
             setMessages([]);setMessagesForKey(null);
           }
@@ -870,6 +882,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     try{
       setBusyAction('deleteMessage:'+messageId);
       await api('/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+messageId,{method:'DELETE'});
+      const prior=messages.find(item=>item.id===messageId);
+      if(prior?.attachment)invalidateChatMedia(prior.attachmentUrl||
+        '/media/community-attachment/'+selectedId+'/'+channelId+'/'+prior.attachment.id);
       const updated=await api<{messages:Message[]}>(`/api/v1/communities/${selectedId}/channels/${channelId}/messages`);
       putCommunityMessages(myId,selectedId,channelId,updated.messages);
       setMessages(old=>reconcileCommunityMessages(old,updated.messages));setDeletingId(null);
@@ -1318,7 +1333,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               followBottomRef.current=atBottom;
               if(atBottom)setNewBelow(old=>old?0:old);
             }}
-            className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
+            className="uorqui-kit-content-enter min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
             {!messagesLoading&&!visibleMessages.length&&!pendingMessages.some(p=>p.channelId===channelId)&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{pt?'Compartilhe textos, fotos e links com os membros da sala.':'Share text, photos and links with room members.'}</p>
@@ -1328,7 +1343,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
             </div>}
-            <div ref={messageContentRef} className="space-y-1.5">{renderedMessages.map((message,index)=><div key={message.clientId}
+            <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{renderedMessages.map((message,index)=><div key={message.clientId}
               className={cn('flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20',groupedWithPrevious(renderedMessages,index)&&'py-0.5')}>
               {groupedWithPrevious(renderedMessages,index)?<span aria-hidden="true" className="w-8 shrink-0"/>:
                 <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>}
@@ -1351,8 +1366,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                         {pt?'Cancelar':'Cancel'}</Button>
                     </div>
                   </form>:isCommunityGifUrl(message.body)?
-                    <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" referrerPolicy="no-referrer"
-                      className="mt-2 max-h-64 max-w-full rounded-xl object-contain"/>:
+                    <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" decoding="async" referrerPolicy="no-referrer"
+                      className="mt-2 block h-auto max-h-64 max-w-full rounded-xl object-contain"/>:
                     <div className="mt-1 min-w-0">
                       <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''}/></p>
                       {!!message.body&&<LinkPreview text={message.body} locale={locale}/>}
