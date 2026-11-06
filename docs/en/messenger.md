@@ -142,3 +142,9 @@ This upgrade addresses reports that the social messenger felt slower than the ol
 **Media loading indicator (2026-11-04):** a spinner appears **only on media** while its content or metadata buffers/loads (images, videos and audio), across direct messages, community channels and media viewers. Plain-text bubbles, delivery/read status rows and ready-to-download file cards **do not** show a spinner. Media failures stop the loading animation.
 
 Outgoing attachment bubbles still pending upload display a small “Uploading media” spinner. It disappears on confirmation or failure and never appears on text-only messages.
+
+## Conversation media and files gallery; shared pinned message
+
+The **Media and files** button in a direct message header (also in its menu) opens a two-tab attachment gallery. `GET /api/v1/dm/conversations/:id/attachments?kind=media|files&before=<uuid>` pages through the **full visible conversation history** in chunks of 40; it is not limited to the chat's last 100 messages. Images/GIFs/videos use the existing media viewer, audio can be played, other files can be downloaded, and the message action jumps back to its source. The API requires authenticated conversation membership and honors each participant's local clear cutoff.
+
+Each confirmed message has a **Pin message / Unpin message** action. One pin per direct conversation is shared by both participants, persisted using `direct_conversations.pinned_message_id` (migration `0038_dm_pinned_message.sql`), and announced via the existing DM SSE event. The banner at the top of the conversation previews the message, jumps to it and supports unpinning. Cancelling a message nulls its pin through the database foreign key. Pin writes check origin, identity, membership and visible message.

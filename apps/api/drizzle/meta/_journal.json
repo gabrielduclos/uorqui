@@ -267,6 +267,13 @@
       "when": 1793910000000,
       "tag": "0037_mail_push",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793990000000,
+      "tag": "0038_dm_pinned_message",
+      "breakpoints": true
     }
   ]
 }

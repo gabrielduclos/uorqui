@@ -106,6 +106,7 @@ export const directConversations = pgTable('direct_conversations', {
   id: uuid('id').defaultRandom().primaryKey(),
   participantAId: uuid('participant_a_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   participantBId: uuid('participant_b_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  pinnedMessageId: uuid('pinned_message_id').references((): AnyPgColumn => directMessages.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   uniqueIndex('direct_conversations_pair_idx').on(table.participantAId, table.participantBId),
