@@ -684,7 +684,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+
          'CASE WHEN original.id IS NULL THEN NULL ELSE jsonb_build_object('+
          "'id',original.id,'body',CASE WHEN original.deleted_at IS NULL THEN LEFT(original.body,220) ELSE NULL END,"+
-         "'authorHandle',ou.handle,'deleted',original.deleted_at IS NOT NULL) END AS \"replyTo\",'+attachmentProjection+reactionProjection+
+         "'authorHandle',ou.handle,'deleted',original.deleted_at IS NOT NULL) END AS \"replyTo\","+attachmentProjection+reactionProjection+
         'FROM community_messages m JOIN users u ON u.id=m.author_id JOIN profiles p ON p.user_id=m.author_id '+
          'LEFT JOIN community_messages original ON original.id=m.reply_to_id AND original.channel_id=m.channel_id '+
          'LEFT JOIN users ou ON ou.id=original.author_id '+
