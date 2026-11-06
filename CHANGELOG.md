@@ -2,9 +2,27 @@
 
 The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for its application workspace manifests. The suffix `-beta.N` marks a **pre-release**, not a stable or generally available product.
 
-## [Unreleased] — changes through 2026-11-03
+## [Unreleased]
 
-This is ongoing technical-beta work on `main`, **not a tagged release or proof of a successful live deployment**.
+No post-baseline updates yet. **Every subsequent PR must add a new version to all three npm manifests and both changelogs.** See [release policy](docs/en/versions.md).
+
+## [0.1.0-beta.1] — 2026-11-06
+
+**Official baseline for the technical beta.** This consolidates the current React UI, CSS tokens, Fastify API and documentation on a single GitHub version. Automated checks and deployment do not certify every mobile/browser workflow.
+
+### Consolidated implementation (November 4–6)
+
+- **Workspace UI:** compact responsive Messages/Contacts/Communities/Email layout, corrected dark/light reply contrast and global surface tokens. The UI Kit now documents the **actual** signed-in grayscale Sprintrix palette, not obsolete purple/blue mockups. One canonical global dark/light token pair replaces duplicate declarations.
+- **Direct messages:** SSE delivery and read timestamps, optimistic text/replies, attachments, paginated all-history media/files gallery, one shared pinned message per conversation, media caching, responsive load placeholders and secure notification badges.
+- **Communities:** channels, access permissions, visible in-place delete confirmations, voice/video meetings, mobile-aware chat and private in-memory lazy media caching.
+- **Email:** Gmail OAuth and manual IMAP/SMTP, inbox/sent/spam/trash, read/reply/move operations, private HTML viewer with native external links and skeleton held until content/image/layout readiness (with a failsafe for stalled third-party images).
+- **PWA/notifications:** configurable activity, community, DM and mail push categories, native unread badge where supported, and secure service-worker handling.
+- **Code consolidation:** duplicate frontend JSON transports extracted into `apps/web/src/lib/apiClient.ts`, preserving each module's existing errors; the Fastify exact-match write-origin guard shared in `apps/api/src/request-origin.ts`. **No API route, authentication, or schema changes in this consolidation.**
+- **Version governance:** `Version policy` checks every future PR for a greater SemVer version with synchronized root/API/web manifests and bilingual release notes. `Publish tagged beta releases` publishes immutable `v...` GitHub tags/releases on `main`, subject to repository permissions.
+
+### November 2–3 product evolution included in the beta
+
+The following work preceded the formal November 6 baseline and is included in this beta.
 
 ### Updated product and communities
 - Removed the redundant **Explore communities** rail and public search/list from Communities. That area now focuses on joined groups, pending invitations and creation; public discovery stays exclusively under **Discover**.
@@ -41,7 +59,7 @@ This is ongoing technical-beta work on `main`, **not a tagged release or proof o
 
 **Pending:** multi-device meeting and screen-sharing tests, iOS/Android installed-PWA checks, push and email E2E, and independently confirmed production deployment.
 
-## [0.1.0-beta.1] — 2026-11-01
+### Initial implementation scope (historical preview notes)
 
 **First technical beta for controlled testing.** This describes implemented code and automated checks, **not** certification of all browser/device flows.
 
@@ -50,7 +68,7 @@ This is ongoing technical-beta work on `main`, **not a tagged release or proof o
 - New open-source social application with React/TypeScript, a light/dark UIKit-inspired interface and a consistent Beta badge beside the header logo.
 - Email/password authentication using Better Auth, profiles, privacy and account blocking; public registration protected by Turnstile and email configuration.
 - Direct 1:1 messaging with persistence, attachments, replies, reactions, status tracking, SSE event delivery and Web Push support.
-- Continuous hybrid feed with persistent "For you" / "Following" filters, a + button opening a post-composer modal, and dedicated video navigation.
+- Community discovery replaces the retired public feed; legacy feed routes and tables were removed as part of the beta evolution.
 - Communities with invitations, roles, text channels, moderation, WebRTC voice sessions and a minimizable ongoing call.
 - Cloudflare Worker frontend and R2 media storage; Render Fastify backend; Neon PostgreSQL; automated API/UI/integration tests.
 - Initial custom-domain cutover preparation, origin allowlist and service-worker replacement path for previously installed PWAs.

@@ -1,3 +1,4 @@
+import { validRequestOrigin as origin } from './request-origin.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { channelGate,channelGateError,channelGateStatus } from './channel-password.js';
@@ -28,7 +29,7 @@ const communityMediaParams={type:'object',required:['id','asset'],additionalProp
 }};
 const ranks:Record<string,number>={owner:4,admin:3,moderator:2,member:1};
 const noCache='private, no-store';
-const origin=(req:FastifyRequest)=>req.headers.origin===(process.env.WEB_ORIGIN??'http://localhost:5173');
+
 
 export function registerCommunityModerationRoutes(app:FastifyInstance,reader:SessionReader){
   async function self(request:FastifyRequest){

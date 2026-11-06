@@ -1,3 +1,4 @@
+import { apiRequest as api } from './lib/apiClient';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Dialog, Tabs } from 'radix-ui';
 import { Ban, Camera, Check, Hash, LockKeyhole, Settings, Shield, Trash2, UserMinus, Users, X } from 'lucide-react';
@@ -16,11 +17,6 @@ type BanEntry={handle:string;reason:string|null;bannedAt:string};
 type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';hasPassword?:boolean;accessMode?:'open'|'restricted'};
 type Data={members:Member[];bans:BanEntry[];myRole:Role};
 const weight:Record<Role,number>={owner:4,admin:3,moderator:2,member:1};
-const api=async(path:string,init?:RequestInit)=>{
-  const r=await fetch(path,{credentials:'same-origin',cache:'no-store',...init});
-  if(!r.ok){const data=await r.json().catch(()=>null) as {error?:string}|null;throw Error(data?.error??'HTTP_'+r.status);}
-  return r.status===204?undefined:r.json();
-};
 
 export default function CommunityModerationPanel({id,role,channels,name,description,visibility,avatarUrl,onChanged,onDeleted}:{
   id:string;role:Role;channels:Channel[];name:string;description:string|null;visibility:Visibility;avatarUrl:string|null;

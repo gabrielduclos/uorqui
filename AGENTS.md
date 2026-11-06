@@ -28,6 +28,14 @@ Use the **existing Neon project** (`red-dream-55067893`), database `uorqui`. Con
 - Runtime `DATABASE_URL` is configured as a private environment variable in **Render**, not in GitHub or Cloudflare frontend. `AUTH_SECRET` is also private. Public frontend Worker uses only an HTTPS `API_ORIGIN` binding to reach the Render API.
 - Validate `/health/ready` (authentication config + database/schema readiness) before enabling login in the UI. Never enable public signup until email verification, recovery and abuse controls are reviewed.
 
+## Versioned releases — mandatory after beta baseline
+
+- `v0.1.0-beta.1` is the **November 6, 2026** consolidated technical-beta baseline. This specific bootstrap PR retains the already declared npm version.
+- **Every following PR** must introduce a strictly higher SemVer version in **all three** `package.json` files and a matching section in **both** changelogs, including docs-only/CSS-only PRs. Never commit a change using a previously tagged version.
+- The `Version policy` workflow validates consistency and compares against the PR base. The `Publish tagged beta releases` workflow attempts a `v...` GitHub tag/Release on `main`. Never move or overwrite release tags.
+- Maintain the real UI kit (`docs/en/ui-kit.md` and `docs/pt-BR/ui-kit.md`) and release documentation together. The app's effective signed-in palette is scoped to `apps/web/src/ui-kit/sprintrix.css`; avoid page-specific palettes or re-adding duplicate global root blocks.
+- Read [release policy](docs/en/versions.md) before preparing the next PR. Repository branch-protection is needed to make the version check merge-blocking; CI alone reports failures.
+
 ## Verification
 
 - `npm run typecheck` and `npm run build`.

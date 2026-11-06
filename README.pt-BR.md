@@ -10,11 +10,13 @@
 
 ## O produto
 
-O Uorqui reúne três experiências:
+O Uorqui reúne quatro experiências:
 
-- **Conversas individuais:** mensagens privadas 1:1, respostas, reações, anexos, estados de mensagens, push e atualização em tempo real via SSE. Não há grupos tradicionais no mensageiro.
+- **Conversas individuais:** mensagens privadas 1:1, respostas otimistas, reações, anexos, galeria de todas as mídias/arquivos, mensagens fixadas para os dois participantes, entrega/leitura, push e SSE. Contatos ficam dentro de Mensagens, sem grupos tradicionais no mensageiro.
 - **Descobrir:** tela inicial sem publicações globais, com recomendações de comunidades públicas, busca e atividades das comunidades das quais o usuário participa. O feed antigo foi retirado da interface, API e PostgreSQL em 02/11/2026.
-- **Comunidades:** participação pública/privada, convites, canais de texto, moderação, salas de voz e **reuniões com áudio e vídeo** (até seis pessoas), convites por link ou mensagem do Uorqui, aprovação de entrada, notificações e canais protegidos por senha. Canais podem ser abertos ou fechados por permissão individual atribuída na moderação. O chat de texto inicia recolhido em voz/reunião; reuniões têm compartilhamento de tela, destaque de quem fala e câmera em miniatura na tela cheia.
+- **Comunidades:** participação pública/privada, convites, canais de texto, moderação, salas de voz e **reuniões com áudio e vídeo** (até seis pessoas), convites por link ou DM, aprovação e notificações, senhas e permissões por canal. Reuniões têm compartilhamento de tela, destaque de quem fala e câmera em miniatura na tela cheia.
+
+- **E-mail:** Gmail OAuth ou IMAP/SMTP manual, múltiplas contas conectadas, entrada/enviados/spam/lixeira, respostas e ações em lote, visualizador HTML seguro e abertura de links externos no navegador.
 
 O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 
@@ -27,10 +29,11 @@ A aprovação de entrada na comunidade atualiza a lista do solicitante por SSE d
 | Área | Estado técnico atual |
 | --- | --- |
 | Cadastro e perfis | Better Auth, verificação/recuperação por e-mail, privacidade e bloqueio implementados; falta validar cadastro real e entrega de e-mails |
-| Mensageiro | Conversas 1:1 persistidas, anexos, reações, estados de leitura/entrega, SSE e Web Push implementados |
+| Mensageiro | Conversas 1:1, anexos, galeria de mídias/arquivos, mensagens fixadas, reações, estados de leitura/entrega, SSE e Web Push |
 | Feed antigo | Removido do app, API e PostgreSQL; preservados snapshots de recuperação na Neon e quatro mídias no R2 |
 | Descobrir | Recomendações de comunidades públicas, busca e atividades autorizadas; API validada em produção, testes em aparelhos pendentes |
-| Comunidades | Canais de texto, voz e reunião em vídeo; aprovação, convites, senhas por canal e solicitações push; API verificada em produção, mídia ainda pendente em dispositivos reais |
+| Comunidades | Canais de texto, voz e reunião em vídeo; permissões, convites, senhas, moderação e cache privado de mídias; testes reais de áudio/vídeo pendentes |
+| E-mail | Conexões Gmail e IMAP/SMTP manual, pastas, leitura/resposta/movimentação, HTML isolado e responsivo; testes do navegador externo no PWA ainda necessários |
 | Infraestrutura | PWA React no Worker `main` da Cloudflare, API Fastify no Render e PostgreSQL na Neon |
 | Lançamento amplo | **Ainda pendente:** testes de câmera/microfone no iOS/Android, entrega de push, TURN/redes diferentes, monitoramento e testes de PWA instalado após a troca do domínio |
 
@@ -47,13 +50,14 @@ Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes
 - **Voz:** WebRTC P2P; TURN é opcional e requer testes entre redes.
 - **Deploy:** Cloudflare Builds e Render, validados pelo GitHub Actions.
 
-A identificação do beta está nos manifestos npm e aparece ao lado do logo no header do Uorqui. Consulte as [notas da versão](CHANGELOG.pt-BR.md) para limitações e pendências.
+A identificação do beta está nos três manifestos npm, e o app mostra o selo Beta. Veja [notas da versão](CHANGELOG.pt-BR.md). **Após `v0.1.0-beta.1`, toda alteração deverá ser versionada**, inclusive documentação e CSS: [política de versões](docs/pt-BR/versoes.md).
 
 ## Documentação
 
 | Tema | Português | English |
 | --- | --- | --- |
 | Versão beta | [Notas da versão](CHANGELOG.pt-BR.md) | [Changelog](CHANGELOG.md) |
+| Política de versões | [Versionamento](docs/pt-BR/versoes.md) | [Release versions](docs/en/versions.md) |
 | Instalação local | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | [Getting started](docs/en/getting-started.md) |
 | API e deploy | [Hospedagem da API](docs/pt-BR/hospedagem-api.md) | [API hosting](docs/en/api-hosting.md) |
 | Worker Cloudflare | [Workers](docs/pt-BR/cloudflare-workers.md) | [Workers](docs/en/cloudflare-workers.md) |

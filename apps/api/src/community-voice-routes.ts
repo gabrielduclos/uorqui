@@ -1,3 +1,4 @@
+import { validRequestOrigin as allowedOrigin } from './request-origin.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import {publishCommunityEvent} from './community-events.js';
@@ -12,7 +13,7 @@ const stateQuery={type:'object',required:['sessionId'],additionalProperties:fals
 const signalBody={type:'object',additionalProperties:false,required:['sessionId','recipientSessionId','kind','payload'],
   properties:{sessionId:uuid,recipientSessionId:uuid,kind:{type:'string',enum:['offer','answer','candidate']},payload:{type:'object'}}};
 const noCache='private, no-store';
-const allowedOrigin=(r:FastifyRequest)=>r.headers.origin===(process.env.WEB_ORIGIN??'http://localhost:5173');
+
 // Allow a short mobile/tab suspension without expiring an otherwise active call.
 // Explicit leave still removes the session immediately.
 const activePresence="s.last_seen_at > now()-interval '180 seconds'";

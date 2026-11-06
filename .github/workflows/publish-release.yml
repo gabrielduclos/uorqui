@@ -1,0 +1,41 @@
+name: Publish tagged beta releases
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+concurrency:
+  group: uorqui-version-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    name: Tag and publish version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check synchronized version/changelogs
+        run: node scripts/check-release-version.mjs
+      - name: Create immutable tag and GitHub pre-release when missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")"
+          tag="v${version}"
+          if git rev-parse --verify "refs/tags/${tag}^{commit}" >/dev/null 2>&1; then
+            tagged="$(git rev-parse "refs/tags/${tag}^{commit}")"
+            if [[ "$tagged" != "$GITHUB_SHA" ]]; then
+              echo "::error::Version ${version} already tagged at ${tagged}. Every update must increase the version." >&2
+              exit 1
+            fi
+            echo "Existing immutable version tag ${tag} points at current commit."
+          elif [[ "${version}" == *-* ]]; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "Uorqui ${tag}" --generate-notes --prerelease
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "Uorqui ${tag}" --generate-notes
+          fi

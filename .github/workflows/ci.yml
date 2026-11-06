@@ -32,6 +32,8 @@ jobs:
         run: node --test apps/api/test/email-provider.test.mjs
       - name: Verify controlled domain migration origins
         run: node --test apps/api/test/web-origins.test.mjs
+      - name: Verify strict shared write-origin guard
+        run: node --test apps/api/test/request-origin.test.mjs
       - name: Check Drizzle migration files for schema drift
         shell: bash
         run: |
