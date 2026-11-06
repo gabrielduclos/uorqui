@@ -19,6 +19,7 @@ import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker'
 import CommunityMessageReactions, { type CommunityReaction } from './CommunityMessageReactions';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import { MessageText } from './MessageText';
+import { ReplyReference, ReplyComposerPreview } from './ReplyReference';
 import { LinkPreview } from './LinkPreview';
 import type {UnreadLocation} from './useCommunityUnread';
 import {clearReadPush} from './readPushNotifications';
@@ -1196,6 +1197,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {groupedWithPrevious(renderedMessages,index)?<span aria-hidden="true" className="w-8 shrink-0"/>:
                 <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>}
               <div className="min-w-0 flex-1">
+                {message.replyToId&&!message.deletedAt&&<ReplyReference
+                  author={'@'+(message.replyTo?.authorHandle??(pt?'mensagem':'message'))}
+                  body={message.replyTo?.body} deleted={message.replyTo?.deleted}
+                  locale={locale}
+                  onJump={()=>document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'})}/>}
                 <div className={cn('flex flex-wrap items-baseline gap-2',groupedWithPrevious(renderedMessages,index)&&'sr-only')}>{message.authorHandle?
                   <a href={'/@'+message.authorHandle} onClick={event=>navigateToPublicProfile(event,message.authorHandle)}
                     className="rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
@@ -1220,14 +1226,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                       <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''} mentions/></p>
                       {!!message.body&&<LinkPreview text={message.body} locale={locale}/>}
                     </div>}
-                {message.replyToId&&!message.deletedAt&&<button type="button"
-                  className="mb-1 mt-1 block max-w-full border-l-2 border-primary bg-secondary/50 px-3 py-1.5 text-left text-xs hover:bg-secondary"
-                  onClick={()=>document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'})}>
-                  <strong className="block text-primary">@{message.replyTo?.authorHandle??(pt?'mensagem':'message')}</strong>
-                  <span className="block max-w-[420px] truncate text-muted-foreground">{message.replyTo?.deleted?
-                    (pt?'Mensagem excluída':'Deleted message'):
-                    (message.replyTo?.body||(pt?'Mídia ou arquivo':'Media or file'))}</span>
-                </button>}
                 {message.attachment&&!message.deletedAt&&selectedId&&channelId&&
                   <CommunityMessageAttachment attachment={message.attachment}
                     src={message.attachmentUrl||('/media/community-attachment/'+selectedId+'/'+channelId+'/'+message.attachment.id)}
@@ -1270,14 +1268,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </button>
           </div>}
           <div className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-            {replySource&&<div className="mb-2 flex min-w-0 items-center gap-3 rounded-lg border-l-2 border-primary bg-secondary/60 px-3 py-2 text-xs">
-              <div className="min-w-0 flex-1"><strong className="block text-primary">
-                {pt?'Respondendo a ':'Replying to '}@{replySource.authorHandle}</strong>
-                <span className="block truncate text-muted-foreground">{replySource.body||(pt?'Mídia ou arquivo':'Media or file')}</span>
-              </div>
-              <button type="button" onClick={()=>setReplySource(null)} aria-label={pt?'Cancelar resposta':'Cancel reply'}
-                className="grid size-8 shrink-0 place-items-center rounded-lg hover:bg-accent"><X className="size-4"/></button>
-            </div>}
+            {replySource&&<ReplyComposerPreview author={'@'+replySource.authorHandle}
+              body={replySource.body||replySource.attachment?.name} locale={locale}
+              onCancel={()=>setReplySource(null)}/>}
             {mediaPicker==='gif'&&<CommunityMediaPicker key="gif" tab="gif" pt={pt}
               onClose={()=>setMediaPicker(null)}
               onEmoji={symbol=>{setDraft(old=>old+symbol);setMediaPicker(null);}}

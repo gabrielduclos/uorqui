@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.6] — 06/11/2026
+
+- **Respostas no estilo Discord:** canais e conversas privadas agora usam uma referência compacta, com conector curvo, nome do autor e trecho da mensagem original, sem balão de citação dentro de outro balão.
+- **Posicionamento:** nos canais, a referência aparece antes do cabeçalho e conteúdo da resposta; no mensageiro privado, antes do texto da resposta. Ambas mantêm o clique para localizar a mensagem original.
+- **Editor:** prévia em uma única linha acima do campo de digitação, com cancelamento, truncamento responsivo e resumo para GIFs, mensagens excluídas e anexos.
+- **Visual:** componente React compartilhado e CSS global com contraste nos temas claro/escuro, foco por teclado e largura adequada no mobile. Respostas antigas continuam legíveis. Não há alteração de API nem migração de banco.
+
 ## [0.1.0-beta.5] — 06/11/2026
 
 - **Abas na central de notificações:** **Todas, Mensagens, Menções, E-mail, Convites e Contatos**, com rolagem horizontal responsiva, navegação por teclado e contadores por categoria. Todas reúne as categorias sem excluir atividades antigas.

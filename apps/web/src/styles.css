@@ -299,41 +299,74 @@ body.uorqui-app-active {
   color: var(--card-foreground);
 }
 
-/* A reply needs to remain legible both inside a light outgoing bubble in Dark
- * and inside a dark outgoing bubble in Light. Invert the quoted surface using
- * existing --primary, --primary-foreground, --card and --foreground tokens. */
-[data-uorqui-app-shell] .uorqui-reply-quote {
-  border-left: 3px solid var(--ring);
-  background-color: color-mix(in srgb, var(--card) 78%, var(--foreground) 22%);
-  color: var(--foreground);
-  border-radius: 4px;
+/* Compact message references use the message's own foreground color instead
+ * of a nested surface: contrast stays correct in both Light and Dark themes,
+ * including the inverse-colored outgoing DM bubble. */
+[data-uorqui-app-shell] .uorqui-reply-reference {
+  display:flex;
+  align-items:center;
+  gap:.375rem;
+  min-width:0;
+  max-width:100%;
+  width:fit-content;
+  margin:0 0 .25rem;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  font-size:11px;
+  font-weight:400;
+  line-height:1.25rem;
+  opacity:.86;
+  cursor:pointer;
 }
-[data-uorqui-app-shell] .uorqui-reply-quote[data-mine="true"] {
-  border-left-color: var(--primary);
-  background-color: color-mix(in srgb, var(--primary-foreground) 88%, var(--primary) 12%);
-  color: var(--primary);
+[data-uorqui-app-shell] .uorqui-reply-reference__connector {
+  display:inline-block;
+  flex:0 0 .85rem;
+  width:.85rem;
+  height:.67rem;
+  border-top:2px solid currentColor;
+  border-left:2px solid currentColor;
+  border-top-left-radius:.6rem;
+  opacity:.55;
+  transform:translateY(.16rem);
 }
-[data-uorqui-app-shell] .uorqui-reply-quote:hover {
-  filter: brightness(1.09);
+[data-uorqui-app-shell] .uorqui-reply-reference__author {
+  flex:0 1 auto;
+  min-width:0;
+  max-width:42%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:700;
 }
-[data-uorqui-app-shell] .uorqui-reply-quote__body {
-  color: inherit;
-  opacity: 1;
+[data-uorqui-app-shell] .uorqui-reply-reference__excerpt {
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  opacity:.78;
 }
+[data-uorqui-app-shell] button.uorqui-reply-reference:hover .uorqui-reply-reference__excerpt {
+  text-decoration:underline;
+}
+[data-uorqui-app-shell] button.uorqui-reply-reference:focus-visible {
+  border-radius:3px;
+  outline:2px solid currentColor;
+  outline-offset:2px;
+}
+[data-uorqui-app-shell] .uorqui-reply-reference--legacy {cursor:default;opacity:.7}
 [data-uorqui-app-shell] .uorqui-reply-draft {
-  border-left: 3px solid var(--ring);
-  border-top: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  background-color: color-mix(in srgb, var(--secondary) 87%, var(--foreground) 13%);
-  color: var(--foreground);
-  border-radius: 4px;
+  border-left:2px solid var(--ring);
+  background:color-mix(in srgb,var(--card) 86%,var(--secondary) 14%);
+  color:var(--foreground);
+  border-radius:3px;
 }
 [data-uorqui-app-shell] .uorqui-reply-draft__preview {
-  color: var(--foreground);
-  opacity: .95;
+  color:var(--muted-foreground);
 }
-
 /* iOS WebKit zooms the viewport when focusing controls smaller than 16px.
    Keep user pinch-to-zoom enabled; only normalize editable text sizing on phones. */
 @supports (-webkit-touch-callout: none) {
