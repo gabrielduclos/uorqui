@@ -4,7 +4,7 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.2` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.3` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -24,7 +24,7 @@ O Uorqui reúne quatro experiências:
 - **Descobrir:** tela inicial sem publicações globais, com recomendações de comunidades públicas, busca e atividades das comunidades das quais o usuário participa. O feed antigo foi retirado da interface, API e PostgreSQL em 02/11/2026.
 - **Comunidades:** participação pública/privada, convites, canais de texto, moderação, salas de voz e **reuniões com áudio e vídeo** (até seis pessoas), convites por link ou DM, aprovação e notificações, senhas e permissões por canal. Reuniões têm compartilhamento de tela, destaque de quem fala e câmera em miniatura na tela cheia.
 
-- **E-mail:** Gmail OAuth ou IMAP/SMTP manual, múltiplas contas conectadas, entrada/enviados/spam/lixeira, respostas e ações em lote, visualizador HTML seguro e abertura de links externos no navegador.
+- **E-mail:** Gmail e Outlook OAuth ou IMAP/SMTP manual, múltiplas contas conectadas, entrada/enviados/spam/lixeira, respostas e ações em lote, visualizador HTML seguro e abertura de links externos no navegador.
 
 O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 
@@ -58,7 +58,7 @@ Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes
 - **Voz:** WebRTC P2P; TURN é opcional e requer testes entre redes.
 - **Deploy:** Cloudflare Builds e Render, validados pelo GitHub Actions.
 
-A identificação do beta está nos três manifestos npm, e o app mostra o selo Beta. Veja [notas da versão](CHANGELOG.pt-BR.md). **Após `v0.1.0-beta.2`, toda alteração deverá ser versionada**, inclusive documentação e CSS: [política de versões](docs/pt-BR/versoes.md).
+A identificação do beta está nos três manifestos npm, e o app mostra o selo Beta. Veja [notas da versão](CHANGELOG.pt-BR.md). **Após `v0.1.0-beta.3`, toda alteração deverá ser versionada**, inclusive documentação e CSS: [política de versões](docs/pt-BR/versoes.md).
 
 ## Documentação
 
