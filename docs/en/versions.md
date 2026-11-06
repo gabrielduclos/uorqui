@@ -7,7 +7,7 @@
 **Every subsequent pull request must introduce a new version, including docs-only, CSS-only or copy changes.**
 
 1. Set **the same SemVer value** in `package.json`, `apps/web/package.json` and `apps/api/package.json`.
-2. Add a matching numbered entry to **`CHANGELOG.md` and `CHANGELOG.pt-BR.md`** covering changes, impacts, migrations, risks and relevant tests. Keep the `[Unreleased]` heading.
+2. Update the displayed version in **`README.md` and `README.pt-BR.md`**, and add a matching numbered entry to **`CHANGELOG.md` and `CHANGELOG.pt-BR.md`** covering changes, impacts, migrations, risks and relevant tests. Keep the `[Unreleased]` heading.
 3. Update affected English and Portuguese documentation; update the UI Kit for visual changes and architecture docs for structural changes.
 4. Submit a PR and check **Version policy**, **Web UI** and relevant **API/integration** jobs. The version check compares PR and `main` and rejects equal or lower versions.
 5. `Publish tagged beta releases` attempts to create the immutable tag `v<version>` and a GitHub Release on `main`. Reusing an existing version/tag for a different commit fails: **never rewrite version tags**.
