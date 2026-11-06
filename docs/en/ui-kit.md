@@ -8,6 +8,9 @@
 
 ## Principles
 
+- **Desktop permission prompts:** the daily push opt-in offer takes priority over optional PWA installation; never stack both prompts, and request native permission only after a click. Preserve mobile-specific installation rules.
+
+
 - Email configuration provides Gmail OAuth, Outlook OAuth and manual IMAP/SMTP in one scrollable modal. OAuth options reflect per-provider configuration; the Outlook action remains disabled until Microsoft Entra credentials are present in Render.
 
 - Compact, communication-first interface influenced by workspace dashboards, without positioning Uorqui as exclusively enterprise software.
