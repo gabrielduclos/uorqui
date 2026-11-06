@@ -26,6 +26,10 @@ function readVersion(path){return JSON.parse(readFileSync(path,'utf8')).version;
 const versions=manifests.map(readVersion),current=versions[0];
 try{versionParts(current);}catch(error){fail(error.message);}
 if(!versions.every(v=>v===current))fail('Root, API, and web manifests must carry exactly the same version. Got '+versions.join(', '));
+for(const file of ['README.md','README.pt-BR.md']){
+  const body=readFileSync(file,'utf8');
+  if(!body.includes('`'+current+'`'))fail(file+' must display the current version '+current);
+}
 for(const file of ['CHANGELOG.md','CHANGELOG.pt-BR.md']){
   const body=readFileSync(file,'utf8');
   if(!body.includes('## ['+current+']'))fail(file+' must contain a release entry for '+current);
