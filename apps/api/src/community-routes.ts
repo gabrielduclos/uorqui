@@ -21,7 +21,8 @@ const groupBody={type:'object',required:['name','slug','visibility'],additionalP
 }};
 const channelBody={type:'object',required:['name','kind'],additionalProperties:false,properties:{
   name:{type:'string',minLength:2,maxLength:64},kind:{type:'string',enum:['text','voice','meeting']},
-  accessMode:{type:'string',enum:['open','restricted']}
+  accessMode:{type:'string',enum:['open','restricted']},
+  description:{type:'string',maxLength:4000}
 }};
 const attachmentSchema={type:'object',additionalProperties:false,required:['id','name','type','size'],properties:{
   id:uuid,name:{type:'string',minLength:1,maxLength:180},type:{type:'string',maxLength:100},
@@ -382,7 +383,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       let channels:unknown[]=[],pendingRequests:unknown[]=[];
       if(data.myRole){
         const result=await getPool().query(
-          'SELECT id,name,kind,created_at AS "createdAt",access_mode AS "accessMode",password_hash IS NOT NULL AS "hasPassword",'+
+          'SELECT id,name,kind,description,created_at AS "createdAt",access_mode AS "accessMode",password_hash IS NOT NULL AS "hasPassword",'+
           "(password_hash IS NULL OR $2::boolean OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) AS \"unlocked\" "+
           "FROM community_channels WHERE community_id=$1 AND (access_mode='open' OR $2::boolean OR EXISTS "+
           '(SELECT 1 FROM community_channel_member_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) '+
@@ -568,14 +569,14 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!manager(await membership(id,me)))return reply.code(403).send({error:'Forbidden'});
-      const {name,kind,accessMode='open'}=request.body as {name:string;kind:'text'|'voice'|'meeting';accessMode?:'open'|'restricted'};
+      const {name,kind,accessMode='open',description}=request.body as {name:string;kind:'text'|'voice'|'meeting';accessMode?:'open'|'restricted';description?:string};
       const normalized=name.trim();
       if(normalized.length<2)return reply.code(400).send({error:'Invalid channel name'});
       const c=await getPool().query('SELECT COUNT(*)::int AS n FROM community_channels WHERE community_id=$1',[id]);
       if(Number(c.rows[0].n)>=50)return reply.code(409).send({error:'CHANNEL_LIMIT'});
       const result=await getPool().query(
-        'INSERT INTO community_channels(community_id,name,kind,access_mode) VALUES($1,$2,$3,$4) RETURNING id,name,kind,access_mode AS "accessMode"',
-        [id,normalized,kind,accessMode]);
+        'INSERT INTO community_channels(community_id,name,kind,access_mode,description) VALUES($1,$2,$3,$4,$5) RETURNING id,name,kind,description,access_mode AS "accessMode"',
+        [id,normalized,kind,accessMode,description?.trim()||null]);
       void publishCommunityEvent(id,result.rows[0].id,'channel').catch(()=>{});
       return reply.code(201).header('Cache-Control',noCache).send({channel:result.rows[0]});
     }catch(error){
