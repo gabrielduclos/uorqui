@@ -203,6 +203,7 @@ export const communityChannels = pgTable('community_channels', {
   check('community_channels_kind', sql`${table.kind} IN ('text', 'voice', 'meeting')`),
   check('community_meeting_policy',sql`${table.meetingJoinPolicy} IN ('open','approval')`),
   check('community_channel_access_mode',sql`${table.accessMode} IN ('open','restricted')`),
+  check('community_channel_description_length',sql`${table.description} IS NULL OR char_length(${table.description}) <= 4000`),
 ]);
 
 /** A meeting invite/approval is distinct from community membership. */
