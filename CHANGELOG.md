@@ -6,6 +6,15 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.5] — 2026-11-06
+
+- **Notification center tabs:** the same responsive page now has **All, Messages, Mentions, Email, Invites, Contacts** tabs with keyboard navigation and tab-specific unread counters. All collects the categories without hiding the original activity history.
+- **Messages:** direct-message unread threads and unread community channels show real data and open their respective conversations.
+- **Mentions:** server-verified `@handles` are saved into a new durable inbox, even when browser push is disabled. Member access, protected/restricted channels, bans and blocks are checked before recording and reading. Each mention opens its channel.
+- **Email:** newly detected messages are persisted with mailbox ownership and sender/subject information, with direct links to the existing email reader. All linked mailboxes also provide an unread-total shortcut. A first mailbox scan remains silent; prior historical emails are not backfilled as new alerts.
+- **Actions:** individual persistent notifications can be read/dismissed, and the All tab can mark activity and newly tracked events as read. Disconnecting a mailbox or deleting a user cascades corresponding inbox records.
+- **Database:** additive migration `0042_notification_inbox_events`; apply before deploying API/Worker. Integration tests cover per-user isolation, read/delete, cross-origin defense, sender attribution and mailbox disconnection. No bulk email/content migration.
+
 ## [0.1.0-beta.4] — 2026-11-06
 
 - **Desktop notifications:** the daily push opt-in prompt has priority over the PWA installation offer in desktop browsers. Before this change, the install banner appeared earlier and cancelled the push reminder.
