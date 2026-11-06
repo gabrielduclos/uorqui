@@ -27,50 +27,8 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
-  color-scheme: dark;
-  --radius: 0.5rem;
-  --background: #141414;
-  --foreground: #ededed;
-  --card: #191919;
-  --card-foreground: #f0f1f4;
-  --popover: #202020;
-  --popover-foreground: #f0f1f4;
-  --primary: #b5a4ff;
-  --primary-foreground: #111016;
-  --secondary: #292929;
-  --secondary-foreground: #f0f1f4;
-  --muted: #222222;
-  --muted-foreground: #a1a1a1;
-  --accent: #303030;
-  --accent-foreground: #ffffff;
-  --destructive: #fa646e;
-  --border: #303030;
-  --input: #3c3c3c;
-  --ring: #a99cff;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-}
-:root.light {
-  color-scheme: light;
-  --background: #fafafa;
-  --foreground: #181a20;
-  --card: #ffffff;
-  --card-foreground: #181a20;
-  --popover: #ffffff;
-  --popover-foreground: #181a20;
-  --primary: #6557d6;
-  --primary-foreground: #ffffff;
-  --secondary: #f0f0f2;
-  --secondary-foreground: #23262d;
-  --muted: #f5f5f6;
-  --muted-foreground: #727783;
-  --accent: #e9e9ed;
-  --accent-foreground: #1b1e26;
-  --destructive: #d63a4e;
-  --border: #e2e3e7;
-  --input: #d1d3dc;
-  --ring: #8578e2;
-}
+/* Canonical fallback tokens live in the one :root/.light pair below.
+   Signed-in workspace variants intentionally override them in sprintrix.css. */
 
 @layer base {
   * { @apply border-border; }
@@ -196,6 +154,7 @@ body.uorqui-app-active {
 /* Sprintrix visual-fidelity pass — original implementation, not vendor code.
    A pale application canvas, quiet navigation and a white inset work surface. */
 :root {
+  color-scheme: dark;
   --radius: .625rem;
   --background: #111111;
   --workspace-rail: #1c1c1c;
@@ -212,12 +171,14 @@ body.uorqui-app-active {
   --muted-foreground: #a3a3a3;
   --accent: #303030;
   --accent-foreground: #f6f6f8;
+  --destructive: #fa646e;
   --border: #333333;
   --input: #404040;
   --ring: #a3a3a3;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 :root.light {
+  color-scheme: light;
   --background: #f5f5f5;
   --workspace-rail: #ebebeb;
   --foreground: #0a0a0a;
