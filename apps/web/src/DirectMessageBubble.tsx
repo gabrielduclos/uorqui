@@ -180,17 +180,17 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         {message.replyTo && !message.deletedAt && <button type="button"
           onClick={() => onJumpToReply(message.replyTo!.id)}
           aria-label={pt ? 'Ir para a mensagem respondida' : 'Jump to replied message'}
-           data-mine={mine?'true':'false'}
-           className="uorqui-reply-quote mb-2 block w-full px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-current">
+          data-mine={mine?'true':'false'}
+          className="uorqui-reply-quote mb-2 block w-full px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-current">
           <span className="block font-semibold">{pt ? 'Resposta a ' : 'Reply to '}{message.replyTo.authorId === myId ? (pt ? 'você' : 'you') : peerName}</span>
-          <span className="mt-0.5 block max-w-full truncate opacity-80">
+          <span className="uorqui-reply-quote__body mt-0.5 block max-w-full truncate">
             {message.replyTo.deleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : message.replyTo.body}
           </span>
         </button>}
-         {quote && !message.replyToId && !message.deletedAt && <blockquote data-mine={mine?'true':'false'}
+        {quote && !message.replyToId && !message.deletedAt && <blockquote data-mine={mine?'true':'false'}
            className="uorqui-reply-quote mb-2 px-2.5 py-2 text-xs">
           <span className="block font-semibold">{pt ? 'Resposta antiga' : 'Legacy reply'}</span>
-          <span className="mt-0.5 block max-w-full truncate opacity-80">{quote[1]}</span>
+          <span className="uorqui-reply-quote__body mt-0.5 block max-w-full truncate">{quote[1]}</span>
         </blockquote>}
 
         {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0">
