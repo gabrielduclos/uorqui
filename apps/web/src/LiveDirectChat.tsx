@@ -1169,7 +1169,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             peerName={active.peerName} onClose={()=>setGalleryOpen(false)}
             onJump={id=>{setGalleryOpen(false);void jumpToRepliedMessage(id);}}/>}
           <div ref={scrollBox} onScroll={onMessagesScroll}
-            data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
+            data-testid="messages-scroll" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             <div ref={messageContentRef} key={activeId} className="uorqui-kit-content-enter flex w-full min-w-0 flex-col gap-2.5">
               {messagesLoading && <WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'}
                 rows={4} className="w-full py-4"/>}
