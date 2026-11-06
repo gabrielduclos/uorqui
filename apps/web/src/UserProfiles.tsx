@@ -91,9 +91,10 @@ export function UserDirectory({ currentHandle }: { currentHandle?: string }) {
   </Card>;
 }
 
-export function ProfileEditor({ initial, onSaved }: {
+export function ProfileEditor({ initial, onSaved, onDeleted }: {
   initial: UserProfileData;
   onSaved: (data: UserProfileData) => void;
+  onDeleted:()=>Promise<void>;
 }) {
   const { locale } = useUorquiPreferences();
   const pt = locale === 'pt-BR';
@@ -103,6 +104,33 @@ export function ProfileEditor({ initial, onSaved }: {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<{ kind: ProfileImageKind; file: File } | null>(null);
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [deleteOpen,setDeleteOpen]=useState(false);
+  const [deletePassword,setDeletePassword]=useState('');
+  const [deleteWord,setDeleteWord]=useState('');
+  const [deleteBusy,setDeleteBusy]=useState(false);
+  const [deleteError,setDeleteError]=useState('');
+  async function deleteAccount(event:FormEvent){
+    event.preventDefault();
+    if(deleteBusy||deleteWord!=='EXCLUIR'||!deletePassword)return;
+    setDeleteBusy(true);setDeleteError('');
+    try{
+      const response=await fetch('/api/v1/account/delete',{
+        method:'DELETE',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({password:deletePassword,confirmation:deleteWord})
+      });
+      if(!response.ok){
+        const payload=await response.json().catch(()=>null) as {error?:string}|null;
+        throw Error(payload?.error??'ACCOUNT_DELETE_FAILED');
+      }
+      await onDeleted();
+    }catch(error){
+      setDeleteError(error instanceof Error&&error.message==='INVALID_PASSWORD'?
+        (pt?'Senha incorreta.':'Incorrect password.'):
+        (pt?'Não foi possível excluir a conta. Tente novamente.':'Could not delete this account. Please retry.'));
+      setDeleteBusy(false);
+    }
+  }
   useEffect(() => setProfile(initial), [initial.handle, initial.displayName, initial.bio, initial.avatarUrl, initial.coverUrl, initial.isPublic]);
 
   function update<K extends keyof UserProfileData>(key: K, value: UserProfileData[K]) {
@@ -238,6 +266,43 @@ export function ProfileEditor({ initial, onSaved }: {
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={saving} className="w-full sm:w-auto"><Check className="size-4" />{saving ? pt ? 'Salvando…' : 'Saving…' : pt ? 'Salvar alterações' : 'Save changes'}</Button>
         </form>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardHeader><CardTitle className="text-lg text-destructive">{pt?'Excluir conta':'Delete account'}</CardTitle>
+        <CardDescription>{pt?
+          'Esta ação é permanente: elimina seu perfil, sessões, mensagens, vínculos, arquivos e conexões de e-mail no Uorqui. Conversas privadas compartilhadas também serão removidas. Comunidades que tenham outros membros serão transferidas. Os arquivos R2 restantes são eliminados por uma rotina de limpeza automática.':
+          'This is permanent: removes your profile, sessions, messages, connections, files and linked email accounts. Shared direct conversations will also be removed. Communities with other members are transferred. Remaining R2 objects are removed by scheduled cleanup.'}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!deleteOpen?<Button type="button" variant="outline" onClick={()=>setDeleteOpen(true)}
+          className="border-destructive/50 text-destructive hover:bg-destructive/10">
+          <Trash2 className="size-4"/>{pt?'Excluir minha conta':'Delete my account'}
+        </Button>:<form onSubmit={event=>void deleteAccount(event)} className="space-y-3 rounded-xl border border-destructive/40 p-4">
+          <p className="text-sm font-medium text-destructive">
+            {pt?'Esta ação não pode ser desfeita. Todos os seus dados pessoais serão removidos.':
+              'This action cannot be undone. Your personal data will be deleted.'}</p>
+          <label className="block space-y-1 text-xs font-medium">
+            <span>{pt?'Confirme sua senha':'Confirm your password'}</span>
+            <Input required type="password" value={deletePassword} onChange={event=>setDeletePassword(event.target.value)}
+              autoComplete="current-password" maxLength={256} disabled={deleteBusy}/>
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            <span>{pt?'Digite EXCLUIR para confirmar':'Type EXCLUIR to confirm'}</span>
+            <Input required value={deleteWord} onChange={event=>setDeleteWord(event.target.value)}
+              autoComplete="off" placeholder="EXCLUIR" disabled={deleteBusy}/>
+          </label>
+          {deleteError&&<p role="alert" className="text-xs text-destructive">{deleteError}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={()=>{
+              setDeleteOpen(false);setDeletePassword('');setDeleteWord('');setDeleteError('');
+            }} disabled={deleteBusy}>{pt?'Cancelar':'Cancel'}</Button>
+            <Button type="submit" disabled={deleteBusy||deleteWord!=='EXCLUIR'||!deletePassword}
+              loading={deleteBusy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {pt?'Excluir permanentemente':'Permanently delete'}
+            </Button>
+          </div>
+        </form>}
       </CardContent>
     </Card>
     <UserDirectory currentHandle={profile.handle} />
