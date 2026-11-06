@@ -1,3 +1,4 @@
+import { directApiRequest as api } from './lib/apiClient';
 import { Spinner } from '@/components/ui/spinner';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
@@ -53,14 +54,6 @@ function optimisticReaction(message: Message, next: string | null): Message {
 
 const NEAR_BOTTOM_PX = 96;
 
-async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error('UNAUTHORIZED');
-    throw new Error('HTTP_' + response.status);
-  }
-  return response.json() as Promise<T>;
-}
 function formatTime(value: string | null | undefined, locale: string) {
   if (!value) return '';
   const date = new Date(value);
