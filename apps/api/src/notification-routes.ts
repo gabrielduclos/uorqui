@@ -75,6 +75,79 @@ export function registerNotificationRoutes(app:FastifyInstance,readSession:Sessi
       return reply.header('Cache-Control',noCache).send({notifications:items.rows,unreadCount:count.rows[0]?.count??0});
     }catch(error){request.log.error({err:error},'Notification inbox');return reply.code(503).send({error:'Notifications unavailable'});}
   });
+
+  // Persistent mention/mail records supplement the existing activity inbox.
+  // Hidden channels, revoked permissions and disconnected mailboxes never leak.
+  app.get('/api/v1/notifications/inbox-events',async(request,reply)=>{
+    try{
+      const id=await me(request);if(!id)return reply.code(401).send({error:'Unauthorized'});
+      const result=await getPool().query(
+        'SELECT n.id,n.kind,n.read_at AS "readAt",n.created_at AS "createdAt",'+
+        'n.mail_account_id AS "mailAccountId",n.mail_message_id AS "mailMessageId",'+
+        'mc.email AS "mailAddress",n.sender,n.subject,'+
+        'm.id AS "communityMessageId",ch.id AS "channelId",ch.name AS "channelName",'+
+        'c.id AS "communityId",c.name AS "communityName",u.handle AS "actorHandle",'+
+        "CASE WHEN p.is_public=true OR f.status='accepted' THEN COALESCE(p.display_name,u.handle) ELSE u.handle END AS \"actorName\", "+
+        "CASE WHEN p.is_public=true OR f.status='accepted' THEN p.avatar_url ELSE NULL END AS \"actorAvatar\" "+
+        'FROM notification_inbox_events n '+
+        'LEFT JOIN mail_connections mc ON mc.id=n.mail_account_id AND mc.user_id=$1 '+
+        'LEFT JOIN community_messages m ON m.id=n.community_message_id AND m.deleted_at IS NULL '+
+        'LEFT JOIN community_channels ch ON ch.id=m.channel_id '+
+        'LEFT JOIN communities c ON c.id=ch.community_id '+
+        'LEFT JOIN users u ON u.id=n.actor_id LEFT JOIN profiles p ON p.user_id=u.id '+
+        'LEFT JOIN user_friendships f ON f.user_a_id=LEAST($1::uuid,n.actor_id) AND f.user_b_id=GREATEST($1::uuid,n.actor_id) '+
+        'LEFT JOIN community_members cm ON cm.community_id=c.id AND cm.user_id=$1 '+
+        'LEFT JOIN community_channel_password_access unlocked ON unlocked.channel_id=ch.id AND unlocked.user_id=$1 '+
+        'LEFT JOIN community_channel_member_access access ON access.channel_id=ch.id AND access.user_id=$1 '+
+        'WHERE n.recipient_id=$1 AND ( '+
+        "(n.kind='email' AND mc.id IS NOT NULL) OR (n.kind='mention' AND m.id IS NOT NULL AND cm.user_id IS NOT NULL "+
+        "AND (ch.password_hash IS NULL OR cm.role IN ('owner','admin') OR unlocked.user_id IS NOT NULL) "+
+        "AND (ch.access_mode='open' OR cm.role IN ('owner','admin') OR access.user_id IS NOT NULL) "+
+        'AND NOT EXISTS (SELECT 1 FROM community_bans banned WHERE banned.community_id=c.id AND banned.user_id=$1) '+
+        'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=n.actor_id) '+
+        'OR (b.blocked_id=$1 AND b.blocker_id=n.actor_id)))) '+
+        'ORDER BY n.created_at DESC,n.id DESC LIMIT 100',[id]);
+      return reply.header('Cache-Control',noCache).send({events:result.rows});
+    }catch(error){
+      request.log.error({err:error},'Notification inbox events');
+      return reply.code(503).send({error:'Inbox events unavailable'});
+    }
+  });
+  const inboxEventParams={type:'object',required:['id'],additionalProperties:false,
+    properties:{id:{type:'string',format:'uuid'}}};
+  app.patch('/api/v1/notifications/inbox-events/:id/read',{schema:{params:inboxEventParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const userId=await me(request);if(!userId)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      const saved=await getPool().query('UPDATE notification_inbox_events SET read_at=COALESCE(read_at,now()) '+
+        'WHERE id=$1 AND recipient_id=$2 RETURNING id',[id,userId]);
+      if(!saved.rowCount)return reply.code(404).send({error:'Notification unavailable'});
+      await publishDmUserEvent(userId,'notification').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({read:true});
+    }catch(error){request.log.error({err:error},'Mark inbox event read');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.delete('/api/v1/notifications/inbox-events/:id',{schema:{params:inboxEventParams}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const userId=await me(request);if(!userId)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      const removed=await getPool().query('DELETE FROM notification_inbox_events WHERE id=$1 AND recipient_id=$2 RETURNING id',[id,userId]);
+      if(!removed.rowCount)return reply.code(404).send({error:'Notification unavailable'});
+      await publishDmUserEvent(userId,'notification').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({removed:true});
+    }catch(error){request.log.error({err:error},'Delete inbox event');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.post('/api/v1/notifications/inbox-events/read-all',async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const userId=await me(request);if(!userId)return reply.code(401).send({error:'Unauthorized'});
+      await getPool().query('UPDATE notification_inbox_events SET read_at=now() WHERE recipient_id=$1 AND read_at IS NULL',[userId]);
+      await publishDmUserEvent(userId,'notification').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({read:true});
+    }catch(error){request.log.error({err:error},'Mark inbox events read');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   app.patch('/api/v1/notifications/:id/read',{schema:{params:{type:'object',required:['id'],additionalProperties:false,
     properties:{id:{type:'string',format:'uuid'}}}}},async(request,reply)=>{
     if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
