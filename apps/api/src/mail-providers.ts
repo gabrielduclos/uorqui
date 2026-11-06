@@ -6,7 +6,7 @@ export type MailProvider = OAuthMailProvider | 'manual';
 export type MailTokens = { access_token: string; refresh_token: string; expires_at: number };
 export type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
 export type MailMessage = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
-export const isMailProvider = (value: string): value is OAuthMailProvider => value === 'gmail';
+export const isMailProvider = (value: string): value is OAuthMailProvider => value === 'gmail' || value === 'outlook';
 export const stateHash = (value: string) => createHash('sha256').update(value).digest('hex');
 export const randomSecret = () => randomBytes(32).toString('base64url');
 
@@ -38,7 +38,7 @@ export function mailConfig(provider: OAuthMailProvider) {
     token: provider === 'gmail' ? 'https://oauth2.googleapis.com/token' : 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     scope: provider === 'gmail' ? 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send' : 'offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send' };
 }
-export function mailProviderReady(provider: OAuthMailProvider) { if (provider !== 'gmail') return false; try { mailConfig(provider); return true; } catch { return false; } }
+export function mailProviderReady(provider: OAuthMailProvider) { try { mailConfig(provider); return true; } catch { return false; } }
 export function authorizationUrl(provider: OAuthMailProvider, state: string, verifier: string) {
   const config = mailConfig(provider);
   const query = new URLSearchParams({ client_id: config.clientId, redirect_uri: config.redirectUri, response_type: 'code',

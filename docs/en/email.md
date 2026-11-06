@@ -2,7 +2,18 @@
 
 [English](email.md) · [Português](../pt-BR/email.md)
 
-Email integrates Gmail API and Microsoft Graph through OAuth 2.0 with PKCE. It does not use the user's password or change Better Auth sign-in. Each user can connect one account per provider; authorizing again replaces that provider's previous connection.
+Email integrates Gmail API and Microsoft Graph through OAuth 2.0 with PKCE. It does not use the user's password or change Better Auth sign-in. Users can connect multiple different email addresses per provider; reconnecting the same address refreshes its saved authorization.
+
+## Enable Outlook OAuth in Microsoft Entra — `v0.1.0-beta.3`
+
+1. Go to [Microsoft Entra](https://entra.microsoft.com) → **Identity → Applications → App registrations → New registration**. Select **Accounts in any organizational directory and personal Microsoft accounts** to support both Microsoft 365 and Outlook.com.
+2. Under **Authentication → Add a platform → Web**, register exactly `https://uorqui.app/api/v1/mail/oauth/outlook/callback`. Use **Web**, not SPA, because Fastify exchanges the authorization code server-side.
+3. Under **API permissions → Add a permission → Microsoft Graph → Delegated permissions**, enable `User.Read`, `Mail.ReadWrite` and `Mail.Send`. The authorization flow requests `offline_access` as well. Company tenants might require administrator consent.
+4. Copy the **Application (client) ID**. In **Certificates & secrets → Client secrets → New client secret**, generate a credential and copy its **Value** (not Secret ID) immediately. Monitor its expiration.
+5. In **Render → `uorqui-social-api` → Environment**, set `MAIL_MICROSOFT_CLIENT_ID` and `MAIL_MICROSOFT_CLIENT_SECRET`. Preserve the existing `MAIL_TOKEN_KEY`, because rotation without migration would make stored encrypted tokens unreadable.
+6. After deployment, use **Uorqui → Email → Connect email → Outlook**, or **Connect another email → Outlook**. Test consent, inbox, read state, replies, sending, Spam and Trash. The Outlook button remains disabled until the server is configured.
+
+This connects an Outlook mailbox and **does not** add Microsoft SSO for signing into Uorqui. The Microsoft Graph integration is HTTPS and does not require an SMTP relay.
 
 ## Setup
 
@@ -31,7 +42,7 @@ References: [Google OAuth](https://developers.google.com/identity/protocols/oaut
 ## OAuth troubleshooting
 
 - The `/api/v1/mail/accounts` endpoint returns `webOrigin`; before connecting, the client checks that its current domain matches `WEB_ORIGIN` to prevent login session cookies from being lost when returning from OAuth at another hostname. When origins differ, the UI links to the canonical host rather than starting OAuth.
-- The callback never redirects OAuth authorization codes, state, tokens or raw provider error strings to the browser. A failed callback carries a fixed `mail_reason` category only (`session`, `state`, `denied`, `invalid_return`, `token`, `mailbox`, `storage`). The UI shows actionable advice and removes the callback flags from the URL.
+- The callback never redirects OAuth authorization codes, state, tokens or raw provider error strings to the browser. A failed callback carries only a fixed `mail_reason` category and safe public `mail_provider` label (`session`, `state`, `denied`, `invalid_return`, `token`, `mailbox`, `storage`). The UI shows actionable advice and removes the callback flags from the URL.
 - `session`: missing login on the canonical origin; `state`: expired/invalid/replayed attempt; `denied`: denied consent or non-test account; `token`: rejected OAuth token exchange (client credentials, redirect URI or scopes); `mailbox`: Gmail API or scope issue; `storage`: Neon persistence error. The UI does not claim a connection succeeded until the provider confirms it.
 
 ## Rich mail, folders and read/reply sync
@@ -43,17 +54,17 @@ References: [Google OAuth](https://developers.google.com/identity/protocols/oaut
 
 ## Manual servers, account switcher and bulk mail actions
 
-- Accounts may include multiple distinct Gmail addresses and manual IMAP/SMTP mailboxes. The account selector contains **Connect another email**, with Gmail OAuth or manual IMAP/SMTP setup. Existing Outlook accounts remain readable while their prior OAuth credentials work, but new Outlook OAuth connections are disabled.
+- Accounts may include multiple distinct Gmail addresses and manual IMAP/SMTP mailboxes. The account selector contains **Connect another email**, with Gmail OAuth, Outlook OAuth or manual IMAP/SMTP setup. New Outlook connections are enabled when Microsoft credentials are configured in Render; existing accounts remain intact.
 - Migration `0036_mail_multiple_accounts.sql` updates uniqueness to (user, provider, email) and allows the `manual` provider. Apply before use; existing connections are preserved.
 - Manual mail settings are encrypted and never returned by the list API. Connections require public DNS targets, verified TLS, IMAP 993, SMTP 465/587 or 2525. SMTP login is not tested at account creation.
 - Render Free blocks outbound SMTP ports 25/465/587; manual sending on those ports requires alternative hosting, or SMTP 2525 where the provider supports STARTTLS.
-- Multi-select up to 100 messages, then move to Spam/Trash via Gmail batchModify, legacy Microsoft Graph move or IMAP MOVE. No permanent deletion action is exposed.
+- Multi-select up to 100 messages, then move to Spam/Trash via Gmail batchModify, Microsoft Graph move or IMAP MOVE. No permanent deletion action is exposed.
 - External HTTPS images load by default in a sandboxed iframe without scripts or forms. This may expose view activity to tracking pixels despite no-referrer policy.
 - Outlook.com/Microsoft 365 require OAuth2, and password-based manual setup does not substitute for that authentication.
 
 ## New mail push notifications
 
-The Render API periodically polls connected Gmail and manual IMAP inboxes (120-second default, configurable with `MAIL_POLL_INTERVAL_MS` between 60 seconds and an hour). Previously connected legacy Outlook accounts are scanned too. The first successful scan establishes a **silent baseline**, while observed message IDs are persisted in `mail_seen_messages` to prevent duplicate pushes after restarts. `mail_inbox_state` stores per-account unread badge counts.
+The Render API periodically polls connected Gmail and manual IMAP inboxes (120-second default, configurable with `MAIL_POLL_INTERVAL_MS` between 60 seconds and an hour). New and existing Outlook accounts are scanned too. The first successful scan establishes a **silent baseline**, while observed message IDs are persisted in `mail_seen_messages` to prevent duplicate pushes after restarts. `mail_inbox_state` stores per-account unread badge counts.
 
 Only mail arriving after the baseline is eligible for a push. The payload contains sender and subject (not the message body), is restricted to the signed-in recipient, is reauthorized if the account has been disconnected, and opens the correct account/message when tapped. The **New emails** notification category can be switched off. Background delivery is best-effort: if the Render API is asleep/unavailable, scans are delayed. Gmail unread totals are provider estimates.
 
@@ -65,7 +76,7 @@ The reader adapts **the entire HTML email iframe** to the available mobile width
 
 ## Account configuration modal
 
-New mail accounts are set up in a **scrollable dialog**, both for first-time setup and when selecting **+ Connect another email** with existing accounts. The dialog contains Gmail OAuth and IMAP/SMTP credentials with a fixed heading, dismissal via X, Escape or backdrop (disabled during submission), mobile-friendly scrolling and focus restoration. The inbox list remains separate from the form.
+New mail accounts are set up in a **scrollable dialog**, both for first-time setup and when selecting **+ Connect another email** with existing accounts. The dialog contains Gmail OAuth, Outlook OAuth and IMAP/SMTP credentials with a fixed heading, dismissal via X, Escape or backdrop (disabled during submission), mobile-friendly scrolling and focus restoration. The inbox list remains separate from the form.
 
 ## External links in HTML email
 

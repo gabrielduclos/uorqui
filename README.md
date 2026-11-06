@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.2` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.3` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -24,7 +24,7 @@ Uorqui brings together four connected experiences:
 - **Discover:** a home screen without global posts, featuring recommended public communities, search and activity from communities a user has joined. Obsolete global feed UI, API, and PostgreSQL tables were retired November 2, 2026.
 - **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, admission approval, request notifications and optional password-protected channels. Open/restricted channels have member permissions; meeting rooms support screen sharing, active-speaker highlighting and fullscreen camera/PiP view.
 
-- **Email:** Gmail OAuth or manual IMAP/SMTP, multiple connected accounts, inbox/sent/spam/trash, replies and bulk actions, safe HTML viewer and browser-opening external links.
+- **Email:** Gmail and Outlook OAuth or manual IMAP/SMTP, multiple connected accounts, inbox/sent/spam/trash, replies and bulk actions, safe HTML viewer and browser-opening external links.
 
 The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
 
@@ -41,7 +41,7 @@ Community approvals refresh the applicant's community list through account-targe
 | Legacy feed | Retired from app, API and PostgreSQL; Neon recovery snapshots and four legacy R2 files retained |
 | Discover | Public community recommendations, search and authorized joined-community activity; live API smoke checks passed, device testing pending |
 | Communities | Text, voice and video meeting channels; permissions, invites, channel passwords, moderation and private media cache; real-device AV tests pending |
-| Email | Gmail and manual IMAP/SMTP connectors, mailbox folders, reply/move operations, isolated responsive HTML viewer; external browser and device tests ongoing |
+| Email | Gmail/Outlook OAuth and manual IMAP/SMTP connectors, mailbox folders, reply/move operations, isolated responsive HTML viewer; external browser and device tests ongoing |
 | Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
 | Public launch | **Not yet approved:** real-device camera/microphone tests, push delivery, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
 
@@ -58,7 +58,7 @@ The project has automated CI for the API, UI and integration flows. Passing CI d
 - **Voice:** WebRTC peer-to-peer; TURN is optional and connectivity must be tested across networks.
 - **Deployment:** Cloudflare Builds and Render, with GitHub Actions verification.
 
-This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.2`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
+This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.3`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
 
 ## Documentation
 

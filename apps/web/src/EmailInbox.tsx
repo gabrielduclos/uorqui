@@ -14,29 +14,30 @@ type MailAccount = { id: string; provider: Provider; email: string };
 type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
 type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
 type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[]; webOrigin?: string };
-function mailOAuthFailureMessage(reason: string, pt: boolean): string {
+function mailOAuthFailureMessage(reason: string, pt: boolean, provider: 'gmail'|'outlook'): string {
+  const microsoft=provider==='outlook';
   switch (reason) {
     case 'session': return pt
-      ? 'Sua sessão não foi reconhecida no retorno do Google. Abra o domínio oficial do Uorqui, faça login e tente conectar novamente.'
-      : 'Your Uorqui session was not recognized after returning from Google. Sign in on the official Uorqui domain and try again.';
+      ? 'Sua sessão não foi reconhecida no retorno do '+(microsoft?'Microsoft':'Google')+'. Entre no domínio oficial do Uorqui e tente conectar novamente.'
+      : 'Uorqui session missing after returning from '+(microsoft?'Microsoft':'Google')+'. Sign in on the official domain and retry.';
     case 'state': return pt
-      ? 'A tentativa de autorização expirou ou não corresponde à sessão atual. Volte ao Uorqui e inicie uma nova conexão.'
-      : 'This authorization attempt expired or does not match your current session. Start a new connection.';
+      ? 'A autorização expirou ou não corresponde à sessão atual. Inicie uma nova conexão.'
+      : 'The authorization expired or did not match your current session. Start a new connection.';
     case 'denied': return pt
-      ? 'O Google não autorizou o acesso. Se o aplicativo estiver em teste, inclua sua conta Gmail nos usuários de teste do Google Cloud e tente novamente.'
-      : 'Google did not grant access. If the app is in testing, add your Gmail account as a Google Cloud test user and retry.';
+      ? (microsoft?'A Microsoft não concedeu autorização. Confira as permissões delegadas do Graph e, se for uma conta corporativa, o consentimento do administrador.':'O Google não autorizou o acesso. Confira os usuários de teste e as permissões no Google Cloud.')
+      : (microsoft?'Microsoft did not grant access. Check delegated Graph permissions and, for work accounts, administrator consent.':'Google did not grant access. Check test users and permissions in Google Cloud.');
     case 'token': return pt
-      ? 'O Google não concluiu a troca de credenciais. Confira o Client ID, o Client Secret e a URI de redirecionamento configurados no Google Cloud.'
-      : 'Google did not complete the token exchange. Check the OAuth Client ID, Client Secret and redirect URI in Google Cloud.';
+      ? 'Não foi possível trocar o código OAuth do '+(microsoft?'Microsoft Entra':'Google Cloud')+'. Confira Client ID, Client Secret e a URI exata de redirecionamento.'
+      : 'Could not exchange the '+(microsoft?'Microsoft Entra':'Google Cloud')+' OAuth code. Check Client ID, Client Secret and exact redirect URI.';
     case 'mailbox': return pt
-      ? 'A autorização chegou ao servidor, mas o Gmail não liberou a caixa de entrada. Confirme que a Gmail API está ativada e os escopos foram concedidos.'
-      : 'Authorization reached the server, but Gmail mailbox access failed. Enable the Gmail API and check the granted scopes.';
+      ? (microsoft?'A Microsoft autorizou o aplicativo, mas não liberou a caixa de correio. Confira Mail.ReadWrite, Mail.Send, User.Read e a licença de e-mail do usuário.':'O Google autorizou o aplicativo, mas não liberou o Gmail. Confirme que a Gmail API está ativada e os escopos foram concedidos.')
+      : (microsoft?'Microsoft authorized the app, but mailbox access failed. Check Mail.ReadWrite, Mail.Send, User.Read and mailbox provisioning.':'Google authorized the app, but Gmail mailbox access failed. Enable the Gmail API and check permissions.');
     case 'storage': return pt
-      ? 'O Google autorizou o acesso, mas não foi possível salvar a conexão no banco de dados. Confira os logs da API.'
-      : 'Google granted access, but the server could not save the connection. Check API logs.';
+      ? 'A autorização foi concedida, mas não foi possível salvar a conexão. Confira os logs da API.'
+      : 'Authorization was granted, but the connection could not be saved. Check API logs.';
     case 'invalid_return': return pt
-      ? 'O retorno do provedor estava incompleto. Reabra o Uorqui e inicie uma nova conexão.'
-      : 'The provider callback was incomplete. Reopen Uorqui and start a new connection.';
+      ? 'O retorno do provedor estava incompleto. Abra o Uorqui e inicie uma nova conexão.'
+      : 'The provider callback was incomplete. Open Uorqui and reconnect.';
     default: return pt ? 'Não foi possível conectar a conta. Tente novamente.' : 'Could not connect your account. Please try again.';
   }
 }
@@ -75,6 +76,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     return value === 'connected' ? 'connected' : value === 'failed' ? 'failed' : '';
   });
   const [mailFailureReason] = useState(() => new URLSearchParams(window.location.search).get('mail_reason') ?? '');
+  const [mailFailureProvider] = useState<'gmail'|'outlook'>(() =>
+    new URLSearchParams(window.location.search).get('mail_provider')==='outlook'?'outlook':'gmail');
   const [connecting, setConnecting] = useState<Provider | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [compose, setCompose] = useState(false);
@@ -155,8 +158,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   useEffect(() => { onMobileOpenChange(open); return () => onMobileOpenChange(false); }, [open, onMobileOpenChange]);
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.has('mail') || url.searchParams.has('mail_reason')) {
-      url.searchParams.delete('mail'); url.searchParams.delete('mail_reason');
+    if (url.searchParams.has('mail') || url.searchParams.has('mail_reason') || url.searchParams.has('mail_provider')) {
+      url.searchParams.delete('mail'); url.searchParams.delete('mail_reason'); url.searchParams.delete('mail_provider');
       window.history.replaceState({}, '', url.pathname + url.search + url.hash);
     }
     return () => detailAbort.current?.abort();
@@ -193,7 +196,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   function closeDetail() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
   function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
   function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
-  async function connect(provider: 'gmail') {
+  async function connect(provider: 'gmail'|'outlook') {
     if (connecting) return;
     setConnecting(provider); setConnectError('');
     try {
@@ -375,6 +378,13 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
       onClick={() => void connect('gmail')} className="min-h-11 gap-2">
       {connecting === 'gmail' ? <Spinner className="size-4" /> : <Plus className="size-4" />} Gmail
     </Button>
+    <Button type="button" variant="outline"
+      title={!providers.some(item=>item.id==='outlook'&&item.configured)?
+        (pt?'Aguardando credenciais Microsoft Entra no servidor':'Microsoft Entra credentials are not configured on the server'):undefined}
+      disabled={!providers.some(item=>item.id==='outlook'&&item.configured)||Boolean(connecting)||savingManual||loadingAccounts}
+      onClick={()=>void connect('outlook')} className="min-h-11 gap-2">
+      {connecting==='outlook'?<Spinner className="size-4"/>:<Plus className="size-4"/>} Outlook
+    </Button>
     <Button type="button" variant="outline" disabled={savingManual || Boolean(connecting)}
       onClick={() => {setConnectError('');setManualFormOpen(open => !open);}} className="min-h-11 gap-2">
       <Plus className="size-4" />{pt ? 'Servidor manual' : 'Manual server'}
@@ -498,13 +508,13 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.')
             : notice === 'movedTrash' ? (pt ? 'Mensagens movidas para Lixeira.' : 'Messages moved to Trash.')
             : notice === 'movedSpam' ? (pt ? 'Mensagens movidas para Spam.' : 'Messages moved to Spam.')
-            : mailOAuthFailureMessage(mailFailureReason, pt)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
+            : mailOAuthFailureMessage(mailFailureReason, pt, mailFailureProvider)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
         {error && <div role="alert" className="m-3 rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" className="mt-2" onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}>{pt ? 'Tentar novamente' : 'Retry'}</Button></div>}
         {(loadingAccounts || (loading && !messages.length)) &&
           <WorkspaceContentLoading label={pt?'Carregando emails':'Loading emails'} rows={4} className="p-4"/>}
         {!loadingAccounts && !account && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
           <h2 className="font-medium">{pt ? 'Seu email, por perto' : 'Your email, close by'}</h2>
-          <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail ou configure IMAP/SMTP para acompanhar sua caixa de entrada no Uorqui.' : 'Connect Gmail or set up IMAP/SMTP to use your mailbox in Uorqui.'}</p>
+          <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail, Outlook ou configure IMAP/SMTP para acompanhar sua caixa de entrada no Uorqui.' : 'Connect Gmail, Outlook or set up IMAP/SMTP to use your mailbox in Uorqui.'}</p>
           <Button type="button" variant="outline" onClick={openMailConfiguration} className="min-h-11 gap-2">
             <Plus className="size-4"/>{pt?'Conectar e-mail':'Connect email'}
           </Button>
@@ -512,8 +522,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             {pt ? 'Para vincular sua conta, acesse o domínio oficial: ' : 'To connect your mailbox, open the official domain: '}
             <a className="font-medium underline underline-offset-2" href={webOrigin}>{webOrigin}</a>
           </p>}
-          {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'Gmail OAuth indisponível; você pode usar um servidor manual.' : 'Gmail OAuth is unavailable; manual servers remain supported.'}</p>}
-          <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Gmail usa OAuth; servidores manuais usam uma senha de aplicativo, armazenada criptografada no Uorqui.' : 'Gmail uses OAuth; manual servers use an app password encrypted in Uorqui.'}</p>
+          {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'OAuth indisponível sem credenciais do provedor; você pode usar um servidor manual.' : 'OAuth requires provider credentials; manual servers remain supported.'}</p>}
+          <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Gmail e Outlook usam OAuth; servidores manuais usam uma senha de aplicativo, armazenada criptografada no Uorqui.' : 'Gmail and Outlook use OAuth; manual servers use an app password encrypted in Uorqui.'}</p>
         </div>}
         {visible.map(message => <div key={message.id} className={cn('uorqui-inbox-row flex w-full min-w-0 items-center border-b border-border transition-colors hover:bg-muted/60', selected?.id === message.id && !selectionMode && 'bg-secondary/70', selectionMode && selectedIds.includes(message.id) && 'bg-muted/80')}>
           {selectionMode && <label className="flex min-h-12 shrink-0 cursor-pointer items-center px-3" aria-label={pt ? 'Selecionar email' : 'Select email'}>
@@ -770,8 +780,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             <div className="min-w-0">
               <h2 id={mailDialogTitleId} className="text-base font-semibold">{pt?'Configuração de e-mail':'Email configuration'}</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">{pt?
-                'Conecte uma conta Gmail ou configure um servidor IMAP/SMTP.':
-                'Connect Gmail or configure an IMAP/SMTP server.'}</p>
+                'Conecte Gmail, Outlook ou configure um servidor IMAP/SMTP.':
+                'Connect Gmail, Outlook or configure an IMAP/SMTP server.'}</p>
             </div>
             <Button type="button" size="icon" variant="ghost" className="shrink-0"
               disabled={savingManual||Boolean(connecting)} aria-label={pt?'Fechar configuração':'Close configuration'}

@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.2
+# Uorqui UI Kit · Design System v0.1.0-beta.3
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
@@ -7,6 +7,8 @@
 - **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro.
 
 ## Princípios
+
+- O modal de e-mail reúne Gmail OAuth, Outlook OAuth e IMAP/SMTP manual, com rolagem independente. A disponibilidade do botão Outlook depende das credenciais Microsoft Entra no Render; isso não bloqueia os outros provedores.
 
 - Interface compacta, orientada a comunicação, com referências de organização visual a painéis de trabalho; **não** restringir o Uorqui ao público empresarial.
 - Navegação principal: **Descobrir · Mensagens · Comunidades · E-mail**; contatos são acessados **dentro de Mensagens**, não por um item independente do menu.
@@ -74,4 +76,4 @@ Antes de mesclar: validar **mobile/desktop × Dark/Light × PT/EN**, navegação
 
 ## Versão e manutenção
 
-Este documento corresponde ao marco **`v0.1.0-beta.2`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).
+Este documento corresponde ao marco **`v0.1.0-beta.3`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).

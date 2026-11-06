@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.3] — 2026-11-06
+
+- **Outlook OAuth restored:** new Outlook.com, Hotmail and Microsoft 365 mailbox connections can use Microsoft Entra and Graph again with PKCE, one-use state, refreshed credentials and encrypted token storage. Existing connections are preserved.
+- **Email UI:** Outlook returns as an option beside Gmail and Manual server, disabled only until Microsoft credentials are configured in Render; Gmail and IMAP/SMTP remain available.
+- **Diagnostics:** OAuth callback includes only the safe public provider label (never code, tokens or state), with provider-specific Microsoft authorization and permission guidance.
+- **Setup:** register an Entra Web app for organizational and personal accounts with callback `https://uorqui.app/api/v1/mail/oauth/outlook/callback`; delegated `User.Read`, `Mail.ReadWrite`, `Mail.Send`, `offline_access`; set `MAIL_MICROSOFT_CLIENT_ID` and `MAIL_MICROSOFT_CLIENT_SECRET` **in Render only** while preserving `MAIL_TOKEN_KEY`.
+- **Tests:** Microsoft consent, scopes, PKCE, callback isolation/replay/secret protection and fail-closed behavior without credentials. No database migration.
+
 ## [0.1.0-beta.2] — 2026-11-06
 
 - **Channels:** removed Edit from headers. Channel names, pinned descriptions/rules, access and passwords are managed in **Moderation → Channels**.

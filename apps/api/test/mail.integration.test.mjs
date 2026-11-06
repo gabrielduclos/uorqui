@@ -78,7 +78,7 @@ async function connect(provider = 'gmail') {
   return (await request('accounts')).json().accounts.find(account => account.provider === provider);
 }
 async function legacyOutlook() {
-  // Existing Outlook sessions remain readable even though new Outlook OAuth is disabled.
+  // Direct Graph connections and older stored Microsoft tokens share the same schema.
   const encrypted = sealMailSecret(JSON.stringify({
     access_token: 'test-access', refresh_token: 'test-refresh', expires_at: Date.now() + 60_000 * 60,
   }));
@@ -87,17 +87,41 @@ async function legacyOutlook() {
     [alice,'alice@outlook.test',encrypted]);
   return (await request('accounts')).json().accounts.find(row => row.provider === 'outlook');
 }
-test('OAuth starts only for Gmail and preserves distinct addresses per user', async () => {
-  assert.equal((await request('oauth/outlook', { method: 'POST', body: {} })).statusCode, 400);
+test('OAuth starts for both Gmail and Outlook, and preserves distinct accounts', async () => {
+  const outlookUrl=await start('outlook');
+  assert.equal(outlookUrl.hostname,'login.microsoftonline.com');
+  assert.equal(outlookUrl.pathname,'/common/oauth2/v2.0/authorize');
+  assert.equal(outlookUrl.searchParams.get('code_challenge_method'),'S256');
+  assert.equal(outlookUrl.searchParams.get('redirect_uri'),'http://localhost:5173/api/v1/mail/oauth/outlook/callback');
+  const scopes=outlookUrl.searchParams.get('scope')??'';
+  for(const scope of ['offline_access','User.Read','Mail.ReadWrite','Mail.Send'])
+    assert.ok(scopes.includes(scope),'Microsoft permission '+scope+' is requested');
+  const outlook=await connect('outlook');
+  assert.equal(outlook.email,'alice@outlook.test');
   const first = await connect();
   gmailEmail = 'alice-second@example.test';
   try { await connect(); }
   finally { gmailEmail = 'alice@example.test'; }
   const list = (await request('accounts')).json();
-  assert.equal(list.providers.some(p => p.id === 'outlook'), false);
+  assert.equal(list.providers.find(p=>p.id==='outlook')?.configured,true);
   assert.ok(list.accounts.some(a => a.id === first.id));
   assert.ok(list.accounts.some(a => a.email === 'alice-second@example.test'));
   assert.equal(list.accounts.filter(a=>a.provider==='gmail').length, 2);
+  assert.ok(list.accounts.some(a=>a.id===outlook.id));
+});
+test('Outlook OAuth is fail-closed when Microsoft credentials are missing', async () => {
+  const old=process.env.MAIL_MICROSOFT_CLIENT_SECRET;
+  delete process.env.MAIL_MICROSOFT_CLIENT_SECRET;
+  try{
+    const status=(await request('accounts')).json();
+    assert.equal(status.providers.find(p=>p.id==='outlook')?.configured,false);
+    const blocked=await request('oauth/outlook',{method:'POST',body:{}});
+    assert.equal(blocked.statusCode,503);
+    assert.equal(blocked.json().error,'MAIL_NOT_CONFIGURED');
+    assert.equal((await request('oauth/gmail',{method:'POST',body:{}})).statusCode,200,
+      'missing Microsoft configuration must not affect Gmail');
+  }finally{if(old===undefined)delete process.env.MAIL_MICROSOFT_CLIENT_SECRET;
+    else process.env.MAIL_MICROSOFT_CLIENT_SECRET=old;}
 });
 test('manual server config validates fields without exposing passwords', async () => {
   const valid = { email: 'me@company.example.com', imapHost: 'imap.service.invalid',
@@ -149,6 +173,18 @@ test('OAuth requires session, trusted origin, PKCE and a single-use account-boun
   assert.match(wrongUser.headers.location, /mail=failed&mail_reason=state/);
   const valid = await request('oauth/gmail/callback?state=' + state + '&code=test'); assert.match(valid.headers.location, /mail=connected/);
   const replay = await request('oauth/gmail/callback?state=' + state + '&code=test'); assert.match(replay.headers.location, /mail=failed&mail_reason=state/);
+  const outlookUrl=await start('outlook');
+  const microsoftState=outlookUrl.searchParams.get('state');
+  const crossProvider=await request('oauth/gmail/callback?state='+microsoftState+'&code=test');
+  assert.match(crossProvider.headers.location,/mail=failed&mail_reason=state/);
+  const crossUser=await request('oauth/outlook/callback?state='+microsoftState+'&code=test',{user:bob});
+  assert.match(crossUser.headers.location,/mail=failed&mail_reason=state/);
+  const accepted=await request('oauth/outlook/callback?state='+microsoftState+'&code=test');
+  assert.match(accepted.headers.location,/mail=connected/);
+  assert.match(accepted.headers.location,/mail_provider=outlook/);
+  assert.doesNotMatch(accepted.headers.location,/test-access|test-refresh|state=/);
+  const microsoftReplay=await request('oauth/outlook/callback?state='+microsoftState+'&code=test');
+  assert.match(microsoftReplay.headers.location,/mail=failed&mail_reason=state/);
   const db = await getPool().query('SELECT tokens FROM mail_connections WHERE user_id=$1', [alice]);
   assert.ok(!db.rows[0].tokens.includes('test-refresh'));
   assert.ok(!JSON.stringify((await request('accounts')).json()).includes('tokens'));
