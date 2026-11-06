@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.6
+# Uorqui UI Kit · Design System v0.1.0-beta.7
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -85,4 +85,4 @@ Before merging, check **mobile/desktop × Dark/Light × PT/EN**, keyboard focus,
 
 ## Version and maintenance
 
-This document captures **`v0.1.0-beta.6`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
+This document captures **`v0.1.0-beta.7`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
