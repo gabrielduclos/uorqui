@@ -73,3 +73,7 @@ Quando já existe uma conta vinculada, escolher **+ Conectar novo e-mail → Ser
 ## Modal de configuração de contas
 
 A configuração de novos e-mails fica em um **dialog centralizado com rolagem própria**, tanto no primeiro acesso quanto ao selecionar **+ Conectar novo e-mail** em uma caixa já vinculada. O modal reúne Gmail OAuth e o formulário IMAP/SMTP, com cabeçalho fixo, fechamento por X, Escape ou clique no fundo (exceto enquanto salva), rolagem dos campos no mobile e retorno do foco ao controle anterior. A lista de e-mails permanece independente do formulário.
+
+## Links externos no HTML do e-mail
+
+Os links HTTP(S) dentro do corpo HTML do e-mail — inclusive banners e imagens com links — abrem **no navegador, em uma nova aba/janela**, sem navegar dentro do iframe nem substituir o Uorqui. O clique é capturado pelo leitor principal com ação direta do usuário, mantendo o iframe isolado (`sandbox=allow-same-origin`, sem scripts nem formulários). Imagens sem link ainda podem ser ampliadas. URLs relativas (sem origem confiável no e-mail) e esquemas inseguros como `javascript:` e `data:` não são abertos. O site externo não recebe o referrer do Uorqui (`noopener,noreferrer`).
