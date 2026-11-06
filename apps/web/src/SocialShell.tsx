@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, Mail, LogOut, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, ShieldCheck, Users, X,
+  Bell, Compass, Mail, LogOut, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, ShieldCheck, Users, X,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -719,10 +719,10 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
             className="uorqui-kit-community-utility grid size-10 shrink-0 place-items-center rounded-xl border border-dashed border-border">
             <Plus className="size-5"/>
           </button>
-          <button type="button" onClick={browseCommunities} aria-label={locale==='pt-BR'?'Buscar comunidades':'Browse communities'}
-            title={locale==='pt-BR'?'Buscar comunidades':'Browse communities'}
+          <button type="button" onClick={browseCommunities} aria-label={locale==='pt-BR'?'Descobrir':'Discover'}
+            title={locale==='pt-BR'?'Descobrir':'Discover'}
             className="uorqui-kit-community-utility grid size-10 shrink-0 place-items-center rounded-xl">
-            <Search className="size-5"/>
+            <Compass className="size-5"/>
           </button>
         </nav>}
           <div className="h-full min-h-0 min-w-0 flex-1 overflow-hidden">
