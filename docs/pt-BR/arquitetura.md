@@ -92,3 +92,15 @@ Migrações versionadas; lint e testes unitários, de integração e E2E; CI em 
 ## Separação do legado
 
 O mensageiro empresarial anterior continua separado. `uorqui.app` agora atende ao novo Worker `main`; **não reutilizar** bancos, credenciais nem bindings do Worker legado `uorqui-chat`.
+
+## Marco de consolidação versionada — v0.1.0-beta.1 (06/11/2026)
+
+Este marco do beta consolida o código **sem substituir** a arquitetura publicada: React/Vite/Tailwind nos Workers Static Assets da Cloudflare, Node 22/Fastify no Render, PostgreSQL Neon com Drizzle, mídias privadas R2, Better Auth, SSE e WebRTC. Esta refatoração não altera rotas, banco, permissões, apontamento do Worker ou credenciais.
+
+**CSS:** `apps/web/src/styles.css` tem um único par global de tokens Dark/Light; `apps/web/src/ui-kit/sprintrix.css` aplica overrides intencionais apenas no workspace logado. As páginas consomem tokens semânticos; consultar o [UI Kit atual](ui-kit.md), não as paletas de protótipos antigos.
+
+**Frontend:** `apps/web/src/lib/apiClient.ts` concentra transporte HTTP JSON same-origin sem cache indiscriminado para mensagens, comunidades e moderação, preservando os códigos de erro específicos. Cache de mensagens, canais, mídias e eventos em tempo real continua separado por domínio e permissão.
+
+**Backend:** `apps/api/src/request-origin.ts` concentra a validação estrita de `WEB_ORIGIN` nas escritas protegidas de DM/comunidades/voz/moderação/push. Sessão, participação, rate limits, migrações Drizzle e comportamento das rotas Fastify não foram modificados.
+
+**Versionamento:** [v0.1.0-beta.1](../../CHANGELOG.pt-BR.md) é o marco. Todo PR posterior, inclusive só de documentação, eleva os três manifestos npm e atualiza os dois changelogs. Ver [política de versão e tags](versoes.md); a checagem deve ser obrigatória na proteção de branch para impedir bypass.
