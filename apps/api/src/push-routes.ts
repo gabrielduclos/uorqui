@@ -216,7 +216,7 @@ export async function pushCommunityMessage(messageId:string){
     try{
       const mentioned=await getPool().query<{recipient_id:string}>(
         'INSERT INTO notification_inbox_events(recipient_id,actor_id,kind,event_key,community_message_id) '+
-        "SELECT u.id,$1,'mention','mention:'||$2::text||':'||u.id::text,$2::uuid "+
+        "SELECT u.id,$1,'mention','mention:'||$2::uuid::text||':'||u.id::text,$2::uuid "+
         'FROM users u JOIN community_members cm ON cm.user_id=u.id AND cm.community_id=$3 '+
         'LEFT JOIN community_channel_password_access gate ON gate.channel_id=$4 AND gate.user_id=u.id '+
         'LEFT JOIN community_channel_member_access access ON access.channel_id=$4 AND access.user_id=u.id '+
