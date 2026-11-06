@@ -42,7 +42,7 @@ type Community={
   id:string;name:string;slug:string;description:string|null;avatarUrl:string|null;visibility:Visibility;
   memberCount:number;myRole:string|null;requestKind:string|null;requestStatus:string|null;
 };
-type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';createdAt:string;hasPassword?:boolean;unlocked?:boolean;accessMode?:'open'|'restricted'};
+type Channel={id:string;name:string;description:string|null;kind:'text'|'voice'|'meeting';createdAt:string;hasPassword?:boolean;unlocked?:boolean;accessMode?:'open'|'restricted'};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
@@ -122,6 +122,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [channelInviteSuccess,setChannelInviteSuccess]=useState('');
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
+  const [newChannelDescription,setNewChannelDescription]=useState('');
+  const [descriptionExpanded,setDescriptionExpanded]=useState(false);
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
   const [newChannelAccessMode,setNewChannelAccessMode]=useState<'open'|'restricted'>('open');
   const [unlockPassword,setUnlockPassword]=useState('');
@@ -168,6 +170,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   },[channelOpen,active]);
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
+  const channelDescription=activeChannel?.description?.trim()??'';
+  const descriptionNeedsMore=channelDescription.length>180||channelDescription.split('\n').length>3;
+  useEffect(()=>setDescriptionExpanded(false),[channelId,selectedId]);
   const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
   const community=detail?.community??null;
   // A revoked grant removes a closed room from the authorized channel list.
@@ -640,9 +645,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   async function createChannel(event:FormEvent){
     event.preventDefault();
     if(!selectedId||!newChannelName.trim())return;
-    const created=await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind,accessMode:newChannelAccessMode})),
+    const created=await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind,accessMode:newChannelAccessMode,description:newChannelDescription.trim()})),
       pt?'Canal criado.':'Channel created.',selectedId,'createChannel');
-    if(created){setNewChannelOpen(false);setNewChannelName('');setNewChannelAccessMode('open');}
+    if(created){setNewChannelOpen(false);setNewChannelName('');setNewChannelDescription('');setNewChannelAccessMode('open');}
   }
   function releasePending(clientId:string){
     pendingFiles.current.delete(clientId);
@@ -975,6 +980,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {newChannelOpen&&<form className="space-y-2" onSubmit={event=>void createChannel(event)}>
                 <Input required value={newChannelName} onChange={e=>setNewChannelName(e.target.value)} maxLength={64}
                   className="text-base" placeholder={pt?'Nome do canal':'Channel name'}/>
+                <label className="block space-y-1 text-xs font-medium">
+                  <span>{pt?'Descrição ou regras (opcional)':'Description or rules (optional)'}</span>
+                  <textarea value={newChannelDescription} onChange={e=>setNewChannelDescription(e.target.value)}
+                    maxLength={4000} rows={3} className="w-full resize-y rounded-lg border border-input bg-background p-2 text-base"
+                    placeholder={pt?'Orientações fixadas neste canal…':'Pinned guidelines for this channel…'}/>
+                </label>
                 <select value={newChannelKind} onChange={e=>setNewChannelKind(e.target.value as 'text'|'voice'|'meeting')}
                   className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
                   <option value="text">{pt?'Texto':'Text'}</option><option value="voice">{pt?'Voz':'Voice'}</option><option value="meeting">{pt?'Reunião (áudio e vídeo)':'Meeting (audio and video)'}</option>
@@ -1035,6 +1046,24 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <UserPlus className="size-4"/><span className="hidden sm:inline">{pt?'Convidar':'Invite'}</span>
           </Button>
         </header>
+        {!channelLocked&&channelDescription&&<section aria-label={pt?'Descrição fixa do canal':'Pinned channel description'}
+          className="z-10 shrink-0 border-b border-border bg-card/80 px-4 py-2 sm:px-5">
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {pt?'Sobre este canal':'About this channel'}
+              </p>
+              <p className={cn('whitespace-pre-wrap wrap-break-word text-xs leading-5 text-foreground/90',
+                !descriptionExpanded&&descriptionNeedsMore&&'line-clamp-3',
+                descriptionExpanded&&'max-h-[35dvh] overflow-y-auto overscroll-contain')}>{channelDescription}</p>
+            </div>
+            {descriptionNeedsMore&&<Button type="button" variant="ghost" size="sm"
+              aria-expanded={descriptionExpanded}
+              className="h-8 shrink-0 px-2 text-xs" onClick={()=>setDescriptionExpanded(old=>!old)}>
+              {descriptionExpanded?(pt?'Mostrar menos':'Show less'):(pt?'Ler mais':'Read more')}
+            </Button>}
+          </div>
+        </section>}
         {channelLocked?<form className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 py-8 text-center" onSubmit={event=>void unlockChannel(event)}>
           <span className="grid size-14 place-items-center rounded-2xl bg-primary/10"><LockKeyhole className="size-7 text-primary"/></span>
           <h3 className="font-semibold">{pt?'Canal protegido por senha':'Password-protected channel'}</h3>
