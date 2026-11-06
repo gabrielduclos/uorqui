@@ -53,7 +53,7 @@
 | `--destructive` | `#fa646e` | `#d7384c` | Dangerous actions; global fallback |
 | `--workspace-rail` | `#181818` | `#fafafa` | Community rail |
 
-**Never hardcode the table's colors in module components.** Consume the semantic token. Quoted replies use the global `uorqui-reply-quote` / `uorqui-reply-draft` classes, readable in both themes. Bubbles remain compact and gently rounded.
+**Never hardcode the table's colors in module components.** Consume the semantic token. Quoted reply references use the global `uorqui-reply-reference` / `uorqui-reply-draft` classes, readable in both themes. Bubbles remain compact and gently rounded.
 
 ## Components and interaction contracts
 
