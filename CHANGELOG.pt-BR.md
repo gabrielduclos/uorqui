@@ -6,6 +6,15 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.5] — 06/11/2026
+
+- **Abas na central de notificações:** **Todas, Mensagens, Menções, E-mail, Convites e Contatos**, com rolagem horizontal responsiva, navegação por teclado e contadores por categoria. Todas reúne as categorias sem excluir atividades antigas.
+- **Mensagens:** a aba apresenta conversas privadas e canais de comunidades com mensagens não lidas e abre o destino correto.
+- **Menções:** cada `@usuário` válido gera uma notificação persistente mesmo sem push ativado; acesso de membro, canais restritos/protegidos, bans e bloqueios são respeitados na criação e consulta. Cada aviso abre seu canal.
+- **E-mail:** novos e-mails detectados pelo monitoramento entram no histórico com remetente/assunto e acesso ao leitor. Existe também um atalho com o total de não lidos de todas as contas. O primeiro monitoramento continua silencioso e não simula notificações históricas.
+- **Ações:** marcar aviso como lido ou dispensá-lo, marcar atividades como lidas em Todas; desconectar o e-mail ou apagar a conta remove os registros relacionados.
+- **Banco de dados:** migração aditiva `0042_notification_inbox_events`; aplicar antes da API/Worker. Testes abrangem isolamento por usuário, permissões, leitura/exclusão, segurança de origem, autoria e desconexão.
+
 ## [0.1.0-beta.4] — 06/11/2026
 
 - **Notificações no desktop:** o convite diário para ativar o push passa a ter prioridade sobre a oferta de instalar o PWA. Antes, o aviso de instalação surgia primeiro e cancelava o lembrete de notificações.
