@@ -66,3 +66,7 @@ The reader adapts **the entire HTML email iframe** to the available mobile width
 ## Account configuration modal
 
 New mail accounts are set up in a **scrollable dialog**, both for first-time setup and when selecting **+ Connect another email** with existing accounts. The dialog contains Gmail OAuth and IMAP/SMTP credentials with a fixed heading, dismissal via X, Escape or backdrop (disabled during submission), mobile-friendly scrolling and focus restoration. The inbox list remains separate from the form.
+
+## External links in HTML email
+
+HTTP(S) links within an HTML email — including linked images and banners — open **in the external browser in a new tab/window** rather than inside the iframe or over Uorqui. The parent reader handles the actual user click, while the email iframe remains sandboxed (no scripts or forms). Unlinked images still open the enlarged viewer. Relative URLs without a trustworthy sender base and unsafe schemes such as `javascript:` and `data:` are blocked. External pages do not receive the Uorqui referrer (`noopener,noreferrer`).
