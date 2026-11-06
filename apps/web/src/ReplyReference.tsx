@@ -43,7 +43,7 @@ export function ReplyComposerPreview({ author, body, deleted = false, locale, on
   return <div className="uorqui-reply-draft mb-2 flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs">
     <span className="uorqui-reply-reference__connector" aria-hidden="true"/>
     <div className="min-w-0 flex flex-1 items-center gap-1.5">
-      <span className="shrink-0 font-semibold">{pt ? 'Respondendo a' : 'Replying to'} <strong>{author}</strong></span>
+      <span className="min-w-0 max-w-[62%] truncate font-semibold">{pt ? 'Respondendo a' : 'Replying to'} <strong>{author}</strong></span>
       <span className="uorqui-reply-draft__preview min-w-0 flex-1 truncate">{replyExcerpt(body, deleted, locale)}</span>
     </div>
     <button type="button" onClick={onCancel} aria-label={pt ? 'Cancelar resposta' : 'Cancel reply'}
