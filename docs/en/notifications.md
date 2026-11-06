@@ -6,6 +6,14 @@ Recorded events: post likes and comments, new followers, friend requests, and ac
 
 Tapping post activity opens the related feed post; other activity opens the actor profile. History and read state are stored in PostgreSQL. Authenticated real-time events update the UI, with periodic polling as a fallback.
 
+## Desktop notification permission reminders
+
+On desktop browsers (workspace width at least 768 px, excluding iOS), **Enable notifications** is offered before the optional PWA installation banner when push is supported but not yet active. The installation reminder never displaces an in-progress notification reminder; if notifications were offered during this visit, installation can be suggested on a future visit instead.
+
+The daily prompt is **per account and browser** using local storage. The operating-system permission dialog is requested **only on the user's button click**. A previous refusal opens instructions to allow notifications in site settings; no hidden permission requests occur. When already subscribed, the desktop may show the optional installation suggestion. Mobile behavior is unchanged: iPhone/iPad require an installed PWA for push, while other supported browsers can subscribe normally.
+
+The permanent device-level action remains available at **Notifications → Settings → Permission on this device**.
+
 ## Web Push
 
 Activity notifications reuse the existing VAPID keys, account-bound subscriptions and service worker already used for messaging. Delivery requires the user's permission. On iOS, users must install the PWA to their Home Screen and grant permission. Push is best-effort; the activity remains in the inbox if delivery fails.
