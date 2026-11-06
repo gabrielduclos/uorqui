@@ -2,6 +2,10 @@
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
+- **Channel chat:** original-message replies, `@username` suggestions, GIFs and per-emoji reactor details, filtered by read permissions.
+- **Privacy:** irreversible account deletion card in Profile with password and `EXCLUIR` confirmations, errors and delayed media-purge disclosure.
+- **Invites:** explicit join confirmation only after authentication, never blocking signup.
+
 ## Principles
 
 - Compact, communication-first interface influenced by workspace dashboards, without positioning Uorqui as exclusively enterprise software.
