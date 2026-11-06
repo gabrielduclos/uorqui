@@ -331,6 +331,48 @@ body.uorqui-app-active {
   [data-uorqui-dashboard-sidebar] .uorqui-sidebar-item { transition: none !important; }
 }
 
+/* Workspace canvas is shared by full-page views (Messages, Email, Contacts).
+ * Theme colors come exclusively from the global light/dark semantic tokens. */
+[data-uorqui-inset-panel] [data-uorqui-workspace-surface] {
+  background-color: var(--card);
+  color: var(--card-foreground);
+}
+
+/* A reply needs to remain legible both inside a light outgoing bubble in Dark
+ * and inside a dark outgoing bubble in Light. Invert the quoted surface using
+ * existing --primary, --primary-foreground, --card and --foreground tokens. */
+[data-uorqui-app-shell] .uorqui-reply-quote {
+  border-left: 3px solid var(--ring);
+  background-color: color-mix(in srgb, var(--card) 78%, var(--foreground) 22%);
+  color: var(--foreground);
+  border-radius: 4px;
+}
+[data-uorqui-app-shell] .uorqui-reply-quote[data-mine="true"] {
+  border-left-color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary-foreground) 88%, var(--primary) 12%);
+  color: var(--primary);
+}
+[data-uorqui-app-shell] .uorqui-reply-quote:hover {
+  filter: brightness(1.09);
+}
+[data-uorqui-app-shell] .uorqui-reply-quote__body {
+  color: inherit;
+  opacity: 1;
+}
+[data-uorqui-app-shell] .uorqui-reply-draft {
+  border-left: 3px solid var(--ring);
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background-color: color-mix(in srgb, var(--secondary) 87%, var(--foreground) 13%);
+  color: var(--foreground);
+  border-radius: 4px;
+}
+[data-uorqui-app-shell] .uorqui-reply-draft__preview {
+  color: var(--foreground);
+  opacity: .95;
+}
+
 /* iOS WebKit zooms the viewport when focusing controls smaller than 16px.
    Keep user pinch-to-zoom enabled; only normalize editable text sizing on phones. */
 @supports (-webkit-touch-callout: none) {
