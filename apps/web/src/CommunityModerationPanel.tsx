@@ -145,12 +145,22 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
               <Trash2 className="size-4"/>{pt?'Exclusão':'Delete'}
             </Tabs.Trigger>}
           </Tabs.List>
+          {/* Notices are outside the scrolling tab body. On mobile the
+              confirmation remains visible when the selected channel is far down. */}
+          {(error||notice||confirm)&&<div className="max-h-36 shrink-0 space-y-2 overflow-y-auto overscroll-contain border-b border-border bg-card px-4 py-2 sm:px-5" aria-live="polite">
+            {error&&<p role="alert" className="text-xs text-destructive">{error}</p>}
+            {notice&&<p role="status" className={confirm?.startsWith('channel:delete:')?'text-xs font-medium text-destructive':'text-xs text-primary'}>{notice}</p>}
+            {confirm&&<div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+              <p className="min-w-0 text-xs text-foreground">{confirm.startsWith('channel:delete:')
+                ?(pt?'Atenção: a exclusão não pode ser desfeita. Confirme no canal selecionado abaixo.':'Warning: deletion cannot be undone. Confirm in the selected channel below.')
+                :(pt?'Clique novamente na ação para confirmar.':'Click the action again to confirm.')}</p>
+              <Button type="button" size="sm" variant="ghost" className="shrink-0" disabled={busy}
+                onClick={()=>{setConfirm(null);setNotice('');}}>
+                <X className="size-4"/>{pt?'Cancelar':'Cancel'}
+              </Button>
+            </div>}
+          </div>}
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
-      {error&&<p role="alert" className="text-xs text-destructive">{error}</p>}
-      {notice&&<p role="status" className="text-xs text-primary">{notice}</p>}
-      {confirm&&<div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 p-2">
-        <p className="text-xs text-muted-foreground">{pt?'Clique novamente na ação para confirmar.':'Click the action again to confirm.'}</p>
-        <Button type="button" size="icon" variant="ghost" aria-label={pt?'Cancelar':'Cancel'} onClick={()=>{setConfirm(null);setNotice('');}}><X className="size-4"/></Button></div>}
       {canAdmin&&<Tabs.Content value="settings" className="space-y-3 outline-none">
         <h4 className="text-xs font-semibold">{pt?'Configurações da comunidade':'Community settings'}</h4>
         <div className="flex items-center gap-3">
@@ -378,13 +388,28 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
                   <X className="size-3.5"/>{pt?'Remover senha':'Remove password'}
                 </Button>}
               </div>
-              <div className="flex justify-end border-t border-border/70 pt-3">
-                <Button size="sm" variant="outline" className="h-9 text-destructive" disabled={busy}
+              {confirm==='channel:delete:'+ch.id&&<div role="alert"
+                className="space-y-1 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs">
+                <p className="font-semibold text-destructive">{pt?'Excluir este canal?':'Delete this channel?'}</p>
+                <p className="text-foreground">{pt?
+                  'O canal “'+ch.name+'” e suas mensagens serão excluídos. Esta ação não pode ser desfeita.':
+                  'The channel “'+ch.name+'” and its messages will be deleted. This cannot be undone.'}</p>
+              </div>}
+              <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-3">
+                {confirm==='channel:delete:'+ch.id&&<Button type="button" size="sm" variant="ghost"
+                  disabled={busy} onClick={()=>{setConfirm(null);setNotice('');}}>
+                  {pt?'Cancelar':'Cancel'}
+                </Button>}
+                <Button type="button" size="sm"
+                  variant={confirm==='channel:delete:'+ch.id?'destructive':'outline'}
+                  className={confirm==='channel:delete:'+ch.id?'h-9':'h-9 text-destructive'} disabled={busy}
                   loading={busyKey==='channel:delete:'+ch.id}
                   onClick={()=>request('channel:delete:'+ch.id,
                     ()=>api(endpoint,{method:'DELETE'}),pt?'Canal excluído.':'Channel deleted.',
                     pt?'excluir canal '+ch.name:'delete channel '+ch.name)}>
-                  <Trash2 className="size-3.5"/>{pt?'Excluir canal':'Delete channel'}
+                  <Trash2 className="size-3.5"/>{confirm==='channel:delete:'+ch.id
+                    ?(pt?'Confirmar exclusão':'Confirm deletion')
+                    :(pt?'Excluir canal':'Delete channel')}
                 </Button>
               </div>
             </section>;
