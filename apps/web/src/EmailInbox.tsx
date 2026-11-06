@@ -351,7 +351,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
     '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: https:; style-src \'unsafe-inline\'; font-src data:; form-action \'none\'; base-uri \'none\'; object-src \'none\';">',
-    '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:min(100%,420px)!important;max-height:280px!important;width:auto!important;height:auto!important;object-fit:contain!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
+    '<style>html,body{margin:0;padding:0;max-width:100%;overflow-wrap:anywhere}img{max-width:min(100%,180px)!important;max-height:120px!important;width:auto!important;height:auto!important;object-fit:contain!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
@@ -568,6 +568,15 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                   return true;
                 };
                 doc.querySelectorAll('img').forEach(img=>{
+                  // Email templates often use inline !important widths that win
+                  // against our iframe CSS. Keep every inline image thumbnail-sized
+                  // even in those cases, without changing the actual image URL.
+                  img.style.setProperty('max-width','min(100%, 180px)','important');
+                  img.style.setProperty('max-height','120px','important');
+                  img.style.setProperty('width','auto','important');
+                  img.style.setProperty('height','auto','important');
+                  img.style.setProperty('object-fit','contain','important');
+                  img.style.setProperty('cursor','zoom-in','important');
                   img.setAttribute('tabindex','0');
                   img.setAttribute('role','button');
                   img.setAttribute('aria-label',pt?'Ampliar imagem':'Enlarge image');
