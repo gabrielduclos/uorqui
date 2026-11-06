@@ -1,14 +1,15 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { isCommunityGifUrl } from './CommunityMediaPicker';
 
-/** A single-line reference shared by channel messages and direct chats. */
+/** Display the original text without silently cutting it at a character limit. */
 export function replyExcerpt(body: string | null | undefined, deleted: boolean, locale: string) {
   const pt = locale === 'pt-BR';
   if (deleted) return pt ? 'Mensagem excluída' : 'Deleted message';
   const text = (body ?? '').trim();
   if (!text) return pt ? 'Mídia ou arquivo' : 'Media or file';
   if (isCommunityGifUrl(body ?? null)) return 'GIF';
-  return text.replace(/\s+/g, ' ').slice(0, 180);
+  return text.replace(/\s+/g, ' ');
 }
 
 type ReferenceProps = {
@@ -19,19 +20,31 @@ type ReferenceProps = {
   onJump: () => void;
 };
 
-/** Discord-style reply context: connector + author + one-line snippet, no nested card. */
+/** Compact reply with a readable multiline preview and optional full expansion. */
 export function ReplyReference({ author, body, deleted = false, locale, onJump }: ReferenceProps) {
+  const [expanded, setExpanded] = useState(false);
   const excerpt = replyExcerpt(body, deleted, locale);
-  return <button type="button" className="uorqui-reply-reference"
-    onClick={onJump} aria-label={(locale === 'pt-BR' ? 'Ir para mensagem de ' : 'Jump to message from ') + author + ': ' + excerpt}
-    title={excerpt}>
+  const pt = locale === 'pt-BR';
+  const canExpand = !deleted && excerpt.length > 100;
+  return <div className="uorqui-reply-reference" role="group"
+    aria-label={pt ? 'Referência à mensagem original' : 'Original message reference'}>
     <span aria-hidden="true" className="uorqui-reply-reference__connector"/>
-    <strong className="uorqui-reply-reference__author">{author}</strong>
-    <span aria-hidden="true" className="uorqui-reply-reference__excerpt">{excerpt}</span>
-  </button>;
+    <div className="uorqui-reply-reference__content">
+      <button type="button" className="uorqui-reply-reference__link" onClick={onJump}
+        aria-label={(pt ? 'Ir para mensagem de ' : 'Jump to message from ') + author}>
+        <strong className="uorqui-reply-reference__author">{author}</strong>
+        <span className="uorqui-reply-reference__excerpt" data-expanded={expanded ? 'true' : 'false'}>{excerpt}</span>
+      </button>
+      {canExpand && <button type="button" className="uorqui-reply-reference__toggle"
+        onClick={() => setExpanded(previous => !previous)}
+        aria-expanded={expanded}>
+        {expanded ? (pt ? 'Mostrar menos' : 'Show less') : (pt ? 'Ler mais' : 'Read more')}
+      </button>}
+    </div>
+  </div>;
 }
 
-/** Compact, dismissible context above either type of message composer. */
+/** The same author-then-preview reading order above either type of composer. */
 export function ReplyComposerPreview({ author, body, deleted = false, locale, onCancel }: {
   author: string;
   body?: string | null;
@@ -40,11 +53,19 @@ export function ReplyComposerPreview({ author, body, deleted = false, locale, on
   onCancel: () => void;
 }) {
   const pt = locale === 'pt-BR';
-  return <div className="uorqui-reply-draft mb-2 flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs">
+  const [expanded, setExpanded] = useState(false);
+  const excerpt = replyExcerpt(body, deleted, locale);
+  const canExpand = !deleted && excerpt.length > 100;
+  return <div className="uorqui-reply-draft mb-2 flex min-w-0 items-start gap-2 px-2.5 py-2 text-xs">
     <span className="uorqui-reply-reference__connector" aria-hidden="true"/>
-    <div className="min-w-0 flex flex-1 items-center gap-1.5">
-      <span className="min-w-0 max-w-[62%] truncate font-semibold">{pt ? 'Respondendo a' : 'Replying to'} <strong>{author}</strong></span>
-      <span className="uorqui-reply-draft__preview min-w-0 flex-1 truncate">{replyExcerpt(body, deleted, locale)}</span>
+    <div className="min-w-0 flex-1">
+      <strong className="block truncate">{pt ? 'Respondendo a ' : 'Replying to '}{author}</strong>
+      <span className="uorqui-reply-draft__preview" data-expanded={expanded ? 'true' : 'false'}>{excerpt}</span>
+      {canExpand && <button type="button" className="uorqui-reply-reference__toggle"
+        onClick={() => setExpanded(previous => !previous)}
+        aria-expanded={expanded}>
+        {expanded ? (pt ? 'Mostrar menos' : 'Show less') : (pt ? 'Ler mais' : 'Read more')}
+      </button>}
     </div>
     <button type="button" onClick={onCancel} aria-label={pt ? 'Cancelar resposta' : 'Cancel reply'}
       className="grid size-8 shrink-0 place-items-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
