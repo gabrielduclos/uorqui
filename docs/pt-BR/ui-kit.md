@@ -53,7 +53,7 @@ O padrão de instalação nova é **Light**, como implementado em `UorquiPrefere
 | `--destructive` | `#fa646e` | `#d7384c` | Ações destrutivas; token global |
 | `--workspace-rail` | `#181818` | `#fafafa` | Trilho lateral |
 
-**Não copiar esses valores hexadecimais para os componentes.** Usar o token. Estados de resposta citada usam `uorqui-reply-quote` e `uorqui-reply-draft` definidos globalmente, com contraste testado em ambos os temas. Cantos seguem a escala compartilhada, com balões compactos e levemente arredondados.
+**Não copiar esses valores hexadecimais para os componentes.** Usar o token. Referências de resposta usam `uorqui-reply-reference` e `uorqui-reply-draft` definidos globalmente, com contraste testado em ambos os temas. Cantos seguem a escala compartilhada, com balões compactos e levemente arredondados.
 
 ## Componentes e comportamentos obrigatórios
 
