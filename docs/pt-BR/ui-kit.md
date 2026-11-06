@@ -8,6 +8,7 @@
 
 ## Princípios
 
+- **Leitura das respostas (beta.7):** nos canais, a sequência é **autor → citação original → nova mensagem**. A citação mostra quatro linhas antes de **Ler mais**; no editor, três linhas, com expansão do texto inteiro. Mantém o salto ao original e largura mínima responsiva no chat privado.
 - **Respostas em mensagens (estilo Discord):** referência compacta com conector, autor e trecho truncado **acima** da mensagem em conversas privadas e canais; clique leva à mensagem original. Editor exibe prévia discreta e cancelar. Sem cartão dentro de outro balão; cores vêm do CSS global para contraste Light/Dark. Inclui fallback para mensagem excluída, GIF e arquivos.
 
 
