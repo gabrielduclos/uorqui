@@ -7,7 +7,7 @@
 **Toda alteração posterior enviada por PR deve receber uma versão nova, mesmo se apenas corrigir texto, CSS ou documentação.**
 
 1. Alterar **a mesma versão SemVer** nos arquivos `package.json`, `apps/web/package.json` e `apps/api/package.json`.
-2. Acrescentar uma entrada com o novo número em **`CHANGELOG.md` e `CHANGELOG.pt-BR.md`**. Descrever o que mudou, impactos, migrações, riscos e testes relevantes. Manter a seção `[Unreleased]` disponível.
+2. Atualizar o número exibido em **`README.md` e `README.pt-BR.md`** e acrescentar uma entrada com o novo número em **`CHANGELOG.md` e `CHANGELOG.pt-BR.md`**. Descrever o que mudou, impactos, migrações, riscos e testes relevantes. Manter a seção `[Unreleased]` disponível.
 3. Sincronizar a documentação impactada em português e inglês; corrigir o UI Kit quando houver mudança de interface, e os documentos de arquitetura quando houver mudança técnica.
 4. Abrir PR e aguardar os checks **Version policy**, **Web UI** e **API/integrations** aplicáveis. O check de versão compara o PR com a `main` e rejeita versões iguais ou menores.
 5. O workflow `Publish tagged beta releases` tenta criar a tag imutável `v<versão>` e uma GitHub Release ao entrar na `main`. Se a mesma versão já estiver etiquetada em outro commit, o workflow falha: **não reescrever tags**.
