@@ -25,9 +25,10 @@ Obrigado pelo interesse em contribuir com o Uorqui.
 1. Faça um fork e crie uma branch descritiva.
 2. Envie uma mudança focada, explicando **por que** ela é necessária.
 3. Vincule a issue correspondente quando houver e descreva os fluxos impactados.
-4. Atualize a documentação relacionada nos dois idiomas.
-5. Quando houver código e comandos de teste documentados, execute as verificações e informe os resultados.
-6. Abra um pull request para revisão. Ajustes podem ser solicitados antes do merge.
+4. **Sempre aumente a versão SemVer** após o marco `v0.1.0-beta.1`, mesmo em alterações apenas de docs/CSS. Mantenha os manifestos raiz, web e API iguais e acrescente uma entrada aos **dois** changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
+5. Atualize a documentação relacionada nos dois idiomas; revise o UI Kit quando a mudança for visual.
+6. Execute `npm run typecheck`, `npm run build` e as integrações aplicáveis; confira **Verify release version**.
+7. Abra um pull request para revisão. Ajustes podem ser solicitados antes do merge.
 
 Nunca envie segredos, tokens, dados de produção, código proprietário de terceiros ou mídias sem licenças adequadas.
 
