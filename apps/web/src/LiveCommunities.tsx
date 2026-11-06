@@ -122,6 +122,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [channelInviteSuccess,setChannelInviteSuccess]=useState('');
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
+  const [newChannelNameEdited,setNewChannelNameEdited]=useState(false);
   const [newChannelDescription,setNewChannelDescription]=useState('');
   const [descriptionExpanded,setDescriptionExpanded]=useState(false);
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
@@ -171,6 +172,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
   const channelDescription=activeChannel?.description?.trim()??'';
+  function suggestedChannelName(kind:Channel['kind']){
+    const base=kind==='text'?'Sala de texto':kind==='voice'?'Sala de voz':'Sala de reunião';
+    const taken=new Set((detail?.channels??[]).filter(ch=>ch.kind===kind)
+      .map(ch=>ch.name.trim().toLocaleLowerCase(locale)));
+    for(let number=1;number<=100;number++){
+      const proposal=base+' '+number;
+      if(!taken.has(proposal.toLocaleLowerCase(locale)))return proposal;
+    }
+    return base+' 101';
+  }
   const descriptionNeedsMore=channelDescription.length>180||channelDescription.split('\n').length>3;
   useEffect(()=>setDescriptionExpanded(false),[channelId,selectedId]);
   const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
@@ -647,7 +658,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     if(!selectedId||!newChannelName.trim())return;
     const created=await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind,accessMode:newChannelAccessMode,description:newChannelDescription.trim()})),
       pt?'Canal criado.':'Channel created.',selectedId,'createChannel');
-    if(created){setNewChannelOpen(false);setNewChannelName('');setNewChannelDescription('');setNewChannelAccessMode('open');}
+    if(created){setNewChannelOpen(false);setNewChannelName('');setNewChannelNameEdited(false);setNewChannelDescription('');setNewChannelAccessMode('open');}
   }
   function releasePending(clientId:string){
     pendingFiles.current.delete(clientId);
@@ -976,9 +987,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               </p>}</section>)}
             {manage(community)&&<section className="space-y-2 border-t border-border pt-3">
               <button type="button" className="flex w-full items-center gap-2 rounded-xl p-2 text-sm text-primary hover:bg-secondary"
-                onClick={()=>setNewChannelOpen(v=>!v)}><Plus className="size-4"/>{pt?'Novo canal':'New channel'}</button>
+                onClick={()=>{
+                  const opening=!newChannelOpen;setNewChannelOpen(opening);
+                  if(opening){setNewChannelKind('text');setNewChannelName(suggestedChannelName('text'));setNewChannelNameEdited(false);setNewChannelDescription('');}
+                }}><Plus className="size-4"/>{pt?'Novo canal':'New channel'}</button>
               {newChannelOpen&&<form className="space-y-2" onSubmit={event=>void createChannel(event)}>
-                <Input required value={newChannelName} onChange={e=>setNewChannelName(e.target.value)} maxLength={64}
+                <Input required value={newChannelName} onChange={e=>{setNewChannelName(e.target.value);setNewChannelNameEdited(true);}} maxLength={64}
                   className="text-base" placeholder={pt?'Nome do canal':'Channel name'}/>
                 <label className="block space-y-1 text-xs font-medium">
                   <span>{pt?'Descrição ou regras (opcional)':'Description or rules (optional)'}</span>
@@ -986,7 +1000,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                     maxLength={4000} rows={3} className="w-full resize-y rounded-lg border border-input bg-background p-2 text-base"
                     placeholder={pt?'Orientações fixadas neste canal…':'Pinned guidelines for this channel…'}/>
                 </label>
-                <select value={newChannelKind} onChange={e=>setNewChannelKind(e.target.value as 'text'|'voice'|'meeting')}
+                <select value={newChannelKind} onChange={e=>{
+                    const next=e.target.value as Channel['kind'];
+                    setNewChannelKind(next);
+                    if(!newChannelNameEdited)setNewChannelName(suggestedChannelName(next));
+                  }}
                   className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
                   <option value="text">{pt?'Texto':'Text'}</option><option value="voice">{pt?'Voz':'Voice'}</option><option value="meeting">{pt?'Reunião (áudio e vídeo)':'Meeting (audio and video)'}</option>
                 </select>
