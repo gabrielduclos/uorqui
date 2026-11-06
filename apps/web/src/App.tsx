@@ -201,6 +201,16 @@ function AppContent() {
     clearChatMediaCache();
     setAccount(next);
   }, []);
+  const accountDeleted = useCallback(async () => {
+    await deactivatePush().catch(()=>{});
+    await clearProfileImageCache().catch(()=>{});
+    clearChatMediaCache();
+    setProfileImageCacheAccount(null);
+    setChatMediaCacheAccount(null);
+    setAccount(null);
+    setInvitedCommunity(null);
+    window.history.replaceState(null,'','/');
+  }, []);
   const signOut = useCallback(async () => {
     // Revoke the authenticated subscription before ending the session.
     await deactivatePush().catch(()=>{});
@@ -221,7 +231,7 @@ function AppContent() {
   return (
     <MotionConfig reducedMotion="user">
       {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
-        <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)}
+        <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
           invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
       {inviteToken && !publicHandle && !isVerificationResult && !legalDocument && <div
