@@ -977,8 +977,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const archivedThreads = threads.filter(c=>c.archived).length;
 
   return <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-    <section data-uorqui-inbox-list data-uorqui-dm-list ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
-      'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border bg-background md:flex md:w-[340px] md:shrink-0 xl:w-[380px]',
+    <section data-uorqui-inbox-list data-uorqui-dm-list data-uorqui-workspace-surface ref={listRef} aria-label={pt ? 'Lista de conversas' : 'Conversation list'} className={cn(
+      'h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-r border-border md:flex md:w-[340px] md:shrink-0 xl:w-[380px]',
       mobileOpened ? 'hidden' : 'flex'
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-3">
@@ -1164,10 +1164,10 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <button type="button" onClick={cancelEdit} aria-label={pt ? 'Cancelar edição' : 'Cancel edit'}
               className="grid size-9 place-items-center hover:bg-accent"><X className="size-4"/></button>
           </div>}
-          {replySource && !editing && <div className="mb-2 flex items-center gap-2 border-l-2 border-primary bg-secondary/50 px-3 py-2 text-xs">
+          {replySource && !editing && <div className="uorqui-reply-draft mb-2 flex items-center gap-2 px-3 py-2 text-xs">
             <div className="min-w-0 flex-1">
               <span className="block font-semibold">{pt ? 'Respondendo a ' : 'Replying to '}{replySource.authorId === myId ? (pt ? 'você' : 'you') : active.peerName}</span>
-              <span className="mt-0.5 block truncate text-muted-foreground">{replySource.body}</span>
+              <span className="uorqui-reply-draft__preview mt-0.5 block truncate">{replySource.body}</span>
             </div>
             <button type="button" onClick={() => setReplySource(null)}
               aria-label={pt ? 'Cancelar resposta' : 'Cancel reply'} className="grid size-9 place-items-center hover:bg-accent">
