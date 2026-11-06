@@ -191,6 +191,7 @@ export const communityChannels = pgTable('community_channels', {
   id: uuid('id').defaultRandom().primaryKey(),
   communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 64 }).notNull(),
+  description: text('description'),
   kind: varchar('kind', { length: 8 }).notNull(),
   meetingJoinPolicy: varchar('meeting_join_policy', { length: 12 }).notNull().default('open'),
   passwordHash: text('password_hash'),
