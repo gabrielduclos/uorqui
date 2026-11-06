@@ -1,3 +1,4 @@
+import { validRequestOrigin as allowedOrigin } from './request-origin.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getPool } from './db/client.js';
@@ -7,9 +8,7 @@ import { pushDirectMessage } from './push-routes.js';
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 const uuidParam = { type: 'string', format: 'uuid' } as const;
 
-function allowedOrigin(request: FastifyRequest) {
-  return request.headers.origin === (process.env.WEB_ORIGIN ?? 'http://localhost:5173');
-}
+
 async function identity(request: FastifyRequest, getSession: SessionReader): Promise<string | null> {
   const session = await getSession(request);
   if (!session) return null;
