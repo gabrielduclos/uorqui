@@ -1,7 +1,7 @@
 import { Spinner } from '@/components/ui/spinner';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
-import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
@@ -983,10 +983,14 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     )}>
       <div className="shrink-0 border-b border-border px-4 pb-3 pt-3">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <div><h2 className="text-lg font-semibold tracking-tight">{pt ? 'Mensagens' : 'Messages'}</h2>
+          <div className="min-w-0"><h2 className="text-lg font-semibold tracking-tight">{pt ? 'Mensagens' : 'Messages'}</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{pt ? 'Mensagens individuais' : 'Direct messages'}</p>
           </div>
-
+          <Button type="button" size="sm" variant="outline" onClick={()=>onOpenContacts?.()}
+            aria-label={pt?'Abrir contatos':'Open contacts'} disabled={!onOpenContacts}
+            className="min-h-9 shrink-0 gap-2 rounded-md px-3 text-xs font-medium">
+            <ContactRound aria-hidden="true" className="size-4"/>{pt?'Contatos':'Contacts'}
+          </Button>
         </div>
         <div className="relative">
           <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>

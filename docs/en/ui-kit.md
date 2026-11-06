@@ -203,3 +203,9 @@ Test with multiple accounts and revoked memberships: open/restricted channels, p
 - The mobile header shows the pixel-art **Uorqui** wordmark instead of the active module name. The logo still opens Messages; the other header controls remain available.
 - Tapping the desktop notification bell or the mobile Notifications tab opens Notifications and remembers the previous module. Tapping it again while Notifications is open returns to that module, including when a deep link opened Notifications. The Communities component stays mounted to preserve voice sessions.
 - This behavior does not clear notifications, change read receipts or alter content-only loading/page animations.
+
+## Contacts inside Messages
+
+**Contacts** is accessed from the **Contacts** button at the top of the **Messages** conversation list, rather than as an independent desktop or mobile sidebar item. A back button returns to Messages. The last-module preference treats Contacts as a subpage of Messages, including existing saved selections.
+
+The Contacts view follows the shared messenger styling: compact fixed header, semantic `bg-card` surfaces and `border-border` dividers, consistent tabs, inputs and action buttons, compact contact rows, independently scrollable content on mobile, and a matching blocked-accounts section. Empty and loading states use shared UI elements.

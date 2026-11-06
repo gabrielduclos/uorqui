@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Bell, ContactRound, Mail, LogOut, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, ShieldCheck, Users, X,
+  Bell, Mail, LogOut, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, ShieldCheck, Users, X,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -48,12 +48,14 @@ const mailMessageId=/^[A-Za-z0-9_=+\/\-]{1,1024}$/;
 
 // Remember the last main app module per account on this device. Direct links
 // and invitations remain authoritative over the restored selection.
-const rememberedAreas: readonly Area[] = ['email', 'conversations', 'contacts', 'communities', 'notifications', 'profile', 'moderation'];
+const rememberedAreas: readonly Area[] = ['email', 'conversations', 'communities', 'notifications', 'profile', 'moderation'];
 const lastAreaKey = (userId: string) => 'uorqui:last-area:v1:' + userId;
 function readLastArea(userId: string): Area {
   try {
     const value = localStorage.getItem(lastAreaKey(userId));
     if (new URLSearchParams(window.location.search).has('mail') || new URLSearchParams(window.location.search).has('mailAccount')) return 'email';
+    // Contacts now live under Messages; recover older saved navigation safely.
+    if(value==='contacts')return 'conversations';
     return rememberedAreas.find(area => area === value) ?? 'conversations';
   } catch {
     return 'conversations';
@@ -65,7 +67,6 @@ const WORKSPACE_PAGE_MOTION = { duration: 0.18, ease: [0.22, 1, 0.36, 1] as [num
 // The same alphabetical order is used in the desktop sidebar and mobile menu.
 const navigation = [
   { id: 'communities', label: 'Comunidades', icon: Users },
-  { id: 'contacts', label: 'Contatos', icon: ContactRound },
   { id: 'email', label: 'Email', icon: Mail },
   { id: 'conversations', label: 'Mensagens', icon: MessageCircle },
   { id: 'notifications', label: 'Notificações', icon: Bell },
@@ -198,7 +199,7 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     }
     // Tour steps navigate automatically and must not overwrite this preference.
     if (tourVisible) return;
-    try { localStorage.setItem(lastAreaKey(account.user.id), area); }
+    try { localStorage.setItem(lastAreaKey(account.user.id), area==='contacts'?'conversations':area); }
     catch { /* Private browsing or blocked storage: keep normal navigation. */ }
   }, [area, account.user.id, tourVisible]);
   const communityUnreadCount = Object.values(communityUnread.communities).reduce((sum, count) => sum + count, 0);
@@ -501,7 +502,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const [navDirection,setNavDirection]=useState<1|-1>(1);
   const previousArea=useRef<Area>(area);
   useEffect(()=>{previousArea.current=area;},[area]);
-  const activeLabel=area==='profile'?'Perfil':area==='moderation'?(locale==='pt-BR'?'Moderação':'Moderation'):
+  const activeLabel=area==='contacts'?(locale==='pt-BR'?'Contatos':'Contacts'):
+     area==='profile'?'Perfil':area==='moderation'?(locale==='pt-BR'?'Moderação':'Moderation'):
     navigation.find(item=>item.id===area)?.label??'Comunidades';
   const commands:WorkspaceCommand[] = [
     ...navigation.map(item => ({
@@ -718,7 +720,8 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
                 onStarted={() => setRequestedChatHandle(null)} />
             )}
             {area === 'email' && <EmailInbox onMobileOpenChange={setEmailOpened} requestedMessage={mailDeepLink}/>}
-            {area === 'contacts' && <div className="h-full overflow-y-auto overscroll-contain bg-background"><div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-7"><FriendsPanel onMessage={async handle => { setRequestedChatHandle(handle); move('conversations'); }} /></div></div>}
+            {area === 'contacts' && <FriendsPanel onBack={()=>move('conversations')}
+               onMessage={async handle => { setRequestedChatHandle(handle); move('conversations'); }} />}
 
             {area==='notifications'&&<ActivityNotifications accountId={account.user.id}
               items={activity.items} unread={activity.unread} loading={activity.loading}

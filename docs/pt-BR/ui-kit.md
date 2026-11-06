@@ -262,3 +262,9 @@ Testar com duas contas: enviar mensagem em canal aberto/fechado, revogar acesso 
 - O cabeçalho do celular exibe a marca pixelada **Uorqui**, independente do módulo ativo, no lugar do título da tela. A marca continua levando a Mensagens quando tocada; os demais controles não mudam.
 - O sino do cabeçalho desktop e a aba **Notificações** no menu inferior mobile são alternadores: ao abrir notificações, a navegação memoriza o módulo anterior; ao tocar no mesmo sino/aba novamente, retorna a esse módulo. Links diretos de push também mantêm a regra. O conteúdo de Comunidades segue montado para preservar chamadas de voz.
 - A volta não apaga notificações, não altera recibos de leitura e preserva o mecanismo de carregamento e animação somente do conteúdo.
+
+## Contatos dentro de Mensagens
+
+**Contatos** deixa de ser uma opção independente do menu lateral (desktop e mobile) e passa a abrir pelo botão **Contatos** no cabeçalho da lista de **Mensagens**. A tela de Contatos tem botão de voltar às Mensagens, mantendo conversa direta e solicitações de contato acessíveis. A restauração do último módulo trata Contatos como parte de Mensagens, inclusive para preferências antigas.
+
+O componente `FriendsPanel` segue o mesmo padrão visual do mensageiro: cabeçalho compacto e fixo, superfícies semânticas `bg-card`, bordas `border-border`, abas com estados ativos, campos `Input` do kit, linhas de contatos separadas por divisórias finas e rolagem vertical independente em dispositivos móveis. A lista de bloqueados segue a mesma organização; estados vazios e de carregamento usam componentes padronizados.
