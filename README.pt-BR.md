@@ -4,7 +4,7 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.6` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.7` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -58,7 +58,7 @@ Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes
 - **Voz:** WebRTC P2P; TURN é opcional e requer testes entre redes.
 - **Deploy:** Cloudflare Builds e Render, validados pelo GitHub Actions.
 
-A identificação do beta está nos três manifestos npm, e o app mostra o selo Beta. Veja [notas da versão](CHANGELOG.pt-BR.md). **Após `v0.1.0-beta.6`, toda alteração deverá ser versionada**, inclusive documentação e CSS: [política de versões](docs/pt-BR/versoes.md).
+A identificação do beta está nos três manifestos npm, e o app mostra o selo Beta. Veja [notas da versão](CHANGELOG.pt-BR.md). **Após `v0.1.0-beta.7`, toda alteração deverá ser versionada**, inclusive documentação e CSS: [política de versões](docs/pt-BR/versoes.md).
 
 ## Documentação
 

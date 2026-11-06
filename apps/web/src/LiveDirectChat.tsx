@@ -1220,7 +1220,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <button type="button" onClick={cancelEdit} aria-label={pt ? 'Cancelar edição' : 'Cancel edit'}
               className="grid size-9 place-items-center hover:bg-accent"><X className="size-4"/></button>
           </div>}
-          {replySource && !editing && <ReplyComposerPreview
+          {replySource && !editing && <ReplyComposerPreview key={replySource.id}
             author={replySource.authorId === myId ? (pt ? 'você' : 'you') : active.peerName}
             body={replySource.body || replySource.attachment?.name} locale={locale}
             onCancel={() => setReplySource(null)}/>}

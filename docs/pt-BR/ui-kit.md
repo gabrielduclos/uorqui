@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.6
+# Uorqui UI Kit · Design System v0.1.0-beta.7
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
@@ -8,6 +8,7 @@
 
 ## Princípios
 
+- **Leitura das respostas (beta.7):** nos canais, a sequência é **autor → citação original → nova mensagem**. A citação mostra quatro linhas antes de **Ler mais**; no editor, três linhas, com expansão do texto inteiro. Mantém o salto ao original e largura mínima responsiva no chat privado.
 - **Respostas em mensagens (estilo Discord):** referência compacta com conector, autor e trecho truncado **acima** da mensagem em conversas privadas e canais; clique leva à mensagem original. Editor exibe prévia discreta e cancelar. Sem cartão dentro de outro balão; cores vêm do CSS global para contraste Light/Dark. Inclui fallback para mensagem excluída, GIF e arquivos.
 
 
@@ -85,4 +86,4 @@ Antes de mesclar: validar **mobile/desktop × Dark/Light × PT/EN**, navegação
 
 ## Versão e manutenção
 
-Este documento corresponde ao marco **`v0.1.0-beta.6`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).
+Este documento corresponde ao marco **`v0.1.0-beta.7`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).

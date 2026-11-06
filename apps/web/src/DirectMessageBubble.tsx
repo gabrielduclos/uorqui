@@ -178,7 +178,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
 
   return <div data-direct-message-id={message.id} className={cn('group relative flex w-full min-w-0 max-w-full items-start gap-1.5', mine ? 'justify-end' : 'justify-start')}>
     <SwipeToReply onReply={() => { if (!message.deletedAt && !message.pendingStatus) onReply(message); }}>
-      <div className={cn('min-w-0 max-w-full rounded-[5px] px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]', highlighted && 'outline outline-2 outline-primary outline-offset-2',
+      <div className={cn('min-w-0 max-w-full rounded-[5px] px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]', (message.replyTo || quote) && 'min-w-[min(76vw,300px)]', highlighted && 'outline outline-2 outline-primary outline-offset-2',
         mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
         {message.forwarded && !message.deletedAt && <span className="mb-1 flex items-center gap-1 text-[11px] opacity-75"><Forward className="size-3"/> {pt ? 'Encaminhada' : 'Forwarded'}</span>}
         {message.replyTo && !message.deletedAt && <ReplyReference
@@ -189,8 +189,10 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         {quote && !message.replyToId && !message.deletedAt && <div role="note"
           className="uorqui-reply-reference uorqui-reply-reference--legacy">
           <span aria-hidden="true" className="uorqui-reply-reference__connector"/>
-          <strong className="uorqui-reply-reference__author">{pt ? 'Resposta antiga' : 'Legacy reply'}</strong>
-          <span className="uorqui-reply-reference__excerpt">{replyExcerpt(quote[1],false,locale)}</span>
+          <div className="uorqui-reply-reference__content">
+            <strong className="uorqui-reply-reference__author">{pt ? 'Resposta antiga' : 'Legacy reply'}</strong>
+            <span className="uorqui-reply-reference__excerpt">{replyExcerpt(quote[1],false,locale)}</span>
+          </div>
         </div>}
 
         {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0 max-w-full overflow-hidden">

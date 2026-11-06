@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.7] — 06/11/2026
+
+- **Ordem de leitura das respostas:** nos canais, o nome e horário de quem respondeu voltam a aparecer **antes** da mensagem citada, seguidos do conteúdo da nova resposta. Nas mensagens privadas, a citação também permanece antes do texto respondido.
+- **Prévia da mensagem original:** removido o corte fixo de 180 caracteres. A citação pode ocupar **quatro linhas** nas mensagens e **três linhas** acima do editor, com **Ler mais / Mostrar menos** para visualizar todo o texto sem perder o atalho para localizar o original.
+- **Mobile:** balões com resposta ganham largura suficiente para não espremer a citação; a prévia expande sem rolagem horizontal. Respostas antigas continuam legíveis.
+- **Tema e navegação:** CSS global para Light/Dark e preservação dos vínculos, mensagens otimistas e salto à mensagem original. Apenas frontend; sem migração do banco ou alteração de API.
+
 ## [0.1.0-beta.6] — 06/11/2026
 
 - **Respostas no estilo Discord:** canais e conversas privadas agora usam uma referência compacta, com conector curvo, nome do autor e trecho da mensagem original, sem balão de citação dentro de outro balão.

@@ -51,7 +51,7 @@ type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
 /** Stoat-like compact rows: consecutive posts from the same author form a group. */
 function groupedWithPrevious(messages:(Message|PendingMessage)[],index:number){
-  if(index<=0)return false;
+  if(index<=0||messages[index]?.replyToId)return false;
   const previous=messages[index-1],current=messages[index];
   if(!previous||!current||previous.authorHandle!==current.authorHandle||
      previous.authorName!==current.authorName||previous.deletedAt||current.deletedAt)return false;
@@ -1197,11 +1197,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {groupedWithPrevious(renderedMessages,index)?<span aria-hidden="true" className="w-8 shrink-0"/>:
                 <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>}
               <div className="min-w-0 flex-1">
-                {message.replyToId&&!message.deletedAt&&<ReplyReference
-                  author={'@'+(message.replyTo?.authorHandle??(pt?'mensagem':'message'))}
-                  body={message.replyTo?.body} deleted={message.replyTo?.deleted}
-                  locale={locale}
-                  onJump={()=>document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'})}/>}
                 <div className={cn('flex flex-wrap items-baseline gap-2',groupedWithPrevious(renderedMessages,index)&&'sr-only')}>{message.authorHandle?
                   <a href={'/@'+message.authorHandle} onClick={event=>navigateToPublicProfile(event,message.authorHandle)}
                     className="rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
@@ -1209,6 +1204,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   <strong className="text-sm">{message.authorName}</strong>}
                   <span className="text-[11px] text-muted-foreground">@{message.authorHandle}</span>
                   <time className="text-[11px] text-muted-foreground">{new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}).format(new Date(message.createdAt))}</time></div>
+                {message.replyToId&&!message.deletedAt&&<ReplyReference
+                  author={'@'+(message.replyTo?.authorHandle??(pt?'mensagem':'message'))}
+                  body={message.replyTo?.body} deleted={message.replyTo?.deleted}
+                  locale={locale}
+                  onJump={()=>document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'})}/>}
                 {message.deletedAt?<p className="mt-1 text-sm italic text-muted-foreground">{pt?'Mensagem cancelada':'Message removed'}</p>:
                   editingId===message.id?<form className="mt-2 space-y-2" onSubmit={event=>void updateMessage(event)}>
                     <textarea value={editingBody} onChange={event=>setEditingBody(event.target.value)} maxLength={4000} rows={2}
@@ -1268,7 +1268,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </button>
           </div>}
           <div className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-            {replySource&&<ReplyComposerPreview author={'@'+replySource.authorHandle}
+            {replySource&&<ReplyComposerPreview key={replySource.id} author={'@'+replySource.authorHandle}
               body={replySource.body||replySource.attachment?.name} locale={locale}
               onCancel={()=>setReplySource(null)}/>}
             {mediaPicker==='gif'&&<CommunityMediaPicker key="gif" tab="gif" pt={pt}
