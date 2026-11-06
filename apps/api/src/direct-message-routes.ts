@@ -276,11 +276,11 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
 
   // One shared pinned message per DM, visible to either participant. Soft-deleted
   // or account-cleared messages are never disclosed to that account.
-  const pinnedMessageSql='SELECT '+messageColumns+
-    ',p.pinned_at AS "pinnedAt",p.pinned_by AS "pinnedBy" '+
-    'FROM direct_message_pins p JOIN direct_messages ON direct_messages.id=p.message_id '+
-    'WHERE p.conversation_id=$1 AND direct_messages.conversation_id=$1 AND deleted_at IS NULL '+
-    "AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),'-infinity'::timestamptz)";
+  const pinnedMessageSql='SELECT dm.*,p.pinned_at AS "pinnedAt",p.pinned_by AS "pinnedBy" '+
+    'FROM direct_message_pins p JOIN LATERAL (SELECT '+messageColumns+
+    ' FROM direct_messages WHERE id=p.message_id AND conversation_id=p.conversation_id AND deleted_at IS NULL '+
+    "AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=p.conversation_id AND user_id=$2),'-infinity'::timestamptz)) dm ON true "+
+    'WHERE p.conversation_id=$1';
   app.get('/api/v1/dm/conversations/:id/pin',{schema:{params:pathParams}},async(request,reply)=>{
     try{
       const me=await identity(request,getSession);if(!me)return reply.code(401).send({error:'Unauthorized'});
