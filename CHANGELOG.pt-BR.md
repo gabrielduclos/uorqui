@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.3] — 06/11/2026
+
+- **Outlook OAuth restaurado:** a conexão de novas contas Outlook.com, Hotmail e Microsoft 365 volta a ser aceita por Microsoft Entra e Graph, com PKCE, estado de uso único, renovação de tokens e armazenamento criptografado. Contas já conectadas permanecem preservadas.
+- **Interface de e-mail:** botão Outlook volta ao modal de configuração, junto com Gmail e Servidor manual. Fica indisponível até que as credenciais Microsoft estejam presentes no Render; sem afetar outros provedores.
+- **Erros de conexão:** o callback devolve apenas o identificador público do provedor (sem códigos, tokens ou estado) e a interface apresenta instruções específicas para permissões e erros Microsoft.
+- **Configuração:** criar aplicativo Entra para contas organizacionais e pessoais, plataforma Web, redirect exato `https://uorqui.app/api/v1/mail/oauth/outlook/callback`, permissões delegadas `User.Read`, `Mail.ReadWrite`, `Mail.Send` e `offline_access`. Configurar `MAIL_MICROSOFT_CLIENT_ID` e `MAIL_MICROSOFT_CLIENT_SECRET` **somente no Render**, preservando `MAIL_TOKEN_KEY`.
+- **Testes:** fluxo Microsoft de autorização, escopos, PKCE, callback com isolamento por usuário/provedor, proteção contra replay e ausência de segredos, e bloqueio seguro quando as credenciais não estiverem configuradas. Sem migração do banco.
+
 ## [0.1.0-beta.2] — 06/11/2026
 
 - **Canais:** removido o botão Editar do cabeçalho; nome, descrição/regras, acesso e senha são administrados em **Moderação → Canais**.
