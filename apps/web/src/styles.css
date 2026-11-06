@@ -303,12 +303,13 @@ body.uorqui-app-active {
  * of a nested surface: contrast stays correct in both Light and Dark themes,
  * including the inverse-colored outgoing DM bubble. */
 [data-uorqui-app-shell] .uorqui-reply-reference {
-  display:flex;
-  align-items:center;
-  gap:.375rem;
+  display:grid;
+  grid-template-columns:.9rem minmax(0,1fr);
+  align-items:start;
+  gap:.5rem;
   min-width:0;
   max-width:100%;
-  width:fit-content;
+  width:min(100%,640px);
   margin:0 0 .25rem;
   padding:0;
   border:0;
