@@ -45,7 +45,7 @@ type Community={
 type Channel={id:string;name:string;description:string|null;kind:'text'|'voice'|'meeting';createdAt:string;hasPassword?:boolean;unlocked?:boolean;accessMode?:'open'|'restricted'};
 type Pending={handle:string;displayName:string;requestedAt:string};
 type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
-type Message={id:string;clientId:string;body:string|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
+type Message={id:string;clientId:string;body:string|null;replyToId?:string|null;replyTo?:{id:string;body:string|null;authorHandle:string;deleted:boolean}|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
 type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
 /** Stoat-like compact rows: consecutive posts from the same author form a group. */
@@ -138,6 +138,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [messagesLoadFailed,setMessagesLoadFailed]=useState(false);
   const [detailLoading,setDetailLoading]=useState(false);
   const [draft,setDraft]=useState('');
+  const [replySource,setReplySource]=useState<Message|null>(null);
+  const [inspectReaction,setInspectReaction]=useState<{messageId:string;emoji:string;users:{handle:string;name:string;avatarUrl:string|null}[];loading:boolean;error:string}|null>(null);
   const [mentionMembers,setMentionMembers]=useState<{handle:string;displayName:string;avatarUrl:string|null}[]>([]);
   const [mentionAt,setMentionAt]=useState<{start:number;end:number;query:string}|null>(null);
   const [mentionIndex,setMentionIndex]=useState(0);
@@ -445,7 +447,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         'Could not send. Check the username and direct-message permissions.');
     }finally{setChannelInviteSending(false);}
   }
-  const closeChannel=()=>{setMentionAt(null);setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  const closeChannel=()=>{setReplySource(null);setInspectReaction(null);setMentionAt(null);setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
   useEffect(()=>{
     if(!selectedId||!channelId||!activeChannel||!community?.myRole||
@@ -455,7 +457,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     const communityId=selectedId,roomId=channelId,roomKey=communityId+'/'+roomId;
     let mounted=true,inFlight=false,repeat=false,lastRefresh=0;
     const cached=peekCommunityMessages<Message>(myId,communityId,roomId);
-    setReactionPickerId(null);setMessagesForKey(roomKey);
+    setReactionPickerId(null);setReplySource(null);setInspectReaction(null);setMessagesForKey(roomKey);
     setMessages(cached??[]);setMessagesLoading(!cached);setMessagesLoadFailed(false);
     // Open from cache immediately, then revalidate in the background. A burst
     // of SSE events during one request only schedules one follow-up request.
@@ -710,13 +712,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             'Content-Type':p.attachment.type,
             'x-uorqui-client-id':p.clientId,
             'x-uorqui-filename':encodeURIComponent(p.attachment.name),
-            ...(p.body?{'x-uorqui-caption':encodeURIComponent(p.body)}:{})
+            ...(p.body?{'x-uorqui-caption':encodeURIComponent(p.body)}:{}),
+             ...(p.replyToId?{'x-uorqui-reply-to-id':p.replyToId}:{})
           },body:file
         });
         if(!response.ok)throw Error('UPLOAD_'+response.status);
       }else{
         await api('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages',
-          body({clientId:p.clientId,body:p.body}));
+          body({clientId:p.clientId,body:p.body,...(p.replyToId?{replyToId:p.replyToId}:{})}));
       }
       if(channelId===p.channelId&&currentCommunity){
         const updated=await api<{messages:Message[]}>('/api/v1/communities/'+currentCommunity+'/channels/'+p.channelId+'/messages');
@@ -742,12 +745,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       pendingFiles.current.set(clientId,attachment);
       if(preview)pendingBlobUrls.current.set(clientId,preview);
     }
-    const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text.trim(),createdAt:now,
+    const source=replySource;
+     const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text.trim(),createdAt:now,
+       replyToId:source?.id??null,
+       replyTo:source?{id:source.id,body:source.body,authorHandle:source.authorHandle,deleted:false}:null,
       authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,
       canEdit:false,canDelete:false,canReact:false,reactions:[],pending:'sending',
       attachment:attachment?{id:clientId,name:attachment.name,type:attachment.type||'application/octet-stream',size:attachment.size}:null,
       attachmentUrl:preview};
     setPendingMessages(old=>[...old,pending]);
+    setReplySource(null);setMentionAt(null);
     setError('');
     window.requestAnimationFrame(()=>scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'}));
     void submitPending(pending);
@@ -804,6 +811,19 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       setMessages(old=>reconcileCommunityMessages(old,updated.messages));setDeletingId(null);
     }catch{setError(pt?'Não foi possível cancelar a mensagem.':'Could not remove message.');}
     finally{setBusy(false);setBusyAction(null);}
+  }
+  async function inspectReactors(message:Message,emoji:string){
+    if(!selectedId||!channelId)return;
+    setInspectReaction({messageId:message.id,emoji,users:[],loading:true,error:''});
+    try{
+      const result=await api<{users:{handle:string;name:string;avatarUrl:string|null}[]}>(
+        '/api/v1/communities/'+selectedId+'/channels/'+channelId+'/messages/'+message.id+
+        '/reactors?emoji='+encodeURIComponent(emoji));
+      setInspectReaction(old=>old?.messageId===message.id&&old.emoji===emoji?{...old,users:result.users,loading:false}:old);
+    }catch{
+      setInspectReaction(old=>old?.messageId===message.id&&old.emoji===emoji?
+        {...old,loading:false,error:pt?'Não foi possível carregar as reações.':'Could not load reactions.'}:old);
+    }
   }
   async function toggleReaction(message:Message,emoji:string,mine:boolean){
     if(!selectedId||!channelId||!message.canReact||message.deletedAt||reactionSubmitting.current)return;
@@ -1171,7 +1191,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
             </div>}
-            <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{renderedMessages.map((message,index)=><div key={message.clientId}
+            <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{renderedMessages.map((message,index)=><div id={'community-msg-'+message.id} key={message.clientId}
               className={cn('flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20',groupedWithPrevious(renderedMessages,index)&&'py-0.5')}>
               {groupedWithPrevious(renderedMessages,index)?<span aria-hidden="true" className="w-8 shrink-0"/>:
                 <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>}
@@ -1200,6 +1220,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                       <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''} mentions/></p>
                       {!!message.body&&<LinkPreview text={message.body} locale={locale}/>}
                     </div>}
+                {message.replyToId&&!message.deletedAt&&<button type="button"
+                  className="mb-1 mt-1 block max-w-full border-l-2 border-primary bg-secondary/50 px-3 py-1.5 text-left text-xs hover:bg-secondary"
+                  onClick={()=>document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'})}>
+                  <strong className="block text-primary">@{message.replyTo?.authorHandle??(pt?'mensagem':'message')}</strong>
+                  <span className="block max-w-[420px] truncate text-muted-foreground">{message.replyTo?.deleted?
+                    (pt?'Mensagem excluída':'Deleted message'):
+                    (message.replyTo?.body||(pt?'Mídia ou arquivo':'Media or file'))}</span>
+                </button>}
                 {message.attachment&&!message.deletedAt&&selectedId&&channelId&&
                   <CommunityMessageAttachment attachment={message.attachment}
                     src={message.attachmentUrl||('/media/community-attachment/'+selectedId+'/'+channelId+'/'+message.attachment.id)}
@@ -1215,8 +1243,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   reactions={message.reactions??[]} canReact={message.canReact}
                   open={reactionPickerId===message.id} busy={reactionBusyId===message.id}
                   pt={pt} onOpen={()=>setReactionPickerId(old=>old===message.id?null:message.id)}
-                  onToggle={(emoji,mine)=>void toggleReaction(message,emoji,mine)}/>}
+                  onToggle={(emoji,mine)=>void toggleReaction(message,emoji,mine)}
+                  onInspect={emoji=>void inspectReactors(message,emoji)}/>}
                 {!message.deletedAt&&!isPendingMessage(message)&&<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
+                  <button type="button" className="hover:text-primary"
+                    onClick={()=>{setReplySource(message);setEditingId(null);composerRef.current?.focus();}}>
+                    {pt?'Responder':'Reply'}</button>
                   {!message.canEdit&&<button type="button" className="inline-flex items-center gap-1 hover:text-destructive"
                      onClick={()=>setReportMessageId(message.id)}><Flag className="size-3.5"/>{pt?'Denunciar':'Report'}</button>}
                    {message.canEdit&&editingId!==message.id&&<button type="button" className="hover:text-foreground"
@@ -1238,6 +1270,14 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             </button>
           </div>}
           <div className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            {replySource&&<div className="mb-2 flex min-w-0 items-center gap-3 rounded-lg border-l-2 border-primary bg-secondary/60 px-3 py-2 text-xs">
+              <div className="min-w-0 flex-1"><strong className="block text-primary">
+                {pt?'Respondendo a ':'Replying to '}@{replySource.authorHandle}</strong>
+                <span className="block truncate text-muted-foreground">{replySource.body||(pt?'Mídia ou arquivo':'Media or file')}</span>
+              </div>
+              <button type="button" onClick={()=>setReplySource(null)} aria-label={pt?'Cancelar resposta':'Cancel reply'}
+                className="grid size-8 shrink-0 place-items-center rounded-lg hover:bg-accent"><X className="size-4"/></button>
+            </div>}
             {mediaPicker==='gif'&&<CommunityMediaPicker key="gif" tab="gif" pt={pt}
               onClose={()=>setMediaPicker(null)}
               onEmoji={symbol=>{setDraft(old=>old+symbol);setMediaPicker(null);}}
@@ -1361,6 +1401,30 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+    </Dialog.Root>
+    <Dialog.Root open={Boolean(inspectReaction)} onOpenChange={open=>{if(!open)setInspectReaction(null);}}>
+      <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[310] bg-black/65"/>
+      <Dialog.Content aria-describedby={undefined}
+        className="fixed left-1/2 top-1/2 z-[315] w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-4 shadow-2xl">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <Dialog.Title className="font-semibold">{pt?'Quem reagiu':'Who reacted'} {inspectReaction?.emoji}</Dialog.Title>
+          <Dialog.Close asChild><Button type="button" variant="ghost" size="icon" aria-label={pt?'Fechar':'Close'}>
+            <X className="size-4"/></Button></Dialog.Close>
+        </div>
+        <div className="max-h-[60dvh] space-y-1 overflow-y-auto">
+          {inspectReaction?.loading&&<WorkspaceContentLoading label={pt?'Carregando reações':'Loading reactions'} rows={2}/>}
+          {inspectReaction?.error&&<p role="alert" className="text-sm text-destructive">{inspectReaction.error}</p>}
+          {!inspectReaction?.loading&&!inspectReaction?.error&&!inspectReaction?.users.length&&
+            <p className="text-sm text-muted-foreground">{pt?'Nenhuma reação disponível.':'No reactions available.'}</p>}
+          {inspectReaction?.users.map(user=><a key={user.handle} href={'/@'+user.handle}
+            onClick={event=>{navigateToPublicProfile(event,user.handle);setInspectReaction(null);}}
+            className="flex min-h-12 items-center gap-3 rounded-lg px-2 hover:bg-secondary">
+            <UserAvatar name={user.name} image={user.avatarUrl} size="sm"/>
+            <span className="min-w-0"><strong className="block truncate text-sm">{user.name}</strong>
+              <span className="text-xs text-muted-foreground">@{user.handle}</span></span>
+          </a>)}
+        </div>
+      </Dialog.Content></Dialog.Portal>
     </Dialog.Root>
     <ContentReportDialog target={reportMessageId?{targetKind:'community_message',targetId:reportMessageId}:null}
       locale={locale} onClose={()=>setReportMessageId(null)}/>
