@@ -1,6 +1,6 @@
 # Voice rooms and audio/video meetings
 
-Updated **November 3, 2026** for technical beta `0.1.0-beta.1`.
+Updated **November 6, 2026** for technical beta `0.1.0-beta.2`.
 
 Uorqui has **text**, **voice**, and **meeting** community channels. Joining a call is an explicit action: simply opening a room never enables the microphone or camera.
 
@@ -13,7 +13,7 @@ Uorqui has **text**, **voice**, and **meeting** community channels. Joining a ca
 - Participants can **pin a different camera**, navigate thumbnails, and return to automatic speaker focus. A shared screen may occupy the main view.
 - **Share screen** is available in both voice and meeting channels, using browser `getDisplayMedia`; it can coexist with a live camera. The button is disabled when the API is unavailable. Mobile and installed-PWA support varies by OS/browser.
 - Fullscreen retains microphone, camera, sharing, leave-call and exit-fullscreen controls.
-- **Invite** copies a meeting URL or sends it via Uorqui 1:1 DM. Community invite links never bypass meeting admission.
+- The **Invite** action in the meeting room and the channel header opens the **same invitation dialog**. A temporary link joins the community and opens that exact channel/meeting, either by copying or Uorqui 1:1 DM; access checks remain mandatory.
 
 ## Admission and authorization
 
@@ -25,7 +25,7 @@ Uorqui has **text**, **voice**, and **meeting** community channels. Joining a ca
 
 ## Channel administration
 
-- Owners/admins can use **Edit channel** in the header of text, voice or meeting channels to rename, set/change/remove passwords and select **Open** or **Closed / permission-only**.
+- No Edit action is shown in channel headers. Owners/admins change names, pinned descriptions, passwords and access rules in **Moderation → Channels**. Each channel can display a persistent description/rules section (up to 4,000 characters) with **Read more / Show less** for longer text. New channels suggest editable, per-type numbered names.
 - In **Moderation → Members**, owners/admins select which closed channels each person can access. Channel permission, password and meeting admission remain independent. Revoking closed-channel access disconnects active RTC sessions; see [Channel permissions](channel-permissions.md).
 - **Delete channel** remains under community moderation.
 - Passwords use salted scrypt hashes; rotation revokes previous grants, and incorrect attempts are rate-limited.
