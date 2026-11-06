@@ -130,7 +130,7 @@ export function FriendsPanel({ onMessage, onBack, busy }: { onMessage: (handle:s
       className="size-9 shrink-0 text-muted-foreground"><X className="size-4"/></Button>}
   </div>;
 
-  return <div data-uorqui-contacts className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+  return <div data-uorqui-contacts data-uorqui-workspace-surface className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
     <header className="shrink-0 border-b border-border bg-card/95 px-4 py-3 sm:px-6">
       <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
         {onBack&&<Button type="button" size="icon" variant="ghost"

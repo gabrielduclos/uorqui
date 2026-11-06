@@ -39,3 +39,9 @@ Com o app **visível**, novas mensagens privadas (SSE), canais com mensagens nov
 ## Retirada de notificações já lidas
 
 Após confirmar a leitura no servidor, o PWA pede ao service worker para fechar o push correspondente no **dispositivo atual**, sem excluir o histórico: conversa privada, canal da comunidade, e-mail e atividade. **Marcar todas como lidas** fecha os pushes de atividade; mover um e-mail para Spam/Lixeira também retira seu push. A central e os avisos internos respeitam o mesmo estado. Atualizações de não lidos das mensagens e comunidades reconciliam pushes antigos depois de leituras em outras sessões. O navegador/sistema operacional controla a central de notificações e pode limitar a retirada em alguns aparelhos; não é possível fechar remotamente notificações exibidas em outro dispositivo.
+
+## Contador de não lidos no ícone do PWA
+
+O ícone do aplicativo instalado mostra o total de itens não lidos: **mensagens diretas**, mensagens dos **canais**, **convites de comunidade**, notificações de **atividade** e **e-mails de todas as contas conectadas**. O contador é recalculado a partir dos hooks de não lidos na interface e por consultas autenticadas no **service worker ao receber push**, mesmo quando a janela está fechada. Ao chegar a zero, o badge é removido; sair da conta também o limpa. Não existem ícones diferentes por módulo nem dados de mensagens armazenados no cache público do service worker.
+
+O badge numérico usa a Badging API nativa do sistema. No **iPhone/iPad é necessário instalar o PWA na Tela de Início e permitir notificações**; o usuário ainda pode ocultar badges nos ajustes do sistema. Em navegadores sem Badging API, o app mantém os indicadores internos e as notificações normalmente, mas não consegue desenhar um número nativo sobre o ícone. Atualizações em segundo plano são de melhor esforço e o total é reconciliado ao abrir o app.

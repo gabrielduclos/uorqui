@@ -35,3 +35,9 @@ New Gmail and manual IMAP messages use the same account-bound VAPID push subscri
 Tapping an operating-system push navigates the PWA directly to the persistent link for its conversation, channel, message, or activity; unlike a post-focus message, URL navigation survives suspended iOS apps. Community links retain the actual channel ID and never auto-join voice rooms; invitations open Notifications. Activity links open the associated request or profile after authenticated data loads.
 
 While the app is **visible**, DM SSE updates, newly unread community channels, invitations, and activity items create temporary clickable in-app alerts only when their module is not currently active. A foreground Web Push is forwarded into this in-app UI instead of displaying a duplicate operating-system alert. Background/system push remains unchanged. Alerts are dismissible and capped at three; unread counters are unaffected.
+
+## Installed PWA unread app icon badge
+
+The installed app icon shows the aggregated unread count across **direct messages**, **community-channel messages**, **community invitations**, **activity notifications** and **email in all connected accounts**. The foreground app updates the native badge whenever unread state changes; the service worker also queries authenticated unread endpoints when push arrives, including while no app window is open. Zero unread items and signing out clear the badge. Account data is not cached in the service worker.
+
+The badge relies on the browser's native Badging API. On **iOS/iPadOS it requires an installed Home Screen web app and notification permission**; the system may still hide badges by user preference. Unsupported browsers retain internal counters and notifications but cannot display a native icon count. Background freshness is best effort and is reconciled on app open.

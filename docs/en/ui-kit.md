@@ -209,3 +209,7 @@ Test with multiple accounts and revoked memberships: open/restricted channels, p
 **Contacts** is accessed from the **Contacts** button at the top of the **Messages** conversation list, rather than as an independent desktop or mobile sidebar item. A back button returns to Messages. The last-module preference treats Contacts as a subpage of Messages, including existing saved selections.
 
 The Contacts view follows the shared messenger styling: compact fixed header, semantic `bg-card` surfaces and `border-border` dividers, consistent tabs, inputs and action buttons, compact contact rows, independently scrollable content on mobile, and a matching blocked-accounts section. Empty and loading states use shared UI elements.
+
+## Shared workspace surface and readable replies
+
+Messages, Email and Contacts use `data-uorqui-workspace-surface`, which inherits its background and text colors from the **global** `--card` and `--card-foreground` tokens in `styles.css` instead of per-page colors. Embedded reply quotes and composer reply previews use globally themed `uorqui-reply-quote` and `uorqui-reply-draft` styles, mixing semantic `--primary`, `--primary-foreground`, `--foreground`, `--secondary` and `--ring` tokens to strengthen contrast in dark and light themes alike.
