@@ -8,6 +8,14 @@
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Beta.2 changes
+
+- **Explicit invitation consent:** users decide whether to join a community after signing in or registering.
+- **Channels:** threaded replies, `@` member mentions, reactor identity lists and pinned guidelines.
+- **GIFs:** enabled in 1:1 messages as well; expanded GIPHY search and pagination requires `VITE_GIPHY_API_KEY` **at web build time**. Without a key, only the limited bundled catalog is used.
+- **Privacy:** Profile → Delete my account requires a password and `EXCLUIR` confirmation. Data is erased from the active database and R2 cleanup is queued. Shared DM conversations are also deleted for the other participant; provider backups are not removed immediately. Validate the R2 cleanup task before enabling deletion in production.
+
 ## Product
 
 Uorqui brings together four connected experiences:
