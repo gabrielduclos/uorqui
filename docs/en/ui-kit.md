@@ -8,6 +8,9 @@
 
 ## Principles
 
+- **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent.
+
+
 - **Desktop permission prompts:** the daily push opt-in offer takes priority over optional PWA installation; never stack both prompts, and request native permission only after a click. Preserve mobile-specific installation rules.
 
 
