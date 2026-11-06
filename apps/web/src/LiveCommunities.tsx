@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEve
 import { createPortal } from 'react-dom';
 import { Dialog } from 'radix-ui';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Hash, Headphones, LockKeyhole, LockKeyholeOpen, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Pencil, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -113,41 +113,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [slugTouched,setSlugTouched]=useState(false);
   const [createDescription,setCreateDescription]=useState('');
   const [createVisibility,setCreateVisibility]=useState<Visibility>('public');
-  const [inviteLink,setInviteLink]=useState<{id:string;expiresAt:string}|null>(null);
   const [channelInviteOpen,setChannelInviteOpen]=useState(false);
-  const [channelInviteContacts,setChannelInviteContacts]=useState<{handle:string;displayName:string;avatarUrl:string|null}[]>([]);
-  const [channelInviteFilter,setChannelInviteFilter]=useState('');
+  const [channelInviteLink,setChannelInviteLink]=useState('');
+  const [channelInviteHandle,setChannelInviteHandle]=useState('');
   const [channelInviteLoading,setChannelInviteLoading]=useState(false);
-  const [channelInviteSending,setChannelInviteSending]=useState<string|null>(null);
+  const [channelInviteSending,setChannelInviteSending]=useState(false);
   const [channelInviteError,setChannelInviteError]=useState('');
   const [channelInviteSuccess,setChannelInviteSuccess]=useState('');
-  const [shareBusy,setShareBusy]=useState(false);
-  const [shareNotice,setShareNotice]=useState('');
-  const [shareOpen,setShareOpen]=useState(false);
-  const [shareCopyState,setShareCopyState]=useState<'idle'|'copied'|'error'>('idle');
-  const [shareToast,setShareToast]=useState<{kind:'success'|'error';message:string}|null>(null);
-  const shareToastTimer=useRef<number|null>(null);
-  useEffect(()=>()=>{if(shareToastTimer.current!==null)window.clearTimeout(shareToastTimer.current);},[]);
-  function showShareToast(kind:'success'|'error',message:string){
-    if(shareToastTimer.current!==null)window.clearTimeout(shareToastTimer.current);
-    setShareToast({kind,message});
-    shareToastTimer.current=window.setTimeout(()=>{
-      setShareToast(null);setShareCopyState('idle');shareToastTimer.current=null;
-    },3500);
-  }
-  useEffect(()=>{
-    if(!channelInviteOpen)return;
-    const controller=new AbortController();
-    setChannelInviteLoading(true);setChannelInviteError('');setChannelInviteSuccess('');
-    setChannelInviteContacts([]);
-    if(!selectedId){setChannelInviteLoading(false);return()=>controller.abort();}
-    void api<{members:{handle:string;displayName:string;avatarUrl:string|null}[]}>(
-      '/api/v1/communities/'+selectedId+'/invitable-members',{signal:controller.signal})
-      .then(data=>{if(!controller.signal.aborted)setChannelInviteContacts(data.members??[]);})
-      .catch(()=>{if(!controller.signal.aborted)setChannelInviteError(pt?'Não foi possível carregar os membros da comunidade.':'Could not load community members.');})
-      .finally(()=>{if(!controller.signal.aborted)setChannelInviteLoading(false);});
-    return()=>controller.abort();
-  },[channelInviteOpen,selectedId,pt]);
   const [newChannelOpen,setNewChannelOpen]=useState(false);
   const [newChannelName,setNewChannelName]=useState('');
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
@@ -155,52 +127,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [unlockPassword,setUnlockPassword]=useState('');
   const [unlockBusy,setUnlockBusy]=useState(false);
   const [unlockError,setUnlockError]=useState('');
-  const [channelSettingsOpen,setChannelSettingsOpen]=useState(false);
-  const [channelSettingsName,setChannelSettingsName]=useState('');
-  const [channelSettingsPassword,setChannelSettingsPassword]=useState('');
-  const [channelSettingsAccessMode,setChannelSettingsAccessMode]=useState<'open'|'restricted'>('open');
-  const [channelSettingsBusy,setChannelSettingsBusy]=useState<'name'|'password'|'remove'|'access'|null>(null);
-  const [channelSettingsError,setChannelSettingsError]=useState('');
-  const [channelRemoveConfirm,setChannelRemoveConfirm]=useState(false);
-  const channelSettingsRef=useRef<HTMLDivElement|null>(null);
-  const channelSettingsMenuRef=useRef<HTMLDivElement|null>(null);
-  const [channelSettingsPosition,setChannelSettingsPosition]=useState<{top:number;left:number}|null>(null);
-  useEffect(()=>{
-    setChannelSettingsOpen(false);setChannelSettingsName('');setChannelSettingsPassword('');
-    setChannelSettingsError('');setChannelRemoveConfirm(false);setChannelSettingsPosition(null);
-  },[selectedId,channelId]);
-  useEffect(()=>{
-    if(!channelSettingsOpen)return;
-    // Voice/video is rendered in a document-body portal above the app shell.
-    // Portaling this menu as well keeps it clickable and visible on every room type.
-    const reposition=()=>{
-      const rect=channelSettingsRef.current?.getBoundingClientRect();
-      if(!rect){setChannelSettingsOpen(false);return;}
-      const width=Math.min(352,Math.max(220,window.innerWidth-24));
-      setChannelSettingsPosition({
-        top:Math.max(12,Math.min(rect.bottom+8,window.innerHeight-72)),
-        left:Math.max(12,Math.min(rect.right-width,window.innerWidth-width-12))
-      });
-    };
-    reposition();
-    const dismiss=(event:PointerEvent)=>{
-      const target=event.target as Node;
-      if(!channelSettingsRef.current?.contains(target)&&!channelSettingsMenuRef.current?.contains(target))
-        setChannelSettingsOpen(false);
-    };
-    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setChannelSettingsOpen(false);};
-    document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',escape);
-    window.addEventListener('resize',reposition);
-    window.addEventListener('scroll',reposition,true);
-    window.visualViewport?.addEventListener('resize',reposition);
-    return ()=>{
-      document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape);
-      window.removeEventListener('resize',reposition);
-      window.removeEventListener('scroll',reposition,true);
-      window.visualViewport?.removeEventListener('resize',reposition);
-    };
-  },[channelSettingsOpen]);
-  const [inviteHandle,setInviteHandle]=useState('');
   const [messages,setMessages]=useState<Message[]>([]);
   const [messagesForKey,setMessagesForKey]=useState<string|null>(null);
   const [newBelow,setNewBelow]=useState(0);
@@ -417,59 +343,59 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     };
   },[selectedId,community?.myRole]);
 
-  async function shareCommunity(){
-    if(!selectedId)return;
-    setShareBusy(true);setShareNotice('');setShareCopyState('idle');
+  async function openChannelInvite(){
+    if(!selectedId||!activeChannel||!community?.myRole)return;
+    setChannelInviteOpen(true);setChannelInviteLoading(true);
+    setChannelInviteLink('');setChannelInviteHandle('');setChannelInviteError('');setChannelInviteSuccess('');
     try{
-      const existing=await api<{link:{id:string;expiresAt:string}|null}>('/api/v1/communities/'+selectedId+'/share');
-      if(!existing.link&&manage(community!)){
-        const made=await api<{link:{id:string;expiresAt:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
-        setInviteLink(made.link);
-      }else setInviteLink(existing.link);
-      setShareOpen(true);
-    }catch{setShareNotice(pt?'Não foi possível carregar o convite.':'Could not load invitation.');}
-    finally{setShareBusy(false);}
-  }
-  async function copyInvite(){
-    if(!inviteLink)return;
-    const url=window.location.origin+'/invite/'+inviteLink.id;
-    setShareCopyState('idle');
-    try{
-      if(!navigator.clipboard?.writeText)throw new Error('Clipboard API unavailable');
-      await navigator.clipboard.writeText(url);
-      setShareCopyState('copied');
-      setShareNotice(pt?'Link copiado para a área de transferência.':'Link copied to clipboard.');
-      showShareToast('success',pt?'Link da comunidade copiado!':'Community link copied!');
+      const existing=await api<{link:{id:string}|null}>('/api/v1/communities/'+selectedId+'/share');
+      let token=existing.link?.id;
+      if(!token&&manage(community)){
+        const created=await api<{link:{id:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
+        token=created.link.id;
+      }
+      if(!token)throw new Error('INVITE_LINK_UNAVAILABLE');
+      // This link joins the community and routes directly to the chosen channel.
+      // Passwords, restricted grants and meeting approval remain server-enforced.
+      const link=new URL('/invite/'+encodeURIComponent(token),window.location.origin);
+      link.searchParams.set('channel',activeChannel.id);
+      setChannelInviteLink(link.toString());
     }catch{
-      setShareCopyState('error');
-      setShareNotice(pt?'Não foi possível copiar. Selecione o link acima para copiar manualmente.':
-        'Could not copy. Select the link above to copy it manually.');
-      showShareToast('error',pt?'Não foi possível copiar o link.':'Could not copy the link.');
-    }
+      setChannelInviteError(pt?
+        'Não há link ativo. Peça a um administrador para criar o primeiro convite para este canal.':
+        'No active link. Ask an administrator to create the first channel invitation.');
+    }finally{setChannelInviteLoading(false);}
   }
-  async function inviteContactToChannel(handle:string){
-    if(channelInviteSending||!selectedId||!channelId||!activeChannel||!community?.myRole||
-       !channelInviteContacts.some(member=>member.handle===handle))return;
-    setChannelInviteSending(handle);setChannelInviteError('');setChannelInviteSuccess('');
+  async function copyChannelInvite(){
+    if(!channelInviteLink)return;
     try{
-      // This picker includes only current community members, so use the
-      // direct channel link rather than generating a community-wide invite.
-      // Password and restricted-channel grants are still enforced on arrival.
-      const link=new URL('/',window.location.origin);
-      link.searchParams.set('community',selectedId);
-      link.searchParams.set('channel',channelId);
+      await navigator.clipboard.writeText(channelInviteLink);
+      setChannelInviteSuccess(pt?'Link do canal copiado.':'Channel link copied.');
+      setChannelInviteError('');
+    }catch{setChannelInviteError(pt?'Não foi possível copiar. Selecione o endereço para copiar manualmente.':'Could not copy. Select the address to copy it manually.');}
+  }
+  async function inviteContactToChannel(event:FormEvent){
+    event.preventDefault();
+    if(channelInviteSending||!selectedId||!channelId||!activeChannel||!community?.myRole||!channelInviteLink)return;
+    const handle=channelInviteHandle.trim().replace(/^@/,'').toLowerCase();
+    if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)){
+      setChannelInviteError(pt?'Informe um @usuário válido.':'Enter a valid @username.');return;
+    }
+    setChannelInviteSending(true);setChannelInviteError('');setChannelInviteSuccess('');
+    try{
       const target=await api<{id:string}>('/api/v1/dm/conversations',body({handle}));
       await api('/api/v1/dm/conversations/'+target.id+'/messages',body({
         clientId:crypto.randomUUID(),
         body:(pt?'Venha para o canal ':'Join the channel ')+
           (activeChannel.kind==='text'?'#':activeChannel.kind==='meeting'?'📹 ':'🔊 ')+
-          activeChannel.name+' · '+community.name+'\n'+link.toString()
+          activeChannel.name+' · '+community.name+'\n'+channelInviteLink
       }));
-      setChannelInviteSuccess(pt?'Convite enviado para @'+handle+' no chat.':'Invitation sent to @'+handle+' in chat.');
+      setChannelInviteSuccess(pt?'Convite enviado para @'+handle+' pelo chat.':'Invitation sent to @'+handle+' via chat.');
+      setChannelInviteHandle('');
     }catch{
-      setChannelInviteError(pt?'Não foi possível enviar a mensagem. Confira as permissões de conversa.':
-        'Could not send the message. Check direct-message permissions.');
-    }finally{setChannelInviteSending(null);}
+      setChannelInviteError(pt?'Não foi possível enviar. Confira o @usuário e as permissões de mensagens.':
+        'Could not send. Check the username and direct-message permissions.');
+    }finally{setChannelInviteSending(false);}
   }
   const closeChannel=()=>{setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
 
@@ -711,64 +637,12 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         (pt?'Não foi possível desbloquear o canal.':'Could not unlock the channel.'));
     }finally{setUnlockBusy(false);}
   }
-  async function updateChannelSettings(operation:'name'|'password'|'remove'){
-    if(!selectedId||!activeChannel||!community||!manage(community)||channelSettingsBusy)return;
-    const name=channelSettingsName.trim();
-    if(operation==='name'&&(name.length<2||name.length>64||name===activeChannel.name))return;
-    if(operation==='password'&&(channelSettingsPassword.length<8||channelSettingsPassword.length>72))return;
-    setChannelSettingsBusy(operation);setChannelSettingsError('');
-    try{
-      const endpoint='/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id;
-      await api(endpoint+(operation==='name'?'':'/password'),{
-        method:operation==='name'?'PATCH':'PUT',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(operation==='name'?{name}:{password:operation==='remove'?null:channelSettingsPassword})
-      });
-      await loadDetail(selectedId);
-      setChannelSettingsPassword('');setChannelRemoveConfirm(false);setChannelSettingsOpen(false);
-      setNotice(operation==='name'?(pt?'Nome do canal atualizado.':'Channel name updated.'):
-        operation==='password'?(pt?'Senha do canal atualizada.':'Channel password updated.'):
-        (pt?'Senha do canal removida.':'Channel password removed.'));
-    }catch(reason){
-      const code=reason instanceof Error?reason.message:'';
-      setChannelSettingsError(code==='CHANNEL_EXISTS'?(pt?'Já existe um canal desse tipo com esse nome.':'A channel of this type already has that name.'):
-        code==='ADMIN_REQUIRED'||code==='Forbidden'?(pt?'Você não tem permissão para editar este canal.':'You cannot edit this channel.'):
-        (pt?'Não foi possível salvar as alterações.':'Could not save changes.'));
-    }finally{setChannelSettingsBusy(null);}
-  }
-  async function updateChannelAccessMode(){
-    if(!selectedId||!activeChannel||!community||!manage(community)||channelSettingsBusy||
-       channelSettingsAccessMode===(activeChannel.accessMode??'open'))return;
-    setChannelSettingsBusy('access');setChannelSettingsError('');
-    try{
-      await api('/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/access',{
-        method:'PUT',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({accessMode:channelSettingsAccessMode})
-      });
-      await loadDetail(selectedId);
-      setChannelSettingsOpen(false);
-      setNotice(channelSettingsAccessMode==='restricted'
-        ?(pt?'Canal fechado. Libere os membros em Moderação.':'Channel closed. Assign members in Moderation.')
-        :(pt?'Canal aberto para os membros da comunidade.':'Channel open to community members.'));
-    }catch{
-      setChannelSettingsError(pt?'Não foi possível alterar o acesso do canal.':'Could not change channel access.');
-    }finally{setChannelSettingsBusy(null);}
-  }
   async function createChannel(event:FormEvent){
     event.preventDefault();
     if(!selectedId||!newChannelName.trim())return;
     const created=await act(()=>api('/api/v1/communities/'+selectedId+'/channels',body({name:newChannelName.trim(),kind:newChannelKind,accessMode:newChannelAccessMode})),
       pt?'Canal criado.':'Channel created.',selectedId,'createChannel');
     if(created){setNewChannelOpen(false);setNewChannelName('');setNewChannelAccessMode('open');}
-  }
-  async function invite(event:FormEvent){
-    event.preventDefault();
-    if(!selectedId)return;
-    const handle=inviteHandle.trim().replace(/^@/,'').toLowerCase();
-    if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)){setError(pt?'Digite um @usuário válido.':'Enter a valid @username.');return;}
-    await act(()=>api('/api/v1/communities/'+selectedId+'/invite',body({handle})),
-      pt?'Convite enviado.':'Invitation sent.',selectedId,'inviteUser');
-    setInviteHandle('');
   }
   function releasePending(clientId:string){
     pendingFiles.current.delete(clientId);
@@ -932,8 +806,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         <Plus className="size-5"/>
       </button>
       <button type="button" onClick={()=>{closeChannel();setSelectedId(null);setCreateOpen(false);setDirectory(true);}}
-        aria-label={pt?'Comunidades públicas':'Public communities'} title={pt?'Comunidades públicas':'Public communities'}
-        className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-secondary"><Search className="size-5"/></button>
+        aria-label={pt?'Descobrir':'Discover'} title={pt?'Descobrir':'Discover'}
+        className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-secondary"><Compass className="size-5"/></button>
     </nav>
 
     <section data-uorqui-channel-nav aria-label={pt?'Comunidades e canais':'Communities and channels'}
@@ -943,7 +817,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           <h2 className="text-lg font-semibold tracking-tight">{createOpen?(pt?'Criar comunidade':'Create community'):(pt?'Comunidades':'Communities')}</h2>
           {!createOpen&&<><div className="uorqui-inbox-filters flex gap-1" role="group" aria-label={pt?'Filtrar comunidades':'Filter communities'}>
             <button type="button" aria-pressed={!directory} onClick={()=>setDirectory(false)} className="min-h-10 rounded-md px-3 text-xs">{pt?'Suas comunidades':'Your communities'}</button>
-            <button type="button" aria-pressed={directory} onClick={()=>setDirectory(true)} className="min-h-10 rounded-md px-3 text-xs">{pt?'Públicas':'Public'}</button>
+            <button type="button" aria-pressed={directory} onClick={()=>setDirectory(true)} className="min-h-10 rounded-md px-3 text-xs">{pt?'Descobrir':'Discover'}</button>
           </div><Input value={communitySearch} onChange={event=>setCommunitySearch(event.target.value)} aria-label={pt?'Buscar comunidades':'Search communities'} placeholder={pt?'Buscar comunidades…':'Search communities…'} className="h-10 text-base md:text-sm"/></>}
           <Button className="w-full" size="sm" variant={createOpen?'outline':'secondary'}
             onClick={()=>{setCreateOpen(v=>!v);setError('');}}>{createOpen?<X className="size-4"/>:<Plus className="size-4"/>}
@@ -963,7 +837,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           {!loading&&!owned.length&&!createOpen&&<section className="mb-4 space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
             <h3 className="text-sm font-semibold">{pt?'Comece por uma comunidade':'Start with a community'}</h3>
             <p className="text-xs leading-5 text-muted-foreground">{pt?'Encontre uma comunidade para participar ou crie a sua.':'Find a community to join or create your own.'}</p>
-            <p className="text-xs text-muted-foreground">{pt?'Use o filtro Públicas para encontrar uma comunidade ou entre por um convite.':'Use the Public filter to find a community or join through an invitation.'}</p>
+            <p className="text-xs text-muted-foreground">{pt?'Abra Descobrir para encontrar uma comunidade ou entre por um convite.':'Open Discover to find a community or join through an invitation.'}</p>
           </section>}
           {createOpen?<form onSubmit={event=>void create(event)} className="space-y-3">
             <label className="block text-xs font-medium">{pt?'Nome':'Name'}
@@ -995,7 +869,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               </span>
             </button>)}
             {!loading&&!homeGroups.length&&<p className="p-4 text-center text-sm text-muted-foreground">
-              {pt?'Nenhuma comunidade encontrada. Use o filtro Públicas ou crie a sua.':'No communities found. Use the Public filter or create your own.'}
+              {pt?'Nenhuma comunidade encontrada. Abra Descobrir ou crie a sua.':'No communities found. Open Discover or create your own.'}
             </p>}
           </div>}
         </div>
@@ -1118,11 +992,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   'Text, voice and meeting channels may share a name. Names must be unique within each type.'}</p>
                 <Button size="sm" type="submit" loading={busyAction==='createChannel'} disabled={busy||newChannelName.trim().length<2}>{pt?'Criar canal':'Create channel'}</Button>
               </form>}
-              <form className="space-y-2 pt-2" onSubmit={event=>void invite(event)}>
-                <label className="text-xs font-semibold">{pt?'Convidar pelo @usuário':'Invite by @username'}</label>
-                <Input value={inviteHandle} onChange={e=>setInviteHandle(e.target.value)} maxLength={40} className="text-base" placeholder="@usuario"/>
-                <Button size="sm" variant="outline" type="submit" loading={busyAction==='inviteUser'} disabled={busy||!inviteHandle.trim()}><UserPlus className="size-4"/>{pt?'Convidar':'Invite'}</Button>
-              </form>
               {!!detail?.pendingRequests.length&&<div className="space-y-2 border-t border-border pt-3">
                 <p className="text-xs font-semibold">{pt?'Pedidos de entrada':'Join requests'}</p>
                 {detail.pendingRequests.map(person=><div key={person.handle} className="flex items-center gap-2">
@@ -1133,34 +1002,6 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                 </div>)}
               </div>}
             </section>}
-            <div className="space-y-2 border-t border-border pt-3">
-              <Button variant="outline" size="sm" className="w-full" loading={shareBusy} onClick={()=>void shareCommunity()}>
-                {pt?'Compartilhar comunidade':'Share community'}</Button>
-              {shareOpen&&<div className="space-y-2 rounded-xl border border-border p-2">
-                {inviteLink?<><p className="break-all text-[11px] text-muted-foreground">{window.location.origin+'/invite/'+inviteLink.id}</p>
-                <p className="text-xs text-muted-foreground">{pt?'Toque em Copiar link para copiar o convite.':'Tap Copy link to copy this invitation.'}</p>
-                <Button type="button" size="sm" className="w-full gap-2" onClick={()=>void copyInvite()}>
-                  {shareCopyState==='copied'?<Check aria-hidden="true" className="size-4"/>:<Copy aria-hidden="true" className="size-4"/>}
-                  {shareCopyState==='copied'?(pt?'Copiado!':'Copied!'):(pt?'Copiar link':'Copy link')}
-                </Button>
-                {manage(community)&&<Button type="button" size="sm" variant="outline" disabled={shareBusy} onClick={()=>{
-                  if(!selectedId)return;setShareBusy(true);
-                  void api<{link:{id:string;expiresAt:string}}>('/api/v1/communities/'+selectedId+'/share',body({}))
-                    .then(data=>{setInviteLink(data.link);setShareNotice(pt?'Novo link criado; o anterior foi revogado.':'New link created; previous link revoked.');})
-                    .catch(()=>setShareNotice(pt?'Falha ao renovar.':'Could not rotate invitation.'))
-                    .finally(()=>setShareBusy(false));
-                }}>{pt?'Gerar novo link':'Rotate invitation link'}</Button>}
-                {manage(community)&&<Button type="button" size="sm" variant="ghost" className="w-full" disabled={shareBusy} onClick={()=>{
-                  if(!selectedId)return;setShareBusy(true);
-                  void api('/api/v1/communities/'+selectedId+'/share',{method:'DELETE'})
-                    .then(()=>{setInviteLink(null);setShareNotice(pt?'Link revogado.':'Invitation revoked.');})
-                    .catch(()=>setShareNotice(pt?'Falha ao revogar.':'Could not revoke link.'))
-                    .finally(()=>setShareBusy(false));
-                }}>{pt?'Revogar link':'Revoke link'}</Button>}</>:
-                  <p className="text-xs text-muted-foreground">{pt?'Peça a um administrador para gerar o link.':'Ask an administrator to create an invitation link.'}</p>}
-              </div>}
-              {shareNotice&&<p role="status" className="break-words text-xs text-muted-foreground">{shareNotice}</p>}
-            </div>
             {['owner','admin','moderator'].includes(community.myRole??'')&&
               <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
                 name={community.name} description={community.description} visibility={community.visibility} avatarUrl={community.avatarUrl}
@@ -1189,94 +1030,10 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             {(activeChannel.hasPassword||activeChannel.accessMode==='restricted')&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?(activeChannel.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(activeChannel.accessMode==='restricted'?'Closed channel':'Password-protected channel')}/>} 
           </h2><p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
           <Button type="button" size="sm" variant="ghost" className="shrink-0 gap-2 px-2 sm:px-3"
-            aria-label={pt?'Convidar membro da comunidade para o canal':'Invite community member to channel'}
-            onClick={()=>{setChannelSettingsOpen(false);setChannelInviteFilter('');setChannelInviteOpen(true);}}>
+            aria-label={pt?'Convidar para este canal':'Invite to this channel'}
+            onClick={()=>void openChannelInvite()}>
             <UserPlus className="size-4"/><span className="hidden sm:inline">{pt?'Convidar':'Invite'}</span>
           </Button>
-          {manage(community)&&<div ref={channelSettingsRef} className="relative shrink-0">
-            <Button type="button" size="sm" variant="ghost" className="gap-2 px-2 sm:px-3"
-              aria-expanded={channelSettingsOpen} aria-controls="uorqui-channel-settings"
-              aria-label={pt?'Editar nome, acesso e senha do canal':'Edit channel name, access and password'}
-              onClick={()=>{
-                setChannelSettingsOpen(old=>!old);setChannelSettingsName(activeChannel.name);
-                setChannelSettingsPassword('');setChannelSettingsAccessMode(activeChannel.accessMode??'open');setChannelSettingsError('');setChannelRemoveConfirm(false);
-              }}>
-              <Pencil className="size-4"/><span className="hidden sm:inline">{pt?'Editar canal':'Edit channel'}</span>
-            </Button>
-            {channelSettingsOpen&&createPortal(<div ref={channelSettingsMenuRef}
-              id="uorqui-channel-settings" role="group"
-              aria-label={pt?'Configurações do canal':'Channel settings'}
-              style={channelSettingsPosition?{top:channelSettingsPosition.top,left:channelSettingsPosition.left}:{visibility:'hidden'}}
-              className="fixed z-[250] max-h-[calc(100dvh-6rem)] w-[calc(100vw-1.5rem)] max-w-[22rem] space-y-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-2xl">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">{pt?'Editar canal':'Edit channel'}</h3>
-                <Button type="button" size="icon" variant="ghost" aria-label={pt?'Fechar':'Close'}
-                  onClick={()=>setChannelSettingsOpen(false)}><X className="size-4"/></Button>
-              </div>
-              {channelSettingsError&&<p role="alert" className="text-xs text-destructive">{channelSettingsError}</p>}
-              <form className="space-y-2" onSubmit={event=>{event.preventDefault();void updateChannelSettings('name');}}>
-                <label htmlFor="uorqui-channel-name" className="block text-xs font-medium">{pt?'Nome do canal':'Channel name'}</label>
-                <Input id="uorqui-channel-name" type="text" required minLength={2} maxLength={64}
-                  className="h-10 text-base" value={channelSettingsName}
-                  onChange={event=>setChannelSettingsName(event.target.value)} disabled={channelSettingsBusy!==null}/>
-                <Button type="submit" size="sm" className="w-full" loading={channelSettingsBusy==='name'}
-                  disabled={channelSettingsBusy!==null||channelSettingsName.trim().length<2||
-                    channelSettingsName.trim()===activeChannel.name}>
-                  <Check className="size-4"/>{pt?'Salvar nome':'Save name'}</Button>
-              </form>
-              <div className="space-y-2 border-t border-border pt-3">
-                <label htmlFor="uorqui-channel-access" className="block text-xs font-medium">
-                  {pt?'Permissão de acesso':'Access permissions'}
-                </label>
-                <select id="uorqui-channel-access" value={channelSettingsAccessMode}
-                  disabled={channelSettingsBusy!==null}
-                  onChange={event=>setChannelSettingsAccessMode(event.target.value as 'open'|'restricted')}
-                  className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
-                  <option value="open">{pt?'Aberto — todos os membros':'Open — all members'}</option>
-                  <option value="restricted">{pt?'Fechado — só membros autorizados':'Closed — permitted members only'}</option>
-                </select>
-                {channelSettingsAccessMode==='restricted'&&<p className="text-xs text-muted-foreground">
-                  {pt?'Proprietário e administradores têm acesso automático. Autorize os demais usuários em Moderação > Membros.':
-                    'Owner and admins have automatic access. Grant other members access in Moderation > Members.'}
-                </p>}
-                <Button type="button" size="sm" className="w-full"
-                  loading={channelSettingsBusy==='access'} disabled={channelSettingsBusy!==null||
-                    channelSettingsAccessMode===(activeChannel.accessMode??'open')}
-                  onClick={()=>void updateChannelAccessMode()}>
-                  <Check className="size-4"/>{pt?'Salvar acesso':'Save access'}
-                </Button>
-              </div>
-              <form className="space-y-2 border-t border-border pt-3"
-                onSubmit={event=>{event.preventDefault();void updateChannelSettings('password');}}>
-                <label htmlFor="uorqui-channel-password" className="block text-xs font-medium">
-                  {activeChannel.hasPassword?(pt?'Alterar senha':'Change password'):(pt?'Definir senha':'Set password')}
-                </label>
-                <Input id="uorqui-channel-password" type="password" autoComplete="new-password"
-                  required minLength={8} maxLength={72} className="h-10 text-base"
-                  placeholder={pt?'Mínimo de 8 caracteres':'At least 8 characters'}
-                  value={channelSettingsPassword} onChange={event=>setChannelSettingsPassword(event.target.value)}
-                  disabled={channelSettingsBusy!==null}/>
-                <Button type="submit" size="sm" className="w-full" loading={channelSettingsBusy==='password'}
-                  disabled={channelSettingsBusy!==null||channelSettingsPassword.length<8}>
-                  <LockKeyhole className="size-4"/>{activeChannel.hasPassword?(pt?'Alterar senha':'Change password'):(pt?'Proteger canal':'Protect channel')}</Button>
-              </form>
-              {activeChannel.hasPassword&&<div className="space-y-2 border-t border-border pt-3">
-                {channelRemoveConfirm&&<p className="text-xs text-muted-foreground">
-                  {pt?'O canal ficará acessível sem senha. Confirme para continuar.':
-                    'The channel will become accessible without a password. Confirm to continue.'}</p>}
-                <Button type="button" size="sm" className="w-full" variant="outline"
-                  loading={channelSettingsBusy==='remove'} disabled={channelSettingsBusy!==null}
-                  onClick={()=>channelRemoveConfirm?void updateChannelSettings('remove'):setChannelRemoveConfirm(true)}>
-                  <LockKeyholeOpen className="size-4"/>
-                  {channelRemoveConfirm?(pt?'Confirmar remoção':'Confirm removal'):(pt?'Remover senha':'Remove password')}
-                </Button>
-                {channelRemoveConfirm&&<Button type="button" size="sm" variant="ghost" className="w-full"
-                  onClick={()=>setChannelRemoveConfirm(false)} disabled={channelSettingsBusy!==null}>
-                  {pt?'Cancelar':'Cancel'}
-                </Button>}
-              </div>}
-            </div>,document.body)}
-          </div>}
         </header>
         {channelLocked?<form className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 py-8 text-center" onSubmit={event=>void unlockChannel(event)}>
           <span className="grid size-14 place-items-center rounded-2xl bg-primary/10"><LockKeyhole className="size-7 text-primary"/></span>
@@ -1435,6 +1192,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         <CommunityVoiceRoom key={activeVoiceRoom.communityId+'/'+activeVoiceRoom.channelId}
           {...activeVoiceRoom} mode={voiceInline?'expanded':'floating'}
           onParticipantsChange={setVoiceParticipants} onPhaseChange={setVoicePhase}
+          onInvite={()=>void openChannelInvite()}
           onMinimize={()=>{
             if(voicePhase==='joined')closeChannel();
             else{setActiveVoiceRoom(null);setVoiceMinimized(true);}
@@ -1452,7 +1210,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     <Dialog.Root open={channelInviteOpen} onOpenChange={next=>{
       if(channelInviteSending)return;
       setChannelInviteOpen(next);
-      if(!next){setChannelInviteFilter('');setChannelInviteError('');setChannelInviteSuccess('');}
+      if(!next){setChannelInviteLink('');setChannelInviteHandle('');setChannelInviteError('');setChannelInviteSuccess('');}
     }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[310] bg-black/65"/>
@@ -1460,59 +1218,52 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
           className="fixed left-1/2 top-1/2 z-[315] flex max-h-[min(85dvh,650px)] w-[min(92vw,470px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl outline-none">
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border p-4">
             <div className="min-w-0">
-              <Dialog.Title className="text-base font-semibold">{pt?'Convidar membro para o canal':'Invite member to channel'}</Dialog.Title>
-              <p className="mt-1 truncate text-xs text-muted-foreground">
-                {activeChannel?.name} · {community?.name}
-              </p>
+              <Dialog.Title className="text-base font-semibold">{pt?'Convidar para o canal':'Invite to channel'}</Dialog.Title>
+              <p className="mt-1 truncate text-xs text-muted-foreground">{activeChannel?.name} · {community?.name}</p>
             </div>
-            <Dialog.Close asChild><Button variant="ghost" size="icon" disabled={!!channelInviteSending}
+            <Dialog.Close asChild><Button variant="ghost" size="icon" disabled={channelInviteSending}
               aria-label={pt?'Fechar':'Close'}><X className="size-5"/></Button></Dialog.Close>
           </div>
-          <div className="min-h-0 space-y-3 overflow-y-auto overscroll-contain p-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-4">
             <p className="text-sm text-muted-foreground">{pt?
-              'Selecione alguém que já participa da comunidade para enviar o link direto do canal pelo chat.':
-              'Select someone who is already in this community to send the direct channel link by chat.'}</p>
-            {activeChannel?.accessMode==='restricted'&&<p className="text-xs text-muted-foreground">
-              {pt?'Canais fechados exigem autorização do administrador.':'Restricted channels require admin authorization.'}
-            </p>}
-            {activeChannel?.hasPassword&&<p className="text-xs text-muted-foreground">
-              {pt?'O destinatário precisará da senha para acessar.':'The recipient will need the channel password.'}
-            </p>}
-            <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground"/>
-              <Input value={channelInviteFilter} onChange={event=>setChannelInviteFilter(event.target.value)}
-                className="h-10 pl-9 text-base" placeholder={pt?'Pesquisar membro':'Search member'}/>
-            </div>
+              'Um único convite leva ao canal escolhido e também permite entrar na comunidade.':
+              'One invitation opens this channel and also grants community membership.'}</p>
+            {activeChannel?.kind==='meeting'&&<p className="text-xs text-muted-foreground">{pt?
+              'Este é também o link da reunião. Se a sala exigir aprovação, o convidado ainda precisará ser aprovado.':
+              'This is also the meeting link. Approval is still required when enabled.'}</p>}
+            {activeChannel?.accessMode==='restricted'&&<p className="text-xs text-muted-foreground">{pt?
+              'O convite não libera automaticamente o acesso a um canal fechado.':
+              'This invitation does not automatically grant access to restricted channels.'}</p>}
+            {activeChannel?.hasPassword&&<p className="text-xs text-muted-foreground">{pt?
+              'O convidado precisará da senha do canal.':'The invitee will need the channel password.'}</p>}
+            {channelInviteLoading?<WorkspaceContentLoading label={pt?'Gerando convite':'Preparing invitation'} rows={2}/>:
+              channelInviteLink&&<div className="space-y-2">
+                <label className="block text-xs font-semibold" htmlFor="uorqui-channel-invite-url">{pt?'Link direto do canal':'Direct channel link'}</label>
+                <Input id="uorqui-channel-invite-url" value={channelInviteLink} readOnly
+                  onFocus={event=>event.currentTarget.select()} className="h-10 text-xs"/>
+                <Button type="button" size="sm" variant="outline" className="w-full" onClick={()=>void copyChannelInvite()}>
+                  <Copy className="size-4"/>{pt?'Copiar link':'Copy link'}
+                </Button>
+              </div>}
+            {channelInviteLink&&<form className="space-y-2 border-t border-border pt-3" onSubmit={event=>void inviteContactToChannel(event)}>
+              <label className="block text-xs font-semibold" htmlFor="uorqui-channel-invite-handle">{pt?'Enviar pelo Uorqui':'Send in Uorqui'}</label>
+              <div className="flex flex-wrap gap-2">
+                <Input id="uorqui-channel-invite-handle" value={channelInviteHandle}
+                  onChange={event=>setChannelInviteHandle(event.target.value)} maxLength={33} autoComplete="off"
+                  placeholder="@usuario" className="h-10 min-w-36 flex-1 text-base"/>
+                <Button type="submit" size="sm" disabled={channelInviteSending||!channelInviteHandle.trim()} loading={channelInviteSending}>
+                  <MessageCircle className="size-4"/>{pt?'Enviar':'Send'}
+                </Button>
+              </div>
+            </form>}
             {channelInviteError&&<p role="alert" className="text-xs text-destructive">{channelInviteError}</p>}
             {channelInviteSuccess&&<p role="status" className="text-xs text-primary">{channelInviteSuccess}</p>}
-            {channelInviteLoading?<WorkspaceContentLoading label={pt?'Carregando membros':'Loading members'} rows={3}/>:channelInviteContacts.length===0?
-              <p className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
-                {pt?'Não há outros membros desta comunidade para convidar.':'No other members of this community are available to invite.'}
-              </p>:<div className="space-y-1">
-              {channelInviteContacts.filter(person=>(person.displayName+' '+person.handle).toLocaleLowerCase(locale)
-                .includes(channelInviteFilter.trim().toLocaleLowerCase(locale))).map(person=>
-                <div key={person.handle} className="flex min-h-14 items-center gap-2 rounded-xl px-2 hover:bg-secondary/70">
-                  <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{person.displayName}</p>
-                    <p className="truncate text-xs text-muted-foreground">@{person.handle}</p></div>
-                  <Button type="button" size="sm" variant="outline" disabled={!!channelInviteSending}
-                    loading={channelInviteSending===person.handle}
-                    onClick={()=>void inviteContactToChannel(person.handle)}>
-                    <MessageCircle className="size-4"/>{pt?'Enviar':'Send'}
-                  </Button>
-                </div>)}
-              </div>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
     <ContentReportDialog target={reportMessageId?{targetKind:'community_message',targetId:reportMessageId}:null}
       locale={locale} onClose={()=>setReportMessageId(null)}/>
-    {shareToast&&createPortal(
-      <div role={shareToast.kind==='error'?'alert':'status'} aria-live={shareToast.kind==='error'?'assertive':'polite'}
-        className="pointer-events-none fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[300] flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-popover px-4 py-3 text-sm font-medium text-popover-foreground shadow-2xl">
-        {shareToast.kind==='success'?<Check aria-hidden="true" className="size-5 shrink-0 text-primary"/>:<X aria-hidden="true" className="size-5 shrink-0 text-destructive"/>}
-        <span>{shareToast.message}</span>
-      </div>,document.body)}
     {(error||notice)&&<div role={error?'alert':'status'}
       className={cn('pointer-events-auto absolute bottom-20 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-xl border border-border bg-popover px-4 py-3 text-center text-xs shadow-xl',error?'text-destructive':'text-primary')}>
       {error||notice}<button type="button" className="ml-3 underline" onClick={()=>{setError('');setNotice('');}}>{pt?'Fechar':'Close'}</button>
