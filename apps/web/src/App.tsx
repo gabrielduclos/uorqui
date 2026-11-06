@@ -234,8 +234,8 @@ function AppContent() {
         <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
           invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
-      {inviteToken && !publicHandle && !isVerificationResult && !legalDocument && <div
-        role="dialog" aria-modal={Boolean(account?.profile)} aria-label="Convite para comunidade / Community invitation"
+      {inviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
+        role="dialog" aria-modal={true} aria-label="Convite para comunidade / Community invitation"
         className="fixed inset-0 z-[410] flex items-center justify-center bg-black/65 p-4">
         <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl">
           <div className="flex items-start justify-between gap-3">
