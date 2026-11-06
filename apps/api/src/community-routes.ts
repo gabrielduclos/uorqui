@@ -1,3 +1,4 @@
+import { validRequestOrigin as originValid } from './request-origin.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getPool } from './db/client.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -44,7 +45,7 @@ const reactionBody={type:'object',required:['emoji'],additionalProperties:false,
 const inviteBody={type:'object',required:['handle'],additionalProperties:false,properties:{handle:{type:'string',pattern:'^[a-z][a-z0-9_]{2,31}$'}}};
 const noCache='private, no-store';
 const manager=(role:string|null)=>role==='owner'||role==='admin';
-const originValid=(request:FastifyRequest)=>request.headers.origin===(process.env.WEB_ORIGIN??'http://localhost:5173');
+
 
 export function registerCommunityRoutes(app:FastifyInstance, readSession:SessionReader) {
   async function self(request:FastifyRequest){
