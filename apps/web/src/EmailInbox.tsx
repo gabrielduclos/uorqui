@@ -82,6 +82,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const [replyBody, setReplyBody] = useState('');
   const [expandedImage,setExpandedImage]=useState<{src:string;alt:string}|null>(null);
   const mailFrameCleanup=useRef<(()=>void)|null>(null);
+  const [readyFrame,setReadyFrame]=useState<{accountId:string;messageId:string;html:string}|null>(null);
   useEffect(()=>()=>{mailFrameCleanup.current?.();mailFrameCleanup.current=null;},[]);
   const [replyError, setReplyError] = useState('');
   // Remote HTTPS images are loaded by default, as requested. The iframe still
@@ -189,7 +190,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     return () => controller.abort();
   }, [accountId, folder, filter, page, refresh, explainError]);
 
-  function closeDetail() { setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
+  function closeDetail() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
   function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
   function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
   async function connect(provider: 'gmail') {
@@ -237,6 +238,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     finally { setDisconnecting(false); }
   }
   async function showMessage(message: Message, chosenAccount = accountId) {
+    mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);
     setExpandedImage(null);
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
@@ -348,7 +350,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     } catch (error) { setError(explainError(error)); }
     finally { setMoving(false); }
   }
-  function startCompose() { detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
+  function startCompose() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
@@ -357,6 +359,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     '<style>html,body{margin:0;padding:0;overflow-wrap:anywhere}img{max-width:100%!important;height:auto!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
+  const htmlFrameReady=Boolean(selected?.html&&readyFrame?.accountId===accountId&&
+    readyFrame?.messageId===selected.id&&readyFrame?.html===selected.html);
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
   const visibleIds = visible.map(message => message.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
@@ -551,17 +555,24 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         <article key={selected.id} className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
           {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : framedHtml ? <>
-            <iframe key={selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
-              sandbox="allow-same-origin" referrerPolicy="no-referrer" srcDoc={framedHtml}
+            <div className={cn('relative w-full min-w-0',!htmlFrameReady&&'min-h-[280px]')}>
+              {!htmlFrameReady&&<WorkspaceContentLoading
+                label={pt?'Montando conteúdo e imagens do e-mail':'Rendering email content and images'}
+                rows={4} className="w-full py-2"/>}
+            <iframe key={accountId+':'+selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              referrerPolicy="no-referrer" srcDoc={framedHtml}
               onLoad={event=>{
                 // The frame cannot run scripts, submit forms or navigate the
-                // workspace. The parent opens external links in the browser.
+                // workspace. Sanitized native _blank links escape the sandbox;
+                // parent window.open from iframe clicks is blocked on iOS PWA.
                 const frame=event.currentTarget;
                 const doc=frame.contentDocument;
                 if(!doc)return;
                 // Many promotional emails use fixed 600-800px tables. Fit the
                 // whole HTML layout into the frame, not each individual photo.
                 mailFrameCleanup.current?.();
+                let alive=true;
                 const fitFrame=()=>{
                   if(!frame.isConnected||!doc.body||!doc.documentElement)return;
                   const root=doc.documentElement,body=doc.body;
@@ -601,6 +612,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                 observer?.observe(frame.parentElement??frame);
                 window.addEventListener('resize',scheduleFit);
                 mailFrameCleanup.current=()=>{
+                  alive=false;
                   observer?.disconnect();
                   window.removeEventListener('resize',scheduleFit);
                   if(fitRaf)window.cancelAnimationFrame(fitRaf);
@@ -614,6 +626,9 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                   // iframe elements belong to another window realm, so the
                   // parent's HTMLImageElement instanceof checks are unreliable.
                   const element=target as Element|null;
+                  // A banner can be both an image and a link: let its native
+                  // _blank link open, instead of swallowing the tap for zoom.
+                  if(element?.closest?.('a[href], area[href]'))return false;
                   const image=element?.tagName?.toLowerCase()==='img'?element as HTMLImageElement:
                     element?.closest?.('img') as HTMLImageElement|null;
                   if(!image)return false;
@@ -622,28 +637,32 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                   setExpandedImage({src,alt:image.alt|| (pt?'Imagem do e-mail':'Email image')});
                   return true;
                 };
-                // srcDoc has no trustworthy base URL for relative links.
-                // Never resolve those links against uorqui.app.
-                const openExternalLink=(target:EventTarget|null)=>{
-                  const element=target as Element|null;
-                  const anchor=element?.closest?.('a[href]') as HTMLAnchorElement|null;
-                  if(!anchor)return false;
-                  const raw=anchor.getAttribute('href')?.trim()??'';
+                // srcDoc resolves relative links against the Uorqui origin,
+                // which would be unsafe. Keep only explicit HTTP(S) destinations
+                // and let the browser handle the actual native link click.
+                // Native target=_blank requires BOTH allow-popups sandbox flags:
+                // JS window.open from a parent click listener is unreliable in
+                // Safari PWAs and can leave the destination inside the iframe.
+                doc.querySelectorAll<HTMLAnchorElement | HTMLAreaElement>('a[href],area[href]').forEach(link=>{
+                  const raw=link.getAttribute('href')?.trim()??'';
+                  let safeUrl:string|null=null;
                   try{
                     if(/^https?:\/\//i.test(raw)||raw.startsWith('//')){
                       const url=new URL(raw.startsWith('//')?'https:'+raw:raw);
-                      if(url.protocol==='https:'||url.protocol==='http:'){
-                        // Direct trusted user activation is required on iOS PWA.
-                        window.open(url.href,'_blank','noopener,noreferrer');
-                      }
+                      if(url.protocol==='http:'||url.protocol==='https:')safeUrl=url.href;
                     }
-                  }catch{/* Untrusted/invalid email links must never navigate. */}
-                  // Cancel in-frame navigation for all links, including unsafe
-                  // URL schemes. External destinations cannot replace Uorqui.
-                  return true;
-                };
+                  }catch{/* Malformed or unsafe destinations are not followed. */}
+                  if(!safeUrl){
+                    link.removeAttribute('href');
+                    link.removeAttribute('target');
+                    return;
+                  }
+                  link.setAttribute('href',safeUrl);
+                  link.setAttribute('target','_blank');
+                  link.setAttribute('rel','noopener noreferrer external');
+                  link.setAttribute('referrerpolicy','no-referrer');
+                });
                 doc.querySelectorAll('img').forEach(img=>{
-                  // Images inside anchors open the link; unlinked images zoom.
                   if(img.closest('a[href]'))return;
                   img.style.setProperty('cursor','zoom-in','important');
                   img.setAttribute('tabindex','0');
@@ -651,28 +670,74 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                   img.setAttribute('aria-label',pt?'Ampliar imagem':'Enlarge image');
                 });
                 const handleClick=(e:MouseEvent)=>{
-                  if(openExternalLink(e.target)){
-                    e.preventDefault();e.stopPropagation();
-                  }else if(openImage(e.target))e.preventDefault();
+                  // Valid external links must keep their default native action.
+                  if((e.target as Element|null)?.closest?.('a[href],area[href]'))return;
+                  if(openImage(e.target))e.preventDefault();
                 };
                 const handleKeyDown=(e:KeyboardEvent)=>{
-                  if(e.key==='Enter'&&openExternalLink(e.target)){
-                    e.preventDefault();e.stopPropagation();
-                  }else if((e.key==='Enter'||e.key===' ')&&
+                  if((e.key==='Enter'||e.key===' ')&&
                     (e.target as Element|null)?.tagName?.toLowerCase()==='img'&&openImage(e.target)){
                     e.preventDefault();
                   }
                 };
                 doc.addEventListener('click',handleClick,true);
                 doc.addEventListener('keydown',handleKeyDown,true);
+                // Stay on the skeleton until the document, web fonts, remote
+                // image loads/errors and responsive fitting have settled.
+                const pendingImages=new Set(images.filter(image=>!image.complete));
+                let fontsReady=!doc.fonts,readyRaf=0;
+                let maxWait=0;
+                const finishIfReady=()=>{
+                  if(!alive||!frame.isConnected||!fontsReady||pendingImages.size)return;
+                  if(maxWait)window.clearTimeout(maxWait);
+                  if(readyRaf)window.cancelAnimationFrame(readyRaf);
+                  readyRaf=window.requestAnimationFrame(()=>{
+                    if(!alive)return;
+                    fitFrame();
+                    readyRaf=window.requestAnimationFrame(()=>{
+                      if(!alive||!frame.isConnected)return;
+                      fitFrame();
+                      setReadyFrame({accountId,messageId:selected.id,html:selected.html!});
+                    });
+                  });
+                };
+                const imageSettled=(event:Event)=>{
+                  pendingImages.delete(event.currentTarget as HTMLImageElement);
+                  finishIfReady();
+                };
+                for(const image of images){
+                  image.addEventListener('load',imageSettled);
+                  image.addEventListener('error',imageSettled);
+                  // Do not leave below-fold marketing images waiting on lazy
+                  // loading forever while the email reader is hidden.
+                  if(!image.complete)image.loading='eager';
+                }
+                if(doc.fonts)void doc.fonts.ready.then(()=>{
+                  fontsReady=true;finishIfReady();
+                }).catch(()=>{fontsReady=true;finishIfReady();});
+                // A broken tracking pixel must not freeze the reader forever.
+                // Any late asset still re-fits the frame after it finishes.
+                maxWait=window.setTimeout(()=>{
+                  pendingImages.clear();fontsReady=true;finishIfReady();
+                },15000);
+                finishIfReady();
                 const cleanupLayout=mailFrameCleanup.current;
                 mailFrameCleanup.current=()=>{
                   cleanupLayout?.();
+                  if(maxWait)window.clearTimeout(maxWait);
+                  if(readyRaf)window.cancelAnimationFrame(readyRaf);
                   doc.removeEventListener('click',handleClick,true);
                   doc.removeEventListener('keydown',handleKeyDown,true);
+                  for(const image of images){
+                    image.removeEventListener('load',imageSettled);
+                    image.removeEventListener('error',imageSettled);
+                  }
                 };
               }}
-              className="min-h-[120px] w-full rounded-md border border-border bg-white" style={{height:240}} />
+              className={cn('min-h-[120px] w-full rounded-md border border-border bg-white',
+                !htmlFrameReady&&'pointer-events-none absolute left-0 top-0 opacity-0')}
+              style={{height:240}} />
+            </div>
           </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
           {replying && !loadingBody && <form onSubmit={event => void submitReply(event)} className="mt-6 space-y-3 border-t border-border pt-5">
             <p className="text-xs font-medium">{pt ? 'Responder a ' : 'Reply to '}{selected.from}</p>
