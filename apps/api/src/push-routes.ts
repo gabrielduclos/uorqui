@@ -1,3 +1,4 @@
+import { validRequestOrigin as originValid } from './request-origin.js';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import {createCipheriv,createECDH,createHmac,createPrivateKey,randomBytes,sign,timingSafeEqual} from 'node:crypto';
 import {getPool} from './db/client.js';
@@ -21,9 +22,7 @@ const noCache='private, no-store';
 const publicKey=()=>process.env.VAPID_PUBLIC_KEY?.trim()??'';
 const privateKey=()=>process.env.VAPID_PRIVATE_KEY?.trim()??'';
 const enabled=()=>publicKey().length>0&&privateKey().length>0;
-function originValid(request:FastifyRequest){
-  return request.headers.origin===(process.env.WEB_ORIGIN??'http://localhost:5173');
-}
+
 /** Limit outbound requests to legitimate push provider endpoints: user supplied
  * URLs must NEVER turn this sender into an SSRF proxy.
  */
