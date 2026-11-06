@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.7] — 2026-11-06
+
+- **Reply reading order:** in community channels, the new-message author/header now appears **before** the cited reference and the reply content. Direct-message replies keep the same source-then-response order inside their bubble.
+- **Quoted message previews:** removed the hard 180-character cutoff. The original text can occupy up to **four lines** in message replies or **three lines** above the composer, with a **Read more / Show less** action to inspect the complete original message without losing the jump-to-original link.
+- **Mobile layout:** reply bubbles gain enough minimum width for the quote, avoiding extremely narrow snippets; expanded previews respect screen width without horizontal scroll. Older text-quote replies remain readable.
+- **Theming and navigation:** use shared global Light/Dark semantic styles and preserve existing reply IDs, optimistic states, and click-to-jump. Frontend-only; no backend or database changes.
+
 ## [0.1.0-beta.6] — 2026-11-06
 
 - **Discord-style reply presentation:** both community channels and private chats now show a single compact reference line with a curved connector, the original author's name and a truncated message preview, rather than an inset quote card.
