@@ -92,6 +92,9 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const target = new URL(destination);
       target.searchParams.set('mail', status);
       if (status === 'failed' && reason) target.searchParams.set('mail_reason', reason);
+      // Public provider label only; authorization codes, tokens and state stay server-side.
+      const provider = (request.params as { provider: string }).provider;
+      if (isMailProvider(provider)) target.searchParams.set('mail_provider', provider);
       return reply.redirect(target.toString());
     };
     let stage: Failure = 'session';
