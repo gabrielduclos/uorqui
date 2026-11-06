@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.1` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.2` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -22,7 +22,7 @@ The initial audience includes gaming communities, but Uorqui is designed for gen
 
 > **Global feed retired November 2, 2026:** the new Discover experience replaces public posts. The API and Worker deployment passed live smoke checks, and the legacy feed tables were removed from production Neon after verified snapshot backups. Four older feed media files are retained in R2 for recovery; do not delete them without a verified copy. Read the [Discover decision](docs/en/discover.md).
 
-Community approvals refresh the applicant's community list through account-targeted SSE without reloading. Community owners/admins edit channel names and passwords from the channel header; deletion remains under moderation. See [Meetings](docs/en/video-meetings.md).
+Community approvals refresh the applicant's community list through account-targeted SSE without reloading. Admins manage channel names, descriptions, passwords and access in Moderation. Each channel offers a single invite link that joins the community and opens that channel; meeting invitations use the same flow. New channels suggest editable numbered names by type. See [Meetings](docs/en/video-meetings.md).
 
 ## Beta status
 
@@ -50,7 +50,7 @@ The project has automated CI for the API, UI and integration flows. Passing CI d
 - **Voice:** WebRTC peer-to-peer; TURN is optional and connectivity must be tested across networks.
 - **Deployment:** Cloudflare Builds and Render, with GitHub Actions verification.
 
-This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.1`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
+This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.2`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
 
 ## Documentation
 
