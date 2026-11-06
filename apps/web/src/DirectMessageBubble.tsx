@@ -5,6 +5,7 @@ import { Copy, Download, FileText, Flag, Forward, MapPin, Newspaper, MoreHorizon
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { Spinner } from '@/components/ui/spinner';
 import { MessageText } from './MessageText';
+import { isCommunityGifUrl } from './CommunityMediaPicker';
 import { LinkPreview } from './LinkPreview';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { ensureChatMediaCached, useCachedChatMedia } from './chatMediaCache';
@@ -250,7 +251,9 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         <p className="whitespace-pre-wrap break-words">
           {message.deletedAt
             ? <span className="italic opacity-70">{pt ? 'Mensagem excluída' : 'Deleted message'}</span>
-            : <MessageText text={locationMessage ? (locationMessage[5]??'') : quote && !message.replyToId ? quote[2] : message.body}/>}
+            : isCommunityGifUrl(message.body)?<img src={message.body} loading="lazy" decoding="async" referrerPolicy="no-referrer"
+              alt={pt?'GIF enviado':'Sent GIF'} className="my-1 block h-auto max-h-64 max-w-full rounded-lg object-contain"/>:
+              <MessageText text={locationMessage ? (locationMessage[5]??'') : quote && !message.replyToId ? quote[2] : message.body}/>}
           {' '}
           <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap align-baseline text-[10px] opacity-80', mine ? 'text-primary-foreground' : 'text-muted-foreground')}>
             {message.editedAt && !message.deletedAt && <span>{pt ? 'editada' : 'edited'}</span>}

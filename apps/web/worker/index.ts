@@ -8,6 +8,7 @@ interface ProfileMediaBucket {
   put(key: string, body: ArrayBuffer, options: { httpMetadata: { contentType: string } }): Promise<unknown>;
   get(key: string, options?: { range?: Headers }): Promise<ProfileMediaObject | null>;
   delete(key: string): Promise<void>;
+  list(options:{prefix?:string;limit?:number}):Promise<{objects:{key:string}[];truncated:boolean}>;
 }
 interface Env {
   API_ORIGIN?: string;
@@ -378,6 +379,51 @@ async function deleteCommunityWithImage(request:Request,env:Env,api:URL,id:strin
   }catch{return jsonError(503,'Could not delete community');}
 }
 
+/**
+ * Erase R2 objects for accounts already removed from PostgreSQL. Jobs were
+ * inserted in the account-deletion transaction; failed batches remain pending
+ * and are retried on the next scheduled invocation.
+ */
+async function gcRequest(env:Env,origin:URL,method:'GET'|'POST',path:string):Promise<Response>{
+  const secret=env.DM_ATTACHMENT_PROOF_SECRET;
+  if(!secret||secret.length<32)throw Error('Media cleanup signing not configured');
+  const minute=Math.floor(Date.now()/60000);
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),
+    {name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const text='uorqui-r2-gc-v1\n'+method+'\n'+path+'\n'+minute;
+  const bytes=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(text));
+  const signature=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
+  return fetch(new URL(path,origin),{
+    method,headers:{'x-uorqui-gc-minute':String(minute),'x-uorqui-gc-signature':signature},
+    cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(25000),
+  });
+}
+async function flushAccountMediaCleanup(env:Env,origin:URL){
+  if(!env.DM_ATTACHMENT_PROOF_SECRET)return;
+  const response=await gcRequest(env,origin,'GET','/api/v1/internal/r2-gc');
+  if(!response.ok)return;
+  const result=await response.json() as {jobs?:{id:string;bucket:'PROFILE_MEDIA'|'DM_ATTACHMENTS';prefix:string}[]};
+  for(const job of result.jobs??[]){
+    if(!/^[a-f0-9-]{36}$/i.test(job.id) || !job.prefix || job.prefix.includes('..'))continue;
+    const bucket=job.bucket==='PROFILE_MEDIA'?env.PROFILE_MEDIA:job.bucket==='DM_ATTACHMENTS'?env.DM_ATTACHMENTS:null;
+    if(!bucket)continue;
+    try{
+      const listing=await bucket.list({prefix:job.prefix,limit:100});
+      let allDeleted=true;
+      for(let i=0;i<listing.objects.length;i+=15){
+        const batch=await Promise.allSettled(listing.objects.slice(i,i+15).map(object=>bucket.delete(object.key)));
+        if(batch.some(x=>x.status==='rejected'))allDeleted=false;
+      }
+      if(allDeleted&&!listing.truncated){
+        const path='/api/v1/internal/r2-gc/'+job.id+'/complete';
+        await gcRequest(env,origin,'POST',path);
+      }
+    }catch(error){
+      console.warn('R2 account-erasure retry scheduled',error instanceof Error?error.name:'unknown');
+    }
+  }
+}
+
 export default {
   // Cron Trigger keeps Render's free instance warm without a browser session.
   // /health is lightweight and intentionally does not query Neon.
@@ -402,6 +448,14 @@ export default {
       // Health checks are best-effort; a Render restart or deploy can interrupt one.
       console.warn('Uorqui API keepalive could not connect',
         error instanceof Error ? error.name : 'unknown error');
+    }
+    // Run durable media cleanup independently of user sessions.
+    try{
+      const origin=new URL(env.API_ORIGIN);
+      if(origin.protocol==='https:'&&!origin.username&&!origin.password)
+        await flushAccountMediaCleanup(env,origin);
+    }catch(error){
+      console.warn('Uorqui R2 cleanup unavailable',error instanceof Error?error.name:'unknown');
     }
   },
   async fetch(request: Request, env: Env): Promise<Response> {

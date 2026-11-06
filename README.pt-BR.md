@@ -4,9 +4,17 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.1` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.2` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
+
+
+## Alterações do beta.2
+
+- **Convites com consentimento:** o usuário decide entrar ou recusar a comunidade depois de criar conta/entrar.
+- **Canais:** respostas vinculadas à mensagem original, menções por `@`, lista de pessoas que reagiram e regras fixadas.
+- **GIFs:** também em conversas privadas; GIPHY com busca e catálogo expansível depende de `VITE_GIPHY_API_KEY` definido **na compilação do web**. Sem chave, apenas os GIFs inclusos.
+- **Privacidade:** Perfil → Excluir minha conta exige a senha e a palavra `EXCLUIR`. Remove dados da base ativa e agenda limpeza de mídia R2. Conversas privadas com outros usuários também são apagadas; backups do provedor não são apagados instantaneamente. O serviço deve validar a tarefa de R2 antes de liberar a exclusão.
 
 ## O produto
 
@@ -22,7 +30,7 @@ O público inicial inclui comunidades gamers, mas o produto é de uso geral.
 
 > **Feed global aposentado em 02/11/2026:** o novo Descobrir substituiu as publicações públicas. A API e o Worker passaram em verificações ao vivo, e as tabelas antigas foram excluídas da Neon após backups verificados. Quatro mídias antigas permanecem no R2 para recuperação; não exclua sem cópia validada. Leia a [decisão Descobrir](docs/pt-BR/descobrir.md).
 
-A aprovação de entrada na comunidade atualiza a lista do solicitante por SSE direcionado à conta, sem recarregar. Proprietário/admins editam nome e senha do canal pelo cabeçalho; exclusão continua na moderação. Ver [Reuniões](docs/pt-BR/reunioes-video.md).
+A aprovação de entrada na comunidade atualiza a lista do solicitante por SSE direcionado à conta, sem recarregar. Administradores editam nome, descrição fixa/regras, senha e acesso em Moderação. Cada canal oferece um convite único que inclui a entrada na comunidade e abre o canal; reuniões usam o mesmo convite. Novos canais sugerem nomes numerados editáveis por tipo. Ver [Reuniões](docs/pt-BR/reunioes-video.md).
 
 ## Situação do beta
 
@@ -50,7 +58,7 @@ Os testes automáticos do GitHub cobrem API, interface e integrações. **Testes
 - **Voz:** WebRTC P2P; TURN é opcional e requer testes entre redes.
 - **Deploy:** Cloudflare Builds e Render, validados pelo GitHub Actions.
 
-A identificação do beta está nos três manifestos npm, e o app mostra o selo Beta. Veja [notas da versão](CHANGELOG.pt-BR.md). **Após `v0.1.0-beta.1`, toda alteração deverá ser versionada**, inclusive documentação e CSS: [política de versões](docs/pt-BR/versoes.md).
+A identificação do beta está nos três manifestos npm, e o app mostra o selo Beta. Veja [notas da versão](CHANGELOG.pt-BR.md). **Após `v0.1.0-beta.2`, toda alteração deverá ser versionada**, inclusive documentação e CSS: [política de versões](docs/pt-BR/versoes.md).
 
 ## Documentação
 

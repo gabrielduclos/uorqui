@@ -274,6 +274,27 @@
       "when": 1793990000000,
       "tag": "0038_dm_pinned_message",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793990001000,
+      "tag": "0039_channel_descriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793990002000,
+      "tag": "0040_community_message_replies",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793990003000,
+      "tag": "0041_account_media_cleanup",
+      "breakpoints": true
     }
   ]
 }

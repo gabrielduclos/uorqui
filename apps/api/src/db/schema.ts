@@ -19,6 +19,19 @@ import {
 } from 'drizzle-orm/pg-core';
 
 // Database schema shared by authentication, profiles, communities, and direct messages.
+/** Durable purge queue contains only random storage keys after an account is erased. */
+export const accountMediaCleanupJobs = pgTable('account_media_cleanup_jobs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  bucket: varchar('bucket',{length:24}).notNull(),
+  prefix: text('prefix').notNull(),
+  createdAt: timestamp('created_at',{withTimezone:true}).defaultNow().notNull(),
+  completedAt: timestamp('completed_at',{withTimezone:true}),
+},table=>[
+  uniqueIndex('account_media_cleanup_bucket_prefix_key').on(table.bucket,table.prefix),
+  index('account_media_cleanup_pending_idx').on(table.createdAt),
+  check('account_media_cleanup_bucket_chk',sql`${table.bucket} IN ('PROFILE_MEDIA','DM_ATTACHMENTS')`),
+]);
+
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   handle: varchar('handle', { length: 32 }).notNull().unique(),
@@ -191,6 +204,7 @@ export const communityChannels = pgTable('community_channels', {
   id: uuid('id').defaultRandom().primaryKey(),
   communityId: uuid('community_id').notNull().references(() => communities.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 64 }).notNull(),
+  description: text('description'),
   kind: varchar('kind', { length: 8 }).notNull(),
   meetingJoinPolicy: varchar('meeting_join_policy', { length: 12 }).notNull().default('open'),
   passwordHash: text('password_hash'),
@@ -202,6 +216,7 @@ export const communityChannels = pgTable('community_channels', {
   check('community_channels_kind', sql`${table.kind} IN ('text', 'voice', 'meeting')`),
   check('community_meeting_policy',sql`${table.meetingJoinPolicy} IN ('open','approval')`),
   check('community_channel_access_mode',sql`${table.accessMode} IN ('open','restricted')`),
+  check('community_channel_description_length',sql`${table.description} IS NULL OR char_length(${table.description}) <= 4000`),
 ]);
 
 /** A meeting invite/approval is distinct from community membership. */
@@ -245,6 +260,7 @@ export const communityMessages = pgTable('community_messages', {
   authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   clientId: uuid('client_id').notNull().unique(),
   body: text('body').notNull(),
+  replyToId: uuid('reply_to_id').references((): AnyPgColumn => communityMessages.id, { onDelete: 'set null' }),
   attachmentId: uuid('attachment_id'),
   attachmentName: varchar('attachment_name', { length: 180 }),
   attachmentType: varchar('attachment_type', { length: 100 }),

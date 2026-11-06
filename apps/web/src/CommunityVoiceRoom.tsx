@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Send, Copy, Check } from 'lucide-react';
+import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserProfiles';
 import { useUorquiPreferences } from './UorquiPreferences';
@@ -55,9 +55,10 @@ function MeetingVideo({stream,label,className,mirror=false}:{
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
-export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,kind='voice',mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange}:{
+export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,kind='voice',mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange,onInvite}:{
   communityId:string;channelId:string;communityName:string;channelName:string;kind?:'voice'|'meeting';
   mode?:'expanded'|'floating';onMinimize?:()=>void;onRestore?:()=>void;onLeave?:()=>void;
+  onInvite?:()=>void;
   onPhaseChange?:(phase:VoicePhase)=>void;
   onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void;
 }){
@@ -81,10 +82,6 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [cameras,setCameras]=useState<Record<string,MediaStream>>({});
   const [cameraOn,setCameraOn]=useState(false);
   const [cameraBusy,setCameraBusy]=useState(false);
-  const [inviteOpen,setInviteOpen]=useState(false);
-  const [inviteHandle,setInviteHandle]=useState('');
-  const [inviteBusy,setInviteBusy]=useState(false);
-  const [inviteFeedback,setInviteFeedback]=useState('');
   const [meetingInfo,setMeetingInfo]=useState<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}|null>(null);
   const [meetingAction,setMeetingAction]=useState('');
   const [meetingNotice,setMeetingNotice]=useState('');
@@ -572,39 +569,6 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     }catch{setError(pt?'Não foi possível ativar a câmera. Verifique a permissão.':'Could not enable camera. Check permissions.');}
     finally{setCameraBusy(false);}
   }
-  async function meetingUrl(){
-    // Reuse the community's existing bearer invite when available. Only managers
-    // may create a new invite: ordinary members can share the room URL with members.
-    try{
-      const existing=await req<{link:{id:string}|null}>('/api/v1/communities/'+communityId+'/share');
-      let token=existing.link?.id;
-      if(!token&&meetingInfo?.manager){
-        const created=await req<{link:{id:string}}>('/api/v1/communities/'+communityId+'/share',json({}));
-        token=created.link.id;
-      }
-      if(token)return new URL('/invite/'+encodeURIComponent(token)+'?channel='+encodeURIComponent(channelId),window.location.origin).toString();
-    }catch{/* Room URLs still work for people who already belong to the community. */}
-    return new URL('/?community='+encodeURIComponent(communityId)+'&channel='+encodeURIComponent(channelId),window.location.origin).toString();
-  }
-  async function copyMeetingUrl(){
-    const link=await meetingUrl();
-    try{await navigator.clipboard.writeText(link);setInviteFeedback(pt?'Link copiado.':'Link copied.');}
-    catch{setInviteFeedback((pt?'Copie o endereço: ':'Copy the address: ')+link);}
-  }
-  async function sendMeetingInvite(){
-    const handle=inviteHandle.trim().replace(/^@/,'').toLowerCase();
-    if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle)||inviteBusy)return;
-    setInviteBusy(true);setInviteFeedback('');
-    try{
-      const started=await req<{id:string}>('/api/v1/dm/conversations',json({handle}));
-      await req('/api/v1/dm/conversations/'+started.id+'/messages',json({
-        body:(pt?'Convite para reunião: ':'Meeting invitation: ')+channelName+'\n'+await meetingUrl(),clientId:crypto.randomUUID()
-      }));
-      setInviteFeedback(pt?'Convite enviado pelo mensageiro do Uorqui.':'Invite sent in Uorqui Messenger.');
-      setInviteHandle('');
-    }catch{setInviteFeedback(pt?'Não foi possível enviar. Confira o @usuário e as permissões de mensagens.':'Could not send invite. Check the @handle and messaging permissions.');}
-    finally{setInviteBusy(false);}
-  }
   function toggleMute(){
     if(deafenedRef.current)return;
     const next=!mutedRef.current;mutedRef.current=next;setMuted(next);
@@ -828,7 +792,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {meeting&&<Button type="button" variant="outline" size="sm" className="min-h-10 gap-1.5" onClick={()=>setInviteOpen(v=>!v)}>
+          {meeting&&onInvite&&<Button type="button" variant="outline" size="sm" className="min-h-10 gap-1.5" onClick={onInvite}>
             <Link2 className="size-4"/>{pt?'Convidar':'Invite'}
           </Button>}
           <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground" role="status">
@@ -863,18 +827,6 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </div>)}
         </div>}
         {meetingNotice&&<p role="status" className="mt-2 text-muted-foreground">{meetingNotice}</p>}
-      </div>}
-      {meeting&&inviteOpen&&<div className="mx-auto mt-3 w-full max-w-5xl rounded-xl border border-border bg-card p-3">
-        <h4 className="text-sm font-semibold">{pt?'Convidar para esta reunião':'Invite to this meeting'}</h4>
-        <p className="mt-1 text-xs text-muted-foreground">{pt?'O convidado precisa participar da comunidade. A aprovação da reunião, quando ativa, continua obrigatória.':'Invitees must belong to the community. Meeting approval still applies when enabled.'}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={()=>void copyMeetingUrl()}><Copy className="size-4"/>{pt?'Copiar link':'Copy link'}</Button>
-          <form className="flex min-w-0 flex-1 flex-wrap items-center gap-2" onSubmit={event=>{event.preventDefault();void sendMeetingInvite();}}>
-            <input className="min-h-10 min-w-28 flex-1 rounded-lg border border-input bg-background px-3 text-base sm:text-sm" autoComplete="off" aria-label={pt?'@usuário para convidar':'@handle to invite'} placeholder="@usuario" maxLength={33} value={inviteHandle} onChange={e=>setInviteHandle(e.target.value)}/>
-            <Button type="submit" size="sm" disabled={inviteBusy||!inviteHandle.trim()}><Send className="size-4"/>{inviteBusy?(pt?'Enviando…':'Sending…'):(pt?'Enviar pelo Uorqui':'Send in Uorqui')}</Button>
-          </form>
-        </div>
-        {inviteFeedback&&<p role="status" className="mt-2 break-all text-xs text-muted-foreground">{inviteFeedback}</p>}
       </div>}
       {error&&<div role="alert" className="mx-auto mt-4 max-w-5xl rounded-xl border border-destructive/35 bg-destructive/5 p-3 text-xs text-destructive">
         {error==='VOICE_NETWORK_RETRY'?(pt?'Reconectando…':'Reconnecting…'):error}</div>}

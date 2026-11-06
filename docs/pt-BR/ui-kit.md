@@ -1,12 +1,16 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.1
+# Uorqui UI Kit · Design System v0.1.0-beta.2
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
+
+- **Chats dos canais:** respostas com mensagem original, `@usuário` com sugestões, GIFs e lista de reagentes por emoji; não mostrar membros sem permissão.
+- **Privacidade:** cartão de exclusão definitiva no Perfil com duas confirmações (senha e `EXCLUIR`), estados de erro e aviso de mídia em limpeza posterior.
+- **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro.
 
 ## Princípios
 
 - Interface compacta, orientada a comunicação, com referências de organização visual a painéis de trabalho; **não** restringir o Uorqui ao público empresarial.
 - Navegação principal: **Descobrir · Mensagens · Comunidades · E-mail**; contatos são acessados **dentro de Mensagens**, não por um item independente do menu.
-- Trilho de comunidades e barra lateral no desktop; fluxo de telas e cabeçalhos fixos responsivos no mobile. Somente a área de conteúdo deve rolar.
+- Trilho de comunidades e barra lateral no desktop; **Descobrir** usa ícone de bússola no lugar da lupa. O cabeçalho dos canais tem **Convidar**, mas não **Editar**; descrições fixas apresentam **Ler mais / Mostrar menos**, e são editadas em **Moderação → Canais**. Somente a área de conteúdo deve rolar.
 - Dark e Light têm a mesma estrutura e ações. Todos os controles de toque e diálogos devem respeitar viewport, área segura do iOS, teclado, Escape e acessibilidade.
 - PT-BR e inglês coexistem; linguagem humana, ícones Lucide, sem misturar bibliotecas ou criar CSS avulso para cada página.
 
@@ -70,4 +74,4 @@ Antes de mesclar: validar **mobile/desktop × Dark/Light × PT/EN**, navegação
 
 ## Versão e manutenção
 
-Este documento corresponde ao marco **`v0.1.0-beta.1`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).
+Este documento corresponde ao marco **`v0.1.0-beta.2`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).

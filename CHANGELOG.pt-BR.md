@@ -4,7 +4,23 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 ## [Unreleased]
 
-Ainda não existem alterações lançadas após o marco inicial. **Todo PR seguinte deve elevar a versão nos três manifestos npm e atualizar os dois changelogs.** Ver [política de versões](docs/pt-BR/versoes.md).
+Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
+
+## [0.1.0-beta.2] — 06/11/2026
+
+- **Canais:** removido o botão Editar do cabeçalho; nome, descrição/regras, acesso e senha são administrados em **Moderação → Canais**.
+- **Descrição fixa:** criação e edição de textos de até 4.000 caracteres, exibidos permanentemente abaixo do cabeçalho, com **Ler mais / Mostrar menos** para textos longos. Disponível em canais de texto, voz e reunião.
+- **Nomes sugeridos:** novas salas recebem nomes numerados por tipo (**Sala de texto 1**, **Sala de voz 1**, **Sala de reunião 1**); a numeração evita nomes duplicados no mesmo tipo e pode ser alterada antes de salvar. A restrição única no PostgreSQL permanece.
+- **Convites:** removidas as ações independentes de convidar/compartilhar a comunidade. Cada canal fornece um link único que aceita a entrada na comunidade e abre o canal de destino. O link pode ser copiado ou enviado por mensagem direta; reunião e canal usam o mesmo modal/link.
+- **Descobrir:** a lupa na barra das comunidades foi substituída pelo ícone e nome **Descobrir**, mantendo o acesso à lista de comunidades públicas.
+- **Segurança:** convite não contorna senha de canal, permissão de canal restrito nem aprovação de reunião. Link temporário existente é reutilizado; administradores podem gerar o primeiro link se não existir.
+- **Migração:** `0039_channel_descriptions`, aditiva, acrescenta a coluna opcional `community_channels.description` sem apagar dados. Exige migração do banco antes do deploy da nova API.
+- **Segurança de ingresso:** após login/cadastro, o convite apresenta o nome da comunidade e exige **Entrar na comunidade** ou **Agora não**; cadastro e autenticação nunca resgatam convites automaticamente.
+- **Mensagens dos canais:** resposta com referência à mensagem original (também para anexos), envio otimista, menções `@usuário` com autocompletar e destaque, e lista de pessoas que reagiram ao tocar na contagem. Acesso restrito é respeitado; push destaca quando a pessoa foi mencionada.
+- **GIFs:** seletor compartilhado nos canais e nas mensagens privadas, com envio/visualização como mídia animada e preservação do rascunho. Suporte a catálogo expansível via GIPHY Trending/Busca com paginação quando configurado `VITE_GIPHY_API_KEY`; sem chave, mantém catálogo local limitado.
+- **Exclusão da conta:** em Perfil, confirmação de senha e texto `EXCLUIR`; apaga dados pessoais, sessões, mensagens e vínculos do banco, transferindo comunidades com outros membros. Objetos R2 são removidos por fila persistente e tarefa agendada, com tentativas posteriores. A exclusão de conversas privadas compartilhadas impacta o outro participante. Backups do provedor seguem a política de retenção.
+- **Migrações adicionais:** `0040_community_message_replies` e `0041_account_media_cleanup`; aplicá-las antes de publicar a nova API. Testes de integração cobrem exclusão e os fluxos de respostas/reações. Testar exclusão e GC do R2 com dados de teste em ambiente real antes de liberar a opção em produção.
+- **Testes:** casos de integração para persistência, autorização, limite e remoção de descrição; compilação de frontend e backend/CI. Testar convite com conta nova, link expirado e PWAs reais após implantação.
 
 ## [0.1.0-beta.1] — 06/11/2026
 

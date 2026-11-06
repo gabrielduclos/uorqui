@@ -29,10 +29,11 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      # Public signup requires ALL of the following settings in Render.
-      # Keep disabled until sender domain and Turnstile widget are configured.
+      # Production registration was enabled in the Render service. Keep the
+      # Blueprint aligned so a future sync does not silently disable signup.
+      # The backend still fails closed without Resend and Turnstile credentials.
       - key: ENABLE_PUBLIC_SIGNUP
-        value: "false"
+        value: "true"
       - key: RESEND_API_KEY
         sync: false
       - key: AUTH_EMAIL_FROM

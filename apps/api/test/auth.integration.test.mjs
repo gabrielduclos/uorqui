@@ -233,3 +233,38 @@ test('Auth + social profile local integration', async () => {
   assert.equal(afterLogout.response.status, 401, 'signed-out session must be rejected');
 
 });
+
+test('account deletion requires password and removes the user, sessions and profile',async()=>{
+  const email='erase-account@example.invalid',password='Eight8!!';
+  const signup=await send('/api/auth/sign-up/email',{method:'POST',body:{
+    name:'Erase Account',email,password,termsAccepted:true,privacyNoticeAcknowledged:true,
+    termsVersion:'2026-11-03',privacyVersion:'2026-11-03'
+  }});
+  assert.equal(signup.response.status,200,JSON.stringify(signup.data));
+  const userId=signup.data.user.id;
+  const onboard=await send('/api/v1/onboarding',{method:'POST',body:{handle:'erase_account',displayName:'Erase Account'}});
+  assert.equal(onboard.response.status,201,JSON.stringify(onboard.data));
+  const noOrigin=await fetch(url+'/api/v1/account/delete',{method:'DELETE',
+    headers:{cookie,'content-type':'application/json'},
+    body:JSON.stringify({password,confirmation:'EXCLUIR'})});
+  assert.equal(noOrigin.status,403,'account deletion is origin protected');
+  const invalid=await send('/api/v1/account/delete',{method:'DELETE',body:{password:'incorrect-password',confirmation:'EXCLUIR'}});
+  assert.equal(invalid.response.status,403,'wrong password must never erase an account');
+  assert.equal((await send('/api/v1/me')).response.status,200);
+  const incomplete=await send('/api/v1/account/delete',{method:'DELETE',body:{password,confirmation:'NÃO'}});
+  assert.equal(incomplete.response.status,400,'explicit exact confirmation is mandatory');
+  const remove=await send('/api/v1/account/delete',{method:'DELETE',body:{password,confirmation:'EXCLUIR'}});
+  assert.equal(remove.response.status,200,JSON.stringify(remove.data));
+  assert.equal(remove.data.deleted,true);
+  assert.equal((await send('/api/v1/me')).response.status,401,'all sessions must be revoked');
+  const client=new pg.Client({connectionString:process.env.DATABASE_URL});
+  await client.connect();
+  try{
+    assert.equal(Number((await client.query('SELECT COUNT(*)::int AS n FROM "user" WHERE id=$1',[userId])).rows[0].n),0);
+    assert.equal(Number((await client.query('SELECT COUNT(*)::int AS n FROM users WHERE id=$1',[userId])).rows[0].n),0);
+    assert.equal(Number((await client.query('SELECT COUNT(*)::int AS n FROM profiles WHERE user_id=$1',[userId])).rows[0].n),0);
+    assert.equal(Number((await client.query('SELECT COUNT(*)::int AS n FROM session WHERE user_id=$1',[userId])).rows[0].n),0);
+    const jobs=await client.query("SELECT prefix FROM account_media_cleanup_jobs WHERE bucket='PROFILE_MEDIA' AND prefix=$1",['media/profile/'+userId+'/']);
+    assert.equal(jobs.rowCount,1,'R2 erasure must remain scheduled after the account is deleted');
+  }finally{await client.end();}
+});

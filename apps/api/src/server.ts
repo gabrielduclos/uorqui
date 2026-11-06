@@ -9,6 +9,7 @@ import { isDevelopmentSignupEnabled, isPublicSignupEnabled, isRegistrationAvaila
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 import { registerProfileRoutes } from './profile-routes.js';
+import { registerAccountDeletionRoutes } from './account-deletion-routes.js';
 import { registerDirectMessageRoutes } from './direct-message-routes.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerNotificationRoutes } from './notification-routes.js';
@@ -289,6 +290,7 @@ app.post('/api/v1/onboarding', {
 });
 
 registerProfileRoutes(app, async request => readSession(request));
+registerAccountDeletionRoutes(app,async request=>readSession(request));
 registerDirectMessageRoutes(app, async request => readSession(request));
 registerPushRoutes(app, async request => readSession(request));
 registerNotificationRoutes(app, async request => readSession(request));

@@ -21,14 +21,15 @@ const groupBody={type:'object',required:['name','slug','visibility'],additionalP
 }};
 const channelBody={type:'object',required:['name','kind'],additionalProperties:false,properties:{
   name:{type:'string',minLength:2,maxLength:64},kind:{type:'string',enum:['text','voice','meeting']},
-  accessMode:{type:'string',enum:['open','restricted']}
+  accessMode:{type:'string',enum:['open','restricted']},
+  description:{type:'string',maxLength:4000}
 }};
 const attachmentSchema={type:'object',additionalProperties:false,required:['id','name','type','size'],properties:{
   id:uuid,name:{type:'string',minLength:1,maxLength:180},type:{type:'string',maxLength:100},
   size:{type:'integer',minimum:1,maximum:52428800}
 }};
 const messageBody={type:'object',required:['clientId','body'],additionalProperties:false,properties:{
-  clientId:uuid,body:{type:'string',maxLength:4000},attachment:attachmentSchema
+  clientId:uuid,body:{type:'string',maxLength:4000},replyToId:uuid,attachment:attachmentSchema
 }};
 const mediaParams={type:'object',required:['id','channelId','attachmentId'],additionalProperties:false,properties:{id:uuid,channelId:uuid,attachmentId:uuid}};
 const communityAttachmentTypes=new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
@@ -382,7 +383,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       let channels:unknown[]=[],pendingRequests:unknown[]=[];
       if(data.myRole){
         const result=await getPool().query(
-          'SELECT id,name,kind,created_at AS "createdAt",access_mode AS "accessMode",password_hash IS NOT NULL AS "hasPassword",'+
+          'SELECT id,name,kind,description,created_at AS "createdAt",access_mode AS "accessMode",password_hash IS NOT NULL AS "hasPassword",'+
           "(password_hash IS NULL OR $2::boolean OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) AS \"unlocked\" "+
           "FROM community_channels WHERE community_id=$1 AND (access_mode='open' OR $2::boolean OR EXISTS "+
           '(SELECT 1 FROM community_channel_member_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) '+
@@ -568,14 +569,14 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!manager(await membership(id,me)))return reply.code(403).send({error:'Forbidden'});
-      const {name,kind,accessMode='open'}=request.body as {name:string;kind:'text'|'voice'|'meeting';accessMode?:'open'|'restricted'};
+      const {name,kind,accessMode='open',description}=request.body as {name:string;kind:'text'|'voice'|'meeting';accessMode?:'open'|'restricted';description?:string};
       const normalized=name.trim();
       if(normalized.length<2)return reply.code(400).send({error:'Invalid channel name'});
       const c=await getPool().query('SELECT COUNT(*)::int AS n FROM community_channels WHERE community_id=$1',[id]);
       if(Number(c.rows[0].n)>=50)return reply.code(409).send({error:'CHANNEL_LIMIT'});
       const result=await getPool().query(
-        'INSERT INTO community_channels(community_id,name,kind,access_mode) VALUES($1,$2,$3,$4) RETURNING id,name,kind,access_mode AS "accessMode"',
-        [id,normalized,kind,accessMode]);
+        'INSERT INTO community_channels(community_id,name,kind,access_mode,description) VALUES($1,$2,$3,$4,$5) RETURNING id,name,kind,description,access_mode AS "accessMode"',
+        [id,normalized,kind,accessMode,description?.trim()||null]);
       void publishCommunityEvent(id,result.rows[0].id,'channel').catch(()=>{});
       return reply.code(201).header('Cache-Control',noCache).send({channel:result.rows[0]});
     }catch(error){
@@ -675,13 +676,18 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const result=await getPool().query(
         'SELECT m.id,m.client_id AS "clientId",m.author_id AS "authorId",'+
         'CASE WHEN m.deleted_at IS NULL THEN m.body ELSE NULL END AS body,m.created_at AS "createdAt",'+
-        'm.edited_at AS "editedAt",m.deleted_at AS "deletedAt",'+
+        'm.edited_at AS "editedAt",m.deleted_at AS "deletedAt",m.reply_to_id AS "replyToId",'+
         'u.handle AS "authorHandle",'+
         'CASE WHEN p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\' THEN p.display_name ELSE u.handle END AS "authorName",'+
         'CASE WHEN (p.is_public=true OR m.author_id=$2 OR friends.status=\'accepted\') AND '+
         'NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=m.author_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=m.author_id)) '+
-        'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+attachmentProjection+reactionProjection+
+        'THEN p.avatar_url ELSE NULL END AS "authorAvatar",'+
+         'CASE WHEN original.id IS NULL THEN NULL ELSE jsonb_build_object('+
+         "'id',original.id,'body',CASE WHEN original.deleted_at IS NULL THEN LEFT(original.body,220) ELSE NULL END,"+
+         "'authorHandle',ou.handle,'deleted',original.deleted_at IS NOT NULL) END AS \"replyTo\","+attachmentProjection+reactionProjection+
         'FROM community_messages m JOIN users u ON u.id=m.author_id JOIN profiles p ON p.user_id=m.author_id '+
+         'LEFT JOIN community_messages original ON original.id=m.reply_to_id AND original.channel_id=m.channel_id '+
+         'LEFT JOIN users ou ON ou.id=original.author_id '+
         'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
         'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
       return reply.header('Cache-Control',noCache).send({
@@ -698,7 +704,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
-      const {clientId,body,attachment}=request.body as {clientId:string;body:string;attachment?:{id:string;name:string;type:string;size:number}};
+      const {clientId,body,replyToId,attachment}=request.body as {clientId:string;body:string;replyToId?:string;attachment?:{id:string;name:string;type:string;size:number}};
       const clean=body.trim();
       if((!clean&&!attachment)||clean.length>4000)return reply.code(400).send({error:'Invalid message'});
       if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
@@ -711,18 +717,22 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
         const ready=await getPool().query("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='community_messages' AND column_name='attachment_id') AS enabled");
         if(!ready.rows[0]?.enabled)return reply.code(503).send({error:'ATTACHMENTS_NOT_READY'});
       }
+      if(replyToId){
+        const target=await getPool().query('SELECT 1 FROM community_messages WHERE id=$1 AND channel_id=$2 AND deleted_at IS NULL',[replyToId,channelId]);
+        if(!target.rowCount)return reply.code(404).send({error:'REPLY_TARGET_UNAVAILABLE'});
+      }
       const limit=await getPool().query(
         'SELECT COUNT(*)::int AS n FROM community_messages WHERE channel_id=$1 AND author_id=$2 AND created_at>now()-interval \'1 minute\'',
         [channelId,me]);
       if(Number(limit.rows[0].n)>=30)return reply.code(429).send({error:'MESSAGE_RATE_LIMIT'});
-      const insertColumns=attachment?'(channel_id,author_id,client_id,body,attachment_id,attachment_name,attachment_type,attachment_size)':'(channel_id,author_id,client_id,body)';
-      const insertValues=attachment?'SELECT ch.id,$3,$4,$5,$6,$7,$8,$9 ':'SELECT ch.id,$3,$4,$5 ';
+      const insertColumns=attachment?'(channel_id,author_id,client_id,body,reply_to_id,attachment_id,attachment_name,attachment_type,attachment_size)':'(channel_id,author_id,client_id,body,reply_to_id)';
+      const insertValues=attachment?'SELECT ch.id,$3,$4,$5,$6,$7,$8,$9,$10 ':'SELECT ch.id,$3,$4,$5,$6 ';
       const saved=await getPool().query(
         'INSERT INTO community_messages'+insertColumns+' '+insertValues+
         'FROM community_channels ch JOIN community_members cm ON cm.community_id=ch.community_id AND cm.user_id=$3 '+
         "WHERE ch.id=$1 AND ch.community_id=$2 "+
         'ON CONFLICT(client_id) DO NOTHING RETURNING id',
-        attachment?[channelId,id,me,clientId,clean,attachment.id,attachment.name,attachment.type,attachment.size]:[channelId,id,me,clientId,clean]);
+        attachment?[channelId,id,me,clientId,clean,replyToId??null,attachment.id,attachment.name,attachment.type,attachment.size]:[channelId,id,me,clientId,clean,replyToId??null]);
       if(!saved.rowCount){
         const existing=await getPool().query('SELECT id,body,author_id FROM community_messages WHERE client_id=$1 AND channel_id=$2',[clientId,channelId]);
         if(!existing.rowCount||existing.rows[0].author_id!==me)return reply.code(404).send({error:'Channel unavailable'});
@@ -812,6 +822,32 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       return reply.header('Cache-Control',noCache).send({reactions:counts.rows});
     }catch(error){request.log.error({err:error},'React to community message');return reply.code(503).send({error:'Unavailable'});}
   }
+
+  // Only members allowed to read this channel can inspect reaction identities.
+  app.get('/api/v1/communities/:id/channels/:channelId/messages/:messageId/reactors',{
+    schema:{params:reactionParams,querystring:{type:'object',required:['emoji'],additionalProperties:false,
+      properties:{emoji:{type:'string',enum:[...reactionEmojis]}}}}
+  },async(request,reply)=>{
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,channelId,messageId}=request.params as {id:string;channelId:string;messageId:string};
+      const {emoji}=request.query as {emoji:string};
+      if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const gate=await channelGate(id,channelId,me);
+      if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
+      const exists=await getPool().query('SELECT 1 FROM community_messages WHERE id=$1 AND channel_id=$2 AND deleted_at IS NULL',[messageId,channelId]);
+      if(!exists.rowCount)return reply.code(404).send({error:'Message unavailable'});
+      const result=await getPool().query(
+        'SELECT u.handle,CASE WHEN p.is_public OR friends.status=\'accepted\' OR u.id=$2 THEN p.display_name ELSE u.handle END AS name,'+
+        'CASE WHEN p.is_public OR friends.status=\'accepted\' OR u.id=$2 THEN p.avatar_url ELSE NULL END AS "avatarUrl" '+
+        'FROM community_message_reactions reaction JOIN users u ON u.id=reaction.user_id JOIN profiles p ON p.user_id=u.id '+
+        'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(u.id,$2::uuid) AND friends.user_b_id=GREATEST(u.id,$2::uuid) '+
+        'WHERE reaction.message_id=$1 AND reaction.emoji=$3 '+
+        'AND NOT EXISTS(SELECT 1 FROM user_blocks b WHERE (b.blocker_id=u.id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=u.id)) '+
+        'ORDER BY reaction.created_at ASC LIMIT 100',[messageId,me,emoji]);
+      return reply.header('Cache-Control',noCache).send({users:result.rows});
+    }catch(error){request.log.error({err:error},'List channel reactors');return reply.code(503).send({error:'Unavailable'});}
+  });
 
   app.put('/api/v1/communities/:id/channels/:channelId/messages/:messageId/reactions',
     {schema:{params:reactionParams,body:reactionBody}},async(request,reply)=>react(request,reply,true));

@@ -1,4 +1,4 @@
-import { Fragment, type MouseEvent } from 'react';
+import { Fragment, type MouseEvent, type ReactNode } from 'react';
 
 /**
  * Render user-provided message text as plain text plus safe, clickable links.
@@ -82,11 +82,33 @@ export function openInternalChatLink(event:MouseEvent<HTMLAnchorElement>,href:st
   return true;
 }
 
-export function MessageText({text}:{text:string}){
+function MentionText({text}:{text:string}){
+  const mentions=/(^|[^a-zA-Z0-9_])@([a-z][a-z0-9_]{2,31})(?![a-zA-Z0-9_])/g;
+  const parts:ReactNode[]=[];
+  let offset=0;
+  for(const match of text.matchAll(mentions)){
+    const start=(match.index??0)+match[1].length;
+    if(start>offset)parts.push(text.slice(offset,start));
+    const handle=match[2].toLowerCase();
+    parts.push(<a key={start} href={'/@'+handle}
+      className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+      onClick={event=>{
+        if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||event.button!==0)return;
+        event.preventDefault();
+        window.history.pushState({uorquiInternalProfile:true},'','/@'+handle);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }}>@{handle}</a>);
+    offset=start+match[2].length+1;
+  }
+  if(offset<text.length)parts.push(text.slice(offset));
+  return <>{parts.length?parts:text}</>;
+}
+
+export function MessageText({text,mentions=false}:{text:string;mentions?:boolean}){
   return <>{splitMessageLinks(text).map((part,index)=>
     <Fragment key={index}>{part.href?
       <a href={part.href} target={internalChatLink(part.href)?undefined:'_blank'} rel="noopener noreferrer nofollow ugc"
         className="break-all underline decoration-current underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
-        onClick={event=>{if(!openInternalChatLink(event,part.href!))event.stopPropagation();}}>{part.text}</a>:part.text}</Fragment>
+        onClick={event=>{if(!openInternalChatLink(event,part.href!))event.stopPropagation();}}>{part.text}</a>:mentions?<MentionText text={part.text}/>:part.text}</Fragment>
   )}</>;
 }

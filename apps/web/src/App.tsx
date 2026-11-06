@@ -161,40 +161,55 @@ function AppContent() {
       .catch(()=>{if(active)setInviteError('Este convite expirou ou foi revogado. / This invitation is no longer valid.');});
     return ()=>{active=false;};
   },[inviteToken]);
-  useEffect(()=>{
-    // A second invite can be accepted in the same signed-in session.
-    if(!inviteToken||!account?.profile)return;
-    let active=true;setInviteBusy(true);
-    void fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken)+'/redeem',{
-      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'
-    }).then(async r=>{if(!r.ok)throw Error((await r.json().catch(()=>({error:'JOIN_FAILED'})) as {error:string}).error);return r.json() as Promise<{communityId:string}>;})
-      .then(data=>{
-        if(!active)return;
-        setInvitedCommunity(data.communityId);setInviteToken(null);
-        let meetingChannel:string|null=null;
-        try{
-          meetingChannel=localStorage.getItem('uorqui:pending-meeting-channel');
-          localStorage.removeItem('uorqui:pending-meeting-channel');
-          localStorage.removeItem(INVITE_KEY);
-        }catch{}
-        window.history.replaceState(null,'','/');
-        if(meetingChannel&&/^[0-9a-f-]{36}$/i.test(meetingChannel))
-          window.setTimeout(()=>window.dispatchEvent(new CustomEvent('uorqui:open-community-link',{
-            detail:{communityId:data.communityId,channelId:meetingChannel}
-          })),120);
-        // Verification callbacks may already have an authenticated session.
-        setIsVerificationResult(false);
-      }).catch(err=>{if(active){setInviteError(err instanceof Error&&err.message==='COMMUNITY_BANNED'?
-          'Você foi banido desta comunidade. / You are banned from this community.':
-          'Não foi possível aceitar o convite. / Could not redeem the invitation.');}})
-      .finally(()=>{if(active)setInviteBusy(false);});
-    return ()=>{active=false;};
-  },[account?.profile,inviteToken]);
+  // Redeem only after an explicit user click. Registration or login never joins a community.
+  async function acceptCommunityInvite(){
+    if(!inviteToken||!account?.profile||inviteBusy||!invitePreview)return;
+    setInviteBusy(true);setInviteError('');
+    try{
+      const response=await fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken)+'/redeem',{
+        method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'
+      });
+      if(!response.ok)throw Error((await response.json().catch(()=>({error:'JOIN_FAILED'})) as {error:string}).error);
+      const data=await response.json() as {communityId:string};
+      setInvitedCommunity(data.communityId);setInviteToken(null);
+      let channel:string|null=null;
+      try{
+        channel=localStorage.getItem('uorqui:pending-meeting-channel');
+        localStorage.removeItem('uorqui:pending-meeting-channel');
+        localStorage.removeItem(INVITE_KEY);
+      }catch{}
+      window.history.replaceState(null,'','/');
+      if(channel&&/^[0-9a-f-]{36}$/i.test(channel))
+        window.setTimeout(()=>window.dispatchEvent(new CustomEvent('uorqui:open-community-link',{
+          detail:{communityId:data.communityId,channelId:channel}
+        })),120);
+      setIsVerificationResult(false);
+    }catch(error){
+      setInviteError(error instanceof Error&&error.message==='COMMUNITY_BANNED'?
+        'Você foi banido desta comunidade. / You are banned from this community.':
+        'Não foi possível aceitar o convite. / Could not redeem the invitation.');
+    }finally{setInviteBusy(false);}
+  }
+  function declineCommunityInvite(){
+    try{localStorage.removeItem(INVITE_KEY);localStorage.removeItem('uorqui:pending-meeting-channel');}catch{}
+    if(/^\/invite\//.test(window.location.pathname))window.history.replaceState(null,'','/');
+    setInviteToken(null);setInvitePreview(null);setInviteError('');
+  }
   const onAuthenticated = useCallback((next: Account) => {
     setProfileImageCacheAccount(next.user.id);
     setChatMediaCacheAccount(next.user.id);
     clearChatMediaCache();
     setAccount(next);
+  }, []);
+  const accountDeleted = useCallback(async () => {
+    await deactivatePush().catch(()=>{});
+    await clearProfileImageCache().catch(()=>{});
+    clearChatMediaCache();
+    setProfileImageCacheAccount(null);
+    setChatMediaCacheAccount(null);
+    setAccount(null);
+    setInvitedCommunity(null);
+    window.history.replaceState(null,'','/');
   }, []);
   const signOut = useCallback(async () => {
     // Revoke the authenticated subscription before ending the session.
@@ -216,25 +231,34 @@ function AppContent() {
   return (
     <MotionConfig reducedMotion="user">
       {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
-        <SocialShell account={account} onLogout={signOut} onAccountUpdate={next => setAccount(next)}
+        <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
           invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
-      {inviteToken && !publicHandle && !isVerificationResult && !legalDocument && <div role="status" className="fixed left-1/2 top-4 z-[110] w-[min(90vw,34rem)] -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-3 text-center text-sm shadow-lg">
-        <button type="button" className="absolute right-2 top-2 rounded-md p-1.5 hover:bg-secondary"
-          aria-label="Fechar convite / Dismiss invitation" onClick={()=>{
-            try{localStorage.removeItem(INVITE_KEY);localStorage.removeItem('uorqui:pending-meeting-channel');}catch{}
-            if(/^\/invite\//.test(window.location.pathname))window.history.replaceState(null,'','/');
-            setInviteToken(null);setInviteError('');
-          }}><X className="size-4"/></button>
-        {invitePreview?<strong className="block pr-8">{invitePreview}</strong>:
-          inviteError?<strong>Convite indisponível / Invitation unavailable</strong>:
-          <Skeleton className="mx-auto h-4 w-48"/>}
-        <p className="mt-2 flex items-center justify-center gap-2 text-muted-foreground">
-          {inviteBusy&&<Spinner className="size-4"/>}
-          {inviteError||(inviteBusy?'Entrando na comunidade… / Joining community…':
-            account?.profile?'Convite pronto para aceitar… / Accepting invite…':
-            'Entre ou crie sua conta para participar. / Sign in or create an account to join.')}
-        </p>
+      {inviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
+        role="dialog" aria-modal={true} aria-label="Convite para comunidade / Community invitation"
+        className="fixed inset-0 z-[410] flex items-center justify-center bg-black/65 p-4">
+        <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Convite de comunidade / Community invite</p>
+              <h2 className="mt-1 break-words text-lg font-semibold">{invitePreview||'Acessar comunidade / Join community'}</h2></div>
+            <button type="button" aria-label="Recusar convite / Decline invitation"
+              onClick={declineCommunityInvite} className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-secondary">
+              <X className="size-4"/></button>
+          </div>
+          {!invitePreview&&!inviteError&&<Skeleton className="h-4 w-48"/>}
+          <p className="text-sm text-muted-foreground">{inviteError||
+            (account?.profile?'Você recebeu um convite. Quer entrar nesta comunidade? Nada será aceito automaticamente. / You have been invited. Would you like to join this community?':
+              'Entre ou crie sua conta primeiro. Depois você poderá escolher se deseja participar. / Sign in or register first; then choose whether to join.')}</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" disabled={inviteBusy} onClick={declineCommunityInvite}>
+              Agora não / Not now
+            </Button>
+            {account?.profile&&<Button type="button" onClick={()=>void acceptCommunityInvite()}
+              disabled={!invitePreview||Boolean(inviteError)||inviteBusy}>
+              {inviteBusy&&<Spinner className="size-4"/>}Entrar na comunidade / Join community
+            </Button>}
+          </div>
+        </div>
       </div>}
       {!isVerificationResult && !legalDocument && publicHandle && (
         <div className="fixed inset-0 z-[400] overflow-y-auto overscroll-contain bg-background">

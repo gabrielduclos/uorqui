@@ -1,6 +1,6 @@
 # Salas de voz e reuniões com áudio e vídeo
 
-Atualizado em **03/11/2026** para o beta técnico `0.1.0-beta.1`.
+Atualizado em **06/11/2026** para o beta técnico `0.1.0-beta.2`.
 
 O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O usuário entra na chamada explicitamente; abrir a sala não ativa câmera ou microfone automaticamente.
 
@@ -13,7 +13,7 @@ O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O 
 - É possível **fixar outra câmera** manualmente, navegar pelas miniaturas e voltar ao destaque automático. A apresentação de tela pode ocupar a imagem principal.
 - O botão **Compartilhar tela** está disponível nas salas de voz e nas reuniões: usa `getDisplayMedia` e permite exibir a tela e a câmera simultaneamente. O botão fica indisponível quando o navegador não oferece essa API; em celulares e PWAs, a captura varia conforme o sistema e navegador.
 - Os controles de microfone, câmera, apresentação, encerramento e saída da tela cheia continuam acessíveis na visualização ampliada.
-- O botão **Convidar** copia um link ou envia um convite pelo chat 1:1 do Uorqui. Um link de convite para a comunidade não contorna as regras de acesso da reunião.
+- O botão **Convidar** da sala de reunião e o botão do cabeçalho do canal abrem o **mesmo modal de convite**. Um link temporário inclui entrada na comunidade e acesso direto ao canal/reunião, por cópia ou chat 1:1. Entrada na reunião e permissões continuam obrigatórias.
 
 ## Aprovação e segurança
 
@@ -25,8 +25,9 @@ O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O 
 
 ## Administração dos canais
 
-- Em qualquer canal de texto, voz ou reunião, o botão **Editar canal** fica no cabeçalho apenas para proprietário/administradores.
-- Nesse menu, é possível renomear o canal, definir/trocar/remover senha com confirmação e escolher **Aberto** ou **Fechado por permissão**. Em **Moderação → Membros**, o proprietário e administradores escolhem quem pode acessar cada canal fechado. **Excluir canal** continua na moderação da comunidade.
+- O cabeçalho não possui mais o botão **Editar canal**; proprietários e administradores configuram nome, descrição fixa, senha e permissões em **Moderação → Canais**.
+- A descrição (até 4.000 caracteres) fica fixada abaixo do cabeçalho de qualquer tipo de canal. Regras longas aparecem recolhidas com **Ler mais / Mostrar menos**.
+- Na criação, nomes numerados por tipo são sugeridos automaticamente e podem ser editados. Em **Moderação → Membros**, o proprietário e administradores escolhem quem pode acessar canais fechados. Excluir canal permanece na moderação.
 - Permissão individual, senha e admissão da reunião são verificações diferentes; revogar um acesso fechado desconecta o participante da sala. Consulte [Permissões de canais](permissoes-canais.md).
 - As senhas são armazenadas como hash scrypt com salt; a troca revoga desbloqueios anteriores. O servidor limita tentativas de senha incorreta.
 
