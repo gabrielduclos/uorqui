@@ -13,7 +13,7 @@ const channelParams={type:'object',required:['id','channelId'],additionalPropert
 const messageParams={type:'object',required:['id','channelId','messageId'],additionalProperties:false,properties:{id:uuid,channelId:uuid,messageId:uuid}};
 const roleBody={type:'object',required:['role'],additionalProperties:false,properties:{role:{type:'string',enum:['admin','moderator','member']}}};
 const banBody={type:'object',required:['handle'],additionalProperties:false,properties:{handle,reason:{type:'string',maxLength:300}}};
-const channelBody={type:'object',required:['name'],additionalProperties:false,properties:{name:{type:'string',minLength:2,maxLength:64}}};
+const channelBody={type:'object',minProperties:1,additionalProperties:false,properties:{name:{type:'string',minLength:2,maxLength:64},description:{type:'string',maxLength:4000}}};
 const accessModeBody={type:'object',required:['accessMode'],additionalProperties:false,properties:{accessMode:{type:'string',enum:['open','restricted']}}};
 const memberAccessParams={type:'object',required:['id','handle','channelId'],additionalProperties:false,properties:{id:uuid,handle,channelId:uuid}};
 const memberAccessBody={type:'object',required:['allowed'],additionalProperties:false,properties:{allowed:{type:'boolean'}}};
@@ -236,15 +236,20 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
       if((ranks[(await role(id,me))??'']??0)<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
-      const name=(request.body as {name:string}).name.trim();
-      if(name.length<2)return reply.code(400).send({error:'Invalid channel'});
-      const changed=await getPool().query('UPDATE community_channels SET name=$3 WHERE community_id=$1 AND id=$2 RETURNING id,name,kind',[id,channelId,name]);
+      const updates=request.body as {name?:string;description?:string};
+      const name=updates.name?.trim();
+      if(name!==undefined&&name.length<2)return reply.code(400).send({error:'Invalid channel'});
+      const description=updates.description?.trim()||null;
+      const changed=await getPool().query(
+        'UPDATE community_channels SET name=COALESCE($3,name),description=CASE WHEN $4::boolean THEN $5 ELSE description END '+
+        'WHERE community_id=$1 AND id=$2 RETURNING id,name,kind,description',
+        [id,channelId,name??null,updates.description!==undefined,description]);
       if(!changed.rowCount)return reply.code(404).send({error:'Channel not found'});
       void publishCommunityEvent(id,null,'channel').catch(()=>{});
       return reply.header('Cache-Control',noCache).send({channel:changed.rows[0]});
     }catch(error){
       if(typeof error==='object'&&error!==null&&'code' in error&&error.code==='23505')return reply.code(409).send({error:'CHANNEL_EXISTS'});
-      request.log.error({err:error},'Rename channel');return reply.code(503).send({error:'Unavailable'});
+      request.log.error({err:error},'Update channel metadata');return reply.code(503).send({error:'Unavailable'});
     }
   });
 
