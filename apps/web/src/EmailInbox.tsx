@@ -554,8 +554,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             <iframe key={selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
               sandbox="allow-same-origin" referrerPolicy="no-referrer" srcDoc={framedHtml}
               onLoad={event=>{
-                // The frame is never allowed to execute scripts or forms. The parent
-                // attaches an image-only click handler to its inert document.
+                // The frame cannot run scripts, submit forms or navigate the
+                // workspace. The parent opens external links in the browser.
                 const frame=event.currentTarget;
                 const doc=frame.contentDocument;
                 if(!doc)return;
@@ -622,19 +622,55 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                   setExpandedImage({src,alt:image.alt|| (pt?'Imagem do e-mail':'Email image')});
                   return true;
                 };
+                // srcDoc has no trustworthy base URL for relative links.
+                // Never resolve those links against uorqui.app.
+                const openExternalLink=(target:EventTarget|null)=>{
+                  const element=target as Element|null;
+                  const anchor=element?.closest?.('a[href]') as HTMLAnchorElement|null;
+                  if(!anchor)return false;
+                  const raw=anchor.getAttribute('href')?.trim()??'';
+                  try{
+                    if(/^https?:\/\//i.test(raw)||raw.startsWith('//')){
+                      const url=new URL(raw.startsWith('//')?'https:'+raw:raw);
+                      if(url.protocol==='https:'||url.protocol==='http:'){
+                        // Direct trusted user activation is required on iOS PWA.
+                        window.open(url.href,'_blank','noopener,noreferrer');
+                      }
+                    }
+                  }catch{/* Untrusted/invalid email links must never navigate. */}
+                  // Cancel in-frame navigation for all links, including unsafe
+                  // URL schemes. External destinations cannot replace Uorqui.
+                  return true;
+                };
                 doc.querySelectorAll('img').forEach(img=>{
-                  // Keep the image at its intended size inside the scaled email.
+                  // Images inside anchors open the link; unlinked images zoom.
+                  if(img.closest('a[href]'))return;
                   img.style.setProperty('cursor','zoom-in','important');
                   img.setAttribute('tabindex','0');
                   img.setAttribute('role','button');
                   img.setAttribute('aria-label',pt?'Ampliar imagem':'Enlarge image');
                 });
-                doc.addEventListener('click',e=>{if(openImage(e.target))e.preventDefault();},true);
-                doc.addEventListener('keydown',e=>{
-                  if((e.key==='Enter'||e.key===' ')&&(e.target as Element|null)?.tagName?.toLowerCase()==='img'){
-                    if(openImage(e.target))e.preventDefault();
+                const handleClick=(e:MouseEvent)=>{
+                  if(openExternalLink(e.target)){
+                    e.preventDefault();e.stopPropagation();
+                  }else if(openImage(e.target))e.preventDefault();
+                };
+                const handleKeyDown=(e:KeyboardEvent)=>{
+                  if(e.key==='Enter'&&openExternalLink(e.target)){
+                    e.preventDefault();e.stopPropagation();
+                  }else if((e.key==='Enter'||e.key===' ')&&
+                    (e.target as Element|null)?.tagName?.toLowerCase()==='img'&&openImage(e.target)){
+                    e.preventDefault();
                   }
-                });
+                };
+                doc.addEventListener('click',handleClick,true);
+                doc.addEventListener('keydown',handleKeyDown,true);
+                const cleanupLayout=mailFrameCleanup.current;
+                mailFrameCleanup.current=()=>{
+                  cleanupLayout?.();
+                  doc.removeEventListener('click',handleClick,true);
+                  doc.removeEventListener('keydown',handleKeyDown,true);
+                };
               }}
               className="min-h-[120px] w-full rounded-md border border-border bg-white" style={{height:240}} />
           </> : selected.body !== undefined ? <div className="whitespace-pre-wrap break-words text-sm leading-7 [overflow-wrap:anywhere]">{selected.body}</div> : <p className="text-sm text-muted-foreground">{pt ? 'Não foi possível carregar a mensagem. Volte e tente novamente.' : 'Could not load the message. Go back and try again.'}</p>}
