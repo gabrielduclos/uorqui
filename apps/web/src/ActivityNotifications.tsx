@@ -1,6 +1,6 @@
 
 import {useEffect,useState} from 'react';
-import {Bell,Check,CheckCheck,Hash,Headphones,Settings,UserPlus,UserRoundCheck,Users,Video,X} from 'lucide-react';
+import {AtSign,Bell,Check,CheckCheck,Hash,Headphones,Mail,MessageCircle,Settings,UserPlus,UserRoundCheck,Users,Video,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Spinner} from '@/components/ui/spinner';
 import {UserAvatar} from './UserProfiles';
@@ -10,13 +10,107 @@ import type {ActivityNotification} from './useActivityNotifications';
 import type {UnreadLocation,CommunityInviteAlert} from './useCommunityUnread';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 
+type InboxEvent={id:string;kind:'mention'|'email';createdAt:string;readAt:string|null;
+  communityId:string|null;communityName:string|null;channelId:string|null;channelName:string|null;
+  communityMessageId:string|null;actorHandle:string|null;actorName:string|null;actorAvatar:string|null;
+  mailAccountId:string|null;mailMessageId:string|null;mailAddress:string|null;sender:string|null;subject:string|null};
+type DirectUnread={id:string;peerHandle:string;peerName:string;peerAvatarUrl:string|null;
+  unreadCount:number;lastBody:string|null;lastAt:string|null;archived:boolean};
+type Tab='all'|'messages'|'mentions'|'email'|'invites'|'contacts';
 type Props={items:ActivityNotification[];unread:number;loading:boolean;error:boolean;accountId:string;
   channelAlerts:UnreadLocation[];communityInvites:CommunityInviteAlert[];
+  unreadMailCount:number;onOpenEmailInbox:()=>void;
+  onOpenDm:(conversationId:string)=>void;onOpenMail:(accountId:string,messageId:string)=>void;
   onOpenChannel:(communityId:string,channelId:string)=>void;onOpenCommunity:(communityId:string)=>void;
   onRefresh:()=>void;onReadAll:()=>Promise<void>;onDelete:(id:string)=>Promise<void>;onOpen:(item:ActivityNotification)=>void};
-export function ActivityNotifications({items,unread,loading,error,accountId,channelAlerts,communityInvites,onOpenChannel,onOpenCommunity,onRefresh,onReadAll,onDelete,onOpen}:Props){
+export function ActivityNotifications({items,unread,loading,error,accountId,channelAlerts,communityInvites,unreadMailCount,
+  onOpenEmailInbox,onOpenDm,onOpenMail,onOpenChannel,onOpenCommunity,onRefresh,onReadAll,onDelete,onOpen}:Props){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [settingsOpen,setSettingsOpen]=useState(false);
+  const [activeTab,setActiveTab]=useState<Tab>('all');
+  const [inboxEvents,setInboxEvents]=useState<InboxEvent[]>([]);
+  const [inboxLoading,setInboxLoading]=useState(true);
+  const [inboxError,setInboxError]=useState(false);
+  const [directUnread,setDirectUnread]=useState<DirectUnread[]>([]);
+  const [directLoading,setDirectLoading]=useState(true);
+  useEffect(()=>{
+    let alive=true;
+    const refresh=()=>{
+      void fetch('/api/v1/notifications/inbox-events',{credentials:'same-origin',cache:'no-store'})
+        .then(async response=>{if(!response.ok)throw Error('INBOX_UNAVAILABLE');
+          return response.json() as Promise<{events:InboxEvent[]}>;})
+        .then(body=>{if(alive){setInboxEvents(body.events);setInboxError(false);}})
+        .catch(()=>{if(alive)setInboxError(true);})
+        .finally(()=>{if(alive)setInboxLoading(false);});
+    };
+    setInboxEvents([]);setInboxLoading(true);refresh();
+    const interval=window.setInterval(()=>{if(document.visibilityState==='visible')refresh();},30000);
+    window.addEventListener('uorqui:activity-update',refresh);
+    window.addEventListener('uorqui:mail-unread-refresh',refresh);
+    window.addEventListener('focus',refresh);
+    return()=>{alive=false;window.clearInterval(interval);
+      window.removeEventListener('uorqui:activity-update',refresh);
+      window.removeEventListener('uorqui:mail-unread-refresh',refresh);
+      window.removeEventListener('focus',refresh);
+    };
+  },[accountId]);
+  useEffect(()=>{
+    let alive=true;
+    const refresh=()=>{
+      void fetch('/api/v1/dm/conversations',{credentials:'same-origin',cache:'no-store'})
+        .then(async response=>{if(!response.ok)throw Error('DM_UNAVAILABLE');
+          return response.json() as Promise<{conversations:DirectUnread[]}>;})
+        .then(body=>{if(alive)setDirectUnread(body.conversations.filter(item=>!item.archived&&item.unreadCount>0));})
+        .catch(()=>{})
+        .finally(()=>{if(alive)setDirectLoading(false);});
+    };
+    setDirectUnread([]);setDirectLoading(true);refresh();
+    const interval=window.setInterval(()=>{if(document.visibilityState==='visible')refresh();},30000);
+    const messageRefresh=()=>refresh();
+    window.addEventListener('uorqui:dm-unread-count',messageRefresh);
+    window.addEventListener('focus',messageRefresh);
+    return()=>{alive=false;window.clearInterval(interval);
+      window.removeEventListener('uorqui:dm-unread-count',messageRefresh);
+      window.removeEventListener('focus',messageRefresh);};
+  },[accountId]);
+  const mentions=inboxEvents.filter(item=>item.kind==='mention');
+  const emails=inboxEvents.filter(item=>item.kind==='email');
+  const contactActivities=items.filter(item=>item.kind==='friend_request'||item.kind==='friend_accepted');
+  const inviteActivities=items.filter(item=>item.kind==='community_join_request'||item.kind==='meeting_join_request');
+  const allTab=activeTab==='all';
+  const showMessages=allTab||activeTab==='messages';
+  const showMentions=allTab||activeTab==='mentions';
+  const showEmail=allTab||activeTab==='email';
+  const showInvites=allTab||activeTab==='invites';
+  const showContacts=allTab||activeTab==='contacts';
+  const visibleActivities=[...(showInvites?inviteActivities:[]),...(showContacts?contactActivities:[])]
+    .sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt));
+  const tabs:{key:Tab;pt:string;en:string;icon:typeof Bell;count:number}[]=[
+    {key:'all',pt:'Todas',en:'All',icon:Bell,count:0},
+    {key:'messages',pt:'Mensagens',en:'Messages',icon:MessageCircle,count:directUnread.length+channelAlerts.length},
+    {key:'mentions',pt:'Menções',en:'Mentions',icon:AtSign,count:mentions.filter(x=>!x.readAt).length},
+    {key:'email',pt:'E-mail',en:'Email',icon:Mail,count:Math.max(unreadMailCount,emails.filter(x=>!x.readAt).length)},
+    {key:'invites',pt:'Convites',en:'Invites',icon:Users,count:communityInvites.length+inviteActivities.filter(x=>!x.readAt).length},
+    {key:'contacts',pt:'Contatos',en:'Contacts',icon:UserPlus,count:contactActivities.filter(x=>!x.readAt).length}
+  ];
+  const eventRead=async(id:string)=>{
+    const event=inboxEvents.find(item=>item.id===id);
+    if(!event||event.readAt)return;
+    setInboxEvents(old=>old.map(item=>item.id===id?{...item,readAt:new Date().toISOString()}:item));
+    try{
+      const response=await fetch('/api/v1/notifications/inbox-events/'+id+'/read',{method:'PATCH',credentials:'same-origin'});
+      if(!response.ok)throw Error('UNAVAILABLE');
+    }catch{setInboxEvents(old=>old.map(item=>item.id===id?{...item,readAt:null}:item));}
+  };
+  const eventDelete=async(id:string)=>{
+    setDeletingId(id);setDeleteError(null);
+    try{
+      const response=await fetch('/api/v1/notifications/inbox-events/'+id,{method:'DELETE',credentials:'same-origin'});
+      if(!response.ok)throw Error('UNAVAILABLE');
+      setInboxEvents(old=>old.filter(item=>item.id!==id));
+    }catch{setDeleteError(id);}
+    finally{setDeletingId(null);}
+  };
   const [busy,setBusy]=useState(false);
   const [actionError,setActionError]=useState(false);
   const [deletingId,setDeletingId]=useState<string|null>(null);
@@ -65,7 +159,15 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
   };
   const icons={friend_request:UserPlus,friend_accepted:UserRoundCheck,community_join_request:UserPlus,meeting_join_request:Users};
   const all=async()=>{setBusy(true);setActionError(false);
-    try{await onReadAll();}catch{setActionError(true);}finally{setBusy(false);}};
+    try{
+      const result=await Promise.allSettled([
+        onReadAll(),
+        fetch('/api/v1/notifications/inbox-events/read-all',{method:'POST',credentials:'same-origin'})
+          .then(response=>{if(!response.ok)throw Error('UNAVAILABLE');})
+      ]);
+      if(result.some(item=>item.status==='rejected'))throw Error('UNAVAILABLE');
+      setInboxEvents(old=>old.map(item=>({...item,readAt:item.readAt??new Date().toISOString()})));
+    }catch{setActionError(true);}finally{setBusy(false);}};
   if(settingsOpen)return <div className="uorqui-kit-content-enter h-full min-h-0"><NotificationSettings accountId={accountId} onBack={()=>setSettingsOpen(false)}/></div>;
   return <div className="uorqui-kit-content-enter h-full min-h-0 overflow-y-auto overscroll-contain bg-background">
     <div className="mx-auto max-w-2xl px-4 py-5 sm:px-6">
