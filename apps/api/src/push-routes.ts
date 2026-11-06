@@ -203,15 +203,15 @@ export async function pushCommunityInvite(recipientId:string,communityId:string,
 export async function pushCommunityMessage(messageId:string){
   if(!enabled())return;
   const row=await getPool().query(
-    'SELECT m.id,m.channel_id,ch.community_id,c.name,ch.name AS channel_name,m.author_id,(ch.password_hash IS NOT NULL) AS protected,ch.access_mode AS access_mode '+
+    'SELECT m.id,m.body,m.channel_id,ch.community_id,c.name,ch.name AS channel_name,m.author_id,(ch.password_hash IS NOT NULL) AS protected,ch.access_mode AS access_mode '+
     'FROM community_messages m JOIN community_channels ch ON ch.id=m.channel_id '+
     'JOIN communities c ON c.id=ch.community_id WHERE m.id=$1 AND m.deleted_at IS NULL',[messageId]);
   if(!row.rowCount)return;
   const m=row.rows[0];
   // Limit per message to avoid unbounded network calls on large public communities.
-  const recipients=await getPool().query<Subscription>(
-    'SELECT DISTINCT ON (s.endpoint) s.endpoint,s.p256dh,s.auth,s.user_id '+
-    'FROM push_subscriptions s JOIN community_members cm ON cm.user_id=s.user_id AND cm.community_id=$1 '+
+  const recipients=await getPool().query<Subscription & {handle:string}>(
+    'SELECT DISTINCT ON (s.endpoint) s.endpoint,s.p256dh,s.auth,s.user_id,u.handle '+
+    'FROM push_subscriptions s JOIN users u ON u.id=s.user_id JOIN community_members cm ON cm.user_id=s.user_id AND cm.community_id=$1 '+
     'LEFT JOIN notification_preferences np ON np.user_id=s.user_id '+
     'LEFT JOIN community_channel_password_access grant_access ON grant_access.channel_id=$3 AND grant_access.user_id=s.user_id '+
     'LEFT JOIN community_channel_member_access member_grant ON member_grant.channel_id=$3 AND member_grant.user_id=s.user_id '+
@@ -226,7 +226,10 @@ export async function pushCommunityMessage(messageId:string){
     try{
       const status=await sendPush(sub,{kind:'community',recipientId:sub.user_id,
         communityId:m.community_id,channelId:m.channel_id,
-        title:String(m.name).slice(0,80),body:'Nova mensagem em #'+String(m.channel_name).slice(0,50)});
+        title:String(m.name).slice(0,80),
+        body:new RegExp('(^|[^a-zA-Z0-9_])@'+sub.handle+'(?![a-zA-Z0-9_])','i').test(String(m.body??''))?
+          'Você foi mencionado em #'+String(m.channel_name).slice(0,50):
+          'Nova mensagem em #'+String(m.channel_name).slice(0,50)});
       if(status===404||status===410)await getPool().query('DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',[sub.endpoint,sub.user_id]);
     }catch{/* Best effort. */}
   }));
