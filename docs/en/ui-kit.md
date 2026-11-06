@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.5
+# Uorqui UI Kit · Design System v0.1.0-beta.6
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -7,6 +7,9 @@
 - **Invites:** explicit join confirmation only after authentication, never blocking signup.
 
 ## Principles
+
+- **Discord-style replies:** compact linked connector, author and truncated snippet **above** the message in channels and DMs; click navigates to original. Composer shows the same restrained preview with dismiss. No card nested inside bubbles; global semantic colors preserve Light/Dark contrast, with deleted/GIF/media fallback.
+
 
 - **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent.
 
@@ -82,4 +85,4 @@ Before merging, check **mobile/desktop × Dark/Light × PT/EN**, keyboard focus,
 
 ## Version and maintenance
 
-This document captures **`v0.1.0-beta.5`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
+This document captures **`v0.1.0-beta.6`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
