@@ -104,6 +104,37 @@ async function acknowledge(payload){
     body:JSON.stringify({messageId:payload.messageId,conversationId:payload.conversationId,proof:payload.proof})
   });}catch{/* A missing receipt must not block a visible notification. */}
 }
+// Update the installed app badge from authorized server unread totals, even
+// when every Uorqui window is closed. Never cache private unread data.
+let badgeRefreshPending=null;
+async function updateUnreadAppBadge(){
+  if(typeof self.navigator?.setAppBadge!=='function')return;
+  if(badgeRefreshPending)return badgeRefreshPending;
+  badgeRefreshPending=(async()=>{
+    try{
+      const routes=['/api/v1/dm/conversations','/api/v1/communities/unread',
+        '/api/v1/notifications','/api/v1/mail/unread'];
+      const responses=await Promise.all(routes.map(route=>
+        fetch(route,{credentials:'include',cache:'no-store'})));
+      if(responses.some(response=>!response.ok))return;
+      const [dm,communities,activity,mail]=await Promise.all(responses.map(response=>response.json()));
+      if(!Array.isArray(dm?.conversations)||!Array.isArray(communities?.invites)||
+        !Number.isFinite(Number(communities?.total))||
+        !Number.isFinite(Number(activity?.unreadCount))||
+        !Number.isFinite(Number(mail?.unreadCount)))return;
+      const messages=dm.conversations.reduce((total,thread)=>
+        total+(thread.archived?0:Math.max(0,Number(thread.unreadCount)||0)),0);
+      const total=Math.max(0,Math.floor(messages+Math.max(0,Number(communities.total))+
+        communities.invites.length+Math.max(0,Number(activity.unreadCount))+
+        Math.max(0,Number(mail.unreadCount))));
+      if(total>0)await self.navigator.setAppBadge(Math.min(9999,total));
+      else if(typeof self.navigator.clearAppBadge==='function')
+        await self.navigator.clearAppBadge();
+    }catch{/* Browser support, connectivity and notification permission vary. */}
+  })().finally(()=>{badgeRefreshPending=null;});
+  return badgeRefreshPending;
+}
+
 self.addEventListener('push',event=>{event.waitUntil((async()=>{
   let payload;
   try{payload=event.data?.json();}catch{return;}
@@ -161,6 +192,7 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
         const type=payload.kind==='mail'?'uorqui:mail-push-update':payload.kind==='activity'?'uorqui:activity-update':'uorqui:community-push-update';
         visible.forEach(client=>client.postMessage({type}));
       }
+      await updateUnreadAppBadge();
       return;
     }
     // Confirm receipt only after the browser accepts the visible notification.
@@ -169,6 +201,7 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
       data:{url,kind:payload.kind,conversationId:payload.conversationId||'',messageId:payload.messageId||''}
     });
     await acknowledge(payload);
+    await updateUnreadAppBadge();
     if(payload.kind==='activity'||payload.kind==='community'||payload.kind==='community-invite'||payload.kind==='mail'){
       const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
       const type=payload.kind==='mail'?'uorqui:mail-push-update':payload.kind==='activity'?'uorqui:activity-update':'uorqui:community-push-update';
