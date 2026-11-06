@@ -312,10 +312,23 @@ test('community moderation: hierarchical roles, persistent bans, channels and me
 
   assert.equal((await member(root+'/channels/'+main.id,'PATCH',{name:'not allowed'},false)).status,403);
   assert.equal((await member(root+'/channels/'+main.id,'PATCH',{name:'general-chat'})).status,200);
+  const rules='Bem-vindo!\n1. Respeite os jogadores.\n2. Use o canal apropriado.\n'+('Regra longa. '.repeat(24));
+  const descriptionUpdate=await member(root+'/channels/'+main.id,'PATCH',{description:rules});
+  assert.equal(descriptionUpdate.status,200,JSON.stringify(descriptionUpdate.data));
+  assert.equal((await owner(root)).data.channels.find(ch=>ch.id===main.id).description,rules,
+    'channel rules remain visible to authorized members after saving');
+  assert.equal((await outsider(root+'/channels/'+main.id,'PATCH',{description:'forged rules'})).status,403,
+    'moderators cannot edit channel rules');
+  assert.equal((await member(root+'/channels/'+main.id,'PATCH',{description:'a'.repeat(4001)})).status,400,
+    'rule text has a bounded length');
+  assert.equal((await member(root+'/channels/'+main.id,'PATCH',{description:''})).status,200,
+    'admins can clear an existing description');
+  assert.equal((await owner(root)).data.channels.find(ch=>ch.id===main.id).description,null);
   assert.equal((await outsider(root+'/channels/'+main.id,'PATCH',{name:'bad-name'})).status,403);
   assert.equal((await member(root+'/channels/'+main.id,'DELETE')).status,409,'last text channel cannot be deleted');
-  const extra=await member(root+'/channels','POST',{name:'temporary-text',kind:'text'});
+  const extra=await member(root+'/channels','POST',{name:'temporary-text',kind:'text',description:'Pinned channel rules'});
   assert.equal(extra.status,201);
+  assert.equal(extra.data.channel.description,'Pinned channel rules');
   assert.equal((await member(root+'/channels/'+extra.data.channel.id,'DELETE')).status,204);
 
   const edit=await member(msgPath+'/'+messageId,'PATCH',{body:'Updated text'});
