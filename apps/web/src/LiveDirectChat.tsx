@@ -890,7 +890,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     const body = (forcedBody??draft).trim();
     if (!id || !body || busy || body.length > 4000) return;
     setChatError(''); setActionNotice('');
-    if (editing) {
+    if (editing && forcedBody===undefined) {
       setBusy(true);
       try {
         await api('/api/v1/dm/conversations/' + id + '/messages/' + editing.id,{
@@ -902,6 +902,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       finally { setBusy(false); }
       return;
     }
+    if (editing) cancelEdit();
     const clientId = crypto.randomUUID();
     const sentAt = new Date().toISOString();
     const pending: PendingMessage = {
