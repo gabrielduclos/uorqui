@@ -1,13 +1,14 @@
 import { Spinner } from '@/components/ui/spinner';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
-import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, MessageCircle, MoreHorizontal, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, MessageCircle, MoreHorizontal, Images, Pin, PinOff, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { clearChatMediaCache, invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
+import { DirectConversationAttachments } from './DirectConversationAttachments';
 import { InternalShareDialog } from './InternalShareDialog';
 import { ContentReportDialog } from './ContentReportDialog';
 import { clearProfileImageCache } from './profileImageCache';
@@ -29,6 +30,7 @@ type Conversation = {
 };
 type Person = { handle: string; displayName: string; avatarUrl: string | null };
 type Message = DirectChatMessage;
+type PinnedMessage = Message & {pinnedAt:string;pinnedBy:string};
 type PendingMessage = Message & { clientId: string; pendingStatus: 'sending' | 'failed'; statusUpdatedAt: string };
 type ConfirmedInboxPreview = { pending: PendingMessage; serverCreatedAt: string | null };
 type PreviewConversation = Conversation & { optimisticStatus?: PendingMessage['pendingStatus'] };
@@ -144,6 +146,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [mediaViewerId,setMediaViewerId] = useState<string | null>(null);
+  const [galleryOpen,setGalleryOpen] = useState(false);
+  const [pinnedMessage,setPinnedMessage] = useState<PinnedMessage|null>(null);
+  const [pinBusy,setPinBusy] = useState(false);
   useEffect(()=>{setMediaViewerId(null);},[activeId]);
   const highlightTimer = useRef<number | null>(null);
   const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
@@ -173,6 +178,17 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const previousLastRef = useRef('');
   const handledHandle = useRef<string | null>(null);
   activeIdRef.current = activeId;
+  const loadPinnedMessage=useCallback(async(id:string)=>{
+    try{
+      const result=await api<{pinned:PinnedMessage|null}>('/api/v1/dm/conversations/'+encodeURIComponent(id)+'/pin');
+      if(activeIdRef.current===id)setPinnedMessage(result.pinned??null);
+    }catch{/* Pin API unavailable must not prevent the chat from loading. */}
+  },[]);
+  useEffect(()=>{
+    setPinnedMessage(null);
+    setGalleryOpen(false);
+    if(activeId)void loadPinnedMessage(activeId);
+  },[activeId,loadPinnedMessage]);
   mobileOpenedRef.current = mobileOpened;
   atBottomRef.current = atBottom;
 
@@ -267,6 +283,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 
   const openThread = useCallback((id: string) => {
     setConversationMenuOpen(false);setConversationConfirm(null);
+    setGalleryOpen(false);
     setActiveId(id);
     setMobileOpened(true);
     const cached = peekDmRoom(myId, id);
@@ -293,6 +310,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   },[initialConversationId,requestedOpenNonce,openThread]);
   const closeThread = useCallback(() => {
     setConversationMenuOpen(false);setConversationConfirm(null);
+    setGalleryOpen(false);setPinnedMessage(null);
     setActiveId(null);
     activeIdRef.current = null;
     setMobileOpened(false);
@@ -635,13 +653,14 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         void loadMessages(activeIdRef.current).catch(() => {});
     };
     const unsubscribe = subscribeDmStream(data => {
-      if (data.kind === 'ready') { onReady(); return; }
+      if (data.kind === 'ready') { onReady();if(activeIdRef.current)void loadPinnedMessage(activeIdRef.current);return; }
       if (data.kind === 'friendship-update') {
         clearProfileImageCache(); invalidateDmInbox();
         void loadThreads().catch(() => {}); return;
       }
       if (!data.conversationId || !['message', 'read', 'conversation', 'update', 'received'].includes(data.kind)) return;
       const conversationId = data.conversationId;
+      if(data.kind==='update' && activeIdRef.current===conversationId)void loadPinnedMessage(conversationId);
       const isOpen = isConversationVisible(conversationId);
       // Project a new message at once rather than waiting for an entire HTTP page.
       if (data.kind === 'message' && data.message?.id && isOpen) {
@@ -687,7 +706,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     });
     window.addEventListener('uorqui:friends-updated', onReady);
     return () => { unsubscribe(); window.removeEventListener('uorqui:friends-updated', onReady); };
-  }, [loadThreads, loadMessages, isConversationVisible, myId, pt, locale]);
+  }, [loadThreads, loadMessages, loadPinnedMessage, isConversationVisible, myId, pt, locale]);
   // Delivery is not reading: receiving an inbox update never clears the unread badge.
   const receiving = useRef(new Set<string>());
   const receivedIds = useRef(new Set<string>());
@@ -896,6 +915,29 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     if (editing) cancelEdit();
     setReplySource(message);
     textareaRef.current?.focus({ preventScroll: true });
+  }
+  async function pinMessage(message:Message){
+    if(pinBusy||!activeId||message.pendingStatus)return;
+    const id=activeId;
+    setPinBusy(true);setChatError('');
+    try{
+      const result=await api<{pinned:PinnedMessage}>('/api/v1/dm/conversations/'+encodeURIComponent(id)+'/pin',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({messageId:message.id})
+      });
+      if(activeIdRef.current===id)setPinnedMessage(result.pinned);
+    }catch{setChatError(pt?'Não foi possível fixar esta mensagem.':'Could not pin this message.');}
+    finally{setPinBusy(false);}
+  }
+  async function unpinMessage(){
+    if(pinBusy||!activeId)return;
+    const id=activeId;
+    setPinBusy(true);setChatError('');
+    try{
+      await api('/api/v1/dm/conversations/'+encodeURIComponent(id)+'/pin',{method:'DELETE'});
+      if(activeIdRef.current===id)setPinnedMessage(null);
+    }catch{setChatError(pt?'Não foi possível desafixar a mensagem.':'Could not unpin the message.');}
+    finally{setPinBusy(false);}
   }
   async function archiveConversation(thread:Conversation){
     if(conversationBusy)return;
