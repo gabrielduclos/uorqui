@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, Images, MessageCircle, MoreHorizontal, Pin, PinOff, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
+import { ReplyComposerPreview } from './ReplyReference';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
 import { attachmentLabel } from './chatAttachmentLabels';
@@ -1219,16 +1220,11 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <button type="button" onClick={cancelEdit} aria-label={pt ? 'Cancelar edição' : 'Cancel edit'}
               className="grid size-9 place-items-center hover:bg-accent"><X className="size-4"/></button>
           </div>}
-          {replySource && !editing && <div className="uorqui-reply-draft mb-2 flex items-center gap-2 px-3 py-2 text-xs">
-            <div className="min-w-0 flex-1">
-              <span className="block font-semibold">{pt ? 'Respondendo a ' : 'Replying to '}{replySource.authorId === myId ? (pt ? 'você' : 'you') : active.peerName}</span>
-              <span className="uorqui-reply-draft__preview mt-0.5 block truncate">{replySource.body}</span>
-            </div>
-            <button type="button" onClick={() => setReplySource(null)}
-              aria-label={pt ? 'Cancelar resposta' : 'Cancel reply'} className="grid size-9 place-items-center hover:bg-accent">
-              <X className="size-4"/>
-            </button>
-          </div>}
+          {replySource && !editing && <ReplyComposerPreview
+            author={replySource.authorId === myId ? (pt ? 'você' : 'you') : active.peerName}
+            body={replySource.body || replySource.attachment?.name} locale={locale}
+            onCancel={() => setReplySource(null)}/>}
+
           {active.canMessage && gifPickerOpen && <CommunityMediaPicker tab="gif" pt={pt}
             onClose={()=>setGifPickerOpen(false)} onEmoji={()=>{}}
             onGif={url=>{setGifPickerOpen(false);void send(url);}}/>}
