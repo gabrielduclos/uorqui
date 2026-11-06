@@ -492,6 +492,17 @@ test('community emoji reactions persist, count uniquely and respect message acce
   assert.equal(memberView.reactions.find(r=>r.emoji==='🔥').mine,false);
   assert.equal(ownerView.reactions.find(r=>r.emoji==='👍').mine,false);
   assert.equal(ownerView.canReact,false);
+  const list=await owner(messages+'/'+sent.data.id+'/reactors?emoji='+encodeURIComponent('👍'));
+  assert.equal(list.status,200,JSON.stringify(list.data));
+  assert.deepEqual(list.data.users.map(u=>u.handle).sort(),['comm_member','comm_outsider']);
+  assert.equal((await lurker(messages+'/'+sent.data.id+'/reactors?emoji='+encodeURIComponent('👍'))).status,403);
+  const replied=await member(messages,'POST',{clientId:crypto.randomUUID(),body:'Respondendo @comm_owner',replyToId:sent.data.id});
+  assert.equal(replied.status,201,JSON.stringify(replied.data));
+  const reply=(await outsider(messages)).data.messages.find(m=>m.id===replied.data.id);
+  assert.equal(reply.replyToId,sent.data.id);
+  assert.equal(reply.replyTo.authorHandle,'comm_owner');
+  assert.equal(reply.replyTo.body,'Vote with reactions');
+  assert.equal((await member(messages,'POST',{clientId:crypto.randomUUID(),body:'bad reply',replyToId:crypto.randomUUID()})).status,404);
   assert.equal((await member(url,'DELETE',{emoji:'👍'})).status,200);
   assert.equal((await member(url,'DELETE',{emoji:'👍'})).status,200,'removal is idempotent');
   const after=(await owner(messages)).data.messages.find(m=>m.id===sent.data.id);
