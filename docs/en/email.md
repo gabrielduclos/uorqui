@@ -61,7 +61,7 @@ Apply `0037_mail_push.sql` to the correct Neon database **before deploying the A
 
 ## Email image preview and enlargement
 
-Inline/CID and remote HTTPS images are constrained to 420 px wide, 280 px high, and the available mobile reading width. Click or press Enter on an image to open a full-screen enlarged viewer; dismiss with X, Escape, or the backdrop. HTML remains inside a sandboxed iframe with scripts and forms **disabled**; same-origin DOM access lets the parent handle image clicks without allowing email-provided scripts to run.
+Inline/CID and remote HTTPS images are constrained to 180 px wide, 120 px high, and the available mobile reading width. The limit is also applied directly to image styles to override email template inline dimensions. Click or press Enter on an image to open a full-screen enlarged viewer; dismiss with X, Escape, or the backdrop. HTML remains inside a sandboxed iframe with scripts and forms **disabled**; same-origin DOM access lets the parent handle image clicks without allowing email-provided scripts to run.
 
 ## Account configuration modal
 
