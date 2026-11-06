@@ -25,7 +25,7 @@ export function ReplyReference({ author, body, deleted = false, locale, onJump }
   const [expanded, setExpanded] = useState(false);
   const excerpt = replyExcerpt(body, deleted, locale);
   const pt = locale === 'pt-BR';
-  const canExpand = !deleted && excerpt.length > 100;
+  const canExpand = !deleted && excerpt.length > 64;
   return <div className="uorqui-reply-reference" role="group"
     aria-label={pt ? 'Referência à mensagem original' : 'Original message reference'}>
     <span aria-hidden="true" className="uorqui-reply-reference__connector"/>
@@ -55,7 +55,7 @@ export function ReplyComposerPreview({ author, body, deleted = false, locale, on
   const pt = locale === 'pt-BR';
   const [expanded, setExpanded] = useState(false);
   const excerpt = replyExcerpt(body, deleted, locale);
-  const canExpand = !deleted && excerpt.length > 100;
+  const canExpand = !deleted && excerpt.length > 45;
   return <div className="uorqui-reply-draft mb-2 flex min-w-0 items-start gap-2 px-2.5 py-2 text-xs">
     <span className="uorqui-reply-reference__connector" aria-hidden="true"/>
     <div className="min-w-0 flex-1">
