@@ -7,7 +7,7 @@ export function replyExcerpt(body: string | null | undefined, deleted: boolean, 
   if (deleted) return pt ? 'Mensagem excluída' : 'Deleted message';
   const text = (body ?? '').trim();
   if (!text) return pt ? 'Mídia ou arquivo' : 'Media or file';
-  if (isCommunityGifUrl(text)) return 'GIF';
+  if (isCommunityGifUrl(body)) return 'GIF';
   return text.replace(/\s+/g, ' ').slice(0, 180);
 }
 
