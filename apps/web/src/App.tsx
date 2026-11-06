@@ -192,7 +192,7 @@ function AppContent() {
   }
   function declineCommunityInvite(){
     try{localStorage.removeItem(INVITE_KEY);localStorage.removeItem('uorqui:pending-meeting-channel');}catch{}
-    if(/^\\/invite\\//.test(window.location.pathname))window.history.replaceState(null,'','/');
+    if(/^\/invite\//.test(window.location.pathname))window.history.replaceState(null,'','/');
     setInviteToken(null);setInvitePreview(null);setInviteError('');
   }
   const onAuthenticated = useCallback((next: Account) => {
