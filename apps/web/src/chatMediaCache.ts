@@ -12,8 +12,10 @@ const PRIVATE_MEDIA_URL = /^(?:\/media\/dm\/[0-9a-f-]{36}\/[0-9a-f-]{36}|\/media
 const deviceMemory=typeof navigator==='undefined'?4:(navigator as Navigator & { deviceMemory?:number }).deviceMemory??4;
 const LIMIT_BYTES = deviceMemory<=2?32*1024*1024:deviceMemory<=4?64*1024*1024:96*1024*1024;
 const MAX_ITEM_BYTES = 24 * 1024 * 1024;
-const MAX_ITEMS = 42;
-const MAX_AGE_MS = 90 * 60 * 1000;
+// Keep many small thumbnails from previously visited channels within the same
+// existing byte budget. Big files cannot evict them just by their item count.
+const MAX_ITEMS = 96;
+const MAX_AGE_MS = 120 * 60 * 1000;
 const RETRY_MS = 12_000;
 const MAX_PARALLEL_MEDIA = 3;
 let downloading = 0;
@@ -68,16 +70,28 @@ export function setChatMediaCacheAccount(accountId: string | null) {
 export function invalidateChatMedia(url: string | null | undefined) {
   if(url && entries.has(url)){remove(url);notify();}
 }
+/** Drop only protected media for a channel when access is revoked. */
+export function invalidateCommunityMedia(communityId:string,channelId:string){
+  const prefix='/media/community-attachment/'+communityId+'/'+channelId+'/';
+  let changed=false;
+  for(const key of [...entries.keys()]){
+    if(key.startsWith(prefix)){remove(key);changed=true;}
+  }
+  if(changed)notify();
+}
 function prune() {
   const now=Date.now();
+  let changed=false;
   for(const [url,item] of entries){
     if(!item.pending && (item.failedAt && now-item.failedAt>RETRY_MS*3 ||
-      item.checkedAt && now-item.checkedAt>MAX_AGE_MS))remove(url);
+      item.checkedAt && now-item.checkedAt>MAX_AGE_MS)){
+      remove(url);
+      changed=true;
+    }
   }
   let total=[...entries.values()].reduce((s,v)=>s+v.size,0);
   const lru=[...entries.entries()].filter(([,v])=>!v.pending)
     .sort((a,b)=>a[1].accessedAt-b[1].accessedAt);
-  let changed=false;
   for(const [url,item] of lru){
     if(total<=LIMIT_BYTES && entries.size<=MAX_ITEMS)break;
     total-=item.size;
@@ -165,7 +179,19 @@ export async function ensureChatMediaCached(url: string): Promise<string | null>
 /** Keep one stable object URL across the bubble and expanded viewer. */
 export function useCachedChatMedia(src: string | null | undefined, eager = true) {
   const cached=useSyncExternalStore(subscribe,()=>snapshot(src),()=>null);
-  useEffect(()=>{if(eager && src && PRIVATE_MEDIA_URL.test(src))void ensureChatMediaCached(src);},[src,eager]);
+  useEffect(()=>{
+    if(!eager||!src||!PRIVATE_MEDIA_URL.test(src))return;
+    // A media download skipped in a suspended/background PWA should start on
+    // return to the app; a temporary offline error can also be retried.
+    const warm=()=>{if(document.visibilityState==='visible')void ensureChatMediaCached(src);};
+    warm();
+    document.addEventListener('visibilitychange',warm);
+    window.addEventListener('online',warm);
+    return()=>{
+      document.removeEventListener('visibilitychange',warm);
+      window.removeEventListener('online',warm);
+    };
+  },[src,eager]);
   return cached;
 }
 
