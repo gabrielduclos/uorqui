@@ -2,9 +2,27 @@
 
 O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/) nos manifestos da aplicação. O sufixo `-beta.N` indica **pré-lançamento** e não uma versão estável ou liberada para todos.
 
-## [Não publicado] — alterações até 03/11/2026
+## [Unreleased]
 
-Evolução do beta técnico na `main`, **sem criar tag e sem comprovar deploy da última versão em produção**.
+Ainda não existem alterações lançadas após o marco inicial. **Todo PR seguinte deve elevar a versão nos três manifestos npm e atualizar os dois changelogs.** Ver [política de versões](docs/pt-BR/versoes.md).
+
+## [0.1.0-beta.1] — 06/11/2026
+
+**Marco oficial do beta técnico.** Consolida a interface React, os tokens CSS, a API Fastify e a documentação sob uma única versão no GitHub. Testes automáticos e deploy não certificam todos os fluxos em aparelhos reais.
+
+### Implementação consolidada (04–06 de novembro)
+
+- **Interface:** layout compacto e responsivo de Mensagens/Contatos/Comunidades/E-mail, melhor contraste de respostas nos temas e superfícies globais. UI Kit passa a descrever a **paleta cinza real do workspace**, não as propostas roxas/azuis anteriores. Um par global de tokens Dark/Light substitui declarações duplicadas.
+- **Mensageiro:** SSE e horários de entrega/leitura, texto e respostas otimistas, anexos, galeria paginada de todas as mídias/arquivos, uma mensagem fixada compartilhada por conversa, cache e placeholders responsivos.
+- **Comunidades:** canais, permissões, confirmação de exclusão sempre visível, reuniões de áudio/vídeo, chat mobile e carregamento inteligente de mídias privadas em memória.
+- **E-mail:** OAuth Gmail e IMAP/SMTP manual, pastas entrada/enviados/spam/lixeira, leitura/resposta/movimentação, visualizador HTML isolado com links externos nativos e skeleton até a montagem do layout/imagens (com limite para serviços remotos travados).
+- **PWA/notificações:** categorias configuráveis de push para atividade, comunidades, DMs e e-mail; badge nativo de não lidos onde suportado e service worker seguro.
+- **Código consolidado:** transporte JSON reutilizável em `apps/web/src/lib/apiClient.ts`, sem alterar erros existentes; validação estrita da origem de escrita compartilhada em `apps/api/src/request-origin.ts`. **Sem mudanças nas rotas, autenticação ou schema nesta consolidação.**
+- **Governança:** workflow `Version policy` exige versão SemVer superior e changelogs PT/EN nos próximos PRs; `Publish tagged beta releases` cria tags/Releases imutáveis `v...` na `main` (dependente das permissões do GitHub).
+
+### Evolução de produto de 02–03/11 incluída neste beta
+
+As mudanças abaixo precederam o marco formal de 06/11 e integram esta versão.
 
 ### Produto e comunidades
 - Removido o **Explorar comunidades** interno da aba Comunidades (ícone bússola, pesquisa e lista pública). A área agora mostra apenas comunidades participadas, convites pendentes e criação; a descoberta de novas comunidades fica exclusivamente na aba **Descobrir**.
@@ -41,7 +59,7 @@ Evolução do beta técnico na `main`, **sem criar tag e sem comprovar deploy da
 
 **Pendências:** testes reais de reunião e apresentação entre aparelhos, PWA iOS/Android, push/e-mail de ponta a ponta e confirmação independente do deploy em produção.
 
-## [0.1.0-beta.1] — 01/11/2026
+### Escopo inicial (registros históricos do preview)
 
 **Primeiro beta técnico para testes controlados.** Este documento descreve código implementado e testes automatizados, **não** uma certificação em todos os navegadores e dispositivos.
 
@@ -50,7 +68,7 @@ Evolução do beta técnico na `main`, **sem criar tag e sem comprovar deploy da
 - Nova rede social open source em React/TypeScript, com interface inspirada no UIKit, temas claro e escuro e selo Beta consistente junto ao logo no header.
 - Autenticação Better Auth com e-mail/senha, perfis, privacidade e bloqueios; cadastro público com proteção Turnstile e integração de e-mail.
 - Mensageiro individual 1:1 com persistência, anexos, respostas, reações, estados de mensagens, atualizações SSE e suporte a Web Push.
-- Feed híbrido contínuo com filtros persistentes "Para você" / "Seguindo", botão + que abre o modal de postagem e navegação dedicada por vídeos.
+- Descoberta de comunidades em substituição ao feed global removido; rotas e tabelas legadas foram desativadas durante a evolução do beta.
 - Comunidades com convites, cargos, canais de texto, moderação e salas WebRTC, incluindo chamada minimizável.
 - Frontend Cloudflare Worker/R2; API Fastify no Render; PostgreSQL Neon; testes automáticos de interface, API e integração.
 - Preparação para migração de domínio, lista de origens autorizadas e substituição do service worker em PWAs instalados.
