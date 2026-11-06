@@ -1115,6 +1115,10 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             <span className="min-w-0"><span className="block truncate text-sm font-semibold">{active.peerName}</span>
               <span className="block truncate text-xs text-muted-foreground">@{active.peerHandle}</span></span>
           </a>
+          <Button type="button" variant="ghost" size="icon"
+            title={pt?'Mídias e arquivos':'Media and files'}
+            aria-label={pt?'Ver todas as mídias e arquivos da conversa':'View all media and files from this conversation'}
+            onClick={()=>setGalleryOpen(true)}><Images className="size-5"/></Button>
           <div className="relative shrink-0" ref={conversationMenuRef}>
             <Button type="button" variant="ghost" size="icon" aria-haspopup="menu"
               aria-expanded={conversationMenuOpen} aria-label={pt?'Opções da conversa':'Conversation options'}
@@ -1123,6 +1127,10 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             </Button>
             {conversationMenuOpen&&<div role="menu" aria-label={pt?'Opções da conversa':'Conversation options'}
               className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
+              <button type="button" role="menuitem" onClick={()=>{setGalleryOpen(true);setConversationMenuOpen(false);}}
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm hover:bg-accent">
+                <Images className="size-4"/>{pt?'Mídias e arquivos':'Media and files'}
+              </button>
               <button type="button" role="menuitem" onClick={()=>void archiveConversation(active)}
                 className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm hover:bg-accent">
                 {active.archived?<ArchiveRestore className="size-4"/>:<Archive className="size-4"/>}
@@ -1143,6 +1151,23 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           </div>
         </header>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {pinnedMessage&&<div role="note" aria-label={pt?'Mensagem fixada':'Pinned message'}
+            className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-secondary/50 px-3 py-2 sm:px-5">
+            <Pin className="size-4 shrink-0 text-foreground"/>
+            <button type="button" className="min-w-0 flex-1 text-left hover:opacity-80"
+              onClick={()=>void jumpToRepliedMessage(pinnedMessage.id)}>
+              <span className="block text-[11px] font-semibold">{pt?'Mensagem fixada':'Pinned message'}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {pinnedMessage.body||pinnedMessage.attachment?.name||(pt?'Mídia ou arquivo':'Media or file')}
+              </span>
+            </button>
+            <Button type="button" variant="ghost" size="icon" disabled={pinBusy}
+              title={pt?'Desafixar mensagem':'Unpin message'} aria-label={pt?'Desafixar mensagem':'Unpin message'}
+              onClick={()=>void togglePinned(null)}><PinOff className="size-4"/></Button>
+          </div>}
+          {galleryOpen&&<ConversationAttachmentsPanel conversationId={active.id} locale={locale}
+            peerName={active.peerName} onClose={()=>setGalleryOpen(false)}
+            onJump={id=>{setGalleryOpen(false);void jumpToRepliedMessage(id);}}/>}
           <div ref={scrollBox} onScroll={onMessagesScroll}
             data-testid="messages-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             <div ref={messageContentRef} key={activeId} className="uorqui-kit-content-enter flex w-full min-w-0 flex-col gap-2.5">
@@ -1156,6 +1181,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                     onOpenMedia={setMediaViewerId}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
+                    isPinned={pinnedMessage?.id===message.id}
+                    onPin={pinBusy?undefined:target=>void togglePinned(pinnedMessage?.id===target.id?null:target)}
                     disabled={!active.canMessage || actionBusy || busy || Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)} onEdit={beginEdit} onCancel={setCancelTarget}
                     onForward={message => { setActionNotice(''); setForwardTarget(message); }}
                      onReport={message=>setReportMessageId(message.id)}
