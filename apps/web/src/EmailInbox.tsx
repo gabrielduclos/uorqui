@@ -429,7 +429,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   </form>;
 
   return <div data-uorqui-email className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-    <aside className={cn('flex h-full min-h-0 w-full min-w-0 flex-col border-r border-border bg-background md:w-[340px] md:shrink-0 xl:w-[380px]', open && 'max-md:hidden')}>
+    <aside data-uorqui-workspace-surface className={cn('flex h-full min-h-0 w-full min-w-0 flex-col border-r border-border md:w-[340px] md:shrink-0 xl:w-[380px]', open && 'max-md:hidden')}>
       <header className="shrink-0 space-y-4 border-b border-border px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-2"><h1 className="text-lg font-semibold tracking-tight">Email</h1>
           <div className="flex gap-1"><Button size="icon" variant="ghost" aria-label={pt ? 'Atualizar emails' : 'Refresh email'} disabled={loading || loadingAccounts}
