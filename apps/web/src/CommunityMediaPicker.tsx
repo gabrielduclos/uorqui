@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
@@ -90,10 +90,44 @@ export default function CommunityMediaPicker({tab,onClose,onEmoji,onGif,pt}:{
   tab:PickerTab;onClose:()=>void;onEmoji:(emoji:string)=>void;onGif:(url:string)=>void;pt:boolean;
 }){
   const [search,setSearch]=useState('');
+  const [remoteGifs,setRemoteGifs]=useState<Gif[]>([]);
+  const [remoteOffset,setRemoteOffset]=useState(0);
+  const [remoteLoading,setRemoteLoading]=useState(false);
+  const [remoteMore,setRemoteMore]=useState(false);
+  const giphyKey=import.meta.env.VITE_GIPHY_API_KEY?.trim()??'';
+  useEffect(()=>{
+    if(tab!=='gif'||!giphyKey)return;
+    const controller=new AbortController();
+    const timeout=window.setTimeout(async()=>{
+      setRemoteLoading(true);
+      try{
+        const query=search.trim().slice(0,50);
+        const endpoint=query?'search':'trending';
+        const params=new URLSearchParams({
+          api_key:giphyKey,limit:'24',offset:String(remoteOffset),rating:'pg',
+          ...(query?{q:query,lang:pt?'pt':'en'}:{})
+        });
+        const response=await fetch('https://api.giphy.com/v1/gifs/'+endpoint+'?'+params,{signal:controller.signal});
+        if(!response.ok)throw Error('GIPHY_UNAVAILABLE');
+        const data=await response.json() as {data?:{id?:string;title?:string}[];pagination?:{count?:number;total_count?:number}};
+        const items=(data.data??[]).filter(item=>/^[A-Za-z0-9]+$/.test(item.id??'')).map(item=>({
+          id:item.id!,label:(item.title||'GIF').slice(0,100),tags:item.title||''
+        }));
+        if(controller.signal.aborted)return;
+        setRemoteGifs(old=>remoteOffset?Array.from(new Map([...old,...items].map(item=>[item.id,item])).values()):items);
+        const count=Number(data.pagination?.count??items.length),total=Number(data.pagination?.total_count??0);
+        setRemoteMore(items.length>0&&count+remoteOffset<total);
+      }catch{
+        if(!controller.signal.aborted){setRemoteMore(false);if(remoteOffset===0)setRemoteGifs([]);}
+      }finally{if(!controller.signal.aborted)setRemoteLoading(false);}
+    },remoteOffset?0:280);
+    return ()=>{window.clearTimeout(timeout);controller.abort();};
+  },[tab,giphyKey,search,remoteOffset,pt]);
   const term=search.trim().toLocaleLowerCase();
   const results=useMemo(()=>tab==='emoji'
     ?emojis.filter(item=>(item.label+' '+item.tags).toLocaleLowerCase().includes(term))
-    :gifs.filter(item=>(item.label+' '+item.tags).toLocaleLowerCase().includes(term)),[tab,term]);
+    :giphyKey&&remoteGifs.length?remoteGifs:
+      gifs.filter(item=>(item.label+' '+item.tags).toLocaleLowerCase().includes(term)),[tab,term,giphyKey,remoteGifs]);
   return <div role="dialog" aria-label={tab==='emoji'?(pt?'Selecionar emoji':'Choose emoji'):(pt?'Selecionar GIF':'Choose GIF')}
     className="absolute bottom-full left-0 z-30 mb-2 flex max-h-[min(55dvh,370px)] w-[min(360px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
     <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
@@ -102,7 +136,7 @@ export default function CommunityMediaPicker({tab,onClose,onEmoji,onGif,pt}:{
     </div>
     <div className="relative shrink-0 px-3 py-2">
       <Search className="pointer-events-none absolute left-5 top-4 size-4 text-muted-foreground"/>
-      <Input value={search} onChange={e=>setSearch(e.target.value)}
+      <Input value={search} onChange={e=>{setSearch(e.target.value);setRemoteOffset(0);setRemoteGifs([]);}}
         placeholder={pt?'Buscar':'Search'} aria-label={pt?'Buscar emoji ou GIF':'Search emoji or GIF'}
         className="h-9 pl-9 text-base"/>
     </div>
@@ -121,7 +155,12 @@ export default function CommunityMediaPicker({tab,onClose,onEmoji,onGif,pt}:{
           <span className="block truncate px-2 py-1 text-xs">{item.label}</span>
         </button>)}
       </div>}
-      {!results.length&&<p className="p-4 text-center text-xs text-muted-foreground">{pt?'Nenhum resultado.':'No results.'}</p>}
+      {tab==='gif'&&remoteLoading&&<p role="status" className="p-2 text-center text-xs text-muted-foreground">{pt?'Buscando GIFs…':'Searching GIFs…'}</p>}
+      {tab==='gif'&&giphyKey&&remoteMore&&!remoteLoading&&<button type="button" onClick={()=>setRemoteOffset(old=>old+24)}
+        className="mt-2 w-full rounded-lg border border-border py-2 text-xs hover:bg-secondary">
+        {pt?'Carregar mais GIFs':'Load more GIFs'}
+      </button>}
+      {!results.length&&!remoteLoading&&<p className="p-4 text-center text-xs text-muted-foreground">{pt?'Nenhum resultado.':'No results.'}</p>}
     </div>
     {tab==='gif'&&<p className="shrink-0 border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
       {pt?'GIFs fornecidos pelo GIPHY. Ao abrir um GIF, seu dispositivo se conecta a esse serviço.':
