@@ -240,6 +240,83 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
       return reply.header('Cache-Control',noCache).send({messages:r.rows});
     }catch(e){request.log.error({err:e},'DM messages');return reply.code(503).send({error:'Unavailable'});}
   });
+  // The gallery must query all authorized history, not only the most recent
+  // 100 messages rendered in the chat. Cursor pagination prevents large scans.
+  app.get('/api/v1/dm/conversations/:id/attachments',{
+    schema:{params:pathParams,querystring:{type:'object',additionalProperties:false,
+      properties:{kind:{type:'string',enum:['media','files']},before:uuidParam}}}
+  },async(request,reply)=>{
+    try{
+      const me=await identity(request,getSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const {kind='media',before}=request.query as {kind?:'media'|'files';before?:string};
+      const mediaSql="(m.attachment_type LIKE 'image/%' OR m.attachment_type LIKE 'video/%' OR m.attachment_type LIKE 'audio/%')";
+      const kindSql=kind==='media'?mediaSql:'NOT '+mediaSql;
+      let anchor:{created_at:Date;id:string}|undefined;
+      if(before){
+        const result=await getPool().query(
+          'SELECT created_at,id FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND attachment_id IS NOT NULL AND deleted_at IS NULL AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$2 AND user_id=$3),\'-infinity\'::timestamptz)',
+          [before,id,me]);
+        if(!result.rowCount)return reply.code(404).send({error:'Cursor unavailable'});
+        anchor=result.rows[0];
+      }
+      const columns='m.id, m.conversation_id AS "conversationId", m.author_id AS "authorId", m.body, m.created_at AS "createdAt", '+
+        'json_build_object(\'id\',m.attachment_id,\'name\',m.attachment_name,\'type\',m.attachment_type,\'size\',m.attachment_size) AS attachment';
+      const sql='SELECT '+columns+' FROM direct_messages m WHERE m.conversation_id=$1 AND m.attachment_id IS NOT NULL '+
+        'AND m.deleted_at IS NULL AND m.created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz) '+
+        'AND '+kindSql+(anchor?' AND (m.created_at,m.id) < ($3::timestamptz,$4::uuid)':'')+
+        ' ORDER BY m.created_at DESC,m.id DESC LIMIT 41';
+      const result=await getPool().query(sql,anchor?[id,me,anchor.created_at,anchor.id]:[id,me]);
+      const items=result.rows.slice(0,40);
+      return reply.header('Cache-Control',noCache).send({
+        items,nextCursor:result.rows.length>40?items[items.length-1].id:null,
+      });
+    }catch(e){request.log.error({err:e},'DM gallery');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+  // Exactly one durable shared pin per conversation. The FK clears automatically
+  // if an unread message is cancelled. Each reader also respects local clear-at.
+  app.get('/api/v1/dm/conversations/:id/pinned',{schema:{params:pathParams}},async(request,reply)=>{
+    try{
+      const me=await identity(request,getSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
+      const result=await getPool().query(
+        'SELECT m.id,m.body,m.author_id AS "authorId",m.created_at AS "createdAt", '+
+        'CASE WHEN m.attachment_id IS NULL THEN NULL ELSE json_build_object(\'id\',m.attachment_id,\'name\',m.attachment_name,\'type\',m.attachment_type,\'size\',m.attachment_size) END AS attachment '+
+        'FROM direct_conversations c JOIN direct_messages m ON m.id=c.pinned_message_id AND m.conversation_id=c.id '+
+        'LEFT JOIN direct_conversation_user_states state ON state.conversation_id=c.id AND state.user_id=$2 '+
+        'WHERE c.id=$1 AND (c.participant_a_id=$2 OR c.participant_b_id=$2) AND m.deleted_at IS NULL '+
+        'AND (state.cleared_at IS NULL OR m.created_at>state.cleared_at) LIMIT 1',[id,me]);
+      return reply.header('Cache-Control',noCache).send({pinned:result.rows[0]??null});
+    }catch(e){request.log.error({err:e},'DM pinned');return reply.code(503).send({error:'Unavailable'});}
+  });
+  app.put('/api/v1/dm/conversations/:id/pinned',{schema:{params:pathParams,body:{
+    type:'object',required:['messageId'],additionalProperties:false,
+    properties:{messageId:{anyOf:[uuidParam,{type:'null'}]}}
+  }}},async(request,reply)=>{
+    if(!allowedOrigin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await identity(request,getSession);
+      if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      const {messageId}=request.body as {messageId:string|null};
+      const result=await getPool().query(
+        'UPDATE direct_conversations c SET pinned_message_id=$3::uuid WHERE c.id=$1 '+
+        'AND (c.participant_a_id=$2 OR c.participant_b_id=$2) '+
+        'AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM direct_messages m WHERE m.id=$3::uuid '+
+        'AND m.conversation_id=c.id AND m.deleted_at IS NULL AND m.created_at > COALESCE('+
+        '(SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=c.id AND user_id=$2),\'-infinity\'::timestamptz))) RETURNING id',
+        [id,me,messageId]);
+      if(!result.rowCount)return reply.code(404).send({error:'Message unavailable'});
+      await publishDmConversationEvent(id,'update').catch(error=>request.log.warn({err:error},'DM pin event failed'));
+      return reply.header('Cache-Control',noCache).send({pinnedMessageId:messageId});
+    }catch(e){request.log.error({err:e},'DM set pin');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   // The Worker owns private R2 uploads. Its upload request is checked here
   // before bytes enter the bucket, and downloads are authorized per message.
   app.get('/api/v1/dm/conversations/:id/attachments/allowed',{schema:{params:pathParams}},async(request,reply)=>{
