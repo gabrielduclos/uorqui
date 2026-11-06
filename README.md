@@ -10,11 +10,13 @@
 
 ## Product
 
-Uorqui brings together three connected experiences:
+Uorqui brings together four connected experiences:
 
-- **Direct messages:** private 1:1 text conversations, replies, reactions, media attachments, message status, background push and SSE-driven updates. No conventional private group chats.
+- **Direct messages:** private 1:1 conversations, optimistic replies, reactions, media attachments, an all-history media/files gallery, shared pinned messages, delivery/read status, background push and SSE updates. Contacts are accessed from Messages. No conventional private group chats.
 - **Discover:** a home screen without global posts, featuring recommended public communities, search and activity from communities a user has joined. Obsolete global feed UI, API, and PostgreSQL tables were retired November 2, 2026.
-- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, admission approval, request notifications and optional password-protected channels. Channels may be open or closed with member-specific permissions assigned in moderation. Voice/meeting text chat starts collapsed; meetings support screen sharing, active-speaker highlighting and fullscreen camera/PiP view.
+- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, admission approval, request notifications and optional password-protected channels. Open/restricted channels have member permissions; meeting rooms support screen sharing, active-speaker highlighting and fullscreen camera/PiP view.
+
+- **Email:** Gmail OAuth or manual IMAP/SMTP, multiple connected accounts, inbox/sent/spam/trash, replies and bulk actions, safe HTML viewer and browser-opening external links.
 
 The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
 
@@ -27,10 +29,11 @@ Community approvals refresh the applicant's community list through account-targe
 | Area | Current technical state |
 | --- | --- |
 | Login and profiles | Better Auth sessions, email verification/recovery flow, profile visibility and blocking implemented; real signup + email delivery need final validation |
-| Direct messages | Persisted 1:1 messages, media, reactions, read/delivery state, SSE updates and Web Push implementation |
+| Direct messages | Persisted 1:1 messages, attachments, media/files gallery, pinned messages, reactions, read/delivery state, SSE and push |
 | Legacy feed | Retired from app, API and PostgreSQL; Neon recovery snapshots and four legacy R2 files retained |
 | Discover | Public community recommendations, search and authorized joined-community activity; live API smoke checks passed, device testing pending |
-| Communities | Text, voice and video meeting channels; per-room admission, invitations, channel passwords and community-request alerts; live API smoke passed, real-device media tests pending |
+| Communities | Text, voice and video meeting channels; permissions, invites, channel passwords, moderation and private media cache; real-device AV tests pending |
+| Email | Gmail and manual IMAP/SMTP connectors, mailbox folders, reply/move operations, isolated responsive HTML viewer; external browser and device tests ongoing |
 | Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
 | Public launch | **Not yet approved:** real-device camera/microphone tests, push delivery, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
 
@@ -47,13 +50,14 @@ The project has automated CI for the API, UI and integration flows. Passing CI d
 - **Voice:** WebRTC peer-to-peer; TURN is optional and connectivity must be tested across networks.
 - **Deployment:** Cloudflare Builds and Render, with GitHub Actions verification.
 
-This beta version is defined in the npm workspace manifests and shown beside the Uorqui header wordmark. See [release notes](CHANGELOG.md) for the exact scope and known risks.
+This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.1`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
 
 ## Documentation
 
 | Topic | English | Português |
 | --- | --- | --- |
 | Beta release notes | [Changelog](CHANGELOG.md) | [Notas da versão](CHANGELOG.pt-BR.md) |
+| Version policy | [Release versions](docs/en/versions.md) | [Política de versões](docs/pt-BR/versoes.md) |
 | Local setup | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
 | API & deployment | [API hosting](docs/en/api-hosting.md) | [Hospedagem da API](docs/pt-BR/hospedagem-api.md) |
 | Cloudflare Worker | [Workers](docs/en/cloudflare-workers.md) | [Workers](docs/pt-BR/cloudflare-workers.md) |
