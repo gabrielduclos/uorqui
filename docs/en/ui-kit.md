@@ -8,6 +8,7 @@
 
 ## Principles
 
+- **Reply readability (beta.7):** channel order is **sender → original quote → new content**. Source quotes show four lines before **Read more**; composer quotes show three and can expand to all source text. Replies retain their jump link and responsive minimum width in DMs.
 - **Discord-style replies:** compact linked connector, author and truncated snippet **above** the message in channels and DMs; click navigates to original. Composer shows the same restrained preview with dismiss. No card nested inside bubbles; global semantic colors preserve Light/Dark contrast, with deleted/GIF/media fallback.
 
 
