@@ -27,12 +27,12 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
   const x = useMotionValue(0);
   const visible = useTransform(x, [12, 55], [0, 1]);
   const dragged = useRef(false);
-  return <div className="relative min-w-0">
+  return <div className="relative min-w-0 max-w-full">
     <motion.span aria-hidden="true" style={{ opacity: visible }}
       className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-primary">
       <Reply className="size-5"/>
     </motion.span>
-    <motion.div drag="x" dragControls={controls} dragListener={false}
+    <motion.div className="min-w-0 max-w-full" drag="x" dragControls={controls} dragListener={false}
       dragConstraints={{ left: 0, right: 72 }} dragElastic={0.04} dragMomentum={false}
       dragSnapToOrigin style={{ x, touchAction: 'pan-y' }}
       onPointerDown={event => {
@@ -174,9 +174,9 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
     setOpen(false);
   }
 
-  return <div data-direct-message-id={message.id} className={cn('group relative flex min-w-0 items-start gap-1.5', mine ? 'justify-end' : 'justify-start')}>
+  return <div data-direct-message-id={message.id} className={cn('group relative flex w-full min-w-0 max-w-full items-start gap-1.5', mine ? 'justify-end' : 'justify-start')}>
     <SwipeToReply onReply={() => { if (!message.deletedAt && !message.pendingStatus) onReply(message); }}>
-      <div className={cn('min-w-0 max-w-[calc(100vw-108px)] rounded-[5px] px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]', highlighted && 'outline outline-2 outline-primary outline-offset-2',
+      <div className={cn('min-w-0 max-w-full rounded-[5px] px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]', highlighted && 'outline outline-2 outline-primary outline-offset-2',
         mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
         {message.forwarded && !message.deletedAt && <span className="mb-1 flex items-center gap-1 text-[11px] opacity-75"><Forward className="size-3"/> {pt ? 'Encaminhada' : 'Forwarded'}</span>}
         {message.replyTo && !message.deletedAt && <button type="button"
@@ -195,28 +195,28 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
           <span className="uorqui-reply-quote__body mt-0.5 block max-w-full truncate">{quote[1]}</span>
         </blockquote>}
 
-        {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0">
+        {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0 max-w-full overflow-hidden">
           {isImage ? <button ref={imageRef} type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
             aria-label={pt ? 'Ampliar imagem' : 'Open image'}
-            className="relative block max-w-full focus-visible:outline-2 focus-visible:outline-current">
+            className="relative block w-fit min-w-0 max-w-full overflow-hidden focus-visible:outline-2 focus-visible:outline-current">
             {cachedSrc || !assetUrl.startsWith('/media/dm/')
               ? <img src={visibleSrc} alt={mediaLabel} loading="lazy" decoding="async"
                   onLoad={()=>setLoadedImageSrc(visibleSrc ?? null)}
                   onError={()=>setFailedImageSrc(visibleSrc ?? null)}
-                  className="max-h-[360px] w-auto max-w-full object-contain" />
-              : <span className="block h-36 w-44 bg-muted/30" />}
+                  className="block h-auto max-h-[360px] w-auto max-w-full object-contain" />
+              : <span className="block aspect-[4/3] w-44 max-w-full bg-muted/30" />}
             {loadingImage && <span role="status" aria-label={pt?'Carregando foto':'Loading photo'}
-                className="absolute inset-0 grid min-h-36 min-w-44 place-items-center bg-muted/60">
+                className="absolute inset-0 grid place-items-center bg-muted/60">
                 <Spinner className="size-5"/>
               </span>}
             {failedImageSrc===visibleSrc && <span className="block p-2 text-xs">{pt?'Não foi possível carregar a foto.':'Photo unavailable.'}</span>}
           </button> : isVideo ? <button type="button" onClick={() => onOpenMedia?.(message.id)}
               aria-label={pt?'Abrir vídeo':'Open video'}
-              className="relative block min-h-36 min-w-44 max-w-full bg-black focus-visible:outline-2 focus-visible:outline-current">
+              className="relative block aspect-video w-[min(280px,100%)] min-w-0 max-w-full overflow-hidden bg-black focus-visible:outline-2 focus-visible:outline-current">
               <video src={visibleSrc} muted playsInline preload="metadata"
                 onLoadedMetadata={()=>setLoadedVideoSrc(visibleSrc ?? null)}
                 onError={()=>setFailedVideoSrc(visibleSrc ?? null)}
-                className="pointer-events-none max-h-[320px] max-w-full"/>
+                className="pointer-events-none h-full max-h-[320px] w-full min-w-0 object-contain"/>
               <span className="absolute inset-0 grid place-items-center bg-black/20">
                 {loadingVideo ? <span role="status" aria-label={pt?'Carregando vídeo':'Loading video'}><Spinner className="size-6 text-white"/></span>
                   : failedVideoSrc===visibleSrc ? <span className="p-2 text-xs text-white">{pt?'Vídeo indisponível':'Video unavailable'}</span>
