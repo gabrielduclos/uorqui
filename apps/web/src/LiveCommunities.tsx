@@ -51,7 +51,7 @@ type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
 /** Stoat-like compact rows: consecutive posts from the same author form a group. */
 function groupedWithPrevious(messages:(Message|PendingMessage)[],index:number){
-  if(index<=0)return false;
+  if(index<=0||messages[index]?.replyToId)return false;
   const previous=messages[index-1],current=messages[index];
   if(!previous||!current||previous.authorHandle!==current.authorHandle||
      previous.authorName!==current.authorName||previous.deletedAt||current.deletedAt)return false;
