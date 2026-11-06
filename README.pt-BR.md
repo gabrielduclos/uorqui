@@ -8,6 +8,14 @@
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Alterações do beta.2
+
+- **Convites com consentimento:** o usuário decide entrar ou recusar a comunidade depois de criar conta/entrar.
+- **Canais:** respostas vinculadas à mensagem original, menções por `@`, lista de pessoas que reagiram e regras fixadas.
+- **GIFs:** também em conversas privadas; GIPHY com busca e catálogo expansível depende de `VITE_GIPHY_API_KEY` definido **na compilação do web**. Sem chave, apenas os GIFs inclusos.
+- **Privacidade:** Perfil → Excluir minha conta exige a senha e a palavra `EXCLUIR`. Remove dados da base ativa e agenda limpeza de mídia R2. Conversas privadas com outros usuários também são apagadas; backups do provedor não são apagados instantaneamente. O serviço deve validar a tarefa de R2 antes de liberar a exclusão.
+
 ## O produto
 
 O Uorqui reúne quatro experiências:
