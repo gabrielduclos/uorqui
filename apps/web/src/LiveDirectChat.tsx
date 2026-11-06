@@ -6,6 +6,7 @@ import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, Images, Me
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { LiveMessageComposer } from './LiveMessageComposer';
+import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { clearChatMediaCache, invalidateChatMedia } from './chatMediaCache';
 import { ChatMediaViewer } from './ChatMediaViewer';
@@ -170,6 +171,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [actionNotice, setActionNotice] = useState('');
   const [conversationMenuOpen,setConversationMenuOpen]=useState(false);
   const [conversationConfirm,setConversationConfirm]=useState<'delete'|'block'|null>(null);
+  const [gifPickerOpen,setGifPickerOpen]=useState(false);
   const [conversationBusy,setConversationBusy]=useState(false);
   const [blockedHandles,setBlockedHandles]=useState<string[]>([]);
   const conversationMenuRef=useRef<HTMLDivElement>(null);
@@ -883,10 +885,10 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setPendingMessages(prev=>[...prev,pending]);setReplySource(null);
     jumpToLast('smooth');void submitPending(pending);
   }
-  async function send() {
+  async function send(forcedBody?:string) {
     const id = activeId;
-    const body = draft.trim();
-    if (!id || !draft.trim() || busy || body.length > 4000) return;
+    const body = (forcedBody??draft).trim();
+    if (!id || !body || busy || body.length > 4000) return;
     setChatError(''); setActionNotice('');
     if (editing) {
       setBusy(true);
@@ -1075,7 +1077,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                           ? (pt ? 'Você respondeu: ' : 'You replied: ')
                           : (pt ? thread.peerName + ' respondeu: ' : thread.peerName + ' replied: '))
                         : (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : ''))
-                      + (thread.lastBody || attachmentLabel(thread.lastAttachmentType,locale))
+                      + (isCommunityGifUrl(thread.lastBody)?'GIF':(thread.lastBody || attachmentLabel(thread.lastAttachmentType,locale)))
                     : '@' + thread.peerHandle}
               </span>
               {thread.unreadCount > 0 && <span aria-label={String(thread.unreadCount) + (pt ? ' não lidas' : ' unread')}
@@ -1225,8 +1227,12 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
               <X className="size-4"/>
             </button>
           </div>}
+          {active.canMessage && gifPickerOpen && <CommunityMediaPicker tab="gif" pt={pt}
+            onClose={()=>setGifPickerOpen(false)} onEmoji={()=>{}}
+            onGif={url=>{setGifPickerOpen(false);void send(url);}}/>}
           {active.canMessage ? <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
-            onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}/> :
+            onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}
+             onGif={()=>setGifPickerOpen(old=>!old)} gifOpen={gifPickerOpen}/> :
             <div role="status" className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-center text-sm text-muted-foreground">
               {pt ? 'Mensagens indisponíveis: perfil privado sem contato aceito ou conta bloqueada.' : 'Messaging unavailable: private profile without an accepted contact or blocked account.'}
               <div className="mt-2"><button type="button" className="text-primary underline" onClick={() => { closeThread(); onOpenContacts?.(); }}>
