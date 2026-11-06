@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.1
+# Uorqui UI Kit · Design System v0.1.0-beta.2
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -6,7 +6,7 @@
 
 - Compact, communication-first interface influenced by workspace dashboards, without positioning Uorqui as exclusively enterprise software.
 - Primary areas: **Discover · Messages · Communities · Email**; Contacts are reached **from Messages**, not from a separate main-menu entry.
-- Community rail and sidebar on desktop, responsive navigation and fixed headers on mobile. Scroll content, not the entire workspace.
+- Community rail and desktop sidebar, responsive navigation and fixed mobile headers. **Discover** uses a compass icon rather than Search in the community rail. Channel headers show Invite, not Edit; pinned channel rules expand using Read more / Show less and are edited in Moderation. Scroll content, not the entire workspace.
 - Dark/Light share the same structure; touch controls and dialogs must respect viewport, iOS safe areas, keyboards, Escape and accessibility.
 - Brazilian Portuguese/English, Lucide iconography, consistent primitives and no page-specific theme palettes.
 
@@ -70,4 +70,4 @@ Before merging, check **mobile/desktop × Dark/Light × PT/EN**, keyboard focus,
 
 ## Version and maintenance
 
-This document captures **`v0.1.0-beta.1`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
+This document captures **`v0.1.0-beta.2`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
