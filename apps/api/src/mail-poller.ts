@@ -3,6 +3,7 @@ import { getPool } from './db/client.js';
 import { withMailbox } from './mail-account-access.js';
 import { countInboxUnread, listMail, type MailMessage, type MailProvider } from './mail-providers.js';
 import { pushMailNotification } from './push-routes.js';
+import { publishDmUserEvent } from './dm-events.js';
 
 type Account = { id: string; user_id: string; provider: MailProvider };
 const validId = /^[A-Za-z0-9_=+/\-]{1,1024}$/;
@@ -59,11 +60,22 @@ async function pollAccount(account: Account) {
           unseen.has(message.id) && newlyArrivedMail(message, baseline));
       }
     }
+    // Persist email notifications independent of Web Push subscriptions. A
+    // disconnected mailbox cascades its notifications out of this inbox.
+    for(const message of notifications){
+      await client.query(
+        'INSERT INTO notification_inbox_events(recipient_id,kind,event_key,mail_account_id,mail_message_id,sender,subject) '+
+        "VALUES($1,'email',$2,$3,$4,$5,$6) ON CONFLICT(event_key) DO NOTHING",
+        [account.user_id,'email:'+account.id+':'+message.id,account.id,message.id,
+          (message.from||'').slice(0,180),(message.subject||'').slice(0,240)]);
+    }
     await client.query('COMMIT');
   } catch(error) {
     await client.query('ROLLBACK').catch(()=>{});
     throw error;
   } finally { client.release(); }
+  // Browser subscribers and the in-app inbox update independently.
+  if(notifications.length)void publishDmUserEvent(account.user_id,'notification').catch(()=>{});
   // Never hold a DB transaction while making outbound push requests.
   for (const message of notifications.slice(0, MAX_MESSAGES_PER_SCAN)) {
     await pushMailNotification(account.user_id, account.id, message);
