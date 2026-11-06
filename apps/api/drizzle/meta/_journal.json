@@ -288,6 +288,13 @@
       "when": 1793990002000,
       "tag": "0040_community_message_replies",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793990003000,
+      "tag": "0041_account_media_cleanup",
+      "breakpoints": true
     }
   ]
 }
