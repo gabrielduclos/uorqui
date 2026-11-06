@@ -25,9 +25,10 @@ Thank you for considering a contribution to Uorqui.
 1. Fork the repository and create a descriptive branch.
 2. Make a focused change and explain **why** it is needed.
 3. Link the relevant issue, if one exists; describe affected product flows.
-4. Update both language versions of related documentation.
-5. Run `npm run typecheck`, `npm run build` and the relevant GitHub Actions integration checks; include actual results.
-6. Submit a pull request for review. Maintainers may ask for adjustments before merging.
+4. **Always bump the SemVer version** after the `v0.1.0-beta.1` baseline, even for docs/CSS-only changes. Keep root, web and API npm manifests identical and add a release entry to **both** changelogs. See [version policy](docs/en/versions.md).
+5. Update both language versions of related documentation; update the UI Kit for visual changes.
+6. Run `npm run typecheck`, `npm run build` and relevant integration checks; ensure **Verify release version** passes.
+7. Submit a pull request for review. Maintainers may ask for adjustments before merging.
 
 Do not commit secrets, authentication tokens, production data, third-party proprietary code or media without appropriate licenses.
 
