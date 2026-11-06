@@ -43,6 +43,21 @@ export type SignedInAccount = {
 };
 type Area = 'email' | 'conversations' | 'contacts' | 'communities' | 'notifications' | 'profile' | 'moderation';
 type InAppNotice = {id:string;key:string;title:string;body:string;url:string};
+type AppBadgeNavigator = Navigator & {
+  setAppBadge?: (count:number)=>Promise<void>;
+  clearAppBadge?: ()=>Promise<void>;
+};
+/** PWA icon count is native to supported installed web apps. No custom icon asset
+ * or per-page badge artwork is generated. */
+function updatePwaAppBadge(count:number){
+  if(!window.isSecureContext)return;
+  const browser=navigator as AppBadgeNavigator;
+  try{
+    const result=count>0?browser.setAppBadge?.(Math.min(9999,Math.floor(count))):
+      browser.clearAppBadge?.();
+    void result?.catch(()=>{/* Permission and platform support vary. */});
+  }catch{/* A missing native badging API must never break the workspace. */}
+}
 const validUuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const mailMessageId=/^[A-Za-z0-9_=+\/\-]{1,1024}$/;
 
@@ -205,6 +220,12 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
   const communityUnreadCount = Object.values(communityUnread.communities).reduce((sum, count) => sum + count, 0);
   // Count unread channel locations once per channel, not once per message.
   const notificationBadgeCount = activity.unread + communityUnread.locations.length + communityUnread.invites.length;
+  // One total shared across messages, community channels, invitations, activity
+  // and ALL connected mailboxes. Recalculate when any unread source changes.
+  const pwaUnreadCount=Math.max(0,unreadMessageCount)+
+    Math.max(0,communityUnread.total)+communityUnread.invites.length+
+    Math.max(0,activity.unread)+Math.max(0,unreadMailCount);
+  useEffect(()=>{updatePwaAppBadge(pwaUnreadCount);},[account.user.id,pwaUnreadCount]);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [requestedConversation,setRequestedConversation]=useState<{id:string;nonce:number}|null>(null);
   const [requestedCommunity,setRequestedCommunity]=useState<{communityId:string;channelId:string|null;nonce:number}|null>(null);
@@ -476,7 +497,14 @@ export default function SocialShell({ account, onLogout, onAccountUpdate, invite
     if (loggingOut) return;
     setLoggingOut(true);
     setLogoutError('');
-    try { await onLogout(); resetDmInboxSession(); clearChatMediaCache(); clearCommunityMessageCache(account.user.id); await clearDmAccount(account.user.id); }
+    try {
+      await onLogout();
+      updatePwaAppBadge(0);
+      resetDmInboxSession();
+      clearChatMediaCache();
+      clearCommunityMessageCache(account.user.id);
+      await clearDmAccount(account.user.id);
+    }
     catch { setLogoutError(t("Não foi possível sair da conta. Tente novamente.")); setLoggingOut(false);setLogoutConfirm(false); }
   }
 
