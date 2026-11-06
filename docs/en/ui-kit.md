@@ -213,3 +213,7 @@ The Contacts view follows the shared messenger styling: compact fixed header, se
 ## Shared workspace surface and readable replies
 
 Messages, Email and Contacts use `data-uorqui-workspace-surface`, which inherits its background and text colors from the **global** `--card` and `--card-foreground` tokens in `styles.css` instead of per-page colors. Embedded reply quotes and composer reply previews use globally themed `uorqui-reply-quote` and `uorqui-reply-draft` styles, mixing semantic `--primary`, `--primary-foreground`, `--foreground`, `--secondary` and `--ring` tokens to strengthen contrast in dark and light themes alike.
+
+## Channel deletion confirmation in Moderation
+
+Under **Moderation > Channels**, feedback and confirmation instructions live in a persistent region below the tabs, outside the scrolling content. Selecting **Delete channel** also displays a contextual warning and **Cancel**/**Confirm deletion** controls directly in that channel's card, without shifting scroll position. The notice uses global theme tokens, remains visible on mobile and desktop, and deletion only happens after explicit confirmation.
