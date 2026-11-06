@@ -14,7 +14,7 @@ type Visibility='public'|'approval'|'private';
 type ModerationTab='members'|'bans'|'channels'|'settings'|'danger';
 type Member={handle:string;displayName:string;role:Role;joinedAt:string;restrictedChannelIds?:string[]};
 type BanEntry={handle:string;reason:string|null;bannedAt:string};
-type Channel={id:string;name:string;kind:'text'|'voice'|'meeting';hasPassword?:boolean;accessMode?:'open'|'restricted'};
+type Channel={id:string;name:string;description?:string|null;kind:'text'|'voice'|'meeting';hasPassword?:boolean;accessMode?:'open'|'restricted'};
 type Data={members:Member[];bans:BanEntry[];myRole:Role};
 const weight:Record<Role,number>={owner:4,admin:3,moderator:2,member:1};
 
@@ -38,11 +38,11 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   const [groupVisibility,setGroupVisibility]=useState<Visibility>(visibility);
   const [photo,setPhoto]=useState(avatarUrl);
   const [confirmDeleteText,setConfirmDeleteText]=useState('');
-  const [channelDrafts,setChannelDrafts]=useState<Record<string,{name:string;accessMode:'open'|'restricted';password:string}>>({});
+  const [channelDrafts,setChannelDrafts]=useState<Record<string,{name:string;description:string;accessMode:'open'|'restricted';password:string}>>({});
   useEffect(()=>{setGroupName(name);setGroupDescription(description??'');setGroupVisibility(visibility);setPhoto(avatarUrl);},[name,description,visibility,avatarUrl]);
   useEffect(()=>{
     setChannelDrafts(Object.fromEntries(channels.map(channel=>[channel.id,{
-      name:channel.name,accessMode:channel.accessMode??'open',password:''
+      name:channel.name,description:channel.description??'',accessMode:channel.accessMode??'open',password:''
     }])));
   },[channels]);
   const base='/api/v1/communities/'+id;
@@ -81,9 +81,10 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   const bodyFor=(method:'PATCH'|'PUT',v:unknown)=>({
     method,headers:{'Content-Type':'application/json'},body:JSON.stringify(v)
   } as RequestInit);
-  function updateChannelDraft(channelId:string,change:Partial<{name:string;accessMode:'open'|'restricted';password:string}>){
+  function updateChannelDraft(channelId:string,change:Partial<{name:string;description:string;accessMode:'open'|'restricted';password:string}>){
     setChannelDrafts(old=>({...old,[channelId]:{
       name:old[channelId]?.name??channels.find(ch=>ch.id===channelId)?.name??'',
+      description:old[channelId]?.description??channels.find(ch=>ch.id===channelId)?.description??'',
       accessMode:old[channelId]?.accessMode??'open',
       password:old[channelId]?.password??'',
       ...change
@@ -308,10 +309,10 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
       {canAdmin&&<Tabs.Content value="channels" className="space-y-3 outline-none">
           <p className="text-xs font-semibold">{pt?'Gerenciar canais':'Manage channels'}</p>
           <p className="text-xs text-muted-foreground">{pt?
-            'Nome, acesso e senha são alterações independentes. Somente administradores podem editar.':
-            'Name, access and password can be changed separately by administrators.'}</p>
+            'Nome, descrição, acesso e senha são editados aqui por administradores.':
+            'Admins can edit channel names, descriptions, access and passwords here.'}</p>
           {channels.map(ch=>{
-            const draft=channelDrafts[ch.id]??{name:ch.name,accessMode:ch.accessMode??'open',password:''};
+            const draft=channelDrafts[ch.id]??{name:ch.name,description:ch.description??'',accessMode:ch.accessMode??'open',password:''};
             const endpoint=base+'/channels/'+ch.id;
             const changedName=draft.name.trim();
             return <section key={ch.id} className="space-y-3 rounded-lg border border-border/70 p-3">
@@ -336,6 +337,30 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
                   loading={busyKey==='channel:name:'+ch.id}>
                   <Check className="size-3.5"/>{pt?'Salvar nome':'Save name'}
                 </Button>
+              </form>
+              <form className="space-y-2 border-t border-border/70 pt-3" onSubmit={event=>{
+                event.preventDefault();
+                if(draft.description.trim()===(ch.description??'').trim())return;
+                void action('channel:description:'+ch.id,
+                  ()=>api(endpoint,bodyFor('PATCH',{description:draft.description.trim()})),
+                  pt?'Descrição fixa atualizada.':'Pinned description updated.');
+              }}>
+                <label className="block text-xs font-medium">
+                  {pt?'Descrição do canal / regras':'Channel description / rules'}
+                  <textarea value={draft.description}
+                    onChange={event=>updateChannelDraft(ch.id,{description:event.target.value})}
+                    maxLength={4000} rows={4} disabled={busy}
+                    placeholder={pt?'Orientações que ficam visíveis no topo do canal…':'Guidelines shown at the top of the channel…'}
+                    className="mt-1 min-h-24 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-base"/>
+                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">{draft.description.length}/4000</span>
+                  <Button type="submit" size="sm" variant="outline"
+                    disabled={busy||draft.description.trim()===(ch.description??'').trim()}
+                    loading={busyKey==='channel:description:'+ch.id}>
+                    <Check className="size-3.5"/>{pt?'Salvar descrição':'Save description'}
+                  </Button>
+                </div>
               </form>
               <div className="flex flex-wrap items-end gap-2">
                 <label className="min-w-[170px] flex-1 text-xs">{pt?'Acesso ao canal':'Channel access'}
