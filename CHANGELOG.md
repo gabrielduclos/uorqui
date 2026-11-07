@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.8] — 2026-11-06
+
+- **Inline reply references:** cited author and original message excerpt now start on the same line (for example, **Sandra: looks good**) in both community channels and direct messages, instead of rendering on separate rows.
+- **Composer previews:** the reply author and source excerpt also appear inline, with the existing cancel button and expandable preview.
+- **Long replies remain readable:** line clamping now applies to the combined author-and-text reference (up to four lines in messages and three lines in the composer), retaining **Read more / Show less** for the complete text and click-to-jump for the original.
+- **Author names:** when the original community message is already loaded, prefer its display name; use the stored handle otherwise. Global semantic CSS retains mobile sizing and light/dark contrast. Frontend-only, no API or database migration.
+
 ## [0.1.0-beta.7] — 2026-11-06
 
 - **Reply reading order:** in community channels, the new-message author/header now appears **before** the cited reference and the reply content. Direct-message replies keep the same source-then-response order inside their bubble.

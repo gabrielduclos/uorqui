@@ -30,10 +30,10 @@ export function ReplyReference({ author, body, deleted = false, locale, onJump }
     aria-label={pt ? 'Referência à mensagem original' : 'Original message reference'}>
     <span aria-hidden="true" className="uorqui-reply-reference__connector"/>
     <div className="uorqui-reply-reference__content">
-      <button type="button" className="uorqui-reply-reference__link" onClick={onJump}
+      <button type="button" className="uorqui-reply-reference__link" data-expanded={expanded ? 'true' : 'false'} onClick={onJump}
         aria-label={(pt ? 'Ir para mensagem de ' : 'Jump to message from ') + author}>
-        <strong className="uorqui-reply-reference__author">{author}</strong>
-        <span className="uorqui-reply-reference__excerpt" data-expanded={expanded ? 'true' : 'false'}>{excerpt}</span>
+        <strong className="uorqui-reply-reference__author">{author}:</strong>{' '}
+        <span className="uorqui-reply-reference__excerpt">{excerpt}</span>
       </button>
       {canExpand && <button type="button" className="uorqui-reply-reference__toggle"
         onClick={() => setExpanded(previous => !previous)}
@@ -59,8 +59,10 @@ export function ReplyComposerPreview({ author, body, deleted = false, locale, on
   return <div className="uorqui-reply-draft mb-2 flex min-w-0 items-start gap-2 px-2.5 py-2 text-xs">
     <span className="uorqui-reply-reference__connector" aria-hidden="true"/>
     <div className="min-w-0 flex-1">
-      <strong className="block truncate">{pt ? 'Respondendo a ' : 'Replying to '}{author}</strong>
-      <span className="uorqui-reply-draft__preview" data-expanded={expanded ? 'true' : 'false'}>{excerpt}</span>
+      <div className="uorqui-reply-draft__line" data-expanded={expanded ? 'true' : 'false'}>
+        <strong className="uorqui-reply-draft__author">{pt ? 'Respondendo a ' : 'Replying to '}{author}:</strong>{' '}
+        <span className="uorqui-reply-draft__preview">{excerpt}</span>
+      </div>
       {canExpand && <button type="button" className="uorqui-reply-reference__toggle"
         onClick={() => setExpanded(previous => !previous)}
         aria-expanded={expanded}>

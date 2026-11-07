@@ -335,28 +335,26 @@ body.uorqui-app-active {
   margin-top:.3rem;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference__author {
-  display:block;
+  display:inline;
   min-width:0;
   max-width:100%;
   overflow-wrap:anywhere;
   font-weight:700;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference__excerpt {
+  display:inline;
+  overflow-wrap:anywhere;
+  opacity:.86;
+}
+[data-uorqui-app-shell] .uorqui-reply-reference__content { min-width:0; max-width:100%; }
+[data-uorqui-app-shell] .uorqui-reply-reference__link {
   display:-webkit-box;
-  min-width:0;
-  max-width:100%;
   overflow:hidden;
   overflow-wrap:anywhere;
   white-space:normal;
   -webkit-box-orient:vertical;
   -webkit-line-clamp:4;
   line-clamp:4;
-  line-height:1.35rem;
-  opacity:.86;
-}
-[data-uorqui-app-shell] .uorqui-reply-reference__content { min-width:0; max-width:100%; }
-[data-uorqui-app-shell] .uorqui-reply-reference__link {
-  display:block;
   width:100%;
   min-width:0;
   padding:0;
@@ -372,8 +370,8 @@ body.uorqui-app-active {
   outline:2px solid currentColor;
   outline-offset:2px;
 }
-[data-uorqui-app-shell] .uorqui-reply-reference__excerpt[data-expanded="true"],
-[data-uorqui-app-shell] .uorqui-reply-draft__preview[data-expanded="true"] {
+[data-uorqui-app-shell] .uorqui-reply-reference__link[data-expanded="true"],
+[data-uorqui-app-shell] .uorqui-reply-draft__line[data-expanded="true"] {
   display:block;
   overflow:visible;
   -webkit-line-clamp:unset;
@@ -401,10 +399,9 @@ body.uorqui-app-active {
   color:var(--foreground);
   border-radius:3px;
 }
-[data-uorqui-app-shell] .uorqui-reply-draft__preview {
+[data-uorqui-app-shell] .uorqui-reply-draft__line {
   display:-webkit-box;
   max-width:100%;
-  margin-top:.15rem;
   overflow:hidden;
   overflow-wrap:anywhere;
   white-space:normal;
@@ -412,6 +409,12 @@ body.uorqui-app-active {
   -webkit-line-clamp:3;
   line-clamp:3;
   line-height:1.35rem;
+}
+[data-uorqui-app-shell] .uorqui-reply-draft__author {
+  font-weight:700;
+}
+[data-uorqui-app-shell] .uorqui-reply-draft__preview {
+  display:inline;
   color:var(--muted-foreground);
 }
 /* iOS WebKit zooms the viewport when focusing controls smaller than 16px.

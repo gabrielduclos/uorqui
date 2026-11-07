@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.8] — 06/11/2026
+
+- **Referência de resposta na mesma linha:** nome de quem escreveu e trecho da mensagem citada aparecem juntos, como **Sandra: belezinha**, em canais e conversas privadas, sem quebra forçada entre os dois.
+- **Prévia do editor:** mostra igualmente autor e trecho na mesma linha, mantendo o botão de cancelar e a opção de expansão.
+- **Textos longos:** o limite visual passa a abranger autor e citação como um único texto, permitindo até quatro linhas nas mensagens e três no editor. **Ler mais / Mostrar menos** continua revelando a mensagem inteira e o clique na referência localiza a original.
+- **Identificação:** nos canais, prefere o nome de exibição do autor quando a mensagem original está carregada; caso contrário, utiliza o username. CSS global preserva responsividade e contraste nos temas claro e escuro. Apenas frontend, sem migração ou alteração na API.
+
 ## [0.1.0-beta.7] — 06/11/2026
 
 - **Ordem de leitura das respostas:** nos canais, o nome e horário de quem respondeu voltam a aparecer **antes** da mensagem citada, seguidos do conteúdo da nova resposta. Nas mensagens privadas, a citação também permanece antes do texto respondido.
