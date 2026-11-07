@@ -8,7 +8,7 @@
 
 ## Princípios
 
-- **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** na mesma linha; citações longas podem expandir além de quatro linhas (três no editor). A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
+- **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** em uma única linha compacta. Trechos longos recebem reticências, com acesso à mensagem original pelo clique; a prévia no editor também ocupa só uma linha. A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
 - **Visual anterior nas conversas privadas (beta.9):** a citação volta a aparecer em cartão dentro do balão, com a prévia anterior acima do editor. O contraste permanece adequado nos temas claro e escuro, sem compartilhar a seta dos canais.
 - **Respostas separadas por contexto:** nos canais, referência leve com seta abaixo do nome do remetente; no chat privado, cartão anterior de citação. As prévias no editor permitem cancelar e tratam mensagem excluída, GIF e arquivo.
 
