@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.7
+# Uorqui UI Kit · Design System v0.1.0-beta.8
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -8,6 +8,7 @@
 
 ## Principles
 
+- **Inline reply label (beta.8):** the cited author and quote start on the same line, e.g. **Sandra: looks good**. Long quotes wrap up to four lines (three in the composer), and **Read more** reveals the full text. Display names are preferred where already available, with handle fallback.
 - **Reply readability (beta.7):** channel order is **sender → original quote → new content**. Source quotes show four lines before **Read more**; composer quotes show three and can expand to all source text. Replies retain their jump link and responsive minimum width in DMs.
 - **Discord-style replies:** compact linked connector, author and truncated snippet **above** the message in channels and DMs; click navigates to original. Composer shows the same restrained preview with dismiss. No card nested inside bubbles; global semantic colors preserve Light/Dark contrast, with deleted/GIF/media fallback.
 
@@ -86,4 +87,4 @@ Before merging, check **mobile/desktop × Dark/Light × PT/EN**, keyboard focus,
 
 ## Version and maintenance
 
-This document captures **`v0.1.0-beta.7`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
+This document captures **`v0.1.0-beta.8`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
