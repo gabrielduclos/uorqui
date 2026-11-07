@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.12] — 2026-11-07
+
+- **Mobile navigation over active calls:** the main navigation drawer now renders in a themed, viewport-sized portal above WebRTC voice/video and fullscreen meeting layers. Opening the drawer does not unmount the call or stop its audio.
+- **Participant connection status:** “Connecting…” and “Connection failed” take their own line beneath the participant's name/handle, instead of absolute positioning over the @username on compact audio/video tiles.
+- **Scope:** frontend presentation only. No WebRTC signaling, API, database or migration change. Verify hamburger drawer over an active call, minimized call and meeting; compact tiles and connection transitions; iOS/Android/PWA/desktop and Light/Dark. CI and real-device checks are required.
+
 ## [0.1.0-beta.11] — 2026-11-06
 
 - **No duplicate GIF previews in direct messages:** recognized GIPHY messages render their animated GIF in the private chat but do not mount the external `LinkPreview` card or request its metadata. Ordinary URLs retain link previews.

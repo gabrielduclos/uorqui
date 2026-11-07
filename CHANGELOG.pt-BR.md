@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.12] — 07/11/2026
+
+- **Menu mobile acima da chamada:** o menu principal passa a ser exibido em portal com o tema do aplicativo e dimensões da área visível, acima das camadas de voz/vídeo e reunião em tela cheia. Abrir o menu não desmonta a chamada nem interrompe o áudio.
+- **Status de conexão dos participantes:** “Conectando…” e “Falha na conexão” ocupam uma linha própria abaixo do nome/@usuário em vez de aparecerem sobre ele nos cards compactos de áudio/vídeo.
+- **Escopo:** somente apresentação no frontend. Sem mudança de sinalização WebRTC, API, banco ou migração. Conferir menu sobre chamada ativa/minimizada, reunião e transições de conexão, mobile/PWA/desktop, temas claro/escuro. CI e testes práticos ainda são necessários.
+
 ## [0.1.0-beta.11] — 06/11/2026
 
 - **Sem prévia duplicada para GIFs nas mensagens privadas:** GIFs reconhecidos do GIPHY continuam aparecendo como animação no chat, mas não montam o cartão externo `LinkPreview` nem consultam seus metadados. Links normais continuam com prévia.

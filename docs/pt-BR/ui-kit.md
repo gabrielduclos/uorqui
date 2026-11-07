@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.11
+# Uorqui UI Kit · Design System v0.1.0-beta.12
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
@@ -7,6 +7,8 @@
 - **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro.
 
 ## Princípios
+
+- **Camadas das chamadas (beta.12):** o menu mobile usa um portal em `document.body` com o tema do UI Kit, acima do WebRTC persistente e da reunião em tela cheia, respeitando a área visual e sem interromper a chamada. Cards de participantes exibem “Conectando…”/falha abaixo do @usuário em linha própria, sem sobreposição.
 
 - **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** em uma única linha compacta. Trechos longos recebem reticências, com acesso à mensagem original pelo clique; a prévia no editor também ocupa só uma linha. A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
 - **Respostas unificadas (beta.10):** conversas privadas e canais compartilham a seta de retorno, referência compacta **autor: trecho** em uma linha e clique para localizar a original, além da prévia de uma linha no editor e botão de cancelar. Textos longos mostram reticências. Citações antigas embutidas em texto não permitem clicar porque não possuem ID de origem.

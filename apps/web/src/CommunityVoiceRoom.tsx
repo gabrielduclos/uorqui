@@ -885,6 +885,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
                 <a href={'/@'+peer.handle} onClick={event=>navigateToPublicProfile(event,peer.handle)}
                   className="block truncate rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{peer.displayName}</a>
                 <p className="truncate text-xs text-muted-foreground">{peer.isSelf?(pt?'Você':'You'):'@'+peer.handle}</p>
+                {!ready&&<p role="status" className="mt-0.5 max-w-full truncate text-[11px] leading-4 text-muted-foreground">
+                  {connection==='failed'?(pt?'Falha na conexão':'Connection failed'):(pt?'Conectando…':'Connecting…')}</p>}
               </div>
               <div className="absolute right-1 top-1 flex items-center gap-1 sm:right-2 sm:top-2">
                 {peer.deafened&&<span className="grid size-6 place-items-center rounded-full border border-destructive/30 bg-destructive/10 text-destructive sm:size-8"
@@ -896,8 +898,6 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
                   {peer.muted?<MicOff className="size-4"/>:<Mic className="size-4"/>}
                 </span>
               </div>
-              {!ready&&<span className="absolute bottom-2 text-[11px] text-muted-foreground">
-                {connection==='failed'?(pt?'Falha na conexão':'Connection failed'):(pt?'Conectando…':'Connecting…')}</span>}
             </div>;
           })}
         </div>

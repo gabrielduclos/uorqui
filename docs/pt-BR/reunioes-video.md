@@ -1,10 +1,13 @@
 # Salas de voz e reuniões com áudio e vídeo
 
-Atualizado em **06/11/2026** para o beta técnico `0.1.0-beta.2`.
+Atualizado em **07/11/2026** para o beta técnico `0.1.0-beta.12`.
 
 O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O usuário entra na chamada explicitamente; abrir a sala não ativa câmera ou microfone automaticamente.
 
 ## Comportamento da interface
+
+- O menu principal mobile aparece **acima** da chamada de áudio/vídeo, inclusive da reunião em tela cheia, mantendo o WebRTC montado. O menu acompanha a área visível e o tema do aplicativo.
+- O card de participante mostra conexão em andamento ou falha em uma linha **abaixo** do @usuário, sem cobrir o identificador em telas pequenas.
 
 - **Chat de texto recolhido por padrão** tanto nas salas de voz quanto nas reuniões, com controle para expandir e recolher sem desligar a chamada.
 - O conteúdo da sala e o painel de texto se adaptam ao espaço disponível em celular e desktop. Uma chamada ativa pode ser minimizada dentro do Uorqui sem desmontar o componente WebRTC.
