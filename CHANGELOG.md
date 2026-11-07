@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.10] — 2026-11-06
+
+- **Direct-message bubble sizing:** each message reserves a 36px ellipsis/options button and 6px row gap, even while optimistic/pending, preventing horizontal overflow and width shifts when the menu appears after sending.
+- **Unified reply appearance:** direct messages now use the same compact right-turn arrow, one-line **author: excerpt** reference, truncation and click-to-original as community channels, including the one-line dismissible composer preview.
+- **Legacy quote support:** older text-embedded replies use the same concise visual as a non-interactive reference, since they have no stored original-message ID.
+- **Scope/tests:** frontend presentation and release documentation only; no API, database, message storage, or SSE changes. Validate narrow screens, long texts/attachments, optimistic sends, both themes, and jump-to-original on devices.
+
 ## [0.1.0-beta.9] — 2026-11-06
 
 - **Channel reply arrow:** the reply reference and composer now use an explicit right-turn arrow, keeping the original author's name and ellipsized preview in one compact line (including in the composer), with click-to-jump to the complete original. No expanded multi-line quote or Read more control.
