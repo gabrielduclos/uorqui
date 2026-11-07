@@ -6,6 +6,11 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.11] — 06/11/2026
+
+- **Sem prévia duplicada para GIFs nas mensagens privadas:** GIFs reconhecidos do GIPHY continuam aparecendo como animação no chat, mas não montam o cartão externo `LinkPreview` nem consultam seus metadados. Links normais continuam com prévia.
+- **Escopo:** condição visual apenas no frontend; sem mudanças de API, banco, mídia, SSE ou migração. Testar GIFs e links normais no celular e desktop, nos temas claro/escuro.
+
 ## [0.1.0-beta.10] — 06/11/2026
 
 - **Largura dos balões privados:** cada mensagem reserva os 36 px do botão de três pontos e os 6 px de espaçamento, inclusive antes de concluir o envio otimista, evitando rolagem horizontal e mudança de largura quando o menu aparecer.

@@ -6,6 +6,11 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.11] — 2026-11-06
+
+- **No duplicate GIF previews in direct messages:** recognized GIPHY messages render their animated GIF in the private chat but do not mount the external `LinkPreview` card or request its metadata. Ordinary URLs retain link previews.
+- **Scope:** web-only rendering guard; no API, database, storage, SSE or migration changes. Test GIPHY messages and ordinary links on mobile/desktop in Light/Dark themes.
+
 ## [0.1.0-beta.10] — 2026-11-06
 
 - **Direct-message bubble sizing:** each message reserves a 36px ellipsis/options button and 6px row gap, even while optimistic/pending, preventing horizontal overflow and width shifts when the menu appears after sending.
