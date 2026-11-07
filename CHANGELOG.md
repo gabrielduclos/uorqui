@@ -8,7 +8,7 @@ All subsequent changes must increase the version in all three npm manifests and 
 
 ## [0.1.0-beta.9] — 2026-11-06
 
-- **Channel reply arrow:** the reply reference and composer now use an explicit right-turn arrow, keeping the original author's name and message preview on the same line, with expansion and jump-to-original navigation.
+- **Channel reply arrow:** the reply reference and composer now use an explicit right-turn arrow, keeping the original author's name and ellipsized preview in one compact line (including in the composer), with click-to-jump to the complete original. No expanded multi-line quote or Read more control.
 - **Private chats restored:** direct-message replies again use the earlier inset quote card and composer preview, with their Light/Dark contrast preserved independently from channel styling.
 - **No channel grouping:** every community text-channel message displays its author's avatar, display name, handle and timestamp, even for consecutive messages by the same person.
 - **Scope:** frontend-only. No changes to API, schema, database, permissions, SSE or message data. Check responsive channels and private conversations on mobile/desktop in both themes.
