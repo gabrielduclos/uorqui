@@ -8,7 +8,7 @@
 
 ## Principles
 
-- **Channel reply references (beta.9):** a curved/right-turn arrow precedes **Sandra: looks good** on one line; long quotes can expand beyond four lines (three in the composer). Sender → original quote → reply content, with jump-to-original. Each channel message always shows avatar, sender details and timestamp, even in consecutive runs.
+- **Channel reply references (beta.9):** a curved/right-turn arrow precedes **Sandra: looks good** in one compact line. Long quotes are ellipsized, with the original reachable by clicking the reference; the composer preview also stays on one line. Sender → original quote → reply content, with jump-to-original. Each channel message always shows avatar, sender details and timestamp, even in consecutive runs.
 - **Private reply layout (restored in beta.9):** direct-message replies keep the earlier inset quote card inside the bubble and the earlier composer preview. Private styling is distinct from the channel arrow and retains semantic Light/Dark contrast.
 - **Different reply layouts by context:** channel messages have a slim arrow reference below sender metadata; direct messages have the pre-existing quote card. Composer previews remain dismissible, and both layouts handle deleted/GIF/media fallbacks.
 
