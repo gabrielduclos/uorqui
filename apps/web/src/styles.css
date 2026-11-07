@@ -299,98 +299,79 @@ body.uorqui-app-active {
   color: var(--card-foreground);
 }
 
-/* Compact message references use the message's own foreground color instead
- * of a nested surface: contrast stays correct in both Light and Dark themes,
- * including the inverse-colored outgoing DM bubble. */
+/* Channel reply references are a single compact line: arrow, sender and
+ * ellipsized excerpt. Full text remains accessible at the original message. */
 [data-uorqui-app-shell] .uorqui-reply-reference {
   display:grid;
-  grid-template-columns:.9rem minmax(0,1fr);
-  align-items:start;
-  gap:.5rem;
+  grid-template-columns:1.05rem minmax(0,1fr);
+  align-items:center;
+  column-gap:.35rem;
+  width:min(100%,640px);
   min-width:0;
   max-width:100%;
-  width:min(100%,640px);
-  margin:0 0 .25rem;
+  margin:0 0 .15rem;
   padding:0;
   border:0;
   background:transparent;
   color:inherit;
-  text-align:left;
   font-size:11px;
   font-weight:400;
-  line-height:1.25rem;
+  line-height:1rem;
   opacity:.86;
-  cursor:pointer;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference__connector {
-  display:inline-block;
-  flex:0 0 .85rem;
-  width:.85rem;
-  height:.67rem;
-  border-top:2px solid currentColor;
-  border-left:2px solid currentColor;
-  border-top-left-radius:.6rem;
-  opacity:.55;
-  transform:none;
-  margin-top:.3rem;
+  display:block;
+  flex:0 0 1.05rem;
+  width:1.05rem;
+  height:1.05rem;
+  stroke:currentColor;
+  opacity:.7;
 }
-[data-uorqui-app-shell] .uorqui-reply-reference__author {
-  display:inline;
+[data-uorqui-app-shell] .uorqui-reply-reference__link,
+[data-uorqui-app-shell] .uorqui-reply-draft__line {
+  display:flex;
+  align-items:baseline;
+  gap:.25rem;
   min-width:0;
-  max-width:100%;
-  overflow-wrap:anywhere;
-  font-weight:700;
-}
-[data-uorqui-app-shell] .uorqui-reply-reference__excerpt {
-  display:inline;
-  overflow-wrap:anywhere;
-  opacity:.86;
-}
-[data-uorqui-app-shell] .uorqui-reply-reference__content { min-width:0; max-width:100%; }
-[data-uorqui-app-shell] .uorqui-reply-reference__link {
-  display:-webkit-box;
-  overflow:hidden;
-  overflow-wrap:anywhere;
-  white-space:normal;
-  -webkit-box-orient:vertical;
-  -webkit-line-clamp:4;
-  line-clamp:4;
   width:100%;
-  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+}
+[data-uorqui-app-shell] .uorqui-reply-reference__link {
   padding:0;
   border:0;
   background:transparent;
   color:inherit;
   text-align:left;
+  font:inherit;
   cursor:pointer;
 }
-[data-uorqui-app-shell] .uorqui-reply-reference__link:hover .uorqui-reply-reference__excerpt { text-decoration:underline; }
-[data-uorqui-app-shell] .uorqui-reply-reference__link:focus-visible,
-[data-uorqui-app-shell] .uorqui-reply-reference__toggle:focus-visible {
+[data-uorqui-app-shell] .uorqui-reply-reference__author,
+[data-uorqui-app-shell] .uorqui-reply-draft__author {
+  flex:0 1 auto;
+  min-width:0;
+  max-width:45%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:700;
+}
+[data-uorqui-app-shell] .uorqui-reply-reference__excerpt,
+[data-uorqui-app-shell] .uorqui-reply-draft__preview {
+  display:block;
+  flex:1 1 0%;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  opacity:.86;
+}
+[data-uorqui-app-shell] .uorqui-reply-reference__link:hover .uorqui-reply-reference__excerpt {
+  text-decoration:underline;
+}
+[data-uorqui-app-shell] .uorqui-reply-reference__link:focus-visible {
   outline:2px solid currentColor;
   outline-offset:2px;
-}
-[data-uorqui-app-shell] .uorqui-reply-reference__link[data-expanded="true"],
-[data-uorqui-app-shell] .uorqui-reply-draft__line[data-expanded="true"] {
-  display:block;
-  overflow:visible;
-  -webkit-line-clamp:unset;
-  line-clamp:unset;
-  white-space:pre-wrap;
-}
-[data-uorqui-app-shell] .uorqui-reply-reference__toggle {
-  display:inline-flex;
-  margin-top:.15rem;
-  padding:.1rem .15rem;
-  border:0;
-  border-radius:3px;
-  background:transparent;
-  color:inherit;
-  font-size:11px;
-  font-weight:650;
-  text-decoration:underline;
-  text-underline-offset:2px;
-  cursor:pointer;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference--legacy {cursor:default;opacity:.7}
 [data-uorqui-app-shell] .uorqui-reply-draft {
@@ -400,21 +381,9 @@ body.uorqui-app-active {
   border-radius:3px;
 }
 [data-uorqui-app-shell] .uorqui-reply-draft__line {
-  display:-webkit-box;
-  max-width:100%;
-  overflow:hidden;
-  overflow-wrap:anywhere;
-  white-space:normal;
-  -webkit-box-orient:vertical;
-  -webkit-line-clamp:3;
-  line-clamp:3;
-  line-height:1.35rem;
-}
-[data-uorqui-app-shell] .uorqui-reply-draft__author {
-  font-weight:700;
+  line-height:1rem;
 }
 [data-uorqui-app-shell] .uorqui-reply-draft__preview {
-  display:inline;
   color:var(--muted-foreground);
 }
 /* iOS WebKit zooms the viewport when focusing controls smaller than 16px.
@@ -428,4 +397,31 @@ body.uorqui-app-active {
       font-size: max(16px, 1em) !important;
     }
   }
+}
+
+
+/* Private messages retain their original inset quote card; channel replies
+ * use the separate curved-arrow reference above. Theme tokens stay global. */
+[data-uorqui-app-shell] .uorqui-reply-quote {
+  border-left: 3px solid var(--ring);
+  background-color: color-mix(in srgb, var(--card) 78%, var(--foreground) 22%);
+  color: var(--foreground);
+  border-radius: 4px;
+}
+[data-uorqui-app-shell] .uorqui-reply-quote[data-mine="true"] {
+  border-left-color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary-foreground) 88%, var(--primary) 12%);
+  color: var(--primary);
+}
+[data-uorqui-app-shell] .uorqui-reply-quote:hover { filter:brightness(1.09); }
+[data-uorqui-app-shell] .uorqui-reply-quote__body { color:inherit; opacity:1; }
+[data-uorqui-app-shell] .uorqui-reply-draft--private {
+  border:1px solid var(--border);
+  border-left:3px solid var(--ring);
+  background:color-mix(in srgb,var(--secondary) 87%,var(--foreground) 13%);
+  border-radius:4px;
+}
+[data-uorqui-app-shell] .uorqui-reply-draft--private .uorqui-reply-draft__preview {
+  color:var(--foreground);
+  opacity:.95;
 }

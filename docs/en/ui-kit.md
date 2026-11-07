@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.8
+# Uorqui UI Kit · Design System v0.1.0-beta.9
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -8,9 +8,9 @@
 
 ## Principles
 
-- **Inline reply label (beta.8):** the cited author and quote start on the same line, e.g. **Sandra: looks good**. Long quotes wrap up to four lines (three in the composer), and **Read more** reveals the full text. Display names are preferred where already available, with handle fallback.
-- **Reply readability (beta.7):** channel order is **sender → original quote → new content**. Source quotes show four lines before **Read more**; composer quotes show three and can expand to all source text. Replies retain their jump link and responsive minimum width in DMs.
-- **Discord-style replies:** compact linked connector, author and truncated snippet **above** the message in channels and DMs; click navigates to original. Composer shows the same restrained preview with dismiss. No card nested inside bubbles; global semantic colors preserve Light/Dark contrast, with deleted/GIF/media fallback.
+- **Channel reply references (beta.9):** a curved/right-turn arrow precedes **Sandra: looks good** in one compact line. Long quotes are ellipsized, with the original reachable by clicking the reference; the composer preview also stays on one line. Sender → original quote → reply content, with jump-to-original. Each channel message always shows avatar, sender details and timestamp, even in consecutive runs.
+- **Private reply layout (restored in beta.9):** direct-message replies keep the earlier inset quote card inside the bubble and the earlier composer preview. Private styling is distinct from the channel arrow and retains semantic Light/Dark contrast.
+- **Different reply layouts by context:** channel messages have a slim arrow reference below sender metadata; direct messages have the pre-existing quote card. Composer previews remain dismissible, and both layouts handle deleted/GIF/media fallbacks.
 
 
 - **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent.
@@ -55,7 +55,7 @@
 | `--destructive` | `#fa646e` | `#d7384c` | Dangerous actions; global fallback |
 | `--workspace-rail` | `#181818` | `#fafafa` | Community rail |
 
-**Never hardcode the table's colors in module components.** Consume the semantic token. Quoted reply references use the global `uorqui-reply-reference` / `uorqui-reply-draft` classes, readable in both themes. Bubbles remain compact and gently rounded.
+**Never hardcode the table's colors in module components.** Consume the semantic token. Channel reply references use `uorqui-reply-reference` and the channel composer uses `uorqui-reply-draft`, whereas private chats use `uorqui-reply-quote` and `uorqui-reply-draft--private`; all consume global semantic colors. Bubbles remain compact and gently rounded.
 
 ## Components and interaction contracts
 
@@ -87,4 +87,4 @@ Before merging, check **mobile/desktop × Dark/Light × PT/EN**, keyboard focus,
 
 ## Version and maintenance
 
-This document captures **`v0.1.0-beta.8`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).
+This document captures **`v0.1.0-beta.9`**. From this baseline, **every PR, even CSS-only or documentation-only, must increase the version in all three npm manifests**, update both changelogs and pass the automatic `Version policy` workflow. Releases use immutable `v...` tags. See [release policy](versions.md), [changelog](../../CHANGELOG.md) and [contributing](../../CONTRIBUTING.md).

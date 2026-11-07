@@ -49,15 +49,6 @@ type Detail={community:Community;channels:Channel[];pendingRequests:Pending[]};
 type Message={id:string;clientId:string;body:string|null;replyToId?:string|null;replyTo?:{id:string;body:string|null;authorHandle:string;deleted:boolean}|null;createdAt:string;authorHandle:string;authorName:string;authorAvatar:string|null;editedAt:string|null;deletedAt:string|null;canEdit:boolean;canDelete:boolean;canReact:boolean;reactions:CommunityReaction[];attachment?:CommunityAttachment|null;attachmentUrl?:string|null};
 type PendingMessage=Message & {channelId:string;pending:'sending'|'failed'};
 function isPendingMessage(value:Message|PendingMessage):value is PendingMessage { return 'pending' in value; }
-/** Stoat-like compact rows: consecutive posts from the same author form a group. */
-function groupedWithPrevious(messages:(Message|PendingMessage)[],index:number){
-  if(index<=0||messages[index]?.replyToId)return false;
-  const previous=messages[index-1],current=messages[index];
-  if(!previous||!current||previous.authorHandle!==current.authorHandle||
-     previous.authorName!==current.authorName||previous.deletedAt||current.deletedAt)return false;
-  const delta=Date.parse(current.createdAt)-Date.parse(previous.createdAt);
-  return delta>=0&&delta<5*60_000;
-}
 const hidden='min-h-0 flex-1 overflow-y-auto overscroll-contain';
 const allowedSlug=/^[a-z][a-z0-9-]{2,63}$/;
 
@@ -1192,12 +1183,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
             </div>}
-            <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{renderedMessages.map((message,index)=><div id={'community-msg-'+message.id} key={message.clientId}
-              className={cn('flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20',groupedWithPrevious(renderedMessages,index)&&'py-0.5')}>
-              {groupedWithPrevious(renderedMessages,index)?<span aria-hidden="true" className="w-8 shrink-0"/>:
-                <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>}
+            <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{renderedMessages.map(message=><div id={'community-msg-'+message.id} key={message.clientId}
+              className="flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20">
+              <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>
               <div className="min-w-0 flex-1">
-                <div className={cn('flex flex-wrap items-baseline gap-2',groupedWithPrevious(renderedMessages,index)&&'sr-only')}>{message.authorHandle?
+                <div className="flex flex-wrap items-baseline gap-2">{message.authorHandle?
                   <a href={'/@'+message.authorHandle} onClick={event=>navigateToPublicProfile(event,message.authorHandle)}
                     className="rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
                     {message.authorName}</a>:

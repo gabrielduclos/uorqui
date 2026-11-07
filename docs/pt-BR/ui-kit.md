@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.8
+# Uorqui UI Kit · Design System v0.1.0-beta.9
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
@@ -8,9 +8,9 @@
 
 ## Princípios
 
-- **Referência na mesma linha (beta.8):** autor e trecho citado começam juntos, por exemplo **Sandra: belezinha**. O restante quebra até quatro linhas (três no editor), com **Ler mais** para expandir o texto completo. Preferir o nome de exibição quando disponível, com fallback para username.
-- **Leitura das respostas (beta.7):** nos canais, a sequência é **autor → citação original → nova mensagem**. A citação mostra quatro linhas antes de **Ler mais**; no editor, três linhas, com expansão do texto inteiro. Mantém o salto ao original e largura mínima responsiva no chat privado.
-- **Respostas em mensagens (estilo Discord):** referência compacta com conector, autor e trecho truncado **acima** da mensagem em conversas privadas e canais; clique leva à mensagem original. Editor exibe prévia discreta e cancelar. Sem cartão dentro de outro balão; cores vêm do CSS global para contraste Light/Dark. Inclui fallback para mensagem excluída, GIF e arquivos.
+- **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** em uma única linha compacta. Trechos longos recebem reticências, com acesso à mensagem original pelo clique; a prévia no editor também ocupa só uma linha. A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
+- **Visual anterior nas conversas privadas (beta.9):** a citação volta a aparecer em cartão dentro do balão, com a prévia anterior acima do editor. O contraste permanece adequado nos temas claro e escuro, sem compartilhar a seta dos canais.
+- **Respostas separadas por contexto:** nos canais, referência leve com seta abaixo do nome do remetente; no chat privado, cartão anterior de citação. As prévias no editor permitem cancelar e tratam mensagem excluída, GIF e arquivo.
 
 
 - **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes.
@@ -55,7 +55,7 @@ O padrão de instalação nova é **Light**, como implementado em `UorquiPrefere
 | `--destructive` | `#fa646e` | `#d7384c` | Ações destrutivas; token global |
 | `--workspace-rail` | `#181818` | `#fafafa` | Trilho lateral |
 
-**Não copiar esses valores hexadecimais para os componentes.** Usar o token. Referências de resposta usam `uorqui-reply-reference` e `uorqui-reply-draft` definidos globalmente, com contraste testado em ambos os temas. Cantos seguem a escala compartilhada, com balões compactos e levemente arredondados.
+**Não copiar esses valores hexadecimais para os componentes.** Usar o token. Os canais usam `uorqui-reply-reference` e `uorqui-reply-draft`, enquanto o chat privado usa `uorqui-reply-quote` e `uorqui-reply-draft--private`. Todos utilizam tokens globais para contraste claro/escuro. Cantos seguem a escala compartilhada.
 
 ## Componentes e comportamentos obrigatórios
 
@@ -87,4 +87,4 @@ Antes de mesclar: validar **mobile/desktop × Dark/Light × PT/EN**, navegação
 
 ## Versão e manutenção
 
-Este documento corresponde ao marco **`v0.1.0-beta.8`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).
+Este documento corresponde ao marco **`v0.1.0-beta.9`**. A partir deste marco, **todo PR, inclusive só de CSS ou documentação, deve aumentar a versão SemVer dos três manifestos**, atualizar os changelogs PT/EN e passar na verificação automática `Version policy`. As releases são publicadas com tags imutáveis `v...`; ver [política de versões](versoes.md), [notas](../../CHANGELOG.pt-BR.md) e [contribuição](../../CONTRIBUTING.pt-BR.md).
