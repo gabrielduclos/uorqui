@@ -16,22 +16,26 @@ type ReferenceProps = {
   body?: string | null;
   deleted?: boolean;
   locale: string;
-  onJump: () => void;
+  onJump?: () => void;
 };
 
 /** One-line channel reply reference. The full original opens via onJump. */
 export function ReplyReference({ author, body, deleted = false, locale, onJump }: ReferenceProps) {
   const excerpt = replyExcerpt(body, deleted, locale);
   const pt = locale === 'pt-BR';
-  return <div className="uorqui-reply-reference" role="group"
+  const label = <>
+    <strong className="uorqui-reply-reference__author">{author}:</strong>
+    <span className="uorqui-reply-reference__excerpt">{excerpt}</span>
+  </>;
+  return <div className="uorqui-reply-reference" role={onJump ? 'group' : 'note'}
     aria-label={pt ? 'Referência à mensagem original' : 'Original message reference'}>
     <CornerDownRight aria-hidden="true" className="uorqui-reply-reference__connector"/>
-    <button type="button" className="uorqui-reply-reference__link" onClick={onJump}
-      title={author + ': ' + excerpt}
-      aria-label={(pt ? 'Ir para mensagem de ' : 'Jump to message from ') + author}>
-      <strong className="uorqui-reply-reference__author">{author}:</strong>
-      <span className="uorqui-reply-reference__excerpt">{excerpt}</span>
-    </button>
+    {onJump
+      ? <button type="button" className="uorqui-reply-reference__link" onClick={onJump}
+          title={author + ': ' + excerpt}
+          aria-label={(pt ? 'Ir para mensagem de ' : 'Jump to message from ') + author}>{label}</button>
+      : <span className="uorqui-reply-reference__link uorqui-reply-reference--legacy"
+          title={author + ': ' + excerpt}>{label}</span>}
   </div>;
 }
 
