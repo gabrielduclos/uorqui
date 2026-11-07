@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { CornerDownRight, X } from 'lucide-react';
 import { isCommunityGifUrl } from './CommunityMediaPicker';
 
 /** Display the original text without silently cutting it at a character limit. */
@@ -28,7 +28,7 @@ export function ReplyReference({ author, body, deleted = false, locale, onJump }
   const canExpand = !deleted && excerpt.length > 64;
   return <div className="uorqui-reply-reference" role="group"
     aria-label={pt ? 'Referência à mensagem original' : 'Original message reference'}>
-    <span aria-hidden="true" className="uorqui-reply-reference__connector"/>
+    <CornerDownRight aria-hidden="true" className="uorqui-reply-reference__connector"/>
     <div className="uorqui-reply-reference__content">
       <button type="button" className="uorqui-reply-reference__link" data-expanded={expanded ? 'true' : 'false'} onClick={onJump}
         aria-label={(pt ? 'Ir para mensagem de ' : 'Jump to message from ') + author}>
@@ -57,7 +57,7 @@ export function ReplyComposerPreview({ author, body, deleted = false, locale, on
   const excerpt = replyExcerpt(body, deleted, locale);
   const canExpand = !deleted && excerpt.length > 45;
   return <div className="uorqui-reply-draft mb-2 flex min-w-0 items-start gap-2 px-2.5 py-2 text-xs">
-    <span className="uorqui-reply-reference__connector" aria-hidden="true"/>
+    <CornerDownRight className="uorqui-reply-reference__connector" aria-hidden="true"/>
     <div className="min-w-0 flex-1">
       <div className="uorqui-reply-draft__line" data-expanded={expanded ? 'true' : 'false'}>
         <strong className="uorqui-reply-draft__author">{pt ? 'Respondendo a ' : 'Replying to '}{author}:</strong>{' '}
