@@ -1205,7 +1205,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   <span className="text-[11px] text-muted-foreground">@{message.authorHandle}</span>
                   <time className="text-[11px] text-muted-foreground">{new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}).format(new Date(message.createdAt))}</time></div>
                 {message.replyToId&&!message.deletedAt&&<ReplyReference
-                  author={'@'+(message.replyTo?.authorHandle??(pt?'mensagem':'message'))}
+                  author={renderedMessages.find(source=>source.id===message.replyToId)?.authorName??message.replyTo?.authorHandle??(pt?'Mensagem':'Message')}
                   body={message.replyTo?.body} deleted={message.replyTo?.deleted}
                   locale={locale}
                   onJump={()=>document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'})}/>}
