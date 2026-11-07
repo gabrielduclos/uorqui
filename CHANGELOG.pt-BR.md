@@ -8,7 +8,7 @@ Mudanças posteriores ao marco exigem aumento de versão nos três manifestos np
 
 ## [0.1.0-beta.9] — 06/11/2026
 
-- **Seta nas respostas dos canais:** referência e prévia no editor recebem uma seta de retorno à direita, mantendo autor e trecho na mesma linha, expansão do texto e navegação à mensagem original.
+- **Seta nas respostas dos canais:** referência e prévia no editor recebem uma seta de retorno à direita, mantendo autor e trecho compactos em uma única linha (inclusive no editor), com reticências em textos longos e clique para visualizar a mensagem original, sem expansão multilinha nem botão Ler mais.
 - **Chat privado restaurado:** respostas individuais voltam ao cartão de citação e à prévia do editor anteriores, com contraste próprio para os temas claro e escuro.
 - **Sem agrupamento nos canais:** toda mensagem da comunidade exibe foto, nome, username e horário, inclusive quando o mesmo usuário envia várias mensagens seguidas.
 - **Escopo:** alteração somente visual no frontend. Sem migração, ajustes de API, banco, permissões, SSE ou histórico de mensagens. Revisar mobile/desktop e temas Light/Dark.
