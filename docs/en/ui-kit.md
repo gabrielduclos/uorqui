@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.10
+# Uorqui UI Kit · Design System v0.1.0-beta.11
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -11,6 +11,7 @@
 - **Channel reply references (beta.9):** a curved/right-turn arrow precedes **Sandra: looks good** in one compact line. Long quotes are ellipsized, with the original reachable by clicking the reference; the composer preview also stays on one line. Sender → original quote → reply content, with jump-to-original. Each channel message always shows avatar, sender details and timestamp, even in consecutive runs.
 - **Unified replies (beta.10):** direct messages and channels share the same right-turn arrow, one-line **author: excerpt** reference and click-to-original link, plus one-line dismissible composer previews. Long excerpts ellipsize; legacy DM text-embedded quotes have no target to jump to and remain non-interactive.
 - **Private bubble width (beta.10):** reserve 36px for the message `…` actions button plus 6px gap at all times, including while a message is optimistic/pending; prevent horizontal overflow or shifting when the options appear after delivery. Wrapping, media and replies honor the available width.
+- **GIF cards (beta.11):** show the animated GIF inline in private messages without a second link-preview card or metadata request; keep rich previews for ordinary links.
 
 
 - **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent.
