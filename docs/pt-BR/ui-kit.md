@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.10
+# Uorqui UI Kit · Design System v0.1.0-beta.11
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
@@ -11,6 +11,7 @@
 - **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** em uma única linha compacta. Trechos longos recebem reticências, com acesso à mensagem original pelo clique; a prévia no editor também ocupa só uma linha. A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
 - **Respostas unificadas (beta.10):** conversas privadas e canais compartilham a seta de retorno, referência compacta **autor: trecho** em uma linha e clique para localizar a original, além da prévia de uma linha no editor e botão de cancelar. Textos longos mostram reticências. Citações antigas embutidas em texto não permitem clicar porque não possuem ID de origem.
 - **Largura do balão privado (beta.10):** reservar sempre os 36 px do botão `…` e 6 px de espaçamento, inclusive durante o envio otimista, evitando rolagem horizontal e mudança de largura após concluir o envio. Textos, anexos e respostas respeitam essa área.
+- **GIFs nas mensagens (beta.11):** exibir a animação no chat privado sem carregar um segundo cartão de prévia de link ou consultar seus metadados. Links comuns continuam com prévia.
 
 
 - **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes.
