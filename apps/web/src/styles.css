@@ -400,28 +400,11 @@ body.uorqui-app-active {
 }
 
 
-/* Private messages retain their original inset quote card; channel replies
- * use the separate curved-arrow reference above. Theme tokens stay global. */
-[data-uorqui-app-shell] .uorqui-reply-quote {
-  border-left: 3px solid var(--ring);
-  background-color: color-mix(in srgb, var(--card) 78%, var(--foreground) 22%);
-  color: var(--foreground);
-  border-radius: 4px;
+/* Private bubbles always reserve room for the 36px ellipsis button plus
+ * the 6px flex gap. This prevents an overflow and width jump after send. */
+[data-uorqui-app-shell] .uorqui-dm-message-content {
+  flex: 0 1 auto;
+  max-width: calc(100% - 2.625rem);
 }
-[data-uorqui-app-shell] .uorqui-reply-quote[data-mine="true"] {
-  border-left-color: var(--primary);
-  background-color: color-mix(in srgb, var(--primary-foreground) 88%, var(--primary) 12%);
-  color: var(--primary);
-}
-[data-uorqui-app-shell] .uorqui-reply-quote:hover { filter:brightness(1.09); }
-[data-uorqui-app-shell] .uorqui-reply-quote__body { color:inherit; opacity:1; }
-[data-uorqui-app-shell] .uorqui-reply-draft--private {
-  border:1px solid var(--border);
-  border-left:3px solid var(--ring);
-  background:color-mix(in srgb,var(--secondary) 87%,var(--foreground) 13%);
-  border-radius:4px;
-}
-[data-uorqui-app-shell] .uorqui-reply-draft--private .uorqui-reply-draft__preview {
-  color:var(--foreground);
-  opacity:.95;
-}
+/* Channel and direct-message replies share the same arrow, single-line excerpt,
+ * and dismissible composer preview, with semantic light/dark tokens. */
