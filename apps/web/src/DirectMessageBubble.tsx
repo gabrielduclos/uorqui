@@ -256,7 +256,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
                 className="rounded border border-current px-1 font-semibold underline" aria-label={pt ? 'Falha ao enviar. Tentar novamente' : 'Failed to send. Retry'}>{pt ? 'Reenviar' : 'Retry'}</button>}
           </span>
         </p>
-        {!message.deletedAt&&!locationMessage&&!sharedPostId&&message.body&&
+        {!message.deletedAt&&!locationMessage&&!sharedPostId&&!isCommunityGifUrl(message.body)&&message.body&&
           <LinkPreview text={message.body} locale={locale}/>}
       </div>
       {!!message.reactions?.length && !message.deletedAt && <div className={cn('mt-1 flex flex-wrap gap-1', mine ? 'justify-end' : 'justify-start')}>
