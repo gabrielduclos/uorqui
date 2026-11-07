@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.10] — 06/11/2026
+
+- **Largura dos balões privados:** cada mensagem reserva os 36 px do botão de três pontos e os 6 px de espaçamento, inclusive antes de concluir o envio otimista, evitando rolagem horizontal e mudança de largura quando o menu aparecer.
+- **Respostas padronizadas com canais:** mensagens privadas usam a seta de retorno, referência compacta em uma linha **autor: trecho**, reticências e clique para localizar a original, além da mesma prévia de uma linha no editor com botão de cancelar.
+- **Respostas antigas:** citações embutidas em texto recebem a mesma aparência compacta, sem falso clique porque não possuem ID da mensagem original.
+- **Escopo e validação:** somente interface e documentação; sem mudanças de API, banco, armazenamento ou SSE. Conferir telas estreitas, textos/anexos longos, envio otimista, temas claro/escuro e navegação à mensagem original.
+
 ## [0.1.0-beta.9] — 06/11/2026
 
 - **Seta nas respostas dos canais:** referência e prévia no editor recebem uma seta de retorno à direita, mantendo autor e trecho compactos em uma única linha (inclusive no editor), com reticências em textos longos e clique para visualizar a mensagem original, sem expansão multilinha nem botão Ler mais.
