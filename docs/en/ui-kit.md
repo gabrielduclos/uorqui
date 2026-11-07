@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.9
+# Uorqui UI Kit · Design System v0.1.0-beta.10
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -9,8 +9,8 @@
 ## Principles
 
 - **Channel reply references (beta.9):** a curved/right-turn arrow precedes **Sandra: looks good** in one compact line. Long quotes are ellipsized, with the original reachable by clicking the reference; the composer preview also stays on one line. Sender → original quote → reply content, with jump-to-original. Each channel message always shows avatar, sender details and timestamp, even in consecutive runs.
-- **Private reply layout (restored in beta.9):** direct-message replies keep the earlier inset quote card inside the bubble and the earlier composer preview. Private styling is distinct from the channel arrow and retains semantic Light/Dark contrast.
-- **Different reply layouts by context:** channel messages have a slim arrow reference below sender metadata; direct messages have the pre-existing quote card. Composer previews remain dismissible, and both layouts handle deleted/GIF/media fallbacks.
+- **Unified replies (beta.10):** direct messages and channels share the same right-turn arrow, one-line **author: excerpt** reference and click-to-original link, plus one-line dismissible composer previews. Long excerpts ellipsize; legacy DM text-embedded quotes have no target to jump to and remain non-interactive.
+- **Private bubble width (beta.10):** reserve 36px for the message `…` actions button plus 6px gap at all times, including while a message is optimistic/pending; prevent horizontal overflow or shifting when the options appear after delivery. Wrapping, media and replies honor the available width.
 
 
 - **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent.
@@ -55,7 +55,7 @@
 | `--destructive` | `#fa646e` | `#d7384c` | Dangerous actions; global fallback |
 | `--workspace-rail` | `#181818` | `#fafafa` | Community rail |
 
-**Never hardcode the table's colors in module components.** Consume the semantic token. Channel reply references use `uorqui-reply-reference` and the channel composer uses `uorqui-reply-draft`, whereas private chats use `uorqui-reply-quote` and `uorqui-reply-draft--private`; all consume global semantic colors. Bubbles remain compact and gently rounded.
+**Never hardcode the table's colors in module components.** Consume the semantic token. Channels and private conversations share `uorqui-reply-reference` and `uorqui-reply-draft` for compact replies and composer previews. The private-message width reserve is `uorqui-dm-message-content`. All use global semantic colors. Bubbles remain compact and gently rounded.
 
 ## Components and interaction contracts
 

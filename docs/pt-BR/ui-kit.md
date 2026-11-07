@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.9
+# Uorqui UI Kit · Design System v0.1.0-beta.10
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
@@ -9,8 +9,8 @@
 ## Princípios
 
 - **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** em uma única linha compacta. Trechos longos recebem reticências, com acesso à mensagem original pelo clique; a prévia no editor também ocupa só uma linha. A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
-- **Visual anterior nas conversas privadas (beta.9):** a citação volta a aparecer em cartão dentro do balão, com a prévia anterior acima do editor. O contraste permanece adequado nos temas claro e escuro, sem compartilhar a seta dos canais.
-- **Respostas separadas por contexto:** nos canais, referência leve com seta abaixo do nome do remetente; no chat privado, cartão anterior de citação. As prévias no editor permitem cancelar e tratam mensagem excluída, GIF e arquivo.
+- **Respostas unificadas (beta.10):** conversas privadas e canais compartilham a seta de retorno, referência compacta **autor: trecho** em uma linha e clique para localizar a original, além da prévia de uma linha no editor e botão de cancelar. Textos longos mostram reticências. Citações antigas embutidas em texto não permitem clicar porque não possuem ID de origem.
+- **Largura do balão privado (beta.10):** reservar sempre os 36 px do botão `…` e 6 px de espaçamento, inclusive durante o envio otimista, evitando rolagem horizontal e mudança de largura após concluir o envio. Textos, anexos e respostas respeitam essa área.
 
 
 - **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes.
@@ -55,7 +55,7 @@ O padrão de instalação nova é **Light**, como implementado em `UorquiPrefere
 | `--destructive` | `#fa646e` | `#d7384c` | Ações destrutivas; token global |
 | `--workspace-rail` | `#181818` | `#fafafa` | Trilho lateral |
 
-**Não copiar esses valores hexadecimais para os componentes.** Usar o token. Os canais usam `uorqui-reply-reference` e `uorqui-reply-draft`, enquanto o chat privado usa `uorqui-reply-quote` e `uorqui-reply-draft--private`. Todos utilizam tokens globais para contraste claro/escuro. Cantos seguem a escala compartilhada.
+**Não copiar esses valores hexadecimais para os componentes.** Usar o token. Canais e conversas privadas usam os mesmos componentes globais `uorqui-reply-reference` e `uorqui-reply-draft`; a largura reservada para o botão do chat privado usa `uorqui-dm-message-content`. Todos utilizam tokens globais para contraste claro/escuro. Cantos seguem a escala compartilhada.
 
 ## Componentes e comportamentos obrigatórios
 

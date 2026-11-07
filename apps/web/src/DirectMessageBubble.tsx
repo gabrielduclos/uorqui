@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { MessageText } from './MessageText';
 import { isCommunityGifUrl } from './CommunityMediaPicker';
 import { LinkPreview } from './LinkPreview';
+import { ReplyReference } from './ReplyReference';
 import { attachmentLabel } from './chatAttachmentLabels';
 import { ensureChatMediaCached, useCachedChatMedia } from './chatMediaCache';
 import { cn } from '@/lib/utils';
@@ -28,7 +29,7 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
   const x = useMotionValue(0);
   const visible = useTransform(x, [12, 55], [0, 1]);
   const dragged = useRef(false);
-  return <div className="relative min-w-0 max-w-full">
+  return <div className="uorqui-dm-message-content relative min-w-0">
     <motion.span aria-hidden="true" style={{ opacity: visible }}
       className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-primary">
       <Reply className="size-5"/>
@@ -177,24 +178,16 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
 
   return <div data-direct-message-id={message.id} className={cn('group relative flex w-full min-w-0 max-w-full items-start gap-1.5', mine ? 'justify-end' : 'justify-start')}>
     <SwipeToReply onReply={() => { if (!message.deletedAt && !message.pendingStatus) onReply(message); }}>
-      <div className={cn('min-w-0 max-w-full rounded-[5px] px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]', highlighted && 'outline outline-2 outline-primary outline-offset-2',
+      <div className={cn('min-w-0 max-w-full [overflow-wrap:anywhere] rounded-[5px] px-3.5 py-2.5 text-sm leading-6 sm:max-w-[min(72vw,720px)]', highlighted && 'outline outline-2 outline-primary outline-offset-2',
         mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
         {message.forwarded && !message.deletedAt && <span className="mb-1 flex items-center gap-1 text-[11px] opacity-75"><Forward className="size-3"/> {pt ? 'Encaminhada' : 'Forwarded'}</span>}
-        {message.replyTo && !message.deletedAt && <button type="button"
-          onClick={() => onJumpToReply(message.replyTo!.id)}
-          aria-label={pt ? 'Ir para a mensagem respondida' : 'Jump to replied message'}
-          data-mine={mine?'true':'false'}
-          className="uorqui-reply-quote mb-2 block w-full px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-current">
-          <span className="block font-semibold">{pt ? 'Resposta a ' : 'Reply to '}{message.replyTo.authorId === myId ? (pt ? 'você' : 'you') : peerName}</span>
-          <span className="uorqui-reply-quote__body mt-0.5 block max-w-full truncate">
-            {message.replyTo.deleted ? (pt ? 'Mensagem excluída' : 'Deleted message') : message.replyTo.body}
-          </span>
-        </button>}
-        {quote && !message.replyToId && !message.deletedAt && <blockquote data-mine={mine?'true':'false'}
-           className="uorqui-reply-quote mb-2 px-2.5 py-2 text-xs">
-          <span className="block font-semibold">{pt ? 'Resposta antiga' : 'Legacy reply'}</span>
-          <span className="uorqui-reply-quote__body mt-0.5 block max-w-full truncate">{quote[1]}</span>
-        </blockquote>}
+        {message.replyTo && !message.deletedAt && <ReplyReference
+          author={message.replyTo.authorId === myId ? (pt ? 'Você' : 'You') : peerName}
+          body={message.replyTo.body} deleted={message.replyTo.deleted} locale={locale}
+          onJump={() => onJumpToReply(message.replyTo!.id)}/>}
+        {quote && !message.replyToId && !message.deletedAt && <ReplyReference
+          author={pt ? 'Mensagem anterior' : 'Earlier message'}
+          body={quote[1]} locale={locale}/>}
 
         {asset && assetUrl && !message.deletedAt && <div className="mb-1 min-w-0 max-w-full overflow-hidden">
           {isImage ? <button ref={imageRef} type="button" onClick={() => onOpenMedia ? onOpenMedia(message.id) : setPreviewOpen(true)}
