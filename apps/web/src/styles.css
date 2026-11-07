@@ -304,7 +304,7 @@ body.uorqui-app-active {
  * including the inverse-colored outgoing DM bubble. */
 [data-uorqui-app-shell] .uorqui-reply-reference {
   display:grid;
-  grid-template-columns:.9rem minmax(0,1fr);
+  grid-template-columns:1.05rem minmax(0,1fr);
   align-items:start;
   gap:.5rem;
   min-width:0;
@@ -323,16 +323,13 @@ body.uorqui-app-active {
   cursor:pointer;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference__connector {
-  display:inline-block;
-  flex:0 0 .85rem;
-  width:.85rem;
-  height:.67rem;
-  border-top:2px solid currentColor;
-  border-left:2px solid currentColor;
-  border-top-left-radius:.6rem;
-  opacity:.55;
-  transform:none;
-  margin-top:.3rem;
+  display:block;
+  flex:0 0 1.05rem;
+  width:1.05rem;
+  height:1.05rem;
+  stroke:currentColor;
+  opacity:.7;
+  margin-top:.12rem;
 }
 [data-uorqui-app-shell] .uorqui-reply-reference__author {
   display:inline;
@@ -428,4 +425,31 @@ body.uorqui-app-active {
       font-size: max(16px, 1em) !important;
     }
   }
+}
+
+
+/* Private messages retain their original inset quote card; channel replies
+ * use the separate curved-arrow reference above. Theme tokens stay global. */
+[data-uorqui-app-shell] .uorqui-reply-quote {
+  border-left: 3px solid var(--ring);
+  background-color: color-mix(in srgb, var(--card) 78%, var(--foreground) 22%);
+  color: var(--foreground);
+  border-radius: 4px;
+}
+[data-uorqui-app-shell] .uorqui-reply-quote[data-mine="true"] {
+  border-left-color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary-foreground) 88%, var(--primary) 12%);
+  color: var(--primary);
+}
+[data-uorqui-app-shell] .uorqui-reply-quote:hover { filter:brightness(1.09); }
+[data-uorqui-app-shell] .uorqui-reply-quote__body { color:inherit; opacity:1; }
+[data-uorqui-app-shell] .uorqui-reply-draft--private {
+  border:1px solid var(--border);
+  border-left:3px solid var(--ring);
+  background:color-mix(in srgb,var(--secondary) 87%,var(--foreground) 13%);
+  border-radius:4px;
+}
+[data-uorqui-app-shell] .uorqui-reply-draft--private .uorqui-reply-draft__preview {
+  color:var(--foreground);
+  opacity:.95;
 }
