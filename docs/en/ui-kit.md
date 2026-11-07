@@ -1,4 +1,4 @@
-# Uorqui UI Kit · Design System v0.1.0-beta.11
+# Uorqui UI Kit · Design System v0.1.0-beta.12
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
@@ -7,6 +7,8 @@
 - **Invites:** explicit join confirmation only after authentication, never blocking signup.
 
 ## Principles
+
+- **Call overlays (beta.12):** the mobile drawer uses a theme-scoped `document.body` portal above the persistent WebRTC and fullscreen meeting portals; it honors the visual viewport and does not disconnect a call. Participant cards keep “Connecting…”/failure in a separate normal-flow line below the handle, never overlaid on it.
 
 - **Channel reply references (beta.9):** a curved/right-turn arrow precedes **Sandra: looks good** in one compact line. Long quotes are ellipsized, with the original reachable by clicking the reference; the composer preview also stays on one line. Sender → original quote → reply content, with jump-to-original. Each channel message always shows avatar, sender details and timestamp, even in consecutive runs.
 - **Unified replies (beta.10):** direct messages and channels share the same right-turn arrow, one-line **author: excerpt** reference and click-to-original link, plus one-line dismissible composer previews. Long excerpts ellipsize; legacy DM text-embedded quotes have no target to jump to and remain non-interactive.

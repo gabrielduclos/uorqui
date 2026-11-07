@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import {
   Bell, Compass, Mail, LogOut, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Plus, Search, ShieldCheck, Users, X,
@@ -608,7 +609,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
         </div>
       </aside>
 
-      {mobileMenuOpen&&<div className="absolute inset-0 z-[80] md:hidden">
+      {mobileMenuOpen&&createPortal(<div data-uorqui-ui-kit="sprintrix-v1" className="fixed inset-x-0 top-[var(--uorqui-app-top,0px)] z-[320] h-[var(--uorqui-app-height,100dvh)] md:hidden">
         <button type="button" className="absolute inset-0 bg-black/60" aria-label={locale==='pt-BR'?'Fechar menu':'Close menu'} onClick={()=>setMobileMenuOpen(false)}/>
         <aside id="uorqui-mobile-nav" role="dialog" aria-modal="true" aria-label={locale==='pt-BR'?'Menu principal':'Main menu'}
           className="relative flex h-full w-[min(82vw,288px)] flex-col overflow-hidden border-r border-border bg-background shadow-2xl pt-[env(safe-area-inset-top)]">
@@ -662,7 +663,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
             </button>
           </div>
         </aside>
-      </div>}
+      </div>,document.body)}
 
       <div data-uorqui-inset-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card md:my-2 md:mr-2 md:h-auto md:rounded-2xl md:border md:border-border md:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <header data-uorqui-main-header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] min-h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] sm:px-5 md:h-13 md:min-h-13 md:pt-0">

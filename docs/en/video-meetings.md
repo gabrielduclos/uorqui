@@ -1,10 +1,13 @@
 # Voice rooms and audio/video meetings
 
-Updated **November 6, 2026** for technical beta `0.1.0-beta.2`.
+Updated **November 7, 2026** for technical beta `0.1.0-beta.12`.
 
 Uorqui has **text**, **voice**, and **meeting** community channels. Joining a call is an explicit action: simply opening a room never enables the microphone or camera.
 
 ## Interface behavior
+
+- The mobile main menu appears **above** active audio/video call surfaces (including the fullscreen meeting) and keeps WebRTC mounted when opened. The drawer follows the visible viewport and current workspace theme.
+- The participant card keeps connection progress/failure on a dedicated line **below** the handle so short cards never cover `@username`.
 
 - **Text chat starts collapsed by default** in both voice and meeting rooms. Users can expand/collapse it without disconnecting.
 - Voice content and the text panel adapt to phone and desktop layouts. Active calls can be minimized inside Uorqui without unmounting the WebRTC component.
