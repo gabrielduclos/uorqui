@@ -362,43 +362,92 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           : 'Reply could not be confirmed. Check Sent before trying again.'));
     } finally { setReplySending(false); }
   }
-  function toggleSelected(id: string) {
-    setSelectedIds(previous => previous.includes(id)
-      ? previous.filter(item => item !== id)
-      : previous.length >= 100 ? previous : [...previous, id]);
+  function toggleSelected(key: string) {
+    setSelectedIds(previous => previous.includes(key)
+      ? previous.filter(item => item !== key)
+      : previous.length >= 100 ? previous : [...previous, key]);
+  }
+  function selectedByAccount() {
+    const picked = new Set(selectedIds);
+    const grouped = new Map<string, string[]>();
+    for (const message of messages) {
+      if (!picked.has(mailKey(message.accountId, message.id))) continue;
+      grouped.set(message.accountId, [...(grouped.get(message.accountId) ?? []), message.id]);
+    }
+    return grouped;
   }
   async function moveSelected(destination: 'trash' | 'spam') {
-    if (!account || selectedIds.length === 0 || moving) return;
+    if (selectedIds.length === 0 || moving) return;
     setMoving(true); setError('');
-    const targetAccount = account.id;
-    const ids = [...selectedIds];
+    const groups = selectedByAccount();
+    const moved = new Set<string>();
     try {
-      const result = await requestMail<{ moved: string[]; failed: string[] }>(
-        'accounts/' + targetAccount + '/messages/move', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids, destination }),
-        });
-      const moved = new Set(result.moved.filter(id => ids.includes(id)));
-      const failed = ids.filter(id => !moved.has(id));
+      const outcomes = await Promise.all([...groups].map(async ([mailboxId, ids]) => {
+        try {
+          const result = await requestMail<{ moved: string[]; failed: string[] }>(
+            'accounts/' + mailboxId + '/messages/move', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids, destination }),
+            });
+          return result.moved.filter(id => ids.includes(id)).map(id => mailKey(mailboxId, id));
+        } catch { return []; }
+      }));
+      outcomes.flat().forEach(key => moved.add(key));
+      const failed = selectedIds.filter(key => !moved.has(key));
       if (moved.size) {
+        const movedRows = messages.filter(message => moved.has(mailKey(message.accountId, message.id)));
         if (folder === 'inbox') {
-          const unreadMoved = messages.filter(message => message.unread && moved.has(message.id)).length;
-          if (unreadMoved) window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:unreadMoved}}));
+          const unreadMoved = movedRows.filter(message => message.unread).length;
+          if (unreadMoved) window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta', {detail:{amount:unreadMoved}}));
         }
-        setMessages(previous => previous.filter(message => !moved.has(message.id)));
-        clearReadPush([...moved].map(messageId=>({kind:'mail' as const,accountId:targetAccount,messageId})));
-        if (selected && moved.has(selected.id)) closeDetail();
+        setMessages(previous => previous.filter(message => !moved.has(mailKey(message.accountId, message.id))));
+        clearReadPush(movedRows.map(message => ({kind:'mail' as const,accountId:message.accountId,messageId:message.id})));
+        if (selected && moved.has(mailKey(selected.accountId, selected.id))) closeDetail();
       }
       setSelectedIds(failed);
       setSelectionMode(failed.length > 0);
-      if (failed.length) {
-        setError(pt
-          ? `${moved.size} movidos, ${failed.length} não puderam ser movidos. Tente novamente.`
-          : `${moved.size} moved, ${failed.length} could not be moved. Please retry.`);
-      } else {
-        setNotice(destination === 'trash' ? 'movedTrash' : 'movedSpam');
+      if (failed.length) setError(pt
+        ? `${moved.size} movidos, ${failed.length} não puderam ser movidos. Tente novamente.`
+        : `${moved.size} moved, ${failed.length} could not be moved. Please retry.`);
+      else setNotice(destination === 'trash' ? 'movedTrash' : 'movedSpam');
+      if (moved.size) { setPage(''); setUnifiedCursors({}); setNextPage(null); setRefresh(value => value + 1); }
+    } catch (error) { setError(explainError(error)); }
+    finally { setMoving(false); }
+  }
+  async function markSelectedRead() {
+    if (!selectedIds.length || moving) return;
+    setMoving(true); setError('');
+    const groups = selectedByAccount();
+    try {
+      const outcomes = await Promise.all([...groups].map(async ([mailboxId, ids]) => {
+        try {
+          const result = await requestMail<{ read: string[]; failed: string[] }>(
+            'accounts/' + mailboxId + '/messages/read', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            });
+          return result.read.filter(id => ids.includes(id)).map(id => mailKey(mailboxId, id));
+        } catch { return []; }
+      }));
+      const read = new Set(outcomes.flat());
+      const failed = selectedIds.filter(key => !read.has(key));
+      if (read.size) {
+        const updated = messages.filter(item => item.unread && read.has(mailKey(item.accountId, item.id)));
+        setMessages(previous => previous.map(item => read.has(mailKey(item.accountId, item.id)) ? { ...item, unread: false } : item));
+        if (selected && read.has(mailKey(selected.accountId, selected.id))) setSelected(old => old ? {...old, unread: false} : old);
+        clearReadPush(updated.map(item => ({kind:'mail' as const,accountId:item.accountId,messageId:item.id})));
+        if (folder === 'inbox' && updated.length) {
+          window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta', {detail:{amount:updated.length}}));
+        }
+        window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
       }
-      if (moved.size) { setPage(''); setNextPage(null); setRefresh(value => value + 1); }
+      setSelectedIds(failed);
+      setSelectionMode(failed.length > 0);
+      if (failed.length) setError(pt
+        ? `${read.size} marcados como lidos, ${failed.length} falharam. Tente novamente.`
+        : `${read.size} marked as read, ${failed.length} failed. Please retry.`);
+      else setNotice('markedRead');
+      if (filter === 'unread' && read.size) { setPage(''); setUnifiedCursors({}); setNextPage(null); setRefresh(value => value + 1); }
     } catch (error) { setError(explainError(error)); }
     finally { setMoving(false); }
   }
@@ -413,8 +462,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   ].join('') : '';
   const htmlFrameReady=Boolean(selected?.html&&readyFrame?.accountId===selected.accountId&&
     readyFrame?.messageId===selected.id&&readyFrame?.html===selected.html);
-  const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
-  const visibleIds = visible.map(message => message.id);
+  const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview + ' ' + (accounts.find(account => account.id === message.accountId)?.email ?? '')).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
+  const visibleIds = visible.map(message => mailKey(message.accountId, message.id));
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
   function toggleVisible() {
     setSelectedIds(previous => allVisibleSelected
