@@ -31,6 +31,12 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     return reply.code(reconnect ? 409 : 503).send({ error: reconnect ? 'MAIL_RECONNECT' : 'MAIL_UNAVAILABLE' });
   }
 
+  // Provider message IDs are opaque and can be long. Keep them out of request URLs.
+  const mailMessageBody = {
+    type: 'object', additionalProperties: false, required: ['messageId'],
+    properties: { messageId: { type: 'string', minLength: 1, maxLength: 1024, pattern: '^[A-Za-z0-9_=+/\\-]+$' } },
+  };
+
   // Polling caches per-account inbox counts; never expose other users' totals.
   app.get('/api/v1/mail/unread', async (request, reply) => {
     try {
@@ -185,6 +191,80 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
   });
 
 
+  // Short authenticated POST routes avoid upstream URI-length restrictions.
+  // Keep legacy message-ID routes for already deployed clients.
+  app.post('/api/v1/mail/accounts/:accountId/message-detail',
+    { schema: { params: accountParams, body: mailMessageBody } }, async (request, reply) => {
+      if (!originAllowed(request, reply)) return;
+      try {
+        const id = await user(request, reply); if (!id) return;
+        const { accountId } = request.params as { accountId: string };
+        const { messageId } = request.body as { messageId: string };
+        const result = await withMailbox(id, accountId, (connection, token) => getMailMessage(connection.provider, token, messageId));
+        return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+      } catch (error) { return unavailable(reply, error); }
+    });
+
+  app.post('/api/v1/mail/accounts/:accountId/message-read',
+    { schema: { params: accountParams, body: mailMessageBody } }, async (request, reply) => {
+      if (!originAllowed(request, reply)) return;
+      try {
+        const id = await user(request, reply); if (!id) return;
+        const { accountId } = request.params as { accountId: string };
+        const { messageId } = request.body as { messageId: string };
+        const result = await withMailbox(id, accountId, async (connection, token) => {
+          await markMailRead(connection.provider, token, messageId);
+          try {
+            const unread = await countInboxUnread(connection.provider, token);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1', [accountId, unread]);
+          } catch { /* The next inbox poll refreshes counts after a successful read. */ }
+          return { ok: true };
+        });
+        return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+      } catch (error) { return unavailable(reply, error); }
+    });
+
+  // Batch read receipts use short URLs and preserve partial provider failures.
+  app.post('/api/v1/mail/accounts/:accountId/messages/read', {
+    schema: {
+      params: accountParams,
+      body: {
+        type: 'object', additionalProperties: false, required: ['ids'],
+        properties: { ids: {
+          type: 'array', minItems: 1, maxItems: 100, uniqueItems: true,
+          items: mailMessageBody.properties.messageId,
+        } },
+      },
+    },
+  }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId } = request.params as { accountId: string };
+      const { ids } = request.body as { ids: string[] };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        const read: string[] = [], failed: string[] = [];
+        for (let offset = 0; offset < ids.length; offset += 4) {
+          const batch = await Promise.all(ids.slice(offset, offset + 4).map(async messageId => {
+            try {
+              await markMailRead(connection.provider, token, messageId);
+              return { messageId, ok: true };
+            } catch { return { messageId, ok: false }; }
+          }));
+          for (const item of batch) (item.ok ? read : failed).push(item.messageId);
+        }
+        if (read.length) {
+          try {
+            const unread = await countInboxUnread(connection.provider, token);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1', [accountId, unread]);
+          } catch { /* Mail is already read; next poll refreshes the count. */ }
+        }
+        return { read, failed };
+      });
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+
   app.post('/api/v1/mail/accounts/:accountId/messages/move', { schema: {
     params: accountParams,
     body: { type: 'object', additionalProperties: false, required: ['ids', 'destination'], properties: {
@@ -223,6 +303,38 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
           const unread = await countInboxUnread(connection.provider, token);
           await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1',[accountId,unread]);
         } catch { /* Marking read succeeded; the next scan refreshes badge counts. */ }
+        return { ok: true };
+      });
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+
+  app.post('/api/v1/mail/accounts/:accountId/message-reply', {
+    preValidation: async (request, reply) => {
+      const body = request.body;
+      if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some(key => key !== 'body' && key !== 'messageId')) {
+        return reply.code(400).send({ error: 'MAIL_INVALID_REPLY_BODY' });
+      }
+    },
+    schema: {
+      params: accountParams,
+      body: {
+        type: 'object', additionalProperties: false, required: ['messageId', 'body'],
+        properties: {
+          messageId: mailMessageBody.properties.messageId,
+          body: { type: 'string', minLength: 1, maxLength: 30000, pattern: '\\S' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId } = request.params as { accountId: string };
+      const { messageId, body } = request.body as { messageId: string; body: string };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        await replyToMail(connection.provider, token, connection.email, messageId, body);
         return { ok: true };
       });
       return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });

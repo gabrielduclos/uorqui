@@ -14,6 +14,12 @@ type MailAccount = { id: string; provider: Provider; email: string };
 type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
 type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
 type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[]; webOrigin?: string };
+type InboxMessage = Message & { accountId: string };
+const ALL_ACCOUNTS = '__all__';
+const mailKey = (accountId: string, messageId: string) => JSON.stringify([accountId, messageId]);
+const newestFirst = (a: InboxMessage, b: InboxMessage) =>
+  (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0);
+
 function mailOAuthFailureMessage(reason: string, pt: boolean, provider: 'gmail'|'outlook'): string {
   const microsoft=provider==='outlook';
   switch (reason) {
@@ -63,9 +69,11 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const [folder, setFolder] = useState<MailFolder>('inbox');
   const [filter, setFilter] = useState<'all' | 'unread' | 'starred'>('all');
   const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [selected, setSelected] = useState<Message | null>(null);
+  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [selected, setSelected] = useState<InboxMessage | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
+  const [unifiedCursors, setUnifiedCursors] = useState<Record<string, string>>({});
+  const [composeAccountId, setComposeAccountId] = useState('');
   const [page, setPage] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -154,6 +162,9 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const detailAbort = useRef<AbortController | null>(null);
   const openedMailLink = useRef<number | null>(null);
   const account = accounts.find(item => item.id === accountId);
+  const readingAccount = accounts.find(item => item.id === selected?.accountId);
+  const composingAccount = accounts.find(item => item.id === composeAccountId);
+  const hasMailAccounts = accounts.length > 0;
   const open = Boolean(selected || compose);
   useEffect(() => { onMobileOpenChange(open); return () => onMobileOpenChange(false); }, [open, onMobileOpenChange]);
   useEffect(() => {
@@ -175,27 +186,65 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     void requestMail<Accounts>('accounts', { signal: controller.signal }).then(data => {
       if (controller.signal.aborted) return;
       setAccounts(data.accounts); setProviders(data.providers); setWebOrigin(data.webOrigin ?? '');
-      setAccountId(previous => data.accounts.some(item => item.id === previous) ? previous : data.accounts[0]?.id ?? '');
+      setAccountId(previous => previous === ALL_ACCOUNTS && data.accounts.length ? previous
+         : data.accounts.some(item => item.id === previous) ? previous : data.accounts.length > 1 ? ALL_ACCOUNTS : data.accounts[0]?.id ?? '');
+       setComposeAccountId(previous => data.accounts.some(item => item.id === previous) ? previous : data.accounts[0]?.id ?? '');
     }).catch(error => { if (!controller.signal.aborted) setError(explainError(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoadingAccounts(false); });
     return () => controller.abort();
   }, [accountRefresh, explainError]);
 
   useEffect(() => {
-    if (!accountId) { setMessages([]); return; }
+    if (!accountId || !accounts.length) { setMessages([]); setNextPage(null); return; }
     const controller = new AbortController();
     setLoading(true); setError('');
-    const params = new URLSearchParams({ folder, filter, ...(page ? { page } : {}) });
-    void requestMail<{ messages: Message[]; nextPage: string | null }>('accounts/' + accountId + '/messages?' + params, { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) { setMessages(previous => page ? [...previous, ...data.messages.filter(item => !previous.some(old => old.id === item.id))] : data.messages); setNextPage(data.nextPage); } })
-      .catch(error => { if (!controller.signal.aborted) setError(explainError(error)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    const unified = accountId === ALL_ACCOUNTS;
+    // Each mailbox keeps an independent cursor: loading more cannot skip a provider's messages.
+    const targets = unified ? (page ? accounts.filter(item => unifiedCursors[item.id]) : accounts)
+      : accounts.filter(item => item.id === accountId);
+    const load = async () => {
+      const responses = await Promise.allSettled(targets.map(async item => {
+        const cursor = unified ? (page ? unifiedCursors[item.id] : '') : page;
+        const params = new URLSearchParams({ folder, filter, ...(cursor ? { page: cursor } : {}) });
+        const result = await requestMail<{ messages: Message[]; nextPage: string | null }>(
+          'accounts/' + item.id + '/messages?' + params, { signal: controller.signal });
+        return { accountId: item.id, ...result };
+      }));
+      if (controller.signal.aborted) return;
+      const received: InboxMessage[] = [];
+      const cursors: Record<string, string> = page && unified ? { ...unifiedCursors } : {};
+      let failures = 0;
+      responses.forEach((result, index) => {
+        if (result.status === 'rejected') { failures++; return; }
+        const { accountId: mailboxId, messages: rows, nextPage: cursor } = result.value;
+        received.push(...rows.map(item => ({ ...item, accountId: mailboxId })));
+        if (unified) {
+          if (cursor) cursors[mailboxId] = cursor;
+          else delete cursors[mailboxId];
+        }
+        if (!unified) setNextPage(cursor);
+      });
+      if (unified) {
+        setUnifiedCursors(cursors);
+        setNextPage(Object.keys(cursors).length ? '__next__' : null);
+      }
+      setMessages(previous => {
+        const combined = page ? [...previous, ...received] : received;
+        const distinct = new Map(combined.map(item => [mailKey(item.accountId, item.id), item]));
+        return [...distinct.values()].sort(newestFirst);
+      });
+      if (failures) setError(failures === targets.length ? explainError(new Error('MAIL_UNAVAILABLE'))
+        : (pt ? `Não foi possível carregar ${failures} conta(s). As demais continuam disponíveis. Tente novamente.`
+          : `Could not load ${failures} account(s). Other mailboxes remain available. Please retry.`));
+    };
+    void load().finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [accountId, folder, filter, page, refresh, explainError]);
+    // Cursors are read only when page changes, so a cursor update must not retrigger fetching.
+  }, [accountId, accounts, folder, filter, page, refresh, explainError, pt]);
 
   function closeDetail() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
   function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
-  function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
+  function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setUnifiedCursors({}); setNextPage(null); setQuery(''); }
   async function connect(provider: 'gmail'|'outlook') {
     if (connecting) return;
     setConnecting(provider); setConnectError('');
@@ -240,7 +289,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     catch (error) { setError(explainError(error)); }
     finally { setDisconnecting(false); }
   }
-  async function showMessage(message: Message, chosenAccount = accountId) {
+  async function showMessage(message: InboxMessage, chosenAccount = message.accountId) {
     mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);
     setExpandedImage(null);
     detailAbort.current?.abort();
@@ -248,16 +297,16 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     setCompose(false); setReplying(false); setReplyBody('');
     setSelected(message); setLoadingBody(true); setError('');
     try {
-      const data = await requestMail<Message>('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id), { signal: controller.signal });
+      const data = await requestMail<Message>('accounts/' + chosenAccount + '/message-detail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }), signal: controller.signal });
       if (controller.signal.aborted) return;
-      setSelected(data);
+      setSelected({ ...data, accountId: chosenAccount });
       if (data.unread) {
         try {
-          await requestMail('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id) + '/read',
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          await requestMail('accounts/' + chosenAccount + '/message-read',
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }) });
           if (controller.signal.aborted) return;
-          setMessages(old => old.map(row => row.id === data.id ? { ...row, unread: false } : row));
-          setSelected(old => old?.id === data.id ? { ...old, unread: false } : old);
+          setMessages(old => old.map(row => row.accountId === chosenAccount && row.id === data.id ? { ...row, unread: false } : row));
+          setSelected(old => old?.accountId === chosenAccount && old.id === data.id ? { ...old, unread: false } : old);
           window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:1}}));
           clearReadPush({kind:'mail',accountId:chosenAccount,messageId:data.id});
         } catch {
@@ -284,27 +333,27 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     resetList();
     setFolder('inbox'); setFilter('all'); setAccountId(requestedMessage.accountId);
     void showMessage({
-      id: requestedMessage.messageId, from:'', to:'', subject:'', preview:'',
+      id: requestedMessage.messageId, accountId: requestedMessage.accountId, from:'', to:'', subject:'', preview:'',
       date:new Date().toISOString(), unread:false, starred:false,
     },requestedMessage.accountId);
   }, [requestedMessage?.nonce, loadingAccounts, accounts]);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (sending || !account) return;
+    event.preventDefault(); if (sending || !composingAccount) return;
     setSending(true); setSendError('');
     try {
-      await requestMail('accounts/' + account.id + '/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+      await requestMail('accounts/' + composingAccount.id + '/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
       setDraft({ to: '', subject: '', body: '' }); setCompose(false); setNotice('sent'); setPage(''); setRefresh(value => value + 1);
     } catch { setSendError(pt ? 'Não foi possível confirmar o envio. Verifique a pasta Enviados antes de tentar novamente.' : 'Could not confirm delivery. Check Sent before trying again.'); }
     finally { setSending(false); }
   }
   async function submitReply(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !account || !replyBody.trim() || replySending) return;
+    if (!selected || !readingAccount || !replyBody.trim() || replySending) return;
     setReplySending(true); setReplyError('');
     try {
-      await requestMail('accounts/' + account.id + '/messages/' + encodeURIComponent(selected.id) + '/reply',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: replyBody.trim() }) });
+      await requestMail('accounts/' + readingAccount.id + '/message-reply',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: selected.id, body: replyBody.trim() }) });
       setReplying(false); setReplyBody(''); setNotice('sent'); setPage(''); setRefresh(value => value + 1);
     } catch (error) {
       setReplyError(error instanceof Error && error.message === 'MAIL_RECONNECT'
@@ -313,47 +362,96 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           : 'Reply could not be confirmed. Check Sent before trying again.'));
     } finally { setReplySending(false); }
   }
-  function toggleSelected(id: string) {
-    setSelectedIds(previous => previous.includes(id)
-      ? previous.filter(item => item !== id)
-      : previous.length >= 100 ? previous : [...previous, id]);
+  function toggleSelected(key: string) {
+    setSelectedIds(previous => previous.includes(key)
+      ? previous.filter(item => item !== key)
+      : previous.length >= 100 ? previous : [...previous, key]);
+  }
+  function selectedByAccount() {
+    const picked = new Set(selectedIds);
+    const grouped = new Map<string, string[]>();
+    for (const message of messages) {
+      if (!picked.has(mailKey(message.accountId, message.id))) continue;
+      grouped.set(message.accountId, [...(grouped.get(message.accountId) ?? []), message.id]);
+    }
+    return grouped;
   }
   async function moveSelected(destination: 'trash' | 'spam') {
-    if (!account || selectedIds.length === 0 || moving) return;
+    if (selectedIds.length === 0 || moving) return;
     setMoving(true); setError('');
-    const targetAccount = account.id;
-    const ids = [...selectedIds];
+    const groups = selectedByAccount();
+    const moved = new Set<string>();
     try {
-      const result = await requestMail<{ moved: string[]; failed: string[] }>(
-        'accounts/' + targetAccount + '/messages/move', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids, destination }),
-        });
-      const moved = new Set(result.moved.filter(id => ids.includes(id)));
-      const failed = ids.filter(id => !moved.has(id));
+      const outcomes = await Promise.all([...groups].map(async ([mailboxId, ids]) => {
+        try {
+          const result = await requestMail<{ moved: string[]; failed: string[] }>(
+            'accounts/' + mailboxId + '/messages/move', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids, destination }),
+            });
+          return result.moved.filter(id => ids.includes(id)).map(id => mailKey(mailboxId, id));
+        } catch { return []; }
+      }));
+      outcomes.flat().forEach(key => moved.add(key));
+      const failed = selectedIds.filter(key => !moved.has(key));
       if (moved.size) {
+        const movedRows = messages.filter(message => moved.has(mailKey(message.accountId, message.id)));
         if (folder === 'inbox') {
-          const unreadMoved = messages.filter(message => message.unread && moved.has(message.id)).length;
-          if (unreadMoved) window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:unreadMoved}}));
+          const unreadMoved = movedRows.filter(message => message.unread).length;
+          if (unreadMoved) window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta', {detail:{amount:unreadMoved}}));
         }
-        setMessages(previous => previous.filter(message => !moved.has(message.id)));
-        clearReadPush([...moved].map(messageId=>({kind:'mail' as const,accountId:targetAccount,messageId})));
-        if (selected && moved.has(selected.id)) closeDetail();
+        setMessages(previous => previous.filter(message => !moved.has(mailKey(message.accountId, message.id))));
+        clearReadPush(movedRows.map(message => ({kind:'mail' as const,accountId:message.accountId,messageId:message.id})));
+        if (selected && moved.has(mailKey(selected.accountId, selected.id))) closeDetail();
       }
       setSelectedIds(failed);
       setSelectionMode(failed.length > 0);
-      if (failed.length) {
-        setError(pt
-          ? `${moved.size} movidos, ${failed.length} não puderam ser movidos. Tente novamente.`
-          : `${moved.size} moved, ${failed.length} could not be moved. Please retry.`);
-      } else {
-        setNotice(destination === 'trash' ? 'movedTrash' : 'movedSpam');
-      }
-      if (moved.size) { setPage(''); setNextPage(null); setRefresh(value => value + 1); }
+      if (failed.length) setError(pt
+        ? `${moved.size} movidos, ${failed.length} não puderam ser movidos. Tente novamente.`
+        : `${moved.size} moved, ${failed.length} could not be moved. Please retry.`);
+      else setNotice(destination === 'trash' ? 'movedTrash' : 'movedSpam');
+      if (moved.size) { setPage(''); setUnifiedCursors({}); setNextPage(null); setRefresh(value => value + 1); }
     } catch (error) { setError(explainError(error)); }
     finally { setMoving(false); }
   }
-  function startCompose() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
+  async function markSelectedRead() {
+    if (!selectedIds.length || moving) return;
+    setMoving(true); setError('');
+    const groups = selectedByAccount();
+    try {
+      const outcomes = await Promise.all([...groups].map(async ([mailboxId, ids]) => {
+        try {
+          const result = await requestMail<{ read: string[]; failed: string[] }>(
+            'accounts/' + mailboxId + '/messages/read', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            });
+          return result.read.filter(id => ids.includes(id)).map(id => mailKey(mailboxId, id));
+        } catch { return []; }
+      }));
+      const read = new Set(outcomes.flat());
+      const failed = selectedIds.filter(key => !read.has(key));
+      if (read.size) {
+        const updated = messages.filter(item => item.unread && read.has(mailKey(item.accountId, item.id)));
+        setMessages(previous => previous.map(item => read.has(mailKey(item.accountId, item.id)) ? { ...item, unread: false } : item));
+        if (selected && read.has(mailKey(selected.accountId, selected.id))) setSelected(old => old ? {...old, unread: false} : old);
+        clearReadPush(updated.map(item => ({kind:'mail' as const,accountId:item.accountId,messageId:item.id})));
+        if (folder === 'inbox' && updated.length) {
+          window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta', {detail:{amount:updated.length}}));
+        }
+        window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
+      }
+      setSelectedIds(failed);
+      setSelectionMode(failed.length > 0);
+      if (failed.length) setError(pt
+        ? `${read.size} marcados como lidos, ${failed.length} falharam. Tente novamente.`
+        : `${read.size} marked as read, ${failed.length} failed. Please retry.`);
+      else setNotice('markedRead');
+      if (filter === 'unread' && read.size) { setPage(''); setUnifiedCursors({}); setNextPage(null); setRefresh(value => value + 1); }
+    } catch (error) { setError(explainError(error)); }
+    finally { setMoving(false); }
+  }
+  function startCompose() { setComposeAccountId(account?.id ?? composeAccountId ?? accounts[0]?.id ?? ''); mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
@@ -362,10 +460,10 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     '<style>html,body{margin:0;padding:0;overflow-wrap:anywhere}img{max-width:100%!important;height:auto!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
-  const htmlFrameReady=Boolean(selected?.html&&readyFrame?.accountId===accountId&&
+  const htmlFrameReady=Boolean(selected?.html&&readyFrame?.accountId===selected.accountId&&
     readyFrame?.messageId===selected.id&&readyFrame?.html===selected.html);
-  const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
-  const visibleIds = visible.map(message => message.id);
+  const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview + ' ' + (accounts.find(account => account.id === message.accountId)?.email ?? '')).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
+  const visibleIds = visible.map(message => mailKey(message.accountId, message.id));
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
   function toggleVisible() {
     setSelectedIds(previous => allVisibleSelected
@@ -447,21 +545,22 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
       <header className="shrink-0 space-y-4 border-b border-border px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-2"><h1 className="text-lg font-semibold tracking-tight">Email</h1>
           <div className="flex gap-1"><Button size="icon" variant="ghost" aria-label={pt ? 'Atualizar emails' : 'Refresh email'} disabled={loading || loadingAccounts}
-            onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}><RefreshCw className="size-4" /></Button>
-            <Button size="icon" variant="ghost" aria-label={pt ? 'Novo email' : 'New email'} disabled={!account} onClick={startCompose}><Plus className="size-4" /></Button></div>
+            onClick={() => { setPage(''); setUnifiedCursors({}); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}><RefreshCw className="size-4" /></Button>
+            <Button size="icon" variant="ghost" aria-label={pt ? 'Novo email' : 'New email'} disabled={!hasMailAccounts} onClick={startCompose}><Plus className="size-4" /></Button></div>
         </div>
-        {account && <>
+        {hasMailAccounts && <>
           <div className="flex items-center gap-1">
             <select aria-label={pt ? 'Conta de email' : 'Email account'} value={accountId} disabled={sending || moving}
               onChange={event => {
                 if (event.target.value === '__connect__') { openMailConfiguration();return; }
                 resetList(); setAccountId(event.target.value);
               }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
+              <option value={ALL_ACCOUNTS}>{pt ? 'Todas as contas' : 'All accounts'}</option>
               {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
               <option value="__connect__">{pt ? '+ Conectar novo e-mail' : '+ Connect another email'}</option>
             </select>
-            <Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'}
-              disabled={disconnecting || sending || moving} onClick={() => void disconnect()}><Unplug className="size-4" /></Button>
+            {account && <Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'}
+              disabled={disconnecting || sending || moving} onClick={() => void disconnect()}><Unplug className="size-4" /></Button>}
           </div>
 
         </>}
@@ -479,18 +578,23 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             disabled={moving} onClick={() => { resetList(); setFilter(value); }} className="min-h-9 rounded-md px-3 text-xs font-medium">
             {value === 'all' ? (pt ? 'Todos' : 'All') : value === 'unread' ? (pt ? 'Não lidos' : 'Unread') : (pt ? 'Favoritos' : 'Starred')}
           </button>)}
-          {account && <Button type="button" size="sm" variant={selectionMode ? 'secondary' : 'ghost'} className="ml-auto"
+          {hasMailAccounts && <Button type="button" size="sm" variant={selectionMode ? 'secondary' : 'ghost'} className="ml-auto"
             disabled={moving || loading} onClick={() => { setSelectionMode(value => !value); setSelectedIds([]); }}>
             {selectionMode ? (pt ? 'Cancelar' : 'Cancel') : (pt ? 'Selecionar' : 'Select')}
           </Button>}
         </div>
-        {selectionMode && account && <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-2 text-xs">
+        {selectionMode && hasMailAccounts && <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-2 text-xs">
           <label className="flex cursor-pointer items-center gap-2">
             <input type="checkbox" disabled={moving || !visibleIds.length} checked={allVisibleSelected}
               onChange={toggleVisible} aria-label={pt ? 'Selecionar todos os emails visíveis' : 'Select all visible emails'} />
             {pt ? 'Selecionar todos' : 'Select all'}
           </label>
           <span className="ml-auto text-muted-foreground">{selectedIds.length}/100</span>
+          <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
+            onClick={() => void markSelectedRead()} className="gap-1">
+            {moving ? <Spinner className="size-3.5" /> : <Mail className="size-3.5" />}
+            {pt ? 'Marcar como lido' : 'Mark as read'}
+          </Button>
           <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
             onClick={() => void moveSelected('spam')} className="gap-1">
             <ShieldAlert className="size-3.5" /> Spam
@@ -506,13 +610,14 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
 
         {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.')
             : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.')
+            : notice === 'markedRead' ? (pt ? 'Mensagens marcadas como lidas.' : 'Messages marked as read.')
             : notice === 'movedTrash' ? (pt ? 'Mensagens movidas para Lixeira.' : 'Messages moved to Trash.')
             : notice === 'movedSpam' ? (pt ? 'Mensagens movidas para Spam.' : 'Messages moved to Spam.')
             : mailOAuthFailureMessage(mailFailureReason, pt, mailFailureProvider)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
         {error && <div role="alert" className="m-3 rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" className="mt-2" onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}>{pt ? 'Tentar novamente' : 'Retry'}</Button></div>}
         {(loadingAccounts || (loading && !messages.length)) &&
           <WorkspaceContentLoading label={pt?'Carregando emails':'Loading emails'} rows={4} className="p-4"/>}
-        {!loadingAccounts && !account && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
+        {!loadingAccounts && !hasMailAccounts && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
           <h2 className="font-medium">{pt ? 'Seu email, por perto' : 'Your email, close by'}</h2>
           <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail, Outlook ou configure IMAP/SMTP para acompanhar sua caixa de entrada no Uorqui.' : 'Connect Gmail, Outlook or set up IMAP/SMTP to use your mailbox in Uorqui.'}</p>
           <Button type="button" variant="outline" onClick={openMailConfiguration} className="min-h-11 gap-2">
@@ -525,28 +630,35 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'OAuth indisponível sem credenciais do provedor; você pode usar um servidor manual.' : 'OAuth requires provider credentials; manual servers remain supported.'}</p>}
           <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Gmail e Outlook usam OAuth; servidores manuais usam uma senha de aplicativo, armazenada criptografada no Uorqui.' : 'Gmail and Outlook use OAuth; manual servers use an app password encrypted in Uorqui.'}</p>
         </div>}
-        {visible.map(message => <div key={message.id} className={cn('uorqui-inbox-row flex w-full min-w-0 items-center border-b border-border transition-colors hover:bg-muted/60', selected?.id === message.id && !selectionMode && 'bg-secondary/70', selectionMode && selectedIds.includes(message.id) && 'bg-muted/80')}>
+        {visible.map(message => <div key={mailKey(message.accountId, message.id)} className={cn('uorqui-inbox-row flex w-full min-w-0 items-center border-b border-border transition-colors hover:bg-muted/60', selected?.accountId === message.accountId && selected.id === message.id && !selectionMode && 'bg-secondary/70', selectionMode && selectedIds.includes(mailKey(message.accountId, message.id)) && 'bg-muted/80')}>
           {selectionMode && <label className="flex min-h-12 shrink-0 cursor-pointer items-center px-3" aria-label={pt ? 'Selecionar email' : 'Select email'}>
-            <input type="checkbox" checked={selectedIds.includes(message.id)} disabled={moving || (selectedIds.length >= 100 && !selectedIds.includes(message.id))}
-              onChange={() => toggleSelected(message.id)} aria-label={pt ? 'Selecionar ' + (message.subject || message.from) : 'Select ' + (message.subject || message.from)} />
+            <input type="checkbox" checked={selectedIds.includes(mailKey(message.accountId, message.id))} disabled={moving || (selectedIds.length >= 100 && !selectedIds.includes(mailKey(message.accountId, message.id)))}
+              onChange={() => toggleSelected(mailKey(message.accountId, message.id))} aria-label={pt ? 'Selecionar ' + (message.subject || message.from) : 'Select ' + (message.subject || message.from)} />
           </label>}
-          <button type="button" disabled={moving} onClick={() => selectionMode ? toggleSelected(message.id) : void showMessage(message)}
-            aria-current={selected?.id === message.id && !selectionMode ? 'true' : undefined}
+          <button type="button" disabled={moving} onClick={() => selectionMode ? toggleSelected(mailKey(message.accountId, message.id)) : void showMessage(message)}
+            aria-current={selected?.accountId === message.accountId && selected.id === message.id && !selectionMode ? 'true' : undefined}
             className="min-w-0 flex-1 px-4 py-4 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
             <div className="mb-1.5 flex items-center gap-2">{message.unread && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={pt ? 'Não lido' : 'Unread'} />}<span className={cn('min-w-0 flex-1 truncate text-xs', message.unread ? 'font-semibold' : 'text-muted-foreground')}>{message.from}</span><time className="shrink-0 text-[10px] text-muted-foreground">{date(message.date)}</time></div>
             <p className="flex items-center gap-2 text-[13px] font-medium"><span className="truncate">{message.subject || (pt ? '(Sem assunto)' : '(No subject)')}</span>{message.starred && <Star className="size-3 shrink-0 fill-current text-muted-foreground" />}</p>
+            {accountId === ALL_ACCOUNTS && <p className="mt-1 truncate text-[11px] text-muted-foreground">{accounts.find(item => item.id === message.accountId)?.email}</p>}
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.preview}</p>
           </button>
         </div>)}
-        {account && !loading && !error && visible.length === 0 && <div className="px-6 py-14 text-center"><Inbox className="mx-auto mb-3 size-7 text-muted-foreground" /><p className="text-sm font-medium">{pt ? 'Nenhum email por aqui' : 'No email here'}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{pt ? 'Tente outra pasta, filtro ou busca.' : 'Try a different folder, filter or search.'}</p></div>}
-        {nextPage && !query && <Button variant="ghost" className="my-3 w-full" disabled={loading} onClick={() => setPage(nextPage)}>{loading ? <Spinner /> : (pt ? 'Carregar mais' : 'Load more')}</Button>}
+        {hasMailAccounts && !loading && !error && visible.length === 0 && <div className="px-6 py-14 text-center"><Inbox className="mx-auto mb-3 size-7 text-muted-foreground" /><p className="text-sm font-medium">{pt ? 'Nenhum email por aqui' : 'No email here'}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{pt ? 'Tente outra pasta, filtro ou busca.' : 'Try a different folder, filter or search.'}</p></div>}
+        {nextPage && !query && <Button variant="ghost" className="my-3 w-full" disabled={loading} onClick={() => setPage(accountId === ALL_ACCOUNTS ? String(Number(page || '0') + 1) : nextPage)}>{loading ? <Spinner /> : (pt ? 'Carregar mais' : 'Load more')}</Button>}
       </div>
     </aside>
 
     <section aria-label={pt ? 'Leitura de email' : 'Email reader'} className={cn('min-h-0 min-w-0 flex-1 flex-col bg-background', open ? 'flex' : 'hidden md:flex')}>
       {compose ? <form onSubmit={event => void submit(event)} className="flex min-h-0 flex-1 flex-col">
         <header className="flex min-h-14 items-center gap-3 border-b border-border px-4"><Button type="button" variant="ghost" size="icon" disabled={sending} onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button><h2 className="text-sm font-medium">{pt ? 'Novo email' : 'New email'}</h2></header>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"><p className="text-xs text-muted-foreground">{pt ? 'De: ' : 'From: '}{account?.email}</p>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+          <label className="block space-y-2 text-xs"><span>{pt ? 'De' : 'From'}</span>
+            <select className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm" value={composeAccountId}
+              disabled={sending} onChange={event => setComposeAccountId(event.target.value)}>
+              {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
+            </select>
+          </label>
           <label className="block space-y-2 text-xs"><span>{pt ? 'Para' : 'To'}</span><Input type="email" required maxLength={320} disabled={sending} value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} placeholder="pessoa@exemplo.com" /></label>
           <label className="block space-y-2 text-xs"><span>{pt ? 'Assunto' : 'Subject'}</span><Input maxLength={200} disabled={sending} value={draft.subject} onChange={event => setDraft({ ...draft, subject: event.target.value })} /></label>
           <label className="block space-y-2 text-xs"><span>{pt ? 'Mensagem' : 'Message'}</span><textarea required maxLength={30000} disabled={sending} value={draft.body} onChange={event => setDraft({ ...draft, body: event.target.value })} className="min-h-60 w-full resize-y rounded-md border border-input bg-transparent p-3 text-base leading-7 outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" /></label>
@@ -555,7 +667,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         <footer className="flex justify-end border-t border-border p-4"><Button disabled={sending} className="min-h-11 gap-2" type="submit">{sending ? <Spinner className="size-4" /> : <Send className="size-4" />}{pt ? 'Enviar email' : 'Send email'}</Button></footer>
       </form> : selected ? <>
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
-          <span className="truncate text-xs text-muted-foreground">{account?.email}</span>
+          <span className="truncate text-xs text-muted-foreground">{readingAccount?.email}</span>
           <div className="flex shrink-0 gap-1">
             <Button size="sm" variant="ghost" onClick={() => { setReplying(true); setReplyError(''); }} className="gap-2" disabled={loadingBody || replySending}>
               <Reply className="size-4" />{pt ? 'Responder' : 'Reply'}
@@ -569,7 +681,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
               {!htmlFrameReady&&<WorkspaceContentLoading
                 label={pt?'Montando conteúdo e imagens do e-mail':'Rendering email content and images'}
                 rows={4} className="w-full py-2"/>}
-            <iframe key={accountId+':'+selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
+            <iframe key={selected.accountId+':'+selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               referrerPolicy="no-referrer" srcDoc={framedHtml}
               onLoad={event=>{
@@ -707,7 +819,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                     readyRaf=window.requestAnimationFrame(()=>{
                       if(!alive||!frame.isConnected)return;
                       fitFrame();
-                      setReadyFrame({accountId,messageId:selected.id,html:selected.html!});
+                      setReadyFrame({accountId:selected.accountId,messageId:selected.id,html:selected.html!});
                     });
                   });
                 };
@@ -766,8 +878,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         </article>
       </> : <div className="flex min-h-0 flex-1 items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl border border-border bg-card"><Mail className="size-6 text-muted-foreground" /></div>
         <h2 className="mt-5 text-lg font-medium tracking-tight">{pt ? 'Um espaço para cada conversa' : 'A space for every conversation'}</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? (pt ? 'Selecione um email para ler ou comece uma nova mensagem.' : 'Select an email to read or start a new message.') : (pt ? 'Mensagens, comunidades e sua caixa de entrada. Tudo conectado no Uorqui.' : 'Messages, communities and your inbox. All connected in Uorqui.')}</p>
-        {account && <Button variant="outline" className="mt-5 gap-2" onClick={startCompose}>{pt ? 'Escrever email' : 'Write email'}<ArrowUpRight className="size-4" /></Button>}
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{hasMailAccounts ? (pt ? 'Selecione um email para ler ou comece uma nova mensagem.' : 'Select an email to read or start a new message.') : (pt ? 'Mensagens, comunidades e sua caixa de entrada. Tudo conectado no Uorqui.' : 'Messages, communities and your inbox. All connected in Uorqui.')}</p>
+        {hasMailAccounts && <Button variant="outline" className="mt-5 gap-2" onClick={startCompose}>{pt ? 'Escrever email' : 'Write email'}<ArrowUpRight className="size-4" /></Button>}
       </div></div>}
     </section>
     {connectPicker&&createPortal(

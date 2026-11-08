@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.12] — 07/11/2026
+
+- **Abertura de e-mails Outlook:** detalhes, marcação como lido e resposta agora usam rotas POST curtas com o ID opaco da mensagem em JSON validado, evitando falhas HTTP 414 relacionadas ao tamanho do caminho da URL.
+- **Caixa unificada:** opção Todas as contas reúne Gmail, Outlook e IMAP conectado com ordenação cronológica, identificação da conta, paginação independente e filtro por caixa individual. Ao escrever pela lista unificada, o remetente é selecionável.
+- **Marcar como lido em lote:** seleção múltipla permite marcar mensagens como lidas, além de mover para Spam/Lixeira, inclusive entre contas, com tratamento de falhas parciais e atualização dos contadores. Cada seleção combina conta e ID para evitar colisões.
+- **Compatibilidade e segurança:** rotas antigas continuam disponíveis; as novas preservam sessão, titularidade da conta, verificação de origem e validação dos IDs. Sem migração de banco nem novas permissões.
+- **Validação:** executar typecheck/build da API e do frontend; após deploy, testar a abertura, marcação de leitura e resposta de e-mails Outlook com IDs longos no PWA atualizado. A origem exata do 414 em produção ainda não foi verificada.
+
 ## [0.1.0-beta.11] — 06/11/2026
 
 - **Sem prévia duplicada para GIFs nas mensagens privadas:** GIFs reconhecidos do GIPHY continuam aparecendo como animação no chat, mas não montam o cartão externo `LinkPreview` nem consultam seus metadados. Links normais continuam com prévia.
