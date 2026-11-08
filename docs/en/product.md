@@ -10,6 +10,14 @@ Uorqui is **community-first**, without a public/global post feed or infinite imm
 
 Details, authorization, migration and success metrics: [Discover replaces the feed](discover.md). The retired global feed UI/API/schema was removed with versioned migrations and recovery snapshots. No feed restoration is planned; see [maintenance audit](maintenance-audit.md).
 
+## Unified email (beta.12)
+
+- **All accounts** in the email account selector combines connected Gmail, Microsoft Outlook and manual IMAP inboxes, as well as Sent/Spam/Trash views, with each item showing its source address. The original per-account selector remains available.
+- The combined list sorts by date and fetches up to one provider page per account; each account keeps its own pagination cursor. Search applies to loaded messages only, not the complete remote history.
+- Multiple selected messages can be **marked read**, moved to Spam or moved to Trash. Operations are grouped by source account, capped at 100 selected items, and return partial failures without falsely marking unread messages as read.
+- Compose while viewing all accounts offers a sender-account selector. Replies and message details always use the original source account. Only disconnect an account from its own filtered view.
+- Opaque Outlook message IDs are sent via validated same-origin JSON request bodies rather than long URL paths. Old endpoints remain supported for deployed clients.
+
 ## Navigation
 
 Primary destinations: **Discover**, **Messages**, **Communities**. Profile, search, notifications and settings stay accessible as secondary navigation on mobile and desktop.
