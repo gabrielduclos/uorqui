@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.13] — 08/11/2026
+
+- **Onboarding responsivo:** o guia mede a própria altura, escolhe espaço acima ou abaixo do item destacado na navegação mobile conforme o viewport e permite rolagem interna em telas baixas. No desktop, mantém a posição lateral.
+- **Escuro como padrão:** usuários sem tema salvo agora iniciam em Dark; preferências Light/Dark anteriores continuam respeitadas e podem ser alteradas a qualquer momento.
+- **Escopo e validação:** frontend e UI Kit bilíngue, sem migração de API ou banco. Validar Comunidades, Mensagens e E-mail no PWA iOS/Android, telas estreitas, rotação, PT/EN e ambos os temas.
+
 ## [0.1.0-beta.12] — 07/11/2026
 
 - **Abertura de e-mails Outlook:** detalhes, marcação como lido e resposta agora usam rotas POST curtas com o ID opaco da mensagem em JSON validado, evitando falhas HTTP 414 relacionadas ao tamanho do caminho da URL.

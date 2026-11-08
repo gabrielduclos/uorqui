@@ -211,7 +211,7 @@ function storedPreference<T extends string>(key: string, choices: readonly T[], 
 export function UorquiPreferences({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(() =>
     storedPreference<Locale>('uorqui:language', ['pt-BR', 'en'], navigator.language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en'));
-  const [theme, setTheme] = useState<Theme>(() => storedPreference<Theme>('uorqui:theme', ['dark', 'light'], 'light'));
+  const [theme, setTheme] = useState<Theme>(() => storedPreference<Theme>('uorqui:theme', ['dark', 'light'], 'dark'));
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');

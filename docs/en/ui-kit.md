@@ -35,7 +35,7 @@
 3. `apps/web/src/components/ui/` and `ui-kit/components.tsx`: shared buttons, fields, menus, skeletons, counters and layout.
 4. Module components consume `bg-card`, `bg-background`, `text-foreground`, `border-border`, etc., rather than defining their own palettes.
 
-**Light** is the actual default for first-time visitors, per `UorquiPreferences.tsx`. Existing user preference at `uorqui:theme` is honored; changing theme requires no reload. **Contacts, Messages and Email** share `data-uorqui-workspace-surface`. An incoming email's HTML is isolated and may use its sender's own styling without changing the app theme.
+**Dark** is the default for first-time visitors without a saved preference, per `UorquiPreferences.tsx`. Existing user preference at `uorqui:theme` is honored; changing theme requires no reload. The contextual onboarding guide measures its content, places itself above/below mobile navigation highlights and scrolls inside short viewports. **Contacts, Messages and Email** share `data-uorqui-workspace-surface`. An incoming email's HTML is isolated and may use its sender's own styling without changing the app theme.
 
 ### Actual signed-in workspace palette
 
