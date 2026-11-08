@@ -14,6 +14,12 @@ type MailAccount = { id: string; provider: Provider; email: string };
 type MailFolder = 'inbox' | 'sent' | 'spam' | 'trash';
 type Message = { id: string; from: string; to: string; subject: string; preview: string; date: string; unread: boolean; starred: boolean; body?: string; html?: string };
 type Accounts = { accounts: MailAccount[]; providers: { id: Provider; configured: boolean }[]; webOrigin?: string };
+type InboxMessage = Message & { accountId: string };
+const ALL_ACCOUNTS = '__all__';
+const mailKey = (accountId: string, messageId: string) => JSON.stringify([accountId, messageId]);
+const newestFirst = (a: InboxMessage, b: InboxMessage) =>
+  (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0);
+
 function mailOAuthFailureMessage(reason: string, pt: boolean, provider: 'gmail'|'outlook'): string {
   const microsoft=provider==='outlook';
   switch (reason) {
@@ -63,9 +69,11 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const [folder, setFolder] = useState<MailFolder>('inbox');
   const [filter, setFilter] = useState<'all' | 'unread' | 'starred'>('all');
   const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [selected, setSelected] = useState<Message | null>(null);
+  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [selected, setSelected] = useState<InboxMessage | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
+  const [unifiedCursors, setUnifiedCursors] = useState<Record<string, string>>({});
+  const [composeAccountId, setComposeAccountId] = useState('');
   const [page, setPage] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -154,6 +162,9 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const detailAbort = useRef<AbortController | null>(null);
   const openedMailLink = useRef<number | null>(null);
   const account = accounts.find(item => item.id === accountId);
+  const readingAccount = accounts.find(item => item.id === selected?.accountId);
+  const composingAccount = accounts.find(item => item.id === composeAccountId);
+  const hasMailAccounts = accounts.length > 0;
   const open = Boolean(selected || compose);
   useEffect(() => { onMobileOpenChange(open); return () => onMobileOpenChange(false); }, [open, onMobileOpenChange]);
   useEffect(() => {
@@ -175,27 +186,65 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     void requestMail<Accounts>('accounts', { signal: controller.signal }).then(data => {
       if (controller.signal.aborted) return;
       setAccounts(data.accounts); setProviders(data.providers); setWebOrigin(data.webOrigin ?? '');
-      setAccountId(previous => data.accounts.some(item => item.id === previous) ? previous : data.accounts[0]?.id ?? '');
+      setAccountId(previous => previous === ALL_ACCOUNTS && data.accounts.length ? previous
+         : data.accounts.some(item => item.id === previous) ? previous : data.accounts.length > 1 ? ALL_ACCOUNTS : data.accounts[0]?.id ?? '');
+       setComposeAccountId(previous => data.accounts.some(item => item.id === previous) ? previous : data.accounts[0]?.id ?? '');
     }).catch(error => { if (!controller.signal.aborted) setError(explainError(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoadingAccounts(false); });
     return () => controller.abort();
   }, [accountRefresh, explainError]);
 
   useEffect(() => {
-    if (!accountId) { setMessages([]); return; }
+    if (!accountId || !accounts.length) { setMessages([]); setNextPage(null); return; }
     const controller = new AbortController();
     setLoading(true); setError('');
-    const params = new URLSearchParams({ folder, filter, ...(page ? { page } : {}) });
-    void requestMail<{ messages: Message[]; nextPage: string | null }>('accounts/' + accountId + '/messages?' + params, { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) { setMessages(previous => page ? [...previous, ...data.messages.filter(item => !previous.some(old => old.id === item.id))] : data.messages); setNextPage(data.nextPage); } })
-      .catch(error => { if (!controller.signal.aborted) setError(explainError(error)); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    const unified = accountId === ALL_ACCOUNTS;
+    // Each mailbox keeps an independent cursor: loading more cannot skip a provider's messages.
+    const targets = unified ? (page ? accounts.filter(item => unifiedCursors[item.id]) : accounts)
+      : accounts.filter(item => item.id === accountId);
+    const load = async () => {
+      const responses = await Promise.allSettled(targets.map(async item => {
+        const cursor = unified ? (page ? unifiedCursors[item.id] : '') : page;
+        const params = new URLSearchParams({ folder, filter, ...(cursor ? { page: cursor } : {}) });
+        const result = await requestMail<{ messages: Message[]; nextPage: string | null }>(
+          'accounts/' + item.id + '/messages?' + params, { signal: controller.signal });
+        return { accountId: item.id, ...result };
+      }));
+      if (controller.signal.aborted) return;
+      const received: InboxMessage[] = [];
+      const cursors: Record<string, string> = page && unified ? { ...unifiedCursors } : {};
+      let failures = 0;
+      responses.forEach((result, index) => {
+        if (result.status === 'rejected') { failures++; return; }
+        const { accountId: mailboxId, messages: rows, nextPage: cursor } = result.value;
+        received.push(...rows.map(item => ({ ...item, accountId: mailboxId })));
+        if (unified) {
+          if (cursor) cursors[mailboxId] = cursor;
+          else delete cursors[mailboxId];
+        }
+        if (!unified) setNextPage(cursor);
+      });
+      if (unified) {
+        setUnifiedCursors(cursors);
+        setNextPage(Object.keys(cursors).length ? '__next__' : null);
+      }
+      setMessages(previous => {
+        const combined = page ? [...previous, ...received] : received;
+        const distinct = new Map(combined.map(item => [mailKey(item.accountId, item.id), item]));
+        return [...distinct.values()].sort(newestFirst);
+      });
+      if (failures) setError(failures === targets.length ? explainError(new Error('MAIL_UNAVAILABLE'))
+        : (pt ? `Não foi possível carregar ${failures} conta(s). As demais continuam disponíveis. Tente novamente.`
+          : `Could not load ${failures} account(s). Other mailboxes remain available. Please retry.`));
+    };
+    void load().finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [accountId, folder, filter, page, refresh, explainError]);
+    // Cursors are read only when page changes, so a cursor update must not retrigger fetching.
+  }, [accountId, accounts, folder, filter, page, refresh, explainError, pt]);
 
   function closeDetail() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
   function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
-  function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setNextPage(null); setQuery(''); }
+  function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setUnifiedCursors({}); setNextPage(null); setQuery(''); }
   async function connect(provider: 'gmail'|'outlook') {
     if (connecting) return;
     setConnecting(provider); setConnectError('');
@@ -240,7 +289,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     catch (error) { setError(explainError(error)); }
     finally { setDisconnecting(false); }
   }
-  async function showMessage(message: Message, chosenAccount = accountId) {
+  async function showMessage(message: InboxMessage, chosenAccount = message.accountId) {
     mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);
     setExpandedImage(null);
     detailAbort.current?.abort();
@@ -250,14 +299,14 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     try {
       const data = await requestMail<Message>('accounts/' + chosenAccount + '/message-detail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }), signal: controller.signal });
       if (controller.signal.aborted) return;
-      setSelected(data);
+      setSelected({ ...data, accountId: chosenAccount });
       if (data.unread) {
         try {
           await requestMail('accounts/' + chosenAccount + '/message-read',
             { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }) });
           if (controller.signal.aborted) return;
-          setMessages(old => old.map(row => row.id === data.id ? { ...row, unread: false } : row));
-          setSelected(old => old?.id === data.id ? { ...old, unread: false } : old);
+          setMessages(old => old.map(row => row.accountId === chosenAccount && row.id === data.id ? { ...row, unread: false } : row));
+          setSelected(old => old?.accountId === chosenAccount && old.id === data.id ? { ...old, unread: false } : old);
           window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:1}}));
           clearReadPush({kind:'mail',accountId:chosenAccount,messageId:data.id});
         } catch {
@@ -284,26 +333,26 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     resetList();
     setFolder('inbox'); setFilter('all'); setAccountId(requestedMessage.accountId);
     void showMessage({
-      id: requestedMessage.messageId, from:'', to:'', subject:'', preview:'',
+      id: requestedMessage.messageId, accountId: requestedMessage.accountId, from:'', to:'', subject:'', preview:'',
       date:new Date().toISOString(), unread:false, starred:false,
     },requestedMessage.accountId);
   }, [requestedMessage?.nonce, loadingAccounts, accounts]);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (sending || !account) return;
+    event.preventDefault(); if (sending || !composingAccount) return;
     setSending(true); setSendError('');
     try {
-      await requestMail('accounts/' + account.id + '/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+      await requestMail('accounts/' + composingAccount.id + '/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
       setDraft({ to: '', subject: '', body: '' }); setCompose(false); setNotice('sent'); setPage(''); setRefresh(value => value + 1);
     } catch { setSendError(pt ? 'Não foi possível confirmar o envio. Verifique a pasta Enviados antes de tentar novamente.' : 'Could not confirm delivery. Check Sent before trying again.'); }
     finally { setSending(false); }
   }
   async function submitReply(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !account || !replyBody.trim() || replySending) return;
+    if (!selected || !readingAccount || !replyBody.trim() || replySending) return;
     setReplySending(true); setReplyError('');
     try {
-      await requestMail('accounts/' + account.id + '/message-reply',
+      await requestMail('accounts/' + readingAccount.id + '/message-reply',
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: selected.id, body: replyBody.trim() }) });
       setReplying(false); setReplyBody(''); setNotice('sent'); setPage(''); setRefresh(value => value + 1);
     } catch (error) {
@@ -353,7 +402,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     } catch (error) { setError(explainError(error)); }
     finally { setMoving(false); }
   }
-  function startCompose() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
+  function startCompose() { setComposeAccountId(account?.id ?? composeAccountId ?? accounts[0]?.id ?? ''); mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
@@ -362,7 +411,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     '<style>html,body{margin:0;padding:0;overflow-wrap:anywhere}img{max-width:100%!important;height:auto!important;cursor:zoom-in!important}table{max-width:100%}a{overflow-wrap:anywhere}</style>',
     '</head><body>', selected.html, '</body></html>',
   ].join('') : '';
-  const htmlFrameReady=Boolean(selected?.html&&readyFrame?.accountId===accountId&&
+  const htmlFrameReady=Boolean(selected?.html&&readyFrame?.accountId===selected.accountId&&
     readyFrame?.messageId===selected.id&&readyFrame?.html===selected.html);
   const visible = messages.filter(message => (message.from + ' ' + message.subject + ' ' + message.preview).toLocaleLowerCase(locale).includes(query.toLocaleLowerCase(locale)));
   const visibleIds = visible.map(message => message.id);
@@ -569,7 +618,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
               {!htmlFrameReady&&<WorkspaceContentLoading
                 label={pt?'Montando conteúdo e imagens do e-mail':'Rendering email content and images'}
                 rows={4} className="w-full py-2"/>}
-            <iframe key={accountId+':'+selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
+            <iframe key={selected.accountId+':'+selected.id} title={pt ? 'Conteúdo seguro da mensagem' : 'Safe message content'}
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               referrerPolicy="no-referrer" srcDoc={framedHtml}
               onLoad={event=>{
@@ -707,7 +756,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
                     readyRaf=window.requestAnimationFrame(()=>{
                       if(!alive||!frame.isConnected)return;
                       fitFrame();
-                      setReadyFrame({accountId,messageId:selected.id,html:selected.html!});
+                      setReadyFrame({accountId:selected.accountId,messageId:selected.id,html:selected.html!});
                     });
                   });
                 };
