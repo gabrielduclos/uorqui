@@ -35,7 +35,7 @@
 3. `apps/web/src/components/ui/` e `ui-kit/components.tsx`: botões, campos, menus, skeletons, contagens e estrutura visual reutilizável.
 4. Componentes de módulos consomem `bg-card`, `bg-background`, `text-foreground`, `border-border` e demais tokens, **sem definir paletas próprias**.
 
-O padrão de instalação nova é **Light**, como implementado em `UorquiPreferences.tsx`; uma escolha existente de tema é respeitada pela chave `uorqui:theme`. O tema muda sem recarregar. As superfícies de **Contatos, Mensagens e E-mail** compartilham `data-uorqui-workspace-surface`. O documento HTML recebido por e-mail permanece isolado e pode ter cores próprias do remetente, sem alterar a paleta do aplicativo.
+O padrão de instalação nova é **Dark**, como implementado em `UorquiPreferences.tsx`; uma escolha existente de tema é respeitada pela chave `uorqui:theme`. O tema muda sem recarregar. O guia contextual do onboarding mede o conteúdo, escolhe espaço acima/abaixo do destaque na navegação mobile e permite rolagem interna em telas baixas. As superfícies de **Contatos, Mensagens e E-mail** compartilham `data-uorqui-workspace-surface`. O documento HTML recebido por e-mail permanece isolado e pode ter cores próprias do remetente, sem alterar a paleta do aplicativo.
 
 ### Paleta real do workspace logado
 

@@ -1,4 +1,4 @@
-import {useEffect,useState,type CSSProperties} from 'react';
+import {useEffect,useRef,useState,type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
 import {Camera,CheckCircle2,ChevronRight,Mail,MessageCircle,SkipForward,Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -20,6 +20,12 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const [step,setStep]=useState(0);
   const [target,setTarget]=useState<Highlight|null>(null);
+  const hintRef=useRef<HTMLElement|null>(null);
+  const [hintHeight,setHintHeight]=useState(210);
+  const [viewport,setViewport]=useState(()=>{
+    const visual=window.visualViewport;
+    return {width:window.innerWidth,height:visual?.height??window.innerHeight,top:visual?.offsetTop??0};
+  });
   const [cropFile,setCropFile]=useState<File|null>(null);
   const [uploading,setUploading]=useState(false);
   const [error,setError]=useState('');
@@ -43,6 +49,10 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
     setTarget(null);
     let misses=0;
     const update=()=>{
+      const visual=window.visualViewport;
+      const next={width:window.innerWidth,height:visual?.height??window.innerHeight,top:visual?.offsetTop??0};
+      setViewport(previous=>previous.width===next.width&&previous.height===next.height&&previous.top===next.top
+        ?previous:next);
       const elements=document.querySelectorAll<HTMLElement>('[data-uorqui-tour-target="'+screens[step].tab+'"]');
       const element=Array.from(elements).find(item=>{
         const bounds=item.getBoundingClientRect();
@@ -65,13 +75,29 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
     window.addEventListener('resize',update);
     window.addEventListener('orientationchange',update);
     window.visualViewport?.addEventListener('resize',update);
+    window.visualViewport?.addEventListener('scroll',update);
     return ()=>{
       window.clearInterval(tick);
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize',update);
       window.removeEventListener('orientationchange',update);
       window.visualViewport?.removeEventListener('resize',update);
+      window.visualViewport?.removeEventListener('scroll',update);
     };
+  },[step]);
+
+  // Keep the actual localized card visible, even on short mobile screens.
+  useEffect(()=>{
+    if(step>=3||!hintRef.current)return;
+    const element=hintRef.current;
+    const measure=()=>{
+      const height=element.getBoundingClientRect().height;
+      setHintHeight(previous=>Math.abs(previous-height)<1?previous:height);
+    };
+    measure();
+    const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(measure):null;
+    observer?.observe(element);
+    return ()=>observer?.disconnect();
   },[step]);
 
   function finish(){
@@ -106,12 +132,22 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
     right:Math.min(window.innerWidth,target.left+target.width+padding),
     bottom:Math.min(window.innerHeight,target.top+target.height+padding),
   }:null;
-  const hintPosition:CSSProperties=target
-    ?window.innerWidth<768
-      ?{left:12,right:12,bottom:Math.max(20,window.innerHeight-target.top+16)}
-      :{left:Math.max(12,Math.min(window.innerWidth-348,target.left+target.width+16)),
-        top:Math.max(12,Math.min(window.innerHeight-230,target.top))}
-    :{left:12,right:12,bottom:110};
+  const edge=12;
+  const gap=16;
+  const viewportTop=viewport.top+edge;
+  const viewportBottom=viewport.top+viewport.height-edge;
+  const cardHeight=Math.min(hintHeight,Math.max(80,viewport.height-edge*2));
+  const spaceBelow=target?viewportBottom-(target.top+target.height+gap):0;
+  const spaceAbove=target?target.top-gap-viewportTop:0;
+  const placeBelow=spaceBelow>=cardHeight||(spaceBelow>=spaceAbove&&spaceBelow>0);
+  const mobileTop=target
+    ?placeBelow?target.top+target.height+gap:target.top-cardHeight-gap
+    :viewportBottom-cardHeight;
+  const clampTop=(top:number)=>Math.max(viewportTop,Math.min(top,Math.max(viewportTop,viewportBottom-cardHeight)));
+  const hintPosition:CSSProperties=viewport.width<768
+    ?{left:edge,right:edge,top:clampTop(mobileTop),maxHeight:Math.max(80,viewport.height-edge*2),overflowY:'auto'}
+    :{left:target?Math.max(edge,Math.min(viewport.width-348,target.left+target.width+gap)):edge,
+      top:clampTop(target?.top??mobileTop),maxHeight:Math.max(80,viewport.height-edge*2),overflowY:'auto'};
 
   return createPortal(<>
     {current?<>
@@ -124,7 +160,7 @@ export function OnboardingTour({userId,profile,onProfileSaved,onNavigate,onFinis
         <div aria-hidden="true" className="pointer-events-none fixed z-[86] rounded-xl border-2 border-primary ring-4 ring-primary/30"
           style={{top:hole.top,left:hole.left,width:hole.right-hole.left,height:hole.bottom-hole.top}}/>
       </>}
-      <section role="region" aria-live="polite" aria-label={pt?'Tutorial do Uorqui':'Uorqui tutorial'}
+      <section ref={hintRef} role="region" aria-live="polite" aria-label={pt?'Tutorial do Uorqui':'Uorqui tutorial'}
         className="fixed z-[90] w-auto rounded-xl border border-border bg-card p-4 text-card-foreground shadow-2xl md:w-80"
         style={hintPosition}>
         <div className="flex items-center justify-between gap-2">

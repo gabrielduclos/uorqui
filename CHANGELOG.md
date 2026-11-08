@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.13] — 2026-11-08
+
+- **Responsive onboarding:** the guide measures its own height, chooses a position above or below mobile navigation highlights based on available viewport space, and scrolls internally when the screen is short. Desktop keeps the side placement.
+- **Dark by default:** users without a saved theme now start in Dark; saved Light/Dark preferences are respected and can be changed at any time.
+- **Scope and validation:** frontend and bilingual UI Kit only; no API or database migration. Validate Communities, Messages and Email steps on iOS/Android PWA, narrow viewports, rotation, PT/EN and both themes.
+
 ## [0.1.0-beta.12] — 2026-11-07
 
 - **Outlook message loading:** message detail, mark-as-read and reply now use short authenticated POST endpoints with validated opaque message IDs in JSON bodies, preventing HTTP 414 failures caused by long URL paths.
