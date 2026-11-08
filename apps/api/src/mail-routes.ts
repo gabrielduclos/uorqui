@@ -224,6 +224,47 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       } catch (error) { return unavailable(reply, error); }
     });
 
+  // Batch read receipts use short URLs and preserve partial provider failures.
+  app.post('/api/v1/mail/accounts/:accountId/messages/read', {
+    schema: {
+      params: accountParams,
+      body: {
+        type: 'object', additionalProperties: false, required: ['ids'],
+        properties: { ids: {
+          type: 'array', minItems: 1, maxItems: 100, uniqueItems: true,
+          items: mailMessageBody.properties.messageId,
+        } },
+      },
+    },
+  }, async (request, reply) => {
+    if (!originAllowed(request, reply)) return;
+    try {
+      const id = await user(request, reply); if (!id) return;
+      const { accountId } = request.params as { accountId: string };
+      const { ids } = request.body as { ids: string[] };
+      const result = await withMailbox(id, accountId, async (connection, token) => {
+        const read: string[] = [], failed: string[] = [];
+        for (let offset = 0; offset < ids.length; offset += 4) {
+          const batch = await Promise.all(ids.slice(offset, offset + 4).map(async messageId => {
+            try {
+              await markMailRead(connection.provider, token, messageId);
+              return { messageId, ok: true };
+            } catch { return { messageId, ok: false }; }
+          }));
+          for (const item of batch) (item.ok ? read : failed).push(item.messageId);
+        }
+        if (read.length) {
+          try {
+            const unread = await countInboxUnread(connection.provider, token);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1', [accountId, unread]);
+          } catch { /* Mail is already read; next poll refreshes the count. */ }
+        }
+        return { read, failed };
+      });
+      return result ?? reply.code(404).send({ error: 'MAIL_ACCOUNT_NOT_FOUND' });
+    } catch (error) { return unavailable(reply, error); }
+  });
+
   app.post('/api/v1/mail/accounts/:accountId/messages/move', { schema: {
     params: accountParams,
     body: { type: 'object', additionalProperties: false, required: ['ids', 'destination'], properties: {
