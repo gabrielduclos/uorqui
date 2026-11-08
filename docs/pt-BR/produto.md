@@ -10,6 +10,14 @@ O Uorqui é **centrado em comunidades**, sem feed global de publicações nem mo
 
 Especificação de comportamento, privacidade, migração e métricas: [Descobrir substitui o feed](descobrir.md). A interface, API e schema do feed aposentado foram removidos com migração versionada e snapshots de recuperação. Ver [auditoria de manutenção](auditoria-manutencao.md).
 
+## E-mail unificado (beta.12)
+
+- **Todas as contas** no seletor de e-mail reúne Gmail, Outlook e IMAP manual, inclusive Entrada/Enviados/Spam/Lixeira, com indicação da conta de origem. É possível filtrar por conta individual.
+- Ordenação por data e paginação independente para cada caixa de e-mail. A busca considera apenas as mensagens já carregadas, não todo o histórico no provedor.
+- A seleção de até 100 e-mails permite **marcar como lido**, mover para Spam ou Lixeira mesmo entre contas, mantendo as falhas selecionadas e evitando atualizações falsas.
+- Na caixa unificada, o usuário escolhe a conta de envio; respostas e detalhes sempre usam a conta original. A desconexão está disponível apenas no filtro de uma conta.
+- IDs longos de mensagens Outlook são enviados em JSON validado, em rotas curtas e autenticadas, preservando as rotas antigas para compatibilidade.
+
 ## Navegação
 
 Áreas principais: **Descobrir**, **Mensagens**, **Comunidades**. Perfil, busca, notificações e configurações continuam acessíveis por navegação secundária, com layouts mobile e desktop adaptados.
