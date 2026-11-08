@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.12] — 2026-11-07
+
+- **Outlook message loading:** message detail, mark-as-read and reply now use short authenticated POST endpoints with validated opaque message IDs in JSON bodies, preventing HTTP 414 failures caused by long URL paths.
+- **Compatibility and security:** existing path-ID endpoints remain for older clients; new routes preserve account ownership, same-origin checks, message validation and encrypted tokens. No database migrations or new permissions.
+- **Validation:** run API/web typechecks and builds, then test opening long-ID Outlook messages, marking read and replying in an updated PWA after deployment. The specific production 414 origin has not yet been verified.
+
 ## [0.1.0-beta.11] — 2026-11-06
 
 - **No duplicate GIF previews in direct messages:** recognized GIPHY messages render their animated GIF in the private chat but do not mount the external `LinkPreview` card or request its metadata. Ordinary URLs retain link previews.
