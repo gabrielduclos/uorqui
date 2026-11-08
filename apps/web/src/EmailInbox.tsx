@@ -248,13 +248,13 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     setCompose(false); setReplying(false); setReplyBody('');
     setSelected(message); setLoadingBody(true); setError('');
     try {
-      const data = await requestMail<Message>('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id), { signal: controller.signal });
+      const data = await requestMail<Message>('accounts/' + chosenAccount + '/message-detail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }), signal: controller.signal });
       if (controller.signal.aborted) return;
       setSelected(data);
       if (data.unread) {
         try {
-          await requestMail('accounts/' + chosenAccount + '/messages/' + encodeURIComponent(message.id) + '/read',
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          await requestMail('accounts/' + chosenAccount + '/message-read',
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }) });
           if (controller.signal.aborted) return;
           setMessages(old => old.map(row => row.id === data.id ? { ...row, unread: false } : row));
           setSelected(old => old?.id === data.id ? { ...old, unread: false } : old);
@@ -303,8 +303,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     if (!selected || !account || !replyBody.trim() || replySending) return;
     setReplySending(true); setReplyError('');
     try {
-      await requestMail('accounts/' + account.id + '/messages/' + encodeURIComponent(selected.id) + '/reply',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: replyBody.trim() }) });
+      await requestMail('accounts/' + account.id + '/message-reply',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: selected.id, body: replyBody.trim() }) });
       setReplying(false); setReplyBody(''); setNotice('sent'); setPage(''); setRefresh(value => value + 1);
     } catch (error) {
       setReplyError(error instanceof Error && error.message === 'MAIL_RECONNECT'
