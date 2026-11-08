@@ -9,6 +9,8 @@ All subsequent changes must increase the version in all three npm manifests and 
 ## [0.1.0-beta.12] — 2026-11-07
 
 - **Outlook message loading:** message detail, mark-as-read and reply now use short authenticated POST endpoints with validated opaque message IDs in JSON bodies, preventing HTTP 414 failures caused by long URL paths.
+- **Unified inbox:** a new All accounts selector combines connected Gmail, Outlook and manual IMAP mailboxes with date ordering, source-email labels, per-mailbox pagination and individual account filters. Composing from All accounts requires selecting the sender.
+- **Bulk read and move:** selected messages can be marked read across multiple accounts in addition to moving to Spam/Trash, with per-account requests, partial-failure reporting and updated unread indicators. The account identity is part of each selection key to avoid collisions.
 - **Compatibility and security:** existing path-ID endpoints remain for older clients; new routes preserve account ownership, same-origin checks, message validation and encrypted tokens. No database migrations or new permissions.
 - **Validation:** run API/web typechecks and builds, then test opening long-ID Outlook messages, marking read and replying in an updated PWA after deployment. The specific production 414 origin has not yet been verified.
 
