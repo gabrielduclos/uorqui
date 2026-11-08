@@ -545,21 +545,22 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
       <header className="shrink-0 space-y-4 border-b border-border px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-2"><h1 className="text-lg font-semibold tracking-tight">Email</h1>
           <div className="flex gap-1"><Button size="icon" variant="ghost" aria-label={pt ? 'Atualizar emails' : 'Refresh email'} disabled={loading || loadingAccounts}
-            onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}><RefreshCw className="size-4" /></Button>
-            <Button size="icon" variant="ghost" aria-label={pt ? 'Novo email' : 'New email'} disabled={!account} onClick={startCompose}><Plus className="size-4" /></Button></div>
+            onClick={() => { setPage(''); setUnifiedCursors({}); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}><RefreshCw className="size-4" /></Button>
+            <Button size="icon" variant="ghost" aria-label={pt ? 'Novo email' : 'New email'} disabled={!hasMailAccounts} onClick={startCompose}><Plus className="size-4" /></Button></div>
         </div>
-        {account && <>
+        {hasMailAccounts && <>
           <div className="flex items-center gap-1">
             <select aria-label={pt ? 'Conta de email' : 'Email account'} value={accountId} disabled={sending || moving}
               onChange={event => {
                 if (event.target.value === '__connect__') { openMailConfiguration();return; }
                 resetList(); setAccountId(event.target.value);
               }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm">
+              <option value={ALL_ACCOUNTS}>{pt ? 'Todas as contas' : 'All accounts'}</option>
               {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
               <option value="__connect__">{pt ? '+ Conectar novo e-mail' : '+ Connect another email'}</option>
             </select>
-            <Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'}
-              disabled={disconnecting || sending || moving} onClick={() => void disconnect()}><Unplug className="size-4" /></Button>
+            {account && <Button size="icon" variant="ghost" aria-label={pt ? 'Desconectar conta' : 'Disconnect account'}
+              disabled={disconnecting || sending || moving} onClick={() => void disconnect()}><Unplug className="size-4" /></Button>}
           </div>
 
         </>}
@@ -577,18 +578,23 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
             disabled={moving} onClick={() => { resetList(); setFilter(value); }} className="min-h-9 rounded-md px-3 text-xs font-medium">
             {value === 'all' ? (pt ? 'Todos' : 'All') : value === 'unread' ? (pt ? 'Não lidos' : 'Unread') : (pt ? 'Favoritos' : 'Starred')}
           </button>)}
-          {account && <Button type="button" size="sm" variant={selectionMode ? 'secondary' : 'ghost'} className="ml-auto"
+          {hasMailAccounts && <Button type="button" size="sm" variant={selectionMode ? 'secondary' : 'ghost'} className="ml-auto"
             disabled={moving || loading} onClick={() => { setSelectionMode(value => !value); setSelectedIds([]); }}>
             {selectionMode ? (pt ? 'Cancelar' : 'Cancel') : (pt ? 'Selecionar' : 'Select')}
           </Button>}
         </div>
-        {selectionMode && account && <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-2 text-xs">
+        {selectionMode && hasMailAccounts && <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-2 text-xs">
           <label className="flex cursor-pointer items-center gap-2">
             <input type="checkbox" disabled={moving || !visibleIds.length} checked={allVisibleSelected}
               onChange={toggleVisible} aria-label={pt ? 'Selecionar todos os emails visíveis' : 'Select all visible emails'} />
             {pt ? 'Selecionar todos' : 'Select all'}
           </label>
           <span className="ml-auto text-muted-foreground">{selectedIds.length}/100</span>
+          <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
+            onClick={() => void markSelectedRead()} className="gap-1">
+            {moving ? <Spinner className="size-3.5" /> : <Mail className="size-3.5" />}
+            {pt ? 'Marcar como lido' : 'Mark as read'}
+          </Button>
           <Button type="button" variant="outline" size="sm" disabled={!selectedIds.length || moving}
             onClick={() => void moveSelected('spam')} className="gap-1">
             <ShieldAlert className="size-3.5" /> Spam
@@ -604,13 +610,14 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
 
         {notice && <div role="status" className="flex items-start gap-2 border-b border-border bg-muted/40 p-4 text-xs"><span className="flex-1">{notice === 'connected' ? (pt ? 'Conta conectada com sucesso.' : 'Account connected successfully.')
             : notice === 'sent' ? (pt ? 'Email enviado.' : 'Email sent.')
+            : notice === 'markedRead' ? (pt ? 'Mensagens marcadas como lidas.' : 'Messages marked as read.')
             : notice === 'movedTrash' ? (pt ? 'Mensagens movidas para Lixeira.' : 'Messages moved to Trash.')
             : notice === 'movedSpam' ? (pt ? 'Mensagens movidas para Spam.' : 'Messages moved to Spam.')
             : mailOAuthFailureMessage(mailFailureReason, pt, mailFailureProvider)}</span><button type="button" onClick={() => setNotice('')} aria-label={pt ? 'Fechar aviso' : 'Dismiss notice'}><X className="size-4" /></button></div>}
         {error && <div role="alert" className="m-3 rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}<Button variant="outline" size="sm" className="mt-2" onClick={() => { setPage(''); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}>{pt ? 'Tentar novamente' : 'Retry'}</Button></div>}
         {(loadingAccounts || (loading && !messages.length)) &&
           <WorkspaceContentLoading label={pt?'Carregando emails':'Loading emails'} rows={4} className="p-4"/>}
-        {!loadingAccounts && !account && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
+        {!loadingAccounts && !hasMailAccounts && !error && <div className="space-y-4 px-5 py-8"><div className="grid size-11 place-items-center rounded-xl border border-border bg-card"><Link2 className="size-5 text-muted-foreground" /></div>
           <h2 className="font-medium">{pt ? 'Seu email, por perto' : 'Your email, close by'}</h2>
           <p className="text-sm leading-6 text-muted-foreground">{pt ? 'Conecte Gmail, Outlook ou configure IMAP/SMTP para acompanhar sua caixa de entrada no Uorqui.' : 'Connect Gmail, Outlook or set up IMAP/SMTP to use your mailbox in Uorqui.'}</p>
           <Button type="button" variant="outline" onClick={openMailConfiguration} className="min-h-11 gap-2">
@@ -623,28 +630,35 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           {providers.length > 0 && !providers.some(item => item.configured) && <p className="text-xs leading-5 text-muted-foreground">{pt ? 'OAuth indisponível sem credenciais do provedor; você pode usar um servidor manual.' : 'OAuth requires provider credentials; manual servers remain supported.'}</p>}
           <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{pt ? 'Gmail e Outlook usam OAuth; servidores manuais usam uma senha de aplicativo, armazenada criptografada no Uorqui.' : 'Gmail and Outlook use OAuth; manual servers use an app password encrypted in Uorqui.'}</p>
         </div>}
-        {visible.map(message => <div key={message.id} className={cn('uorqui-inbox-row flex w-full min-w-0 items-center border-b border-border transition-colors hover:bg-muted/60', selected?.id === message.id && !selectionMode && 'bg-secondary/70', selectionMode && selectedIds.includes(message.id) && 'bg-muted/80')}>
+        {visible.map(message => <div key={mailKey(message.accountId, message.id)} className={cn('uorqui-inbox-row flex w-full min-w-0 items-center border-b border-border transition-colors hover:bg-muted/60', selected?.accountId === message.accountId && selected.id === message.id && !selectionMode && 'bg-secondary/70', selectionMode && selectedIds.includes(mailKey(message.accountId, message.id)) && 'bg-muted/80')}>
           {selectionMode && <label className="flex min-h-12 shrink-0 cursor-pointer items-center px-3" aria-label={pt ? 'Selecionar email' : 'Select email'}>
-            <input type="checkbox" checked={selectedIds.includes(message.id)} disabled={moving || (selectedIds.length >= 100 && !selectedIds.includes(message.id))}
-              onChange={() => toggleSelected(message.id)} aria-label={pt ? 'Selecionar ' + (message.subject || message.from) : 'Select ' + (message.subject || message.from)} />
+            <input type="checkbox" checked={selectedIds.includes(mailKey(message.accountId, message.id))} disabled={moving || (selectedIds.length >= 100 && !selectedIds.includes(mailKey(message.accountId, message.id)))}
+              onChange={() => toggleSelected(mailKey(message.accountId, message.id))} aria-label={pt ? 'Selecionar ' + (message.subject || message.from) : 'Select ' + (message.subject || message.from)} />
           </label>}
-          <button type="button" disabled={moving} onClick={() => selectionMode ? toggleSelected(message.id) : void showMessage(message)}
-            aria-current={selected?.id === message.id && !selectionMode ? 'true' : undefined}
+          <button type="button" disabled={moving} onClick={() => selectionMode ? toggleSelected(mailKey(message.accountId, message.id)) : void showMessage(message)}
+            aria-current={selected?.accountId === message.accountId && selected.id === message.id && !selectionMode ? 'true' : undefined}
             className="min-w-0 flex-1 px-4 py-4 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
             <div className="mb-1.5 flex items-center gap-2">{message.unread && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={pt ? 'Não lido' : 'Unread'} />}<span className={cn('min-w-0 flex-1 truncate text-xs', message.unread ? 'font-semibold' : 'text-muted-foreground')}>{message.from}</span><time className="shrink-0 text-[10px] text-muted-foreground">{date(message.date)}</time></div>
             <p className="flex items-center gap-2 text-[13px] font-medium"><span className="truncate">{message.subject || (pt ? '(Sem assunto)' : '(No subject)')}</span>{message.starred && <Star className="size-3 shrink-0 fill-current text-muted-foreground" />}</p>
+            {accountId === ALL_ACCOUNTS && <p className="mt-1 truncate text-[11px] text-muted-foreground">{accounts.find(item => item.id === message.accountId)?.email}</p>}
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.preview}</p>
           </button>
         </div>)}
-        {account && !loading && !error && visible.length === 0 && <div className="px-6 py-14 text-center"><Inbox className="mx-auto mb-3 size-7 text-muted-foreground" /><p className="text-sm font-medium">{pt ? 'Nenhum email por aqui' : 'No email here'}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{pt ? 'Tente outra pasta, filtro ou busca.' : 'Try a different folder, filter or search.'}</p></div>}
-        {nextPage && !query && <Button variant="ghost" className="my-3 w-full" disabled={loading} onClick={() => setPage(nextPage)}>{loading ? <Spinner /> : (pt ? 'Carregar mais' : 'Load more')}</Button>}
+        {hasMailAccounts && !loading && !error && visible.length === 0 && <div className="px-6 py-14 text-center"><Inbox className="mx-auto mb-3 size-7 text-muted-foreground" /><p className="text-sm font-medium">{pt ? 'Nenhum email por aqui' : 'No email here'}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{pt ? 'Tente outra pasta, filtro ou busca.' : 'Try a different folder, filter or search.'}</p></div>}
+        {nextPage && !query && <Button variant="ghost" className="my-3 w-full" disabled={loading} onClick={() => setPage(accountId === ALL_ACCOUNTS ? String(Number(page || '0') + 1) : nextPage)}>{loading ? <Spinner /> : (pt ? 'Carregar mais' : 'Load more')}</Button>}
       </div>
     </aside>
 
     <section aria-label={pt ? 'Leitura de email' : 'Email reader'} className={cn('min-h-0 min-w-0 flex-1 flex-col bg-background', open ? 'flex' : 'hidden md:flex')}>
       {compose ? <form onSubmit={event => void submit(event)} className="flex min-h-0 flex-1 flex-col">
         <header className="flex min-h-14 items-center gap-3 border-b border-border px-4"><Button type="button" variant="ghost" size="icon" disabled={sending} onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button><h2 className="text-sm font-medium">{pt ? 'Novo email' : 'New email'}</h2></header>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"><p className="text-xs text-muted-foreground">{pt ? 'De: ' : 'From: '}{account?.email}</p>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+          <label className="block space-y-2 text-xs"><span>{pt ? 'De' : 'From'}</span>
+            <select className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm" value={composeAccountId}
+              disabled={sending} onChange={event => setComposeAccountId(event.target.value)}>
+              {accounts.map(item => <option key={item.id} value={item.id}>{item.email}</option>)}
+            </select>
+          </label>
           <label className="block space-y-2 text-xs"><span>{pt ? 'Para' : 'To'}</span><Input type="email" required maxLength={320} disabled={sending} value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} placeholder="pessoa@exemplo.com" /></label>
           <label className="block space-y-2 text-xs"><span>{pt ? 'Assunto' : 'Subject'}</span><Input maxLength={200} disabled={sending} value={draft.subject} onChange={event => setDraft({ ...draft, subject: event.target.value })} /></label>
           <label className="block space-y-2 text-xs"><span>{pt ? 'Mensagem' : 'Message'}</span><textarea required maxLength={30000} disabled={sending} value={draft.body} onChange={event => setDraft({ ...draft, body: event.target.value })} className="min-h-60 w-full resize-y rounded-md border border-input bg-transparent p-3 text-base leading-7 outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" /></label>
@@ -653,7 +667,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         <footer className="flex justify-end border-t border-border p-4"><Button disabled={sending} className="min-h-11 gap-2" type="submit">{sending ? <Spinner className="size-4" /> : <Send className="size-4" />}{pt ? 'Enviar email' : 'Send email'}</Button></footer>
       </form> : selected ? <>
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
-          <span className="truncate text-xs text-muted-foreground">{account?.email}</span>
+          <span className="truncate text-xs text-muted-foreground">{readingAccount?.email}</span>
           <div className="flex shrink-0 gap-1">
             <Button size="sm" variant="ghost" onClick={() => { setReplying(true); setReplyError(''); }} className="gap-2" disabled={loadingBody || replySending}>
               <Reply className="size-4" />{pt ? 'Responder' : 'Reply'}
@@ -864,8 +878,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         </article>
       </> : <div className="flex min-h-0 flex-1 items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto grid size-14 place-items-center rounded-2xl border border-border bg-card"><Mail className="size-6 text-muted-foreground" /></div>
         <h2 className="mt-5 text-lg font-medium tracking-tight">{pt ? 'Um espaço para cada conversa' : 'A space for every conversation'}</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{account ? (pt ? 'Selecione um email para ler ou comece uma nova mensagem.' : 'Select an email to read or start a new message.') : (pt ? 'Mensagens, comunidades e sua caixa de entrada. Tudo conectado no Uorqui.' : 'Messages, communities and your inbox. All connected in Uorqui.')}</p>
-        {account && <Button variant="outline" className="mt-5 gap-2" onClick={startCompose}>{pt ? 'Escrever email' : 'Write email'}<ArrowUpRight className="size-4" /></Button>}
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{hasMailAccounts ? (pt ? 'Selecione um email para ler ou comece uma nova mensagem.' : 'Select an email to read or start a new message.') : (pt ? 'Mensagens, comunidades e sua caixa de entrada. Tudo conectado no Uorqui.' : 'Messages, communities and your inbox. All connected in Uorqui.')}</p>
+        {hasMailAccounts && <Button variant="outline" className="mt-5 gap-2" onClick={startCompose}>{pt ? 'Escrever email' : 'Write email'}<ArrowUpRight className="size-4" /></Button>}
       </div></div>}
     </section>
     {connectPicker&&createPortal(
