@@ -25,8 +25,8 @@ export async function optimizeVideoAttachment(
   const canvas=document.createElement('canvas');
   if(typeof canvas.captureStream!=='function')return unchanged;
   const outputMime=[
-    'video/webm;codecs=vp8,opus','video/webm',
     'video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4',
+    'video/webm;codecs=vp8,opus','video/webm',
   ].find(type=>MediaRecorder.isTypeSupported(type));
   if(!outputMime)return unchanged;
 
