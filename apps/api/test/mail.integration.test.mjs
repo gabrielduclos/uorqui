@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import { getPool, closeDatabase } from '../dist/db/client.js';
 import { registerMailRoutes } from '../dist/mail-routes.js';
 import { registerNotificationRoutes } from '../dist/notification-routes.js';
-import { openMailSecret, sealMailSecret } from '../dist/mail-providers.js';
+import { openMailSecret, sealMailSecret, countInboxUnread } from '../dist/mail-providers.js';
 
 // This suite must only run against disposable local/CI PostgreSQL.
 const dbUrl = new URL(process.env.DATABASE_URL || 'http://missing');
@@ -35,6 +35,8 @@ before(async () => {
     if (url.hostname === 'oauth2.googleapis.com' || url.pathname.endsWith('/token')) return tokenFailure ? Response.json({ error: 'invalid_client' }, { status: 400 }) : Response.json({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 3600 });
     if (url.pathname.endsWith('/profile')) return mailboxFailure ? Response.json({ error: 'forbidden' }, { status: 403 }) : Response.json({ emailAddress: gmailEmail });
     if (url.pathname === '/v1.0/me') return Response.json({ mail: 'alice@outlook.test' });
+    if (url.pathname === '/gmail/v1/users/me/labels/INBOX')
+      return Response.json({ messagesUnread: 7, messagesTotal: 40 });
     if (url.pathname.endsWith('/send') || url.pathname.endsWith('/sendMail') || url.pathname.endsWith('/reply')) return new Response(null, { status: 202 });
     if (url.pathname.endsWith('/messages/batchModify')) return new Response(null, { status: 204 });
     if (url.pathname.endsWith('/messages/outlook-id/move')) return Response.json({ id: 'new-outlook-id' });
@@ -65,6 +67,14 @@ after(async () => {
   globalThis.fetch = realFetch;
   await getPool().query('DELETE FROM users WHERE id=ANY($1::uuid[])', [[alice, bob]]);
   await app.close(); await closeDatabase();
+});
+
+test('Gmail Inbox badge reads exact label messagesUnread rather than list estimate',async()=>{
+  calls=[];
+  const unread=await countInboxUnread('gmail','test-access');
+  assert.equal(unread,7);
+  assert.ok(calls.some(call=>call.url.pathname==='/gmail/v1/users/me/labels/INBOX'));
+  assert.ok(!calls.some(call=>call.url.pathname.endsWith('/messages')));
 });
 function request(path, { user = alice, method = 'GET', body, origin = 'http://localhost:5173' } = {}) {
   return app.inject({ method, url: '/api/v1/mail/' + path, headers: { ...(user ? { 'x-test-user': user } : {}), ...(origin ? { origin } : {}) }, ...(body ? { payload: body } : {}) });
