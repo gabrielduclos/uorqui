@@ -196,10 +196,14 @@ export async function listMail(provider: MailProvider, token: string, folder: Ma
 export async function countInboxUnread(provider: MailProvider, token: string): Promise<number> {
   if (provider === 'manual') return countManualInboxUnread(token);
   if (provider === 'gmail') {
-    const query = new URLSearchParams({labelIds:'INBOX',q:'is:unread',maxResults:'1'});
-    const result = await providerFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?' + query, {headers:headers(token)});
-    const data = await result.json() as {resultSizeEstimate?:number};
-    return Math.max(0,Math.floor(Number(data.resultSizeEstimate ?? 0)));
+    // messages.list exposes resultSizeEstimate (approximate, often stale after
+    // a read). The INBOX label has the provider's actual messagesUnread count.
+    const result = await providerFetch('https://gmail.googleapis.com/gmail/v1/users/me/labels/INBOX',
+      {headers:headers(token)});
+    const data = await result.json() as {messagesUnread?:number};
+    const count = Number(data.messagesUnread);
+    if(!Number.isFinite(count)||count<0)throw Error('MAIL_PROVIDER_UNAVAILABLE');
+    return Math.floor(count);
   }
   const result = await providerFetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox?$select=unreadItemCount',{headers:headers(token)});
   const data = await result.json() as {unreadItemCount?:number};
