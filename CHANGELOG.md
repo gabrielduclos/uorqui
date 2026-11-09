@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.26] — 2026-11-09
+
+- **Complete light-theme background alignment:** the beta.25 sidebar was gray (`#ededed`) but the parent app canvas and outer gutters still used `--background: #fafafa`. The signed-in light palette now uses `--background: #ededed` and `--workspace-rail: #ededed`, aligning the entire background (including the area behind and beside the menu, plus collapsed-sidebar gutters) with `--kit-sidebar: #ededed`.
+- **White content surfaces preserved:** inset panels, channel navigation and conversation reading panes retain `--kit-panel: #ffffff`, so the full outer canvas contrasts clearly against the workspace. Dark theme colors remain unchanged; no individual page overrides or global root palette changes.
+- **Tests and scope:** updated the existing CSS regression suite to assert aligned light canvas/menu/rail tokens and unchanged light panels and dark palette. UI Kit CSS and documentation only; no API, SQL, database migration or account behavior changes. Verify full-screen desktop (menu expanded/collapsed) and mobile in both themes.
+
 ## [0.1.0-beta.25] — 2026-11-09
 
 - **Light theme primary menu contrast:** the desktop sidebar uses a subtly darker neutral gray (`--kit-sidebar: #ededed`, formerly `#fafafa`) to distinguish navigation from the white content panel. The mobile primary-menu drawer now uses the same semantic sidebar token.
