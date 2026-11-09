@@ -51,6 +51,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   const [error,setError] = useState('');
   const [optimizing,setOptimizing] = useState(false);
   const [optimizationProgress,setOptimizationProgress] = useState(0);
+  const [optimizingFile,setOptimizingFile] = useState<{name:string;size:number}|null>(null);
   const [videoNotice,setVideoNotice] = useState('');
   const optimizationController=useRef<AbortController|null>(null);
   const optimizingRef=useRef(false);
@@ -170,7 +171,9 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     }
     const controller=new AbortController();
     optimizationController.current=controller;
-    optimizingRef.current=true;setOptimizing(true);setOptimizationProgress(0);setError('');
+    optimizingRef.current=true;setOptimizing(true);setOptimizationProgress(0);
+    setOptimizingFile({name:file.name,size:file.size});
+    setVideoNotice('');setError('');
     try{
       const result=await optimizeVideoAttachment(file,controller.signal,percent=>{
         if(mounted.current)setOptimizationProgress(percent);
@@ -186,12 +189,14 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         :(pt?'Vídeo já pequeno ou sem compactação disponível; original preservado.':
           'Video already small or compression unavailable; original preserved.'));
     }catch(error){
-      if(mounted.current&&!(error instanceof Error&&error.message==='ABORTED'))
-        setError(pt?'Falha ao preparar o vídeo.':'Could not prepare the video.');
+      if(!mounted.current)return;
+      if(error instanceof Error&&error.message==='ABORTED')
+        setVideoNotice(pt?'Compactação cancelada. Nenhum vídeo foi enviado.':'Compression cancelled. No video was sent.');
+      else setError(pt?'Falha ao preparar o vídeo.':'Could not prepare the video.');
     }finally{
       if(optimizationController.current===controller)optimizationController.current=null;
       optimizingRef.current=false;
-      if(mounted.current)setOptimizing(false);
+      if(mounted.current){setOptimizing(false);setOptimizingFile(null);}
     }
   }
   function selectGallery(files:File[]){
@@ -318,9 +323,22 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
 
   return <form ref={controls} onSubmit={submit}
     className="relative flex w-full min-w-0 flex-wrap items-end gap-1 sm:gap-2" data-live-message-composer>
-    {optimizing&&<p role="status" className="w-full text-xs text-primary">
-      {pt?'Compactando vídeo… ':'Compressing video… '}{optimizationProgress}%
-    </p>}
+    {optimizing&&<div className="w-full min-w-0 space-y-2 rounded-lg border border-border bg-card p-3" role="status" aria-live="polite">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="min-w-0 flex-1 truncate font-semibold" title={optimizingFile?.name}>
+          {pt?'Compactando vídeo':'Compressing video'} · {optimizingFile?(optimizingFile.size/1048576).toFixed(1)+' MB':''}
+        </span>
+        <span className="shrink-0 text-muted-foreground">{optimizationProgress}%</span>
+        <button type="button" className="min-h-9 shrink-0 rounded-md border border-border px-2 text-xs hover:bg-accent"
+          onClick={()=>optimizationController.current?.abort()}>{pt?'Cancelar':'Cancel'}</button>
+      </div>
+      <progress max={100} value={optimizationProgress} className="h-2 w-full accent-primary"
+        aria-label={pt?'Progresso da compactação':'Video compression progress'}/>
+      <p className="text-[11px] text-muted-foreground">
+        {pt?'Processando no dispositivo. O vídeo só será enviado depois de compactado.':
+          'Processing on this device. Video will be uploaded only after compression.'}
+      </p>
+    </div>}
     {videoNotice&&!optimizing&&<p role="status" className="w-full text-xs text-muted-foreground">{videoNotice}</p>}
     {pendingPhotos.length>0 && <div className="w-full min-w-0 border border-border bg-muted/60 p-2 text-xs" role="status">
       <p className="mb-2 font-semibold">{pt?pendingPhotos.length+' foto(s) selecionada(s)':pendingPhotos.length+' selected photo(s)'}</p>

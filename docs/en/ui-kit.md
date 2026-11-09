@@ -64,7 +64,7 @@
 | --- | --- |
 | `SocialShell`, `UIKitSectionHeading` | Responsive navigation and headings; single source of truth for active area |
 | `LiveDirectChat`, `DirectMessageBubble` | Persisted 1:1 messages, SSE, delivery/read status and times, optimistic replies, pins, actions and viewport-safe menus |
-| `LiveMessageComposer` | **+ attachments · Gallery photos/videos · growing input · emoji · mic/send**; optional wake lock during voice recording and best-effort local video compression with 50 MB final cap; keep mobile keyboard stable |
+| `LiveMessageComposer` | **+ attachments · Gallery photos/videos · growing input · emoji · mic/send**; optional wake lock during voice recording and local video compression, with progress/cancel/before-after sizes and 50 MB final cap; keep mobile keyboard stable |
 | `ConversationAttachmentsPanel`, `ChatMediaViewer`, `ChatAudioPlayer` | Paginated history of images/videos/audio/files; zoom, download, responsive previews |
 | `LiveCommunities`, `CommunityVoiceRoom` | Text, voice and meeting channels; realtime messages, membership, moderation, invitations and room text |
 | `CommunityModerationPanel` | Visible delete confirmation in the channel card and outside the scrollable section |
