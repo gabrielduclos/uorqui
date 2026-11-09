@@ -307,7 +307,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
           if (controller.signal.aborted) return;
           setMessages(old => old.map(row => row.accountId === chosenAccount && row.id === data.id ? { ...row, unread: false } : row));
           setSelected(old => old?.accountId === chosenAccount && old.id === data.id ? { ...old, unread: false } : old);
-          window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:1}}));
+          if(folder==='inbox')window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:1}}));
           clearReadPush({kind:'mail',accountId:chosenAccount,messageId:data.id});
         } catch {
           if (!controller.signal.aborted)
@@ -410,7 +410,10 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         ? `${moved.size} movidos, ${failed.length} não puderam ser movidos. Tente novamente.`
         : `${moved.size} moved, ${failed.length} could not be moved. Please retry.`);
       else setNotice(destination === 'trash' ? 'movedTrash' : 'movedSpam');
-      if (moved.size) { setPage(''); setUnifiedCursors({}); setNextPage(null); setRefresh(value => value + 1); }
+      if (moved.size) {
+         setPage(''); setUnifiedCursors({}); setNextPage(null); setRefresh(value => value + 1);
+         window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
+       }
     } catch (error) { setError(explainError(error)); }
     finally { setMoving(false); }
   }
@@ -545,7 +548,10 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
       <header className="shrink-0 space-y-4 border-b border-border px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-2"><h1 className="text-lg font-semibold tracking-tight">Email</h1>
           <div className="flex gap-1"><Button size="icon" variant="ghost" aria-label={pt ? 'Atualizar emails' : 'Refresh email'} disabled={loading || loadingAccounts}
-            onClick={() => { setPage(''); setUnifiedCursors({}); setRefresh(value => value + 1); setAccountRefresh(value => value + 1); }}><RefreshCw className="size-4" /></Button>
+            onClick={() => {
+               setPage(''); setUnifiedCursors({}); setRefresh(value => value + 1); setAccountRefresh(value => value + 1);
+               window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
+             }}><RefreshCw className="size-4" /></Button>
             <Button size="icon" variant="ghost" aria-label={pt ? 'Novo email' : 'New email'} disabled={!hasMailAccounts} onClick={startCompose}><Plus className="size-4" /></Button></div>
         </div>
         {hasMailAccounts && <>
