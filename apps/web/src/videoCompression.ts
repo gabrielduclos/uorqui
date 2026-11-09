@@ -15,12 +15,20 @@ export async function optimizeVideoAttachment(
   if(typeof MediaRecorder==='undefined'||typeof AudioContext==='undefined')return unchanged;
   const withDeadline=async<T>(promise:Promise<T>,ms:number):Promise<T>=>{
     let timer=0;
-    try{
-      return await Promise.race([
-        promise,
-        new Promise<T>((_,reject)=>{timer=window.setTimeout(()=>reject(Error('VIDEO_NOT_ALLOWED')),ms);})
-      ]);
-    }finally{window.clearTimeout(timer);}
+    let onAbort:(()=>void)|null=null;
+    const timeout=new Promise<T>((_,reject)=>{
+      timer=window.setTimeout(()=>reject(Error('VIDEO_TIMEOUT')),ms);
+    });
+    const cancelled=new Promise<T>((_,reject)=>{
+      onAbort=()=>reject(Error('ABORTED'));
+      if(signal?.aborted)onAbort();
+      else if(signal)signal.addEventListener('abort',onAbort,{once:true});
+    });
+    try{return await Promise.race([promise,timeout,cancelled]);}
+    finally{
+      window.clearTimeout(timer);
+      if(onAbort)signal?.removeEventListener('abort',onAbort);
+    }
   };
   const canvas=document.createElement('canvas');
   if(typeof canvas.captureStream!=='function')return unchanged;
@@ -41,20 +49,21 @@ export async function optimizeVideoAttachment(
   let frame=0;
   let watchdog=0;
   let rejectPending:((error:Error)=>void)|null=null;
+  let screenWakeLock:WakeLockSentinel|null=null;
   const abort=()=>rejectPending?.(Error('ABORTED'));
   signal?.addEventListener('abort',abort,{once:true});
   try{
-    const loaded=await new Promise<boolean>(resolve=>{
+    const loaded=await withDeadline(new Promise<boolean>(resolve=>{
       if(video.readyState>=1){resolve(true);return;}
-      const timeout=window.setTimeout(()=>resolve(false),15000);
-      video.addEventListener('loadedmetadata',()=>{window.clearTimeout(timeout);resolve(true);},{once:true});
-      video.addEventListener('error',()=>{window.clearTimeout(timeout);resolve(false);},{once:true});
-    });
+      video.addEventListener('loadedmetadata',()=>resolve(true),{once:true});
+      video.addEventListener('error',()=>resolve(false),{once:true});
+    }),15000);
     if(signal?.aborted)throw Error('ABORTED');
     const duration=video.duration;
     // Real-time browser transcoding is too costly for very long clips.
     if(!loaded||!Number.isFinite(duration)||duration<=0||duration>180||
        !video.videoWidth||!video.videoHeight)return unchanged;
+    // Keep source aspect ratio, cap landscape/portrait at a 720p-equivalent frame.
     const scale=Math.min(1,1280/video.videoWidth,720/video.videoHeight);
     canvas.width=Math.max(2,Math.round(video.videoWidth*scale/2)*2);
     canvas.height=Math.max(2,Math.round(video.videoHeight*scale/2)*2);
@@ -68,9 +77,15 @@ export async function optimizeVideoAttachment(
     const recordingStream=new MediaStream([
       ...canvasStream.getVideoTracks(),...audioTarget.stream.getAudioTracks(),
     ]);
+    // Browser compression runs in real time; avoid display sleep where supported.
+    if('wakeLock' in navigator&&document.visibilityState==='visible'){
+      try{screenWakeLock=await navigator.wakeLock.request('screen');}
+      catch{/* Low-power mode and unsupported browsers may decline. */}
+    }
+    if(signal?.aborted)throw Error('ABORTED');
     try{
       recorder=new MediaRecorder(recordingStream,{
-        mimeType:outputMime,videoBitsPerSecond:1_100_000,audioBitsPerSecond:96_000,
+        mimeType:outputMime,videoBitsPerSecond:1_300_000,audioBitsPerSecond:96_000,
       });
     }catch{return unchanged;}
     const chunks:Blob[]=[];
@@ -127,6 +142,7 @@ export async function optimizeVideoAttachment(
     if(recorder?.state!=='inactive'){try{recorder?.stop();}catch{}}
     canvasStream?.getTracks().forEach(track=>track.stop());
     if(audioContext)void audioContext.close().catch(()=>{});
+    if(screenWakeLock)void screenWakeLock.release().catch(()=>{});
     video.removeAttribute('src');video.load();
     URL.revokeObjectURL(url);
     rejectPending=null;
