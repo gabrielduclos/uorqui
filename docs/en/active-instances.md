@@ -1,10 +1,11 @@
-# Active app instances (beta.20)
+# Active app instances (beta.21)
 
 The signed-in workspace permits **one desktop tab** and **one mobile browser/PWA instance** per account, simultaneously. It does not revoke Better Auth sessions, alter push permissions or grant extra API authorization.
 
 ## Startup and reopening
 
 - Ownership is checked behind the normal `StartupSplash`, before the workspace or message/voice streams are mounted.
+- **Reload handover (beta.21):** the successor page waits up to two seconds for the old page's Web Lock to release, underneath `StartupSplash`. A different live tab still blocks; waiting does not silently take over.
 - **Same browser or installed PWA:** the app saves a random browser instance UUID in `localStorage` per account and device category. Reopening or reloading reuses that ID and renews its existing PostgreSQL lease immediately, rather than generating a new ID and conflicting with its own 60-second lease.
 - **Second live tab:** a Web Lock exclusive to this origin/account/category prevents two documents in the same browser from using the shared ID at once. A second document displays **Uorqui is already open**. **Use this tab** explicitly steals the local lock and takes over; the displaced document unmounts the workspace but remains logged in.
 - **Other browser/device:** the PostgreSQL lease still enforces one browser identity in each category. A desktop slot does not displace a mobile slot. Server conflicts require explicit takeover or the 60-second timeout.
@@ -21,4 +22,4 @@ The signed-in workspace permits **one desktop tab** and **one mobile browser/PWA
 
 ## Verification
 
-Run `node --import tsx --test apps/web/test/app-instance-identity.test.mjs`, the PostgreSQL integration suite, TypeScript/build, and all four CI workflows. Manual acceptance: reload same desktop tab, close/reopen browser, close/reopen installed iOS/Android PWA, duplicate tab, open a different browser, transfer with **Use this tab**, desktop and mobile simultaneously, offline/BFCache recovery and voice-call cleanup. No new database migration is required in beta.20. Confirm real Cloudflare/Render deployment separately.
+Run `npm run test:instance -w @uorqui/web` in the GitHub Web UI workflow (full workspaces, including `tsx`), then the PostgreSQL integration suite, TypeScript/build, and all four CI workflows. The production `npm run build` intentionally does not execute Node tests, because Cloudflare Builds can install only the web workspace and lacks `tsx`. Manual acceptance: reload same desktop tab, close/reopen browser, close/reopen installed iOS/Android PWA, duplicate tab, open a different browser, transfer with **Use this tab**, desktop and mobile simultaneously, offline/BFCache recovery and voice-call cleanup. No new database migration is required in beta.20. Confirm real Cloudflare/Render deployment separately.

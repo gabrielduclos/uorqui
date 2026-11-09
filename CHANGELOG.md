@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.21] — 2026-11-09
+
+- **Cloudflare production build restored:** the web `build` script runs only TypeScript checking and Vite compilation. The instance-identity Node tests require the `tsx` loader, which Cloudflare Builds does not install when installing only the web workspace with Bun; these tests now run as a dedicated step in the GitHub Web UI workflow with full workspace dependencies. This unblocks publication of the persistent browser/PWA identity fix from beta.20.
+- **Refresh lock release grace:** the Web Locks startup arbitration retries for up to two seconds while the previous document unloads, under the existing startup splash. This avoids a false **another instance** warning when refreshing the *same tab* during a short delayed Web Lock release, without silently taking over a genuinely open second tab. A bounded timeout still shows the real conflict.
+- **Regression tests:** test delayed lock release on refresh, a concurrently open tab remaining blocked, and cancellation when navigation closes before acquisition. Existing account, category, takeover, DB/API/session and push rules remain unchanged. **No database migration.**
+- **Verification:** run the GitHub version, web build with identity tests, API and PostgreSQL integration workflows; confirm the actual Cloudflare Build deployment after merge. Previous beta.20 GitHub CI success did not imply successful Cloudflare publication because of the missing `tsx` dependency.
+
 ## [0.1.0-beta.20] — 2026-11-09
 
 - **Persistent browser/PWA identity:** the active-instance identifier is now stored locally per account and desktop/mobile category. Reopening the same browser or installed PWA and reloading a page no longer creates a different owner ID for the existing 60-second server lease, avoiding false “session already open” warnings.

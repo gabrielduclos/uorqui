@@ -1,10 +1,11 @@
-# Instâncias ativas do aplicativo (beta.20)
+# Instâncias ativas do aplicativo (beta.21)
 
 O Uorqui permite **uma aba desktop** e **uma instância mobile (navegador/PWA)** por conta, simultaneamente. O limite não revoga sessões Better Auth, altera permissões push nem substitui autorização da API.
 
 ## Inicialização e reabertura
 
 - A posse da instância é confirmada atrás do `StartupSplash` original, antes de montar chats, chamadas e conexões SSE.
+- **Atualização da mesma aba (beta.21):** a página nova espera por até dois segundos pela liberação do Web Lock da página antiga, ainda sob o `StartupSplash`. Outra aba realmente aberta continua bloqueada; não existe tomada de posse automática.
 - **Mesmo navegador ou PWA instalado:** um UUID aleatório de instância é salvo no `localStorage` por conta e categoria. Recarregar ou reabrir reutiliza o identificador e renova a reserva existente de 60 segundos no PostgreSQL, sem interpretar o próprio navegador como outra sessão.
 - **Segunda aba aberta:** um Web Lock exclusivo por origem/conta/categoria impede duas páginas de usarem a mesma identidade. A segunda recebe **Uorqui já está aberto** e pode selecionar **Usar nesta aba** para tomar o bloqueio e a vaga do servidor. A anterior suspende o aplicativo, mas não sai da conta.
 - **Outro navegador/dispositivo:** a reserva do PostgreSQL mantém uma identidade ativa por categoria. Desktop e mobile podem coexistir. Um conflito real exige transferência explícita ou expiração de 60 segundos.
@@ -21,4 +22,4 @@ O Uorqui permite **uma aba desktop** e **uma instância mobile (navegador/PWA)**
 
 ## Validação
 
-Executar `node --import tsx --test apps/web/test/app-instance-identity.test.mjs`, integração com PostgreSQL temporário, TypeScript/build e os quatro workflows de CI. Validar manualmente: recarregar a aba desktop, fechar/abrir navegador, fechar/abrir PWA iOS/Android, duplicar aba, segundo navegador, transferência, desktop + celular, retorno de hibernação/BFCache e desmontagem de chamadas de voz. A beta.20 não requer outra migração. Confirmar publicação Cloudflare/Render separadamente.
+Executar `npm run test:instance -w @uorqui/web` no CI Web UI (todos os workspaces disponíveis, inclusive `tsx`), integração com PostgreSQL temporário, TypeScript/build e os quatro workflows de CI. O comando `build` do Cloudflare não executa testes Node, pois a instalação parcial do frontend não contém `tsx`. Validar manualmente: recarregar a aba desktop, fechar/abrir navegador, fechar/abrir PWA iOS/Android, duplicar aba, segundo navegador, transferência, desktop + celular, retorno de hibernação/BFCache e desmontagem de chamadas de voz. A beta.20 não requer outra migração. Confirmar publicação Cloudflare/Render separadamente.

@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.21] — 09/11/2026
+
+- **Build de produção Cloudflare corrigido:** o comando `build` do frontend agora executa apenas TypeScript e Vite. Os testes Node de identidade utilizavam `tsx`, indisponível na instalação parcial da Cloudflare via Bun; agora rodam no workflow Web UI do GitHub Actions, que instala todas as dependências dos workspaces. Isso desbloqueia a publicação da identidade persistente do navegador/PWA introduzida na beta.20.
+- **Atualização da mesma aba:** a validação exclusiva por Web Locks aguarda até dois segundos pela liberação da página anterior durante o recarregamento, atrás da tela inicial. Não interpreta um atraso curto no fechamento como outra sessão, mas mantém o bloqueio de uma segunda aba realmente aberta quando o prazo termina.
+- **Testes:** cenários novos de liberação retardada do bloqueio na atualização, segunda aba ainda aberta e navegação cancelada antes da aquisição. Sem alteração de login, API, banco, notificações ou categorias desktop/mobile. **Sem migração.**
+- **Validação:** pipelines GitHub de versionamento, testes e build web, API e integração PostgreSQL; conferir separadamente o deploy Cloudflare depois do merge. O CI verde da beta.20 não garantia publicação, porque o Cloudflare não encontrou `tsx`.
+
 ## [0.1.0-beta.20] — 09/11/2026
 
 - **Identidade persistente do navegador/PWA:** o identificador da instância fica salvo localmente por conta e categoria desktop/mobile. Reabrir o mesmo navegador ou PWA instalado e recarregar a página não gera outro ID para a reserva existente de 60 segundos, evitando o falso aviso “Uorqui já está aberto”.
