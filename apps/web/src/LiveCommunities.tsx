@@ -28,6 +28,7 @@ import { invalidateChatMedia, invalidateCommunityMedia } from './chatMediaCache'
 import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
+import { ChannelScrollBehavior } from './channelScrollBehavior';
 
 /** Shared authorized avatar cache prevents repeated R2 downloads between
  * the community directory, channel header and the workspace icon rail. */
@@ -151,7 +152,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [notice,setNotice]=useState('');
   const scrollRef=useRef<HTMLDivElement>(null);
   const messageContentRef=useRef<HTMLDivElement>(null);
-  const followBottomRef=useRef(true);
+  const channelScrollRef=useRef(new ChannelScrollBehavior());
   const composerRef=useRef<HTMLTextAreaElement>(null);
   const pendingFiles=useRef(new Map<string,File>());
   const pendingBlobUrls=useRef(new Map<string,string>());
@@ -159,16 +160,16 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const previousMessageCount=useRef(0);
   const activeScrollKey=useRef<string|null>(null);
   const acknowledged=useRef(new Map<string,string>());
-  // Reopening a channel always begins with its newest message. Scrolling
-  // through history during an open session still remains under user control.
-  useEffect(()=>{
-    if(!channelOpen || !active){
-      activeScrollKey.current=null;
-      followBottomRef.current=true;
-    }
-  },[channelOpen,active]);
   useEffect(()=>()=>{for(const url of pendingBlobUrls.current.values())URL.revokeObjectURL(url);pendingBlobUrls.current.clear();pendingFiles.current.clear();},[]);
   const activeChannel=detail?.channels.find(x=>x.id===channelId)??null;
+  // Opening a channel (or expanding a voice room's text panel) must start
+  // at the latest message. User-directed history scrolling wins afterwards.
+  useEffect(()=>{
+    if(!channelOpen || !active || (activeChannel?.kind!=='text' && !voiceTextExpanded)){
+      activeScrollKey.current=null;
+      channelScrollRef.current.reset();
+    }
+  },[channelOpen,active,activeChannel?.kind,voiceTextExpanded]);
   const channelDescription=activeChannel?.description?.trim()??'';
   function suggestedChannelName(kind:Channel['kind']){
     const base=kind==='text'?'Sala de texto':kind==='voice'?'Sala de voz':'Sala de reunião';
@@ -518,13 +519,13 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     const key=currentMessageKey;
     if(!active||!channelOpen||!element||!key||messagesForKey!==key||messagesLoading)return;
     const latest=messages.at(-1)?.id??null;
-    if(activeScrollKey.current!==key){
+    if(channelScrollRef.current.open(key)){
       activeScrollKey.current=key;
       previousLastMessage.current=latest;
       previousMessageCount.current=messages.length;
-      followBottomRef.current=true;
       setNewBelow(0);
-      // Position before paint, then again after mobile/PWA layout settles.
+      // Start from the newest message; opening ignores intermediate scroll
+      // events caused by browser restoration or asynchronous layout.
       element.scrollTop=element.scrollHeight;
       const frame=window.requestAnimationFrame(()=>{
         if(scrollRef.current===element&&activeScrollKey.current===key)
@@ -534,9 +535,9 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
     }
     if(latest&&latest!==previousLastMessage.current){
       const distance=element.scrollHeight-element.scrollTop-element.clientHeight;
-      if(followBottomRef.current||distance<180){
-        followBottomRef.current=true;
-        element.scrollTo({top:element.scrollHeight,behavior:previousLastMessage.current?'smooth':'instant'});
+      if(channelScrollRef.current.shouldFollow(key)||distance<180){
+        element.scrollTo({top:element.scrollHeight,
+          behavior:previousLastMessage.current&&!channelScrollRef.current.isOpening(key)?'smooth':'instant'});
       }else if(previousLastMessage.current){
         setNewBelow(old=>old+Math.max(1,messages.length-previousMessageCount.current));
       }
@@ -558,7 +559,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
       const grew=height>previousHeight;
       const wasNearBottom=previousHeight-element.scrollTop-element.clientHeight<110;
       previousHeight=height;
-      if(!followBottomRef.current && !(grew&&wasNearBottom))return;
+      if(!channelScrollRef.current.shouldPinOnResize(key,grew,wasNearBottom))return;
       window.cancelAnimationFrame(frame);
       frame=window.requestAnimationFrame(()=>{
         if(scrollRef.current===element&&activeScrollKey.current===key)
@@ -1173,11 +1174,18 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
         {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind!=='text'?'uorqui-voice-text-panel':undefined}
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div key={currentMessageKey} data-uorqui-room-history ref={scrollRef}
+            onWheel={event=>{if(event.deltaY<0&&currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);}}
+            onTouchStart={()=>{if(currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);}}
+            onPointerDown={()=>{if(currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);}}
+            onKeyDown={event=>{
+              if(currentMessageKey&&['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))
+                channelScrollRef.current.interrupt(currentMessageKey);
+            }}
             onScroll={event=>{
               const element=event.currentTarget,key=currentMessageKey;
               if(!key||messagesForKey!==key)return;
               const atBottom=element.scrollHeight-element.scrollTop-element.clientHeight<110;
-              followBottomRef.current=atBottom;
+              channelScrollRef.current.onScroll(key,atBottom);
               if(atBottom)setNewBelow(old=>old?0:old);
             }}
             className="uorqui-kit-content-enter min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
@@ -1205,7 +1213,8 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                   author={renderedMessages.find(source=>source.id===message.replyToId)?.authorName??message.replyTo?.authorHandle??(pt?'Mensagem':'Message')}
                   body={message.replyTo?.body} deleted={message.replyTo?.deleted}
                   locale={locale}
-                  onJump={()=>document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'})}/>}
+                  onJump={()=>{if(currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);
+                     document.getElementById('community-msg-'+message.replyToId)?.scrollIntoView({block:'center',behavior:'smooth'});}}/>}
                 {message.deletedAt?<p className="mt-1 text-sm italic text-muted-foreground">{pt?'Mensagem cancelada':'Message removed'}</p>:
                   editingId===message.id?<form className="mt-2 space-y-2" onSubmit={event=>void updateMessage(event)}>
                     <textarea value={editingBody} onChange={event=>setEditingBody(event.target.value)} maxLength={4000} rows={2}

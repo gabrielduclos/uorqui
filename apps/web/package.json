@@ -1,6 +1,6 @@
 {
   "name": "@uorqui/web",
-  "version": "0.1.0-beta.21",
+  "version": "0.1.0-beta.22",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "test:instance": "node --import tsx --test test/app-instance-identity.test.mjs",
     "typecheck": "tsc --noEmit",
+    "test:channel-scroll": "node --import tsx --test test/channel-scroll.test.mjs",
     "preview": "vite preview",
     "check:worker": "wrangler deploy --dry-run",
     "preview:worker": "npm run build && wrangler dev",
