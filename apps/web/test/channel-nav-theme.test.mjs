@@ -30,10 +30,12 @@ test('light application canvas, gutter and main menu share one gray surface', ()
     'dark theme sidebar color must stay unchanged');
 });
 
-test('mobile light menu header and hamburger drawer use the shared sidebar gray', () => {
-  assert.match(uiKitCSS, /@media\(max-width:767px\)\s*\{[\s\S]*?:root\.light\s+\[data-uorqui-ui-kit="sprintrix-v1"\]\s+\[data-uorqui-main-header\]\s*\{\s*background:var\(--kit-sidebar\);/);
-  assert.doesNotMatch(uiKitCSS, /@media\(max-width:767px\)\s*\{[\s\S]*?\[data-uorqui-main-header\]\s*\{\s*background:var\(--kit-panel\);/,
-    'the mobile top menu must not use the white reading-panel token');
+test('mobile light header uses the panel surface like dark mode; drawer uses sidebar surface', () => {
+  assert.doesNotMatch(uiKitCSS, /:root\.light\s+\[data-uorqui-ui-kit="sprintrix-v1"\]\s+\[data-uorqui-main-header\]\s*\{[^}]*background\s*:/,
+    'light mode must not recolor the mobile header as the sidebar');
+  assert.doesNotMatch(uiKitCSS, /@media\(max-width:767px\)\s*\{[^}]*\[data-uorqui-main-header\]\s*\{[^}]*background\s*:/,
+    'mobile layout rules must not override the header panel surface');
+
   assert.match(shellSource, /id="uorqui-mobile-nav"[\s\S]{0,270}?bg-\[var\(--kit-sidebar\)\]/,
     'hamburger drawer should explicitly use the sidebar token instead of generic bg-background');
   assert.match(uiKitCSS, /\[data-uorqui-ui-kit="sprintrix-v1"\]\s+\[data-uorqui-main-header\],[\s\S]{0,120}?\[data-uorqui-context-header\]\s*\{\s*background:var\(--kit-panel\);/,

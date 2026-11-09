@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.28] — 09/11/2026
+
+- **Header mobile seguindo o tema escuro:** revertida a regra exclusiva do tema claro da beta.27 que pintava indevidamente o cabeçalho superior com o cinza do menu. Assim como no tema escuro, o header usa a superfície do painel de conteúdo (`--kit-panel: #ffffff` no tema claro). O cabeçalho desktop não muda.
+- **Menu separado do conteúdo:** a gaveta do menu hambúrguer continua com `--kit-sidebar: #ededed`, e o fundo externo permanece cinza. Painéis de leitura e lista de canais continuam brancos; o tema escuro segue inalterado.
+- **Teste e escopo:** regressão de CSS atualizada para impedir regras mobile de cabeçalho que sobrescrevam o painel e verificar a separação do menu. Apenas frontend CSS e documentação; sem alterações na API, banco ou migração. Validar navegador e PWA instalado após publicação Cloudflare.
+
 ## [0.1.0-beta.27] — 09/11/2026
 
 - **Contraste da navegação no mobile claro:** o cabeçalho superior do celular (menu hambúrguer, logotipo e notificações) agora usa `--kit-sidebar: #ededed`, igual ao menu lateral e ao fundo externo. Antes, o cabeçalho era forçado a `--kit-panel: #ffffff` e continuava branco mesmo com o tema claro cinza.
