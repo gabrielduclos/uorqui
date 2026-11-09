@@ -8,9 +8,9 @@ Ao tocar em um evento de publicação, abre-se o post no feed. Os demais eventos
 
 ## Oferta de notificações no desktop
 
-Nos navegadores desktop (janela de pelo menos 768 px, exceto iOS), a oferta diária **Ativar notificações** aparece antes do banner opcional de instalação do PWA quando o push é compatível, mas ainda não está ativo. O banner de instalação não pode mais cancelar a oferta de notificações; se o pedido de push foi exibido durante a visita, a instalação só pode ser sugerida em outro acesso.
+Nos navegadores desktop (janela de pelo menos 768 px, exceto iOS), a oferta diária **Ativar notificações** só aparece enquanto a permissão do navegador estiver em `default` (ainda não decidida) e houver suporte a push. Se a permissão já estiver **concedida**, nenhuma nova oferta de autorização aparece, mesmo quando a inscrição do service worker está ausente ou há falha na sincronização. Neste caso, o usuário pode usar **Notificações → Ajustes → Permissão neste dispositivo** para reconectar. O banner opcional de instalação do PWA é independente e não se sobrepõe ao pedido de permissão.
 
-A oferta continua limitada a **uma vez por dia por conta e navegador**, usando armazenamento local. A janela de permissão do sistema somente é aberta após o clique em **Ativar notificações**. Caso o navegador já tenha bloqueado o acesso, exibimos orientação para alterar a permissão do site, sem ficar pedindo autorização repetidamente.
+A oferta de permissão é limitada a **uma vez por dia por conta e navegador** quando a autorização ainda estiver pendente. A janela de permissão do sistema só abre após clicar em **Ativar notificações**. Se o navegador já negou a permissão, não há nova oferta automática: o caminho para liberá-la ou reconectar manualmente permanece em Ajustes.
 
 Em mobile, a regra anterior permanece: no iPhone/iPad é necessário instalar o PWA para receber push. Em todos os dispositivos, há um controle manual em **Notificações → Ajustes → Permissão neste dispositivo**.
 
