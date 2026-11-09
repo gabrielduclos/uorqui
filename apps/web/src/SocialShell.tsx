@@ -173,17 +173,25 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
   const [unreadMailCount,setUnreadMailCount]=useState(0);
   useEffect(()=>{
     let active=true;
+    // Ignore a request started before a local read/move and stale out-of-order
+    // responses from older refresh calls. Otherwise the badge jumps back up.
+    let requestVersion=0;
     const refresh=async()=>{
+      const version=++requestVersion;
       try{
         const response=await fetch('/api/v1/mail/unread',{credentials:'same-origin',cache:'no-store'});
         if(!response.ok)return;
         const data=await response.json() as {unreadCount:number};
-        if(active&&Number.isFinite(data.unreadCount))setUnreadMailCount(Math.max(0,Math.floor(data.unreadCount)));
+        if(active&&version===requestVersion&&Number.isFinite(data.unreadCount))
+          setUnreadMailCount(Math.max(0,Math.floor(data.unreadCount)));
       }catch{/* Mail is optional; a failed provider check must not break the main menu. */}
     };
     const delta=(event:Event)=>{
       const amount=Number((event as CustomEvent<{amount?:number}>).detail?.amount);
-      if(Number.isFinite(amount)&&amount>0)setUnreadMailCount(previous=>Math.max(0,previous-amount));
+      if(Number.isFinite(amount)&&amount>0){
+        ++requestVersion;
+        setUnreadMailCount(previous=>Math.max(0,previous-amount));
+      }
     };
     const focus=()=>{if(document.visibilityState==='visible')void refresh();};
     void refresh();
@@ -393,21 +401,34 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
       showNotice(key,data.title||'Uorqui',data.body||'Nova notificação',data.url,destination);
     };
     navigator.serviceWorker?.addEventListener('message',onMessage);
-    // Keep the deep link intact through login. Parse it only when the signed-in
-    // shell exists, then clear navigation parameters from the visible address.
-    const current=new URL(window.location.href);
-    if(['conversation','community','notification','mailAccount','communityInvite','mailInbox'].some(key=>current.searchParams.has(key))){
-      openPushDestination(current.toString());
+    // A service-worker click can reuse an already-running tab without remounting
+    // React. Consume the target on activation/history updates as well as startup.
+    const consumeLocation=()=>{
+      const current=new URL(window.location.href);
+      if(!['conversation','community','notification','mailAccount','communityInvite','mailInbox']
+        .some(key=>current.searchParams.has(key)))return;
+      const destination=current.toString();
       for(const key of ['conversation','community','channel','notification','mailAccount','mailMessage','communityInvite','mailInbox'])
         current.searchParams.delete(key);
       window.history.replaceState({},'',current.pathname+current.search+current.hash);
-    }
+      openPushDestination(destination);
+    };
+    consumeLocation();
+    const visible=()=>{if(document.visibilityState==='visible')consumeLocation();};
     const pending=(event:Event)=>{const target=(event as CustomEvent<string>).detail;
       if(typeof target==='string')openPushDestination(target);};
     window.addEventListener('uorqui:open-notification-destination',pending);
+    window.addEventListener('popstate',consumeLocation);
+    window.addEventListener('pageshow',consumeLocation);
+    window.addEventListener('focus',consumeLocation);
+    document.addEventListener('visibilitychange',visible);
     return()=>{
       navigator.serviceWorker?.removeEventListener('message',onMessage);
       window.removeEventListener('uorqui:open-notification-destination',pending);
+      window.removeEventListener('popstate',consumeLocation);
+      window.removeEventListener('pageshow',consumeLocation);
+      window.removeEventListener('focus',consumeLocation);
+      document.removeEventListener('visibilitychange',visible);
     };
   },[openPushDestination,showNotice,account.user.id]);
 
