@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEve
 import { createPortal } from 'react-dom';
 import { Dialog } from 'radix-ui';
 import { VoicePortalShell } from './VoicePortalShell';
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Compass, Hash, Headphones, LockKeyhole, MessageCircle, MessageSquareText, Mic, MicOff, Flag, Plus, Search, UserPlus, Users, Pencil, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -117,6 +117,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   const [newChannelNameEdited,setNewChannelNameEdited]=useState(false);
   const [newChannelDescription,setNewChannelDescription]=useState('');
   const [descriptionExpanded,setDescriptionExpanded]=useState(false);
+  const [editChannelId,setEditChannelId]=useState<string|null>(null);
   const [newChannelKind,setNewChannelKind]=useState<'text'|'voice'|'meeting'>('text');
   const [newChannelAccessMode,setNewChannelAccessMode]=useState<'open'|'restricted'>('open');
   const [unlockPassword,setUnlockPassword]=useState('');
@@ -1079,6 +1080,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
               <CommunityModerationPanel id={community.id} role={community.myRole as 'owner'|'admin'|'moderator'|'member'}
                 name={community.name} description={community.description} visibility={community.visibility} avatarUrl={community.avatarUrl}
                 channels={detail?.channels??[]} onChanged={()=>refresh(community.id)}
+                editChannelId={editChannelId} onChannelEditorClosed={()=>setEditChannelId(null)}
                 onDeleted={async()=>{closeChannel();setDetail(null);setSelectedId(null);await loadList();}}/>}
             {community.myRole!=='owner'&&<Button variant="ghost" size="sm" className="w-full text-muted-foreground"
               loading={busyAction==='leaveCommunity'} disabled={busy} onClick={()=>void act(async()=>{
@@ -1102,6 +1104,11 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
             <span className="truncate">{activeChannel.name}</span>
             {(activeChannel.hasPassword||activeChannel.accessMode==='restricted')&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?(activeChannel.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(activeChannel.accessMode==='restricted'?'Closed channel':'Password-protected channel')}/>} 
           </h2><p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
+          {['owner','admin'].includes(community.myRole??'')&&<Button type="button" size="sm" variant="ghost"
+            className="shrink-0 gap-1 px-2 sm:px-3" aria-label={pt?'Editar canal':'Edit channel'}
+            title={pt?'Editar canal':'Edit channel'} onClick={()=>setEditChannelId(activeChannel.id)}>
+            <Pencil className="size-4"/><span className="hidden sm:inline">{pt?'Editar':'Edit'}</span>
+          </Button>}
           <Button type="button" size="sm" variant="ghost" className="shrink-0 gap-2 px-2 sm:px-3"
             aria-label={pt?'Convidar para este canal':'Invite to this channel'}
             onClick={()=>void openChannelInvite()}>
