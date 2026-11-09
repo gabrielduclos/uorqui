@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.18] — 2026-11-09
+
+- **One app instance per device category:** one active desktop document and one active mobile/PWA document per authenticated account, including different browsers. A second tab is paused instead of signing out; **Use this tab** explicitly takes control of that category. The prior owner is suspended (chat/SSE/media cleanup on unmount) without revoking its Better Auth login.
+- **Atomic server lease:** PostgreSQL migration `0043_app_instance_leases.sql` adds one row per account + category. `POST /api/v1/instances/claim` atomically acquires/renews or returns `409 INSTANCE_IN_USE`; only explicit `takeover:true` may displace a live owner. Expired leases (60 s) can be recovered automatically; `/release` only releases the requesting instance. Write routes require a valid session and exact write origin. Missing migration temporarily permits normal operation during staggered deployment instead of locking out users; enable enforcement by applying migration before treating the limit as live.
+- **Fast handover:** BroadcastChannel blocks the previous tab instantly within one origin. A new SSE `instance-lease` event notifies other browsers when an explicit takeover occurs; a 15-second heartbeat is the fallback. Transient network failures retry; repeated failures temporarily suspend the workspace without logging out. Mobile is detected from user agent (including desktop-mode iPadOS), independent of window width. An instance is a *document*, not a login session; this limits the app UI, not direct access to authenticated APIs by a malicious client.
+- **Scope/testing:** integration tests cover user/session separation, independent desktop/mobile limits, origin validation, takeover, stale release, and expiry using disposable PostgreSQL. Re-test duplicated browser tabs, browser restart, iOS/Android PWA, desktop and mobile concurrently, voice call teardown and connectivity loss. Requires additive SQL migration; no existing session revocation or push permission changes.
+
 ## [0.1.0-beta.17] — 2026-11-09
 
 - **Mail unread count accuracy:** Gmail now uses the authoritative `INBOX` label's `messagesUnread` field rather than the approximate `messages.list.resultSizeEstimate`. Outlook/IMAP continue with provider counts. The UI discards stale/out-of-order count refreshes started before a local read or move, synchronizes the shared badge on manual refresh and move, and avoids decrementing Inbox counts when reading Spam/Sent/Trash.

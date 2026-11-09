@@ -15,6 +15,7 @@
 
 
 - **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent. OS notification clicks navigate an already-open React app directly; closed/background PWAs retain URL deep links. Email unread badges honor provider Inbox counts and ignore stale read-after-refresh races.
+- **Single active instance (beta.18):** one desktop tab and one mobile/PWA window per account. A competing tab displays a centered, theme-aware blocking screen rather than mounting the workspace, with **Use this tab** for explicit takeover, **Try again** on network errors and **Sign out**. Status copy is localized; ownership changes do not revoke authentication or affect the other device category.
 
 
 - **Desktop permission prompts:** offer the daily push opt-in only when browser permission is undecided (`default`), never when granted or denied regardless of subscription sync state. The optional PWA install reminder remains independent; never stack prompts or request native permission without a click. Preserve mobile-specific installation rules.

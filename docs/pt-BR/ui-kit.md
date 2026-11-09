@@ -15,6 +15,7 @@
 
 
 - **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes. O toque em push com app aberto navega diretamente no React; com PWA fechado/oculto, usa link persistente. O badge de e-mail segue o total da Caixa de entrada do provedor e evita respostas atrasadas após leituras.
+- **Instância ativa única (beta.18):** uma aba desktop e uma janela mobile/PWA por conta. Ao disputar a mesma vaga, aparece uma tela centralizada com o tema global, sem montar o aplicativo; botões **Usar nesta aba** para assumir, **Tentar novamente** quando houver erro e **Sair da conta**. Textos respeitam PT/EN, e transferir o controle não desloga nem bloqueia a outra categoria.
 
 
 - **Convites de permissão no desktop:** oferecer push somente quando a permissão do navegador estiver pendente (`default`), nunca se estiver concedida ou negada, mesmo se a inscrição não sincronizar. O convite opcional para instalar PWA é independente; não sobrepor avisos nem abrir a permissão nativa sem clique. No mobile, manter as regras próprias de instalação.
