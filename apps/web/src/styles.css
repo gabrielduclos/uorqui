@@ -212,9 +212,10 @@ body.uorqui-app-active {
     display: none;
   }
   [data-uorqui-app-shell][data-uorqui-sidebar-mode="expanded"] [data-uorqui-channel-nav] {
+    /* Layout only. The channel-pane surface comes from the signed-in UI Kit;
+       an old, higher-specificity background here masked beta.23. */
     flex-basis: 15.5rem;
     width: 15.5rem;
-    background: var(--background);
   }
   [data-uorqui-app-shell] [data-uorqui-context-header] {
     height: 3.25rem;

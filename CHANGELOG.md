@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.24] — 2026-11-09
+
+- **Actually unify channel navigation background:** fixed a higher-specificity rule in `apps/web/src/styles.css` that still set `--background` when the desktop sidebar was expanded, overriding the beta.23 UI Kit `--kit-panel` rule. The channel list (text, voice, meeting, creation, moderation) now inherits the same inset content surface as its header and adjacent content in dark and light themes, regardless of sidebar collapse state.
+- **One semantic source of truth:** the existing signed-in selector in `apps/web/src/ui-kit/sprintrix.css` controls channel-pane color at all breakpoints; the global stylesheet now only sets the desktop column width. Main app sidebar and community icon rail remain unchanged.
+- **Regression test:** new no-dependency Node test in Web UI CI verifies that the conflicting background declaration does not return and that the scoped UI Kit keeps `--kit-panel`. Version bump, READMEs, changelogs and UI Kit EN/PT updated. Frontend CSS/test/docs only; no API/SQL/migration.
+
 ## [0.1.0-beta.23] — 2026-11-09
 
 - **Community channel list surface:** the section listing text, voice and meeting channels (including New channel and Moderation) now uses the same `--kit-panel` background as the surrounding inset workspace in both dark and light modes. The previous desktop override incorrectly used `--background`, making the section look like the outer canvas.

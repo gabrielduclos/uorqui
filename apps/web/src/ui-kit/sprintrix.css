@@ -139,7 +139,8 @@
   background:var(--kit-panel);border-color:var(--border);box-shadow:var(--kit-shadow);
 }
 /* Channels belong to the content inset, not to the primary sidebar/canvas.
-   Match the surrounding workspace surface in both light and dark themes. */
+   This is the sole owner of the channel list background at all breakpoints
+   and sidebar states: --kit-panel matches the parent inset and header. */
 [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-channel-nav]{
   background:var(--kit-panel);
 }

@@ -28,6 +28,8 @@ jobs:
         run: npm run test:instance -w @uorqui/web
       - name: Test community channel opening and scroll control
         run: npm run test:channel-scroll -w @uorqui/web
+      - name: Test channel navigation theme and CSS precedence
+        run: npm run test:channel-theme -w @uorqui/web
       - name: Type-check and build React application
         run: npm run build -w @uorqui/web
       - name: Validate Cloudflare Worker configuration
