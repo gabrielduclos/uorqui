@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.17] — 09/11/2026
+
+- **Contagem de e-mails não lidos:** o Gmail passa a consultar o valor `messagesUnread` do marcador `INBOX`, no lugar da estimativa `messages.list.resultSizeEstimate`. Outlook/IMAP mantêm seus totais do provedor. A interface ignora respostas antigas recebidas após marcar como lido/mover, sincroniza o badge no botão Atualizar e ao mover mensagens e não desconta e-mails de Spam/Enviados/Lixeira da Caixa de entrada.
+- **Corrida no monitoramento:** a API registra o horário de atualização após leitura individual, leitura em lote e movimentação. Uma varredura iniciada antes dessas operações não sobrescreve o total mais recente.
+- **Notificação com app aberto:** ao tocar uma notificação do sistema com a aba Uorqui visível, o service worker envia a rota diretamente para o React, sem depender de uma navegação que pode reaproveitar a página sem reabrir a tela. Instâncias ocultas/congeladas/fechadas continuam usando URL de destino; o aplicativo também processa links no retorno de foco e navegação.
+- **Validação:** conferir leitura individual/em lote, múltiplas contas, atualização de provedores, totais do Gmail, notificações com aba visível/oculta e PWA fechado. Sem migração de banco, mudança de login, R2 ou conexões de e-mail.
+
 ## [0.1.0-beta.16] — 09/11/2026
 
 - **Convites no idioma correto:** o diálogo de entrada após autenticação, botões, rótulos acessíveis, título alternativo e avisos de erro (convite inválido, banimento e falha) passam a seguir o idioma ativo do aplicativo. O idioma inicial vem de `navigator.language`; caso o usuário já tenha escolhido outro idioma, a preferência salva continua valendo. Não há textos misturados em PT/EN; a entrada depende sempre de aceite explícito.

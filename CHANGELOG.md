@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.17] — 2026-11-09
+
+- **Mail unread count accuracy:** Gmail now uses the authoritative `INBOX` label's `messagesUnread` field rather than the approximate `messages.list.resultSizeEstimate`. Outlook/IMAP continue with provider counts. The UI discards stale/out-of-order count refreshes started before a local read or move, synchronizes the shared badge on manual refresh and move, and avoids decrementing Inbox counts when reading Spam/Sent/Trash.
+- **Server polling race:** successful read/batch-read/move actions timestamp their stored unread counts. A mail-poller snapshot started earlier cannot overwrite a newer action count when it completes later.
+- **Push while already open:** a system notification clicked with a visible Uorqui tab now explicitly sends the deep-link destination to the running React app instead of relying on a browser navigate that may not reinitialize the app. Hidden/frozen/closed instances retain durable URL navigation. The signed-in shell also consumes incoming deep links on history, focus and page restoration.
+- **Validation:** check single/batch reads, multiple linked accounts, provider refreshes, Gmail totals, notifications from a visible or background tab and closed PWA. Version and docs only besides the web/worker/API changes; no database migrations, authentication, R2 or mail-connection changes.
+
 ## [0.1.0-beta.16] — 2026-11-09
 
 - **Language-aware community invitation:** the post-login invitation dialog, action labels, accessibility names, loading fallback and expired/banned/redeem error messages now use the app's active Portuguese/English locale. Initial locale follows `navigator.language`; an explicit saved language preference takes precedence. No bilingual slash-separated copy appears in the dialog, and joining still requires a click.

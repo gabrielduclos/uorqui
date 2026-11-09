@@ -18,6 +18,9 @@ export function newlyArrivedMail(message: Pick<MailMessage,'date'>, baseline: Da
 }
 
 async function pollAccount(account: Account) {
+  // A scan may overlap a user's read/move. Never publish an older provider
+  // snapshot over the newer count saved by the user action.
+  const snapshotStartedAt = new Date();
   const snapshot = await withMailbox(account.user_id, account.id, async (connection, token) => {
     const [inbox, unreadCount] = await Promise.all([
       listMail(connection.provider, token, 'inbox', 'all', ''),
@@ -41,8 +44,10 @@ async function pollAccount(account: Account) {
       await client.query('INSERT INTO mail_inbox_state(account_id,unread_count) VALUES($1,$2)',
         [account.id,snapshot.unreadCount]);
     } else {
-      await client.query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1',
-        [account.id,snapshot.unreadCount]);
+      await client.query(
+        'UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() '+
+        'WHERE account_id=$1 AND last_checked_at<=$3',
+        [account.id,snapshot.unreadCount,snapshotStartedAt]);
     }
     if (snapshot.messages.length) {
       const params: string[] = [account.id];
