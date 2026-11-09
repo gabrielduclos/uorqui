@@ -29,6 +29,7 @@ import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 import { ChannelScrollBehavior } from './channelScrollBehavior';
+import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 
 /** Shared authorized avatar cache prevents repeated R2 downloads between
  * the community directory, channel header and the workspace icon rail. */
@@ -65,6 +66,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
   unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
+  const todayKey=useLocalDayKey();
   const lastCommunityKey='uorqui:last-community:'+myId;
   const [list,setList]=useState<Community[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(initialCommunityId??null);
@@ -1208,7 +1210,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
                     {message.authorName}</a>:
                   <strong className="text-sm">{message.authorName}</strong>}
                   <span className="text-[11px] text-muted-foreground">@{message.authorHandle}</span>
-                  <time className="text-[11px] text-muted-foreground">{new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}).format(new Date(message.createdAt))}</time></div>
+                  <time dateTime={message.createdAt} className="text-[11px] text-muted-foreground">{formatMessageTimestamp(message.createdAt,locale,todayKey)}</time></div>
                 {message.replyToId&&!message.deletedAt&&<ReplyReference
                   author={renderedMessages.find(source=>source.id===message.replyToId)?.authorName??message.replyTo?.authorHandle??(pt?'Mensagem':'Message')}
                   body={message.replyTo?.body} deleted={message.replyTo?.deleted}

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, Images, MessageCircle, MoreHorizontal, Pin, PinOff, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
+import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 import { ReplyComposerPreview } from './ReplyReference';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
@@ -56,13 +57,6 @@ function optimisticReaction(message: Message, next: string | null): Message {
 
 const NEAR_BOTTOM_PX = 96;
 
-function formatTime(value: string | null | undefined, locale: string) {
-  if (!value) return '';
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
-}
-
 type BlockDeliveryState = 'failed' | 'sending' | 'sent' | 'received' | 'read';
 type BlockReceipt = { label: string; updatedAt: string };
 type MessageReceipt = { state: BlockDeliveryState; updatedAt: string };
@@ -100,6 +94,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   onMobileOpenChange?: (open: boolean) => void; onOpenContacts?: () => void;
 }) {
   const { locale } = useUorquiPreferences();
+  const todayKey = useLocalDayKey();
   const pt = locale === 'pt-BR';
   const [threads, setThreads] = useState<Conversation[]>(() => peekDmInbox<Conversation>(myId));
   const [people, setPeople] = useState<Person[]>([]);
@@ -1065,7 +1060,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
           <span className="min-w-0 flex-1">
             <span className="flex items-center justify-between gap-2"><span className={cn('truncate text-sm font-semibold', thread.unreadCount > 0 && 'font-bold')}>{thread.peerName}</span>
-              <time className="shrink-0 text-[10px] text-muted-foreground">{formatTime(thread.lastReactionAt && (!thread.lastAt || thread.lastReactionAt > thread.lastAt) ? thread.lastReactionAt : thread.lastAt, locale)}</time></span>
+              <time className="shrink-0 text-[10px] text-muted-foreground">{formatMessageTimestamp(thread.lastReactionAt && (!thread.lastAt || thread.lastReactionAt > thread.lastAt) ? thread.lastReactionAt : thread.lastAt, locale, todayKey)}</time></span>
             <span className="mt-1 flex items-center justify-between gap-2">
               <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', thread.unreadCount > 0 && 'font-medium text-foreground/75')}>
                 {thread.optimisticStatus === 'failed' && <span className="font-medium text-destructive">{pt ? 'Falha no envio · ' : 'Failed to send · '}</span>}
@@ -1175,7 +1170,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
               {renderedMessages.map(message => {
                 const status = blockReceipts.get(message.id);
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
-                  <DirectMessageBubble message={message}
+                  <DirectMessageBubble message={message} todayKey={todayKey}
                     onOpenMedia={setMediaViewerId}
                     mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
@@ -1191,7 +1186,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                     }}/>
                   {status && <div role="note" className="flex justify-center py-0.5">
                     <time dateTime={status.updatedAt} className="inline-flex rounded-md border border-border/50 bg-muted/60 px-3 py-1 text-center text-[11px] text-muted-foreground">
-                      {status.label} {pt ? 'às' : 'at'} {formatTime(status.updatedAt, locale)}
+                      {status.label} {pt ? 'às' : 'at'} {formatMessageTimestamp(status.updatedAt, locale, todayKey)}
                     </time>
                   </div>}
                 </div>;

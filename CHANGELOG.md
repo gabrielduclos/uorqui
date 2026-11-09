@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.29] — 2026-11-09
+
+- **Message timestamps change after midnight:** messages sent on the viewer's *current local calendar date* display only the time (e.g. `18:40`); previous days display a date and time (e.g. `08/11 18:40` in pt-BR), with the year included for messages from another calendar year. The original timestamp is preserved in the HTML `datetime` attribute.
+- **One consistent rule:** applies to direct-message bubbles, conversation list latest activity, direct-message read receipt times, and community text/voice/meeting channel messages. The channel header no longer shows dates unnecessarily for today's messages.
+- **Automatic rollover:** a shared per-message-list local-day clock refreshes at local midnight, and rechecks when a browser/PWA returns from the background. No timers per message; no reload needed. Timestamp rendering respects the user's locale and device timezone, not UTC day boundaries.
+- **Verification:** new frontend timestamp tests cover same day, crossing local midnight, prior years, timezone boundaries, missing timestamps and next-midnight scheduling. Test runs in Web UI GitHub Actions, not the Cloudflare production build. Frontend only, no API/SQL/database migration.
+
 ## [0.1.0-beta.28] — 2026-11-09
 
 - **Match mobile light header to the dark-theme layout:** revert the beta.27 light-only rule that incorrectly painted the mobile top header with the sidebar gray. Header now inherits the regular content-panel surface (`--kit-panel: #ffffff`), exactly as the dark mode uses its panel token; desktop header remains unchanged.

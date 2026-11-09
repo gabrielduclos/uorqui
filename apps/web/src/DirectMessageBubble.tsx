@@ -9,6 +9,7 @@ import { isCommunityGifUrl } from './CommunityMediaPicker';
 import { LinkPreview } from './LinkPreview';
 import { ReplyReference } from './ReplyReference';
 import { attachmentLabel } from './chatAttachmentLabels';
+import { formatMessageTimestamp } from './messageTimestamp';
 import { ensureChatMediaCached, useCachedChatMedia } from './chatMediaCache';
 import { cn } from '@/lib/utils';
 
@@ -58,8 +59,8 @@ function SwipeToReply({ children, onReply }: { children: ReactNode; onReply: () 
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
-export function DirectMessageBubble({ message, mine, locale, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onReport, onRetry, onPin, isPinned, onOpenMedia, disabled, highlighted }: {
-  message: DirectChatMessage; mine: boolean; locale: string; myId: string; peerName: string;
+export function DirectMessageBubble({ message, mine, locale, todayKey, myId, peerName, onReply, onJumpToReply, onEdit, onCancel, onReact, onForward, onReport, onRetry, onPin, isPinned, onOpenMedia, disabled, highlighted }: {
+  message: DirectChatMessage; mine: boolean; locale: string; todayKey: string; myId: string; peerName: string;
   onReply: (message: DirectChatMessage) => void;
   onJumpToReply: (messageId: string) => void;
   onEdit: (message: DirectChatMessage) => void;
@@ -109,7 +110,6 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
   const [failedVideoSrc,setFailedVideoSrc]=useState<string|null>(null);
   const loadingImage=!!visibleSrc && loadedImageSrc!==visibleSrc && failedImageSrc!==visibleSrc;
   const loadingVideo=!!visibleSrc && loadedVideoSrc!==visibleSrc && failedVideoSrc!==visibleSrc;
-  const time = new Date(message.createdAt);
   const quote = /^> ([^\n]+)\n\n([\s\S]*)$/.exec(message.body);
   // Old OpenStreetMap shares remain readable, but now always open Google Maps.
   const locationMessage=/^📍 (?:Localização compartilhada|Shared location)\nhttps:\/\/(?:www\.openstreetmap\.org\/\?mlat=([-\d.]+)&mlon=([-\d.]+)#map=[-\d./]+|www\.google\.com\/maps\?q=([-\d.]+),([-\d.]+))(?:\n([\s\S]*))?$/.exec(message.body);
@@ -126,8 +126,7 @@ export function DirectMessageBubble({ message, mine, locale, myId, peerName, onR
         id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
     }catch{return null;}
   })();
-  const timeLabel = Number.isFinite(time.getTime())
-    ? time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
+  const timeLabel = formatMessageTimestamp(message.createdAt, locale, todayKey);
 
   useLayoutEffect(() => {
     if (!open) return;

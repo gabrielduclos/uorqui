@@ -1,6 +1,6 @@
 {
   "name": "@uorqui/web",
-  "version": "0.1.0-beta.28",
+  "version": "0.1.0-beta.29",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:channel-scroll": "node --import tsx --test test/channel-scroll.test.mjs",
     "test:channel-theme": "node --test test/channel-nav-theme.test.mjs",
+    "test:message-time": "node --import tsx --test test/message-timestamp.test.mjs",
     "preview": "vite preview",
     "check:worker": "wrangler deploy --dry-run",
     "preview:worker": "npm run build && wrangler dev",

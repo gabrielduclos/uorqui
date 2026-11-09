@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.29] — 09/11/2026
+
+- **Data e hora nas mensagens ao virar o dia:** mensagens de **hoje**, conforme o calendário local do dispositivo, exibem somente a hora (ex.: `18:40`). Mensagens de dias anteriores exibem **data + hora** (ex.: `08/11 18:40`); mensagens de outro ano também apresentam o ano. O horário original permanece salvo no atributo HTML `datetime`.
+- **Comportamento padronizado:** aplicado aos balões do chat privado, horário da última atividade na lista de conversas, recibos de leitura e mensagens dos canais de texto/voz/reunião. As mensagens de hoje nos canais deixam de exibir data desnecessariamente.
+- **Atualização automática:** um relógio por lista de mensagens atualiza a apresentação na virada do dia, considerando fuso local e retorno do aplicativo após ficar em segundo plano no PWA. Não é necessário reiniciar nem criar timers por balão. Formatação respeita idioma e fuso do usuário.
+- **Testes:** nova suíte de regressão cobrindo mesma data, meia-noite local, troca de ano, datas UTC vs. locais, timestamps inválidos e agendamento da atualização. Executada no CI frontend, sem interferir no build Cloudflare. Apenas frontend; sem alterações na API, SQL ou migração.
+
 ## [0.1.0-beta.28] — 09/11/2026
 
 - **Header mobile seguindo o tema escuro:** revertida a regra exclusiva do tema claro da beta.27 que pintava indevidamente o cabeçalho superior com o cinza do menu. Assim como no tema escuro, o header usa a superfície do painel de conteúdo (`--kit-panel: #ffffff` no tema claro). O cabeçalho desktop não muda.
