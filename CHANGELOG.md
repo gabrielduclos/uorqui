@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.20] — 2026-11-09
+
+- **Persistent browser/PWA identity:** the active-instance identifier is now stored locally per account and desktop/mobile category. Reopening the same browser or installed PWA and reloading a page no longer creates a different owner ID for the existing 60-second server lease, avoiding false “session already open” warnings.
+- **One genuinely active tab:** an exclusive origin-scoped Web Lock prevents multiple live documents from sharing that stable identity. A second tab remains blocked; **Use this tab** explicitly steals the local lock and server ownership. Each live document gets a different page ID for BroadcastChannel takeover notifications. A BroadcastChannel presence check provides best-effort fallback in browsers without Web Locks.
+- **Lifecycle/race safety:** closing/reloading frees the local browser lock while retaining the stable identity; pagehide never releases the server lease (avoiding a race with immediate re-entry), and pageshow re-acquires ownership. Initial claim and focus are deduplicated. Only the active document may release a lease on sign-out; a blocked tab cannot release the owner's shared browser lease. No changes to authorization, OAuth, push, API or SQL migration.
+- **Tests:** new Node tests in the Web UI workflow cover persistent identity, account/category separation, storage failure, duplicate-tab exclusion, takeover, old release fencing, and BroadcastChannel fallback. First use after upgrading from beta.19 may still encounter the old random lease for up to 60 seconds; use **Use this tab** once if necessary.
+
 ## [0.1.0-beta.19] — 2026-11-09
 
 - **Silent initial instance check:** after restoring the authenticated account, the desktop/mobile lease claim now runs under the existing Uorqui startup splash. The startup splash remains mounted until the claim resolves; users no longer see a separate **Checking active instance…** screen or an intermediate layout transition.

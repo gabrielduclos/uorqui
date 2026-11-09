@@ -1,22 +1,24 @@
-# Active app instances (beta.18)
+# Active app instances (beta.20)
 
-The signed-in Uorqui workspace supports **one active desktop tab/window** and **one active mobile browser/PWA window** per account at a time. Both categories can remain active simultaneously. This reduces duplicate SSE connections, presence loops, polling, and media connections without revoking the Better Auth session. Multiple tabs in a browser are separate instances even if they share cookies or cloned sessionStorage.
+The signed-in workspace permits **one desktop tab** and **one mobile browser/PWA instance** per account, simultaneously. It does not revoke Better Auth sessions, alter push permissions or grant extra API authorization.
 
-## What users see
+## Startup and reopening
 
-- **Startup (beta.19):** the authenticated lease check runs behind the original `StartupSplash` after session restoration. Keep the same splash mounted until an ownership result is known; do not show an intermediate `Checking active instance…` screen. The check does not mount the workspace while ownership is unknown.
-- On a second tab in a category already occupied, the workspace is not mounted. A localized screen explains the conflict and offers **Use this tab**.
-- **Use this tab** explicitly takes over the category. The previous workspace is paused, stops its subscriptions on unmount and displays the blocked screen, but the user remains signed in. A separate **Sign out** option is offered.
-- Network failure shows **Try again**, not a false busy error. Repeated heartbeat failures suspend the workspace until verified. A mobile window does not displace a desktop window and vice versa.
-- Opening another tab does *not* automatically evict the earlier one. A 60-second lease enables recovery if a window crashes or is closed. Reopening after a crash or browser restart claims a free/expired slot automatically.
+- Ownership is checked behind the normal `StartupSplash`, before the workspace or message/voice streams are mounted.
+- **Same browser or installed PWA:** the app saves a random browser instance UUID in `localStorage` per account and device category. Reopening or reloading reuses that ID and renews its existing PostgreSQL lease immediately, rather than generating a new ID and conflicting with its own 60-second lease.
+- **Second live tab:** a Web Lock exclusive to this origin/account/category prevents two documents in the same browser from using the shared ID at once. A second document displays **Uorqui is already open**. **Use this tab** explicitly steals the local lock and takes over; the displaced document unmounts the workspace but remains logged in.
+- **Other browser/device:** the PostgreSQL lease still enforces one browser identity in each category. A desktop slot does not displace a mobile slot. Server conflicts require explicit takeover or the 60-second timeout.
+- **Failures:** network errors display **Try again** and keep the workspace suspended. Browsers without Web Locks use a best-effort BroadcastChannel peer probe. With all local storage disabled, browser identity cannot persist across restarts.
 
-## Implementation and deployment
+## Lifecycle and technical notes
 
-- An additive PostgreSQL migration `apps/api/drizzle/0043_app_instance_leases.sql` creates `app_instance_leases`, keyed by `(user_id,kind)`. Apply this migration **before expecting enforcement on the deployed API**. The API intentionally returns `active:true,managed:false` only if the table is missing during staggered rollout, avoiding a global lockout; this fallback does not provide a limit until migration is installed.
-- Authenticated, same-origin `POST /api/v1/instances/claim` with `{kind,instanceId,takeover?}` acquires/renews atomically or returns HTTP 409 `INSTANCE_IN_USE`. An existing owner renews every 15 seconds; only explicit takeover or an expired lease permits another instance. `POST /api/v1/instances/release` removes ownership only for the matching ID on sign-out. Owner IDs are freshly generated UUIDs per document; they are not auth credentials.
-- A same-origin `BroadcastChannel` signals instant takeover to sibling tabs. Cross-browser handover sends a `instance-lease` event using the existing authenticated SSE stream. Heartbeat also detects changes when push/SSE is unavailable. Blocked windows do not mount `SocialShell` or subscribe to messages.
-- Category is based on mobile user-agent, with iPadOS desktop-mode detection, rather than viewport width. It is a UX/concurrency mechanism, **not a substitute for API authorization or a hard security limit against spoofed clients**. Existing sign-in cookies, server sessions, email permissions and push subscriptions are unchanged.
+- `apps/api/drizzle/0043_app_instance_leases.sql` holds one lease per `(user_id,kind)`. `POST /api/v1/instances/claim` renews or transfers ownership atomically; `/release` on sign-out is called only by an actively owning document.
+- The app keeps two IDs: a stable random **browser instance ID** and a fresh **document/page ID**. The latter distinguishes cloned/duplicated tabs in BroadcastChannel notifications, even though they share cookies, `sessionStorage` and the browser ID.
+- A Web Lock automatically releases when a page closes. `pagehide` drops local ownership and suspends the workspace but deliberately does **not** release the server lease: an old release arriving after a new claim would invalidate the newly reopened page. `pageshow` checks ownership again. Focus/heartbeat do not overlap an ongoing initial request.
+- Same-origin BroadcastChannel gives immediate local takeover notifications. Existing authenticated SSE `instance-lease` events notify cross-browser owners, with a 15-second polling fallback. Blocked tabs never mount the workspace.
+- Mobile classification uses user agent (including iPadOS); window width is not decisive. This is a UX/concurrency limit, **not a substitute for server-side authorization**.
+- The first upgrade from beta.19 may encounter a leftover random-ID lease from that build for up to 60 seconds. If so, **Use this tab** once. The stable ID prevents that false conflict from recurring.
 
-## Regression tests
+## Verification
 
-Run the temporary-PostgreSQL integration `apps/api/test/app-instances.integration.test.mjs`, web typecheck/build and all CI checks. On real devices, test two desktop browser tabs (including Duplicate Tab), two mobile/PWA windows, one desktop plus one phone, different browsers, an explicit takeover during a voice call, inactive tab restart, browser sleep, and reconnection after connectivity loss. Production migration application and Cloudflare/Render deployment must be confirmed separately.
+Run `node --import tsx --test apps/web/test/app-instance-identity.test.mjs`, the PostgreSQL integration suite, TypeScript/build, and all four CI workflows. Manual acceptance: reload same desktop tab, close/reopen browser, close/reopen installed iOS/Android PWA, duplicate tab, open a different browser, transfer with **Use this tab**, desktop and mobile simultaneously, offline/BFCache recovery and voice-call cleanup. No new database migration is required in beta.20. Confirm real Cloudflare/Render deployment separately.

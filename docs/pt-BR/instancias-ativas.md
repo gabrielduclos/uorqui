@@ -1,22 +1,24 @@
-# Instâncias ativas do aplicativo (beta.18)
+# Instâncias ativas do aplicativo (beta.20)
 
-O Uorqui permite **uma aba/janela desktop ativa** e **uma instância mobile (navegador/PWA) ativa** por conta, simultaneamente. Isso reduz conexões SSE, sincronizações e mídias duplicadas sem encerrar a sessão de login do Better Auth. Mesmo que abas compartilhem cookies, são instâncias independentes.
+O Uorqui permite **uma aba desktop** e **uma instância mobile (navegador/PWA)** por conta, simultaneamente. O limite não revoga sessões Better Auth, altera permissões push nem substitui autorização da API.
 
-## Experiência
+## Inicialização e reabertura
 
-- **Inicialização (beta.19):** após recuperar a sessão, a confirmação da vaga ocorre por trás do `StartupSplash` original. A mesma tela inicial permanece até resolver a posse; não mostrar uma tela intermediária **Verificando instância ativa…**. Enquanto a posse não for confirmada, não montar o aplicativo.
-- A segunda aba da mesma categoria não monta o aplicativo e mostra a mensagem **Uorqui já está aberto**, com a ação **Usar nesta aba**.
-- O botão **Usar nesta aba** assume a vaga explicitamente. A instância anterior suspende a interface, encerrando suas assinaturas e conexões ao desmontar; **não perde o login** e pode reassumir depois. Existe também **Sair da conta**.
-- Falhas de comunicação exibem **Tentar novamente**, não um bloqueio falso por outra aba. Falhas repetidas na renovação suspendem a interface até confirmar a posse. Abrir uma instância mobile não derruba a desktop e vice-versa.
-- Abrir outra aba **não expulsa automaticamente** a primeira. A vaga expira após 60 segundos sem renovação, permitindo recuperar o acesso depois de fechar ou travar a aba.
+- A posse da instância é confirmada atrás do `StartupSplash` original, antes de montar chats, chamadas e conexões SSE.
+- **Mesmo navegador ou PWA instalado:** um UUID aleatório de instância é salvo no `localStorage` por conta e categoria. Recarregar ou reabrir reutiliza o identificador e renova a reserva existente de 60 segundos no PostgreSQL, sem interpretar o próprio navegador como outra sessão.
+- **Segunda aba aberta:** um Web Lock exclusivo por origem/conta/categoria impede duas páginas de usarem a mesma identidade. A segunda recebe **Uorqui já está aberto** e pode selecionar **Usar nesta aba** para tomar o bloqueio e a vaga do servidor. A anterior suspende o aplicativo, mas não sai da conta.
+- **Outro navegador/dispositivo:** a reserva do PostgreSQL mantém uma identidade ativa por categoria. Desktop e mobile podem coexistir. Um conflito real exige transferência explícita ou expiração de 60 segundos.
+- **Erros:** falhas de conexão exibem **Tentar novamente**, sem montar o aplicativo. Navegadores sem Web Locks usam uma sondagem via BroadcastChannel como alternativa aproximada. Com todo armazenamento local bloqueado, não é possível preservar a identidade após reiniciar.
 
-## Arquitetura, migração e limites
+## Ciclo de vida e arquitetura
 
-- A migração aditiva `apps/api/drizzle/0043_app_instance_leases.sql` cria `app_instance_leases` no PostgreSQL, com chave `(user_id,kind)`. **Aplique a migração antes de considerar o bloqueio ativo no ambiente publicado**. Durante deploy escalonado, se faltar apenas essa tabela, a API retorna `active:true,managed:false` para não bloquear todas as contas; não há aplicação do limite até a migração.
-- `POST /api/v1/instances/claim` exige usuário autenticado e Origin válido. Com `{kind,instanceId,takeover?}`, obtém/renova a vaga atomicamente ou responde HTTP 409 `INSTANCE_IN_USE`. Uma instância ativa renova a cada 15 segundos; somente o aceite explícito ou a expiração permite substituí-la. `POST /api/v1/instances/release` libera apenas a vaga correspondente ao ID durante o logout. IDs são UUIDs exclusivos por documento, não credenciais.
-- `BroadcastChannel` entrega o bloqueio imediatamente entre abas da mesma origem. Outros navegadores são avisados por `instance-lease` no SSE autenticado existente. A verificação periódica continua como alternativa. Uma aba bloqueada não monta `SocialShell` nem assina as mensagens.
-- A classificação mobile/desktop utiliza o user agent (incluindo iPadOS), e não a largura de tela. É um controle de interface e concorrência, **não substitui autorização de API nem é uma barreira de segurança contra clientes adulterados**. Login, cookies, conexões de e-mail e inscrições push permanecem inalterados.
+- A migração anterior `apps/api/drizzle/0043_app_instance_leases.sql` guarda uma reserva por `(user_id,kind)`. `POST /api/v1/instances/claim` renova ou transfere a posse atomicamente. Somente o documento ativo chama `/release` ao sair da conta.
+- O cliente utiliza **dois identificadores**: um UUID persistente do navegador/PWA e outro UUID temporário exclusivo do documento. O segundo distingue até abas duplicadas/clonadas no BroadcastChannel, embora compartilhem cookies e a mesma identidade de instalação.
+- O Web Lock é liberado ao fechar a aba. `pagehide` suspende o aplicativo e o bloqueio local, sem liberar a reserva no banco, pois a liberação antiga poderia chegar após uma nova abertura e apagar a reserva nova. `pageshow` valida novamente. Eventos de foco e heartbeat não duplicam a checagem inicial.
+- O BroadcastChannel notifica transferências entre abas da mesma origem; o SSE `instance-lease` existente avisa outros navegadores, com verificação a cada 15 segundos como fallback. Abas bloqueadas não montam chats e conexões.
+- A classificação desktop/mobile usa o agente do navegador (incluindo iPadOS), não a largura da tela. É uma medida de interface e concorrência, **não uma garantia contra clientes adulterados**.
+- Na primeira atualização da beta.19, pode existir uma reserva antiga com UUID temporário por até 60 segundos. Se acontecer, pressione **Usar nesta aba** uma única vez; o identificador persistido evita a repetição.
 
-## Testes
+## Validação
 
-Executar `apps/api/test/app-instances.integration.test.mjs` com PostgreSQL temporário, build/typecheck web e CI. Em navegadores reais, testar duas abas desktop (inclusive **Duplicar aba**), duas janelas mobile/PWA, desktop + celular, navegadores diferentes, transferência durante chamada de voz, fechamento da aba, hibernação e retorno após falha de rede. A aplicação da migração no banco de produção e os deploys Render/Cloudflare devem ser verificados separadamente.
+Executar `node --import tsx --test apps/web/test/app-instance-identity.test.mjs`, integração com PostgreSQL temporário, TypeScript/build e os quatro workflows de CI. Validar manualmente: recarregar a aba desktop, fechar/abrir navegador, fechar/abrir PWA iOS/Android, duplicar aba, segundo navegador, transferência, desktop + celular, retorno de hibernação/BFCache e desmontagem de chamadas de voz. A beta.20 não requer outra migração. Confirmar publicação Cloudflare/Render separadamente.
