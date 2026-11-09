@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.19] — 2026-11-09
+
+- **Silent initial instance check:** after restoring the authenticated account, the desktop/mobile lease claim now runs under the existing Uorqui startup splash. The startup splash remains mounted until the claim resolves; users no longer see a separate **Checking active instance…** screen or an intermediate layout transition.
+- **Clear outcomes:** successful claim opens the workspace directly. Conflict opens **Uorqui is already open** with **Use this tab**; network/server errors keep the fail-closed **Try again** option. Existing lease renewal, session preservation, takeover, SSE and 15-second reconciliation behavior remain unchanged.
+- **Scope and testing:** frontend-only startup and blocker presentation, without SQL/API changes or migration. Verify authenticated cold/reloaded startup, second tab takeover, returning from background, network failure, desktop/mobile/PWA and the web build/typecheck.
+
 ## [0.1.0-beta.18] — 2026-11-09
 
 - **One app instance per device category:** one active desktop document and one active mobile/PWA document per authenticated account, including different browsers. A second tab is paused instead of signing out; **Use this tab** explicitly takes control of that category. The prior owner is suspended (chat/SSE/media cleanup on unmount) without revoking its Better Auth login.

@@ -4,6 +4,7 @@ The signed-in Uorqui workspace supports **one active desktop tab/window** and **
 
 ## What users see
 
+- **Startup (beta.19):** the authenticated lease check runs behind the original `StartupSplash` after session restoration. Keep the same splash mounted until an ownership result is known; do not show an intermediate `Checking active instance…` screen. The check does not mount the workspace while ownership is unknown.
 - On a second tab in a category already occupied, the workspace is not mounted. A localized screen explains the conflict and offers **Use this tab**.
 - **Use this tab** explicitly takes over the category. The previous workspace is paused, stops its subscriptions on unmount and displays the blocked screen, but the user remains signed in. A separate **Sign out** option is offered.
 - Network failure shows **Try again**, not a false busy error. Repeated heartbeat failures suspend the workspace until verified. A mobile window does not displace a desktop window and vice versa.

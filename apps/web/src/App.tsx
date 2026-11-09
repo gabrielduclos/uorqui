@@ -246,8 +246,12 @@ function AppContent() {
         instance.status === 'active'
           ? <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
               invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
-          : <AppInstanceBlocker kind={instance.kind} status={instance.status}
-              onTakeover={instance.takeover} onRetry={instance.retry} onLogout={()=>void signOut()} />
+          : instance.status === 'checking'
+            // Keep the original startup splash mounted while the authenticated
+            // instance lease is checked; never flash a separate checking screen.
+            ? <StartupSplash />
+            : <AppInstanceBlocker kind={instance.kind} status={instance.status}
+                onTakeover={instance.takeover} onRetry={instance.retry} onLogout={()=>void signOut()} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
       {instance.status === 'active' && inviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
         role="dialog" aria-modal={true} aria-label={pt?'Convite para comunidade':'Community invitation'}
