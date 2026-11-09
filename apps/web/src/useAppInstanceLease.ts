@@ -30,7 +30,8 @@ export function useAppInstanceLease(accountId: string | null) {
   const pageId = useRef(crypto.randomUUID()).current;
   const instanceId = useMemo(() => {
     if (!accountId) return null;
-    return persistentInstanceId(localStorage, accountId, kind);
+    try { return persistentInstanceId(window.localStorage, accountId, kind); }
+    catch { return crypto.randomUUID(); }
   }, [accountId, kind]);
   const [ownership, setOwnership] = useState<Ownership>({ accountId, status: 'checking' });
   const retryRef = useRef<(takeover: boolean) => void>(()=>{});
@@ -42,6 +43,8 @@ export function useAppInstanceLease(accountId: string | null) {
     let alive = true;
     let sequence = 0;
     let failures = 0;
+    let requestInProgress = false;
+    let wasPageHidden = false;
     let current: AppInstanceStatus = 'checking';
     let releaseLocal: (() => void) | null = null;
     const lockName = 'uorqui:instance-lock:v2:' + accountId + ':' + kind;
@@ -58,9 +61,11 @@ export function useAppInstanceLease(accountId: string | null) {
     const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CHANNEL);
 
     const claim = async (takeover: boolean) => {
-      if (!alive) return;
+      if (!alive || (requestInProgress && !takeover)) return;
+      requestInProgress = true;
       const version = ++sequence;
       if (current !== 'active') set('checking');
+      try {
       // A browser-level identity MUST only be shared by one live document.
       // Browser Web Locks are atomic across same-origin pages and PWAs.
       if (!releaseLocal && hasLocks) {
@@ -82,7 +87,7 @@ export function useAppInstanceLease(accountId: string | null) {
           return;
         }
       }
-      if (!alive || version !== sequence) { dropLocal(); return; }
+      if (!alive || version !== sequence) return;
       try {
         const response = await fetch('/api/v1/instances/claim', {
           method: 'POST', credentials: 'same-origin', cache: 'no-store',
@@ -110,6 +115,9 @@ export function useAppInstanceLease(accountId: string | null) {
         dropLocal();
         set('error');
       }
+      } finally {
+        if (version === sequence) requestInProgress = false;
+      }
     };
 
     retryRef.current = (takeover: boolean) => { void claim(takeover); };
@@ -126,6 +134,7 @@ export function useAppInstanceLease(accountId: string | null) {
       // A different document in this browser now owns the category. Stop all
       // workspace/SSE/media activity without touching its shared login cookie.
       ++sequence;
+      requestInProgress = false;
       failures = 0;
       dropLocal();
       set('blocked');
@@ -134,12 +143,19 @@ export function useAppInstanceLease(accountId: string | null) {
       if (current === 'active') void claim(false);
     };
     const restore = () => {
-      if (document.visibilityState === 'visible' && (current === 'active' || current === 'error' || current === 'checking'))
+      if (document.visibilityState === 'visible' && (current === 'active' || current === 'error'))
         void claim(false);
+    };
+    const pageShow = () => {
+      // Do not make an extra startup claim from pageshow/focus while the
+      // initial claim is already pending. Only restore a real BFCache page.
+      if (wasPageHidden) { wasPageHidden = false; void claim(false); }
     };
     const online = () => { if (current === 'error') void claim(false); };
     const pageHide = () => {
+      wasPageHidden = true;
       ++sequence;
+      requestInProgress = false;
       dropLocal();
       // Do NOT release the server lease here: the same browser/PWA may be
       // reopened instantly and should reuse its identity without a 60s wait.
@@ -148,7 +164,7 @@ export function useAppInstanceLease(accountId: string | null) {
     };
     const interval = window.setInterval(tick, PERIOD_MS);
     window.addEventListener('focus', restore);
-    window.addEventListener('pageshow', restore);
+    window.addEventListener('pageshow', pageShow);
     window.addEventListener('pagehide', pageHide);
     document.addEventListener('visibilitychange', restore);
     window.addEventListener('online', online);
@@ -161,7 +177,7 @@ export function useAppInstanceLease(accountId: string | null) {
       channel?.close();
       window.clearInterval(interval);
       window.removeEventListener('focus', restore);
-      window.removeEventListener('pageshow', restore);
+      window.removeEventListener('pageshow', pageShow);
       window.removeEventListener('pagehide', pageHide);
       document.removeEventListener('visibilitychange', restore);
       window.removeEventListener('online', online);
