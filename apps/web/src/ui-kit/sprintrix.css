@@ -188,11 +188,8 @@
   [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-inset-panel]{
     margin:0;border:0;border-radius:0;
   }
-  /* In mobile, the top bar is the primary menu surface. In light mode it
-     shares the same gray token as the hamburger drawer and outer canvas. */
-  :root.light [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-main-header]{
-    background:var(--kit-sidebar);
-  }
+  /* Mobile follows the same surface hierarchy as dark mode:
+     the top header belongs to the content panel, never the sidebar. */
   [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-inset-panel] > nav[aria-label]{
     background:var(--kit-panel);
   }

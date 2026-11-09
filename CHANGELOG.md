@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.28] — 2026-11-09
+
+- **Match mobile light header to the dark-theme layout:** revert the beta.27 light-only rule that incorrectly painted the mobile top header with the sidebar gray. Header now inherits the regular content-panel surface (`--kit-panel: #ffffff`), exactly as the dark mode uses its panel token; desktop header remains unchanged.
+- **Keep mobile navigation distinct:** the opened hamburger drawer retains `--kit-sidebar: #ededed` and the outer workspace keeps its gray `--background`. Reading panels and channel lists stay white; dark mode stays unchanged.
+- **Regression test and scope:** update Web UI CSS tests to prevent light-only/mobile header overrides while asserting the shared panel header and separate sidebar drawer tokens. Frontend CSS plus release docs only; no API, SQL or database migration. Test in browser and installed mobile PWA after Cloudflare deployment.
+
 ## [0.1.0-beta.27] — 2026-11-09
 
 - **Mobile light navigation contrast:** the mobile top toolbar (hamburger, logo and notifications) now uses the same `--kit-sidebar: #ededed` light-theme background as the primary menu drawer and full outer canvas. Previously it was forcibly painted with the white reading-panel `--kit-panel` token, hiding the intended gray menu surface on mobile.
