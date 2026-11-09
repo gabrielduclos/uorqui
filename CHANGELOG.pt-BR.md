@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.27] — 09/11/2026
+
+- **Contraste da navegação no mobile claro:** o cabeçalho superior do celular (menu hambúrguer, logotipo e notificações) agora usa `--kit-sidebar: #ededed`, igual ao menu lateral e ao fundo externo. Antes, o cabeçalho era forçado a `--kit-panel: #ffffff` e continuava branco mesmo com o tema claro cinza.
+- **Menu lateral mobile:** substituída a classe genérica `bg-background` pelo token semântico `bg-[var(--kit-sidebar)]`, compartilhado com o menu desktop e o UI Kit. Painéis, lista de canais e mensagens continuam brancos (`--kit-panel`) no tema claro.
+- **Preservação e testes:** a alteração do cabeçalho é exclusiva do **tema claro no mobile**. Tema escuro e cabeçalho do desktop mantêm as cores anteriores. Testes de CSS verificam o token do menu superior e lateral, além do painel branco. Apenas frontend/tema/documentação; sem API, banco ou migração. Verificar PWA Android/iOS após o deploy Cloudflare.
+
 ## [0.1.0-beta.26] — 09/11/2026
 
 - **Fundo claro completo uniformizado:** na beta.25, o menu estava cinza (`#ededed`), mas o canvas externo e as faixas ao redor ainda usavam `--background: #fafafa`. Agora, no tema claro logado, `--background: #ededed` e `--workspace-rail: #ededed` acompanham o `--kit-sidebar: #ededed`, aplicando a cor a todo o fundo, inclusive atrás do menu, nas bordas e quando o menu desktop está recolhido.

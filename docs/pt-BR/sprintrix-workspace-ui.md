@@ -19,6 +19,7 @@ A interface adapta padrões gerais observados na [caixa de entrada pública do S
 - Cabeçalho de 52 px com separador e trilha de navegação, seleção escura com texto claro e linhas compactas.
 - Navegação geral separada da coluna de servidores no estilo Stoat e dos canais existentes de texto, voz e reuniões.
 - Histórico ao lado da lista de canais. Recolher o menu geral o esconde por completo e amplia o conteúdo, como na referência; trocar de módulo preserva essa escolha e a coluna de servidores permanece independente.
+- **Navegação mobile clara (beta.27):** cabeçalho mobile e menu hambúrguer aberto passam a compartilhar o cinza `#ededed` do menu principal desktop; apenas o cabeçalho do tema claro mobile muda, preservando o escuro e as áreas de leitura brancas.
 - **Fundo externo claro completo (beta.26):** todo o fundo/canvas do app logado e suas margens (`--background`) e o trilho externo (`--workspace-rail`) usam o mesmo `#ededed` do menu principal. O painel, a lista de canais e a área de leitura continuam brancos; o tema escuro permanece igual.
 - **Contraste do menu claro (beta.25):** menus principais desktop/mobile passam a usar o token compartilhado `--kit-sidebar` (`#ededed` no modo claro); o painel e a lista de canais permanecem brancos e o tema escuro não muda.
 - **Superfície alinhada (beta.23):** os grupos de canais e suas ações de gerenciamento compartilham o fundo do painel de conteúdo (`--kit-panel`), em vez do fundo externo (`--background`). O menu principal mantém sua própria superfície nos temas claro e escuro.
