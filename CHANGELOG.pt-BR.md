@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.20] — 09/11/2026
+
+- **Identidade persistente do navegador/PWA:** o identificador da instância fica salvo localmente por conta e categoria desktop/mobile. Reabrir o mesmo navegador ou PWA instalado e recarregar a página não gera outro ID para a reserva existente de 60 segundos, evitando o falso aviso “Uorqui já está aberto”.
+- **Uma aba realmente ativa:** um Web Lock exclusivo por origem/conta/categoria impede que duas páginas abertas compartilhem a identidade. A segunda aba fica bloqueada; **Usar nesta aba** assume explicitamente o bloqueio local e a vaga do servidor. Cada documento tem um ID temporário diferente para as notificações de transferência pelo BroadcastChannel. Sem Web Locks, há uma verificação de presença pelo BroadcastChannel.
+- **Fechar, reabrir e evitar corridas:** recarregar/fechar libera o bloqueio local e preserva o identificador. `pagehide` não apaga a reserva no servidor para evitar corridas na reabertura imediata; `pageshow` verifica novamente a posse. Eventos de foco não duplicam a verificação inicial. Somente a aba ativa libera sua vaga no logout; outra aba bloqueada não pode apagar a reserva da primeira. Sem mudança de autenticação, OAuth, push, API ou banco.
+- **Testes:** novos testes Node no CI frontend cobrem persistência, isolamento entre contas/categorias, falhas de armazenamento, segunda aba, transferência, liberação antiga e fallback por BroadcastChannel. Na primeira abertura após atualizar da beta.19, ainda pode haver uma última reserva antiga de até 60 segundos; caso ocorra, usar **Usar nesta aba** uma vez.
+
 ## [0.1.0-beta.19] — 09/11/2026
 
 - **Verificação de instância em segundo plano:** ao recuperar a conta autenticada, a checagem da vaga desktop/mobile acontece sob a tela inicial de carregamento do Uorqui, que permanece montada até o resultado. A interface deixa de exibir a tela separada **Verificando instância ativa…** e evita a troca intermediária de layout.
