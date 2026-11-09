@@ -100,9 +100,11 @@ function pendingInvitation(){
 }
 
 function AppContent() {
+  const {locale}=useUorquiPreferences();
+  const pt=locale==='pt-BR';
   const [inviteToken,setInviteToken]=useState<string|null>(pendingInvitation);
   const [invitePreview,setInvitePreview]=useState<string|null>(null);
-  const [inviteError,setInviteError]=useState('');
+  const [inviteError,setInviteError]=useState<''|'expired'|'banned'|'redeem'>('');
   const [inviteBusy,setInviteBusy]=useState(false);
   const [invitedCommunity,setInvitedCommunity]=useState<string|null>(null);
   const [isVerificationResult, setIsVerificationResult] = useState(() => /^\/auth\/email-verification\/?$/.test(window.location.pathname));
@@ -158,7 +160,7 @@ function AppContent() {
     void fetch('/api/v1/community-invites/'+encodeURIComponent(inviteToken),{cache:'no-store'})
       .then(async r=>{if(!r.ok)throw Error('INVITE_EXPIRED');return r.json() as Promise<{community:{name:string}}>})
       .then(data=>{if(active){setInvitePreview(data.community.name);setInviteError('');}})
-      .catch(()=>{if(active)setInviteError('Este convite expirou ou foi revogado. / This invitation is no longer valid.');});
+      .catch(()=>{if(active)setInviteError('expired');});
     return ()=>{active=false;};
   },[inviteToken]);
   // Redeem only after an explicit user click. Registration or login never joins a community.
@@ -185,9 +187,7 @@ function AppContent() {
         })),120);
       setIsVerificationResult(false);
     }catch(error){
-      setInviteError(error instanceof Error&&error.message==='COMMUNITY_BANNED'?
-        'Você foi banido desta comunidade. / You are banned from this community.':
-        'Não foi possível aceitar o convite. / Could not redeem the invitation.');
+      setInviteError(error instanceof Error&&error.message==='COMMUNITY_BANNED'?'banned':'redeem');
     }finally{setInviteBusy(false);}
   }
   function declineCommunityInvite(){
@@ -228,6 +228,13 @@ function AppContent() {
     setInvitedCommunity(null);
   }, []);
 
+  const inviteErrorText=inviteError==='expired'
+    ?(pt?'Este convite expirou ou foi revogado.':'This invitation is no longer valid.')
+    :inviteError==='banned'
+      ?(pt?'Você foi banido desta comunidade.':'You are banned from this community.')
+      :inviteError==='redeem'
+        ?(pt?'Não foi possível aceitar o convite.':'Could not redeem the invitation.')
+        :'';
   return (
     <MotionConfig reducedMotion="user">
       {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
@@ -235,27 +242,30 @@ function AppContent() {
           invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
       {inviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
-        role="dialog" aria-modal={true} aria-label="Convite para comunidade / Community invitation"
+        role="dialog" aria-modal={true} aria-label={pt?'Convite para comunidade':'Community invitation'}
         className="fixed inset-0 z-[410] flex items-center justify-center bg-black/65 p-4">
         <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Convite de comunidade / Community invite</p>
-              <h2 className="mt-1 break-words text-lg font-semibold">{invitePreview||'Acessar comunidade / Join community'}</h2></div>
-            <button type="button" aria-label="Recusar convite / Decline invitation"
+            <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Convite de comunidade':'Community invitation'}</p>
+              <h2 className="mt-1 break-words text-lg font-semibold">{invitePreview||(pt?'Acessar comunidade':'Join community')}</h2></div>
+            <button type="button" aria-label={pt?'Recusar convite':'Decline invitation'}
               onClick={declineCommunityInvite} className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-secondary">
               <X className="size-4"/></button>
           </div>
           {!invitePreview&&!inviteError&&<Skeleton className="h-4 w-48"/>}
-          <p className="text-sm text-muted-foreground">{inviteError||
-            (account?.profile?'Você recebeu um convite. Quer entrar nesta comunidade? Nada será aceito automaticamente. / You have been invited. Would you like to join this community?':
-              'Entre ou crie sua conta primeiro. Depois você poderá escolher se deseja participar. / Sign in or register first; then choose whether to join.')}</p>
+          <p className="text-sm text-muted-foreground">{inviteErrorText||
+            (account?.profile
+              ?(pt?'Você recebeu um convite. Quer entrar nesta comunidade? Nada será aceito automaticamente.':
+                'You have been invited. Would you like to join this community? Nothing will be accepted automatically.')
+              :(pt?'Entre ou crie sua conta primeiro. Depois você poderá escolher se deseja participar.':
+                'Sign in or register first; then choose whether to join.'))}</p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" disabled={inviteBusy} onClick={declineCommunityInvite}>
-              Agora não / Not now
+              {pt?'Agora não':'Not now'}
             </Button>
             {account?.profile&&<Button type="button" onClick={()=>void acceptCommunityInvite()}
               disabled={!invitePreview||Boolean(inviteError)||inviteBusy}>
-              {inviteBusy&&<Spinner className="size-4"/>}Entrar na comunidade / Join community
+              {inviteBusy&&<Spinner className="size-4"/>}{pt?'Entrar na comunidade':'Join community'}
             </Button>}
           </div>
         </div>
