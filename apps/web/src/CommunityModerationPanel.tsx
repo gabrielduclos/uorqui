@@ -18,9 +18,10 @@ type Channel={id:string;name:string;description?:string|null;kind:'text'|'voice'
 type Data={members:Member[];bans:BanEntry[];myRole:Role};
 const weight:Record<Role,number>={owner:4,admin:3,moderator:2,member:1};
 
-export default function CommunityModerationPanel({id,role,channels,name,description,visibility,avatarUrl,onChanged,onDeleted}:{
+export default function CommunityModerationPanel({id,role,channels,name,description,visibility,avatarUrl,onChanged,onDeleted,editChannelId,onChannelEditorClosed}:{
   id:string;role:Role;channels:Channel[];name:string;description:string|null;visibility:Visibility;avatarUrl:string|null;
   onChanged:()=>Promise<void>;onDeleted:()=>Promise<void>;
+  editChannelId?:string|null;onChannelEditorClosed?:()=>void;
 }){
   const {locale}=useUorquiPreferences();const pt=locale==='pt-BR';
   const [open,setOpen]=useState(false);
@@ -47,6 +48,19 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   },[channels]);
   const base='/api/v1/communities/'+id;
   const canAdmin=weight[role]>=3;
+  useEffect(()=>{
+    if(!editChannelId||!canAdmin)return;
+    setError('');setNotice('');setConfirm(null);
+    setTab('channels');setOpen(true);
+  },[editChannelId,canAdmin]);
+  useEffect(()=>{
+    if(!open||tab!=='channels'||!editChannelId)return;
+    const timeout=window.setTimeout(()=>{
+      document.getElementById('uorqui-channel-admin-'+editChannelId)?.scrollIntoView({block:'start'});
+      document.getElementById('uorqui-channel-admin-name-'+editChannelId)?.focus({preventScroll:true});
+    },100);
+    return ()=>window.clearTimeout(timeout);
+  },[open,tab,editChannelId,channels.length]);
   const load=useCallback(async()=>{
     const result=await api(base+'/moderation') as Data;
     setData(result);
@@ -93,7 +107,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
 
   return <Dialog.Root open={open} onOpenChange={next=>{
     if(busy)return;
-    setOpen(next);if(next)setTab('members');setError('');setNotice('');setConfirm(null);
+    setOpen(next);if(next)setTab('members');else onChannelEditorClosed?.();setError('');setNotice('');setConfirm(null);
   }}>
     <Dialog.Trigger asChild>
       <button type="button"
@@ -315,7 +329,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
             const draft=channelDrafts[ch.id]??{name:ch.name,description:ch.description??'',accessMode:ch.accessMode??'open',password:''};
             const endpoint=base+'/channels/'+ch.id;
             const changedName=draft.name.trim();
-            return <section key={ch.id} className="space-y-3 rounded-lg border border-border/70 p-3">
+            return <section key={ch.id} id={'uorqui-channel-admin-'+ch.id} className="scroll-mt-3 space-y-3 rounded-lg border border-border/70 p-3">
               <p className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
                 {ch.kind==='text'?'#':ch.kind==='meeting'?'▣':'◉'} {ch.name}
                 {ch.hasPassword&&<LockKeyhole className="size-3.5 text-primary"/>}
@@ -329,7 +343,7 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
                   pt?'Nome do canal atualizado.':'Channel renamed.');
               }}>
                 <label className="min-w-[160px] flex-1 text-xs">{pt?'Nome do canal':'Channel name'}
-                  <Input value={draft.name} onChange={event=>updateChannelDraft(ch.id,{name:event.target.value})}
+                  <Input id={'uorqui-channel-admin-name-'+ch.id} value={draft.name} onChange={event=>updateChannelDraft(ch.id,{name:event.target.value})}
                     minLength={2} maxLength={64} required disabled={busy} className="mt-1 h-9 text-base"/>
                 </label>
                 <Button type="submit" size="sm" variant="outline" className="h-9"
