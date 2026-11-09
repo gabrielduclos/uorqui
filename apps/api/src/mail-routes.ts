@@ -216,7 +216,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
           await markMailRead(connection.provider, token, messageId);
           try {
             const unread = await countInboxUnread(connection.provider, token);
-            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1', [accountId, unread]);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1', [accountId, unread]);
           } catch { /* The next inbox poll refreshes counts after a successful read. */ }
           return { ok: true };
         });
@@ -256,7 +256,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
         if (read.length) {
           try {
             const unread = await countInboxUnread(connection.provider, token);
-            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1', [accountId, unread]);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1', [accountId, unread]);
           } catch { /* Mail is already read; next poll refreshes the count. */ }
         }
         return { read, failed };
@@ -283,7 +283,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
         if (moved.moved.length) {
           try {
             const unread = await countInboxUnread(connection.provider, token);
-            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1',[accountId,unread]);
+            await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1',[accountId,unread]);
           } catch { /* Existing provider move succeeded; a subsequent scan updates the count. */ }
         }
         return moved;
@@ -301,7 +301,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
         await markMailRead(connection.provider, token, messageId);
         try {
           const unread = await countInboxUnread(connection.provider, token);
-          await getPool().query('UPDATE mail_inbox_state SET unread_count=$2 WHERE account_id=$1',[accountId,unread]);
+          await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1',[accountId,unread]);
         } catch { /* Marking read succeeded; the next scan refreshes badge counts. */ }
         return { ok: true };
       });
