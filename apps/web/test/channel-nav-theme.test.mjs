@@ -17,6 +17,14 @@ test('workspace UI kit is the sole source of the channel list background', () =>
     'all channel background colors belong to the workspace UI kit');
 });
 
+test('light primary menu is subtly gray while channel content stays white', () => {
+  assert.match(uiKitCSS, /:root\.light\s+\[data-uorqui-ui-kit="sprintrix-v1"\]\s*\{[^}]*--kit-sidebar:#ededed;/);
+  assert.match(uiKitCSS, /:root\.light\s+\[data-uorqui-ui-kit="sprintrix-v1"\]\s*\{[^}]*--kit-panel:#ffffff;/);
+  assert.match(uiKitCSS, /\[data-uorqui-ui-kit="sprintrix-v1"\]\s+#uorqui-mobile-nav\s*\{\s*background:var\(--kit-sidebar\);/);
+  assert.doesNotMatch(uiKitCSS, /:root\.light\s+\[data-uorqui-ui-kit="sprintrix-v1"\]\s*\{[^}]*--background:#ededed;/,
+    'do not darken the entire app canvas to style the menu');
+});
+
 test('panel tokens and primary menu are still independent in both themes', () => {
   assert.match(uiKitCSS, /--kit-panel:#0a0a0a;/);
   assert.match(uiKitCSS, /--kit-panel:#ffffff;/);
