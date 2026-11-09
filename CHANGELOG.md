@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.15] — 2026-11-09
+
+- **Video compression refinements:** browser-side video preparation uses a maximum 1280×720 frame, ~1.3 Mbps video and 96 kbps audio, keeps the original when compression is unsupported or saves no significant space, and still enforces the existing 50 MB final upload limit. No increased R2 storage cap.
+- **Visible and cancelable preparation:** during compression, the shared chat/channel composer shows the source size, live percentage progress, and an explicit Cancel control. Successful conversion reports original and final MB. Cancellation aborts before upload and frees local media resources; aborted metadata and playback setup no longer wait for the full timeout.
+- **Power management:** when available, Screen Wake Lock is held temporarily during on-device video conversion and released afterward. Browsers/OS power policies may deny it.
+- **Limits and validation:** source video selection remains up to 300 MB; the real-time browser encoder handles clips up to 180 seconds. Preserve audio and playback quality through real Safari iOS/PWA and Android/PWA tests; the integration CI only verifies code and API compatibility. No database/backend changes.
+
 ## [0.1.0-beta.14] — 2026-11-09
 
 - **Voice recording:** the shared direct-message and channel composer requests a Screen Wake Lock while recording or paused, releasing it on stop, discard and unmount. It reacquires the lock when the page becomes visible; browser/OS restrictions may still prevent screen wake lock.

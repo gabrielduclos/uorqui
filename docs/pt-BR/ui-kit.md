@@ -64,7 +64,7 @@ O padrão de instalação nova é **Dark**, como implementado em `UorquiPreferen
 | --- | --- |
 | `SocialShell`, `UIKitSectionHeading` | Navegação e cabeçalhos responsivos; uma só fonte de verdade para área ativa |
 | `LiveDirectChat`, `DirectMessageBubble` | Conversas persistidas, SSE, estados entregue/lido, hora de leitura, respostas otimistas e fixadas, ações e menus sem ultrapassar a tela |
-| `LiveMessageComposer` | **+ anexos · Galeria com fotos/vídeos · texto expansível · emoji · microfone/enviar**; bloqueio de suspensão opcional durante gravação e compactação local de vídeo com limite final de 50 MB; não fechar teclado desnecessariamente |
+| `LiveMessageComposer` | **+ anexos · Galeria com fotos/vídeos · texto expansível · emoji · microfone/enviar**; bloqueio de suspensão opcional durante gravação e compactação local de vídeo com progresso, cancelamento, tamanhos antes/depois e limite final de 50 MB; não fechar teclado desnecessariamente |
 | `ConversationAttachmentsPanel`, `ChatMediaViewer`, `ChatAudioPlayer` | Histórico paginado de fotos/vídeos/áudios/arquivos; zoom, download, prévia responsiva |
 | `LiveCommunities`, `CommunityVoiceRoom` | Canais de texto, áudio e reunião; SSE, participantes, moderação, convites e texto associado às salas |
 | `CommunityModerationPanel` | Confirmação de exclusão visível, no próprio canal e fora da rolagem principal |

@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.15] — 09/11/2026
+
+- **Compactação de vídeo aprimorada:** preparação no navegador com resolução máxima de 1280×720, cerca de 1,3 Mbps de vídeo e 96 kbps de áudio, preservando o arquivo original quando a compactação não for suportada ou não oferecer redução significativa. O limite de envio final permanece **50 MB**; não aumenta a capacidade permitida no R2.
+- **Preparação visível e cancelável:** o compositor de conversas e canais mostra tamanho original, percentual de progresso e botão **Cancelar** durante a compactação. Após converter, exibe os tamanhos anterior e final. O cancelamento interrompe antes do upload e libera os recursos locais; inicialização e carregamento agora respeitam cancelamento sem aguardar todos os timeouts.
+- **Energia:** tenta manter a tela ligada durante a compactação local por Screen Wake Lock e libera a solicitação ao concluir. Navegador e sistema podem negar o recurso.
+- **Limites e validação:** vídeo original até 300 MB e compactação em tempo real para clipes de até 180 segundos. É preciso conferir áudio e qualidade no Safari/PWA iOS e Android/PWA; CI valida build e compatibilidade com API, não mídia real. Sem mudanças no banco/backend.
+
 ## [0.1.0-beta.14] — 09/11/2026
 
 - **Gravação de áudio:** o compositor compartilhado de conversas e canais solicita Screen Wake Lock durante gravação ou pausa e libera ao finalizar, descartar ou sair. Reativa ao voltar para a tela, quando o navegador/sistema permitir.
