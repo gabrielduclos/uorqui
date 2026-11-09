@@ -89,8 +89,8 @@ Older-message pagination, R2 attachments, push, presence, anti-spam and moderati
 ### Parity with the original demo (PR #31)
 
 - Attachments are **staged for preview and explicit send**, showing name/size and Remove; typed text becomes an attachment caption. Paste a clipboard image to stage it.
-- Camera picker offers native **Take photo** and **Record video**, alongside gallery and files.
-- Voice recorder supports stop, pause/resume, discard and **play before sending**. Audio player with seek/duration and **1×, 1.5×, 2×** playback speeds, using browser-supported WebM/MP4/OGG/MP3/WAV/AAC formats.
+- Camera picker offers native **Take photo** and **Record video**. Gallery supports photos or one MP4/WebM/MOV video at a time. Selected videos up to 300 MB can be compressed locally before upload when the browser supports it, keeping **50 MB as the final-file cap** to control R2 storage. Unsupported or ineffective compression retains the source only when under 50 MB; recording-based compression works for clips up to 3 minutes and may run slowly.
+- Voice recorder requests Screen Wake Lock during recording/pausing to help prevent automatic display sleep where supported. OS/browser restrictions remain. It supports stop, pause/resume, discard and **play before sending**. Audio player with seek/duration and **1×, 1.5×, 2×** playback speeds, using browser-supported WebM/MP4/OGG/MP3/WAV/AAC formats.
 - Image annotation editor **before send** provides freehand pen, rectangle, ellipse, arrows, colors, undo and clear; saving creates a new PNG without modifying the original.
 - Photo/video carousel navigates conversation media with prev/next controls, ← → Esc, and download; videos have native controls.
 - The restored **50 MB** cap requires migration `0008_dm_attachment_50mb` changing only `dm_attachment_consistency`; apply Neon production migration before publishing API/Worker. No existing files are removed.

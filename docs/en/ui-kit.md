@@ -24,7 +24,7 @@
 
 - Compact, communication-first interface influenced by workspace dashboards, without positioning Uorqui as exclusively enterprise software.
 - Primary areas: **Discover · Messages · Communities · Email**; Contacts are reached **from Messages**, not from a separate main-menu entry.
-- Community rail and desktop sidebar, responsive navigation and fixed mobile headers. **Discover** uses a compass icon rather than Search in the community rail. Channel headers show Invite, not Edit; pinned channel rules expand using Read more / Show less and are edited in Moderation. Scroll content, not the entire workspace.
+- Community rail and desktop sidebar, responsive navigation and fixed mobile headers. **Discover** uses a compass icon rather than Search in the community rail. Channel headers show Invite and, for owners/admins, Edit; Edit opens Moderation → Channels at the current channel. Pinned channel rules expand using Read more / Show less and stay editable in Moderation. Scroll content, not the entire workspace.
 - Dark/Light share the same structure; touch controls and dialogs must respect viewport, iOS safe areas, keyboards, Escape and accessibility.
 - Brazilian Portuguese/English, Lucide iconography, consistent primitives and no page-specific theme palettes.
 
@@ -64,7 +64,7 @@
 | --- | --- |
 | `SocialShell`, `UIKitSectionHeading` | Responsive navigation and headings; single source of truth for active area |
 | `LiveDirectChat`, `DirectMessageBubble` | Persisted 1:1 messages, SSE, delivery/read status and times, optimistic replies, pins, actions and viewport-safe menus |
-| `LiveMessageComposer` | **+ attachments · growing input · emoji · mic/send**; keep mobile keyboard stable |
+| `LiveMessageComposer` | **+ attachments · Gallery photos/videos · growing input · emoji · mic/send**; optional wake lock during voice recording and best-effort local video compression with 50 MB final cap; keep mobile keyboard stable |
 | `ConversationAttachmentsPanel`, `ChatMediaViewer`, `ChatAudioPlayer` | Paginated history of images/videos/audio/files; zoom, download, responsive previews |
 | `LiveCommunities`, `CommunityVoiceRoom` | Text, voice and meeting channels; realtime messages, membership, moderation, invitations and room text |
 | `CommunityModerationPanel` | Visible delete confirmation in the channel card and outside the scrollable section |
