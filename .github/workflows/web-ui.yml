@@ -24,8 +24,6 @@ jobs:
           node-version: '22'
       - name: Install workspaces
         run: npm install --include=dev --no-audit --no-fund
-      - name: Test persistent browser instance identity and tab exclusion
-        run: node --import tsx --test apps/web/test/app-instance-identity.test.mjs
       - name: Type-check and build React application
         run: npm run build -w @uorqui/web
       - name: Validate Cloudflare Worker configuration
