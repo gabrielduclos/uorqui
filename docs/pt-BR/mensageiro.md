@@ -103,8 +103,8 @@ Paginação do histórico, anexos privados no R2, push, controle antispam e mode
 ### Paridade de mídia com a versão demo (PR #31)
 
 - Anexos agora ficam **em prévia antes do envio**, com nome, tamanho e ação para remover. Texto digitado pode acompanhar o anexo como legenda. Colar imagem do clipboard abre a mesma prévia.
-- Câmera: escolha **Tirar foto** ou **Gravar vídeo** no seletor nativo. Galeria, vídeo e documentos continuam com entradas nativas.
-- Microfone: gravar, pausar, retomar, finalizar, descartar e **ouvir antes de enviar**. Player do áudio com seek, duração e velocidades **1×, 1,5×, 2×**; formatos WebM/MP4/OGG/MP3/WAV/AAC conforme suporte do navegador.
+- Câmera: escolha **Tirar foto** ou **Gravar vídeo** no seletor nativo. A Galeria permite fotos ou um vídeo MP4/WebM/MOV por vez. Vídeos originais de até 300 MB podem ser compactados no dispositivo antes de enviar, quando houver suporte, mantendo **50 MB como limite final** para controlar o armazenamento R2. Se não houver suporte ou ganho, o original só é usado se couber. A compactação em tempo real contempla vídeos de até 3 minutos e pode demorar.
+- Microfone: solicita Screen Wake Lock durante gravação/pausa para evitar que a tela durma automaticamente, se o navegador e SO permitirem, liberando ao terminar. Permite gravar, pausar, retomar, finalizar, descartar e **ouvir antes de enviar**. Player do áudio com seek, duração e velocidades **1×, 1,5×, 2×**; formatos WebM/MP4/OGG/MP3/WAV/AAC conforme suporte do navegador.
 - Editor de fotos **antes de enviar**: desenho, retângulo, círculo, seta, cores, desfazer e limpar. Salvar gera um PNG novo sem alterar o original.
 - Visualizador de foto/vídeo com rolagem por mídias da conversa, botões anterior/próxima, teclado (←, → e Esc) e opção de salvar; vídeo tem controles nativos.
 - O limite é restaurado para **50 MB** com migração Drizzle `0008_dm_attachment_50mb`, trocando somente a restrição `dm_attachment_consistency`. A mudança requer migração no Neon principal antes de publicar o Worker/API do PR #31; nenhum arquivo existente é apagado.

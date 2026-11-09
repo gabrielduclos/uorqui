@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.14] — 2026-11-09
+
+- **Voice recording:** the shared direct-message and channel composer requests a Screen Wake Lock while recording or paused, releasing it on stop, discard and unmount. It reacquires the lock when the page becomes visible; browser/OS restrictions may still prevent screen wake lock.
+- **Edit channel in header:** owners/admins get Edit next to Invite in the channel header. It opens the existing Moderation → Channels editor for the selected channel, retaining server permission checks.
+- **Gallery video compression:** Gallery accepts photos and MP4/WebM/MOV video selection; the Camera video picker uses the same path. Videos up to 300 MB may be compressed locally with canvas/MediaRecorder before upload. The final R2 attachment cap **stays 50 MB**, and unsupported/ineffective compression keeps the original only if it fits. The UI shows progress and a fallback notice. Photos can be batched; videos are selected individually.
+- **Risks/verification:** browser compatibility, audio retention, conversion speed, device memory and media quality need real-device verification, especially Safari iOS/PWA. Real-time compression currently supports clips up to 3 minutes; longer ones retain the original if small enough. No backend, database or R2 limit changes.
+
 ## [0.1.0-beta.13] — 2026-11-08
 
 - **Responsive onboarding:** the guide measures its own height, chooses a position above or below mobile navigation highlights based on available viewport space, and scrolls internally when the screen is short. Desktop keeps the side placement.

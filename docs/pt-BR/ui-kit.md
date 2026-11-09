@@ -24,7 +24,7 @@
 
 - Interface compacta, orientada a comunicação, com referências de organização visual a painéis de trabalho; **não** restringir o Uorqui ao público empresarial.
 - Navegação principal: **Descobrir · Mensagens · Comunidades · E-mail**; contatos são acessados **dentro de Mensagens**, não por um item independente do menu.
-- Trilho de comunidades e barra lateral no desktop; **Descobrir** usa ícone de bússola no lugar da lupa. O cabeçalho dos canais tem **Convidar**, mas não **Editar**; descrições fixas apresentam **Ler mais / Mostrar menos**, e são editadas em **Moderação → Canais**. Somente a área de conteúdo deve rolar.
+- Trilho de comunidades e barra lateral no desktop; **Descobrir** usa ícone de bússola no lugar da lupa. O cabeçalho dos canais tem **Convidar** e, para proprietários/administradores, **Editar**, que abre o canal em **Moderação → Canais**. Descrições fixas apresentam **Ler mais / Mostrar menos** e permanecem editáveis na moderação. Somente a área de conteúdo deve rolar.
 - Dark e Light têm a mesma estrutura e ações. Todos os controles de toque e diálogos devem respeitar viewport, área segura do iOS, teclado, Escape e acessibilidade.
 - PT-BR e inglês coexistem; linguagem humana, ícones Lucide, sem misturar bibliotecas ou criar CSS avulso para cada página.
 
@@ -64,7 +64,7 @@ O padrão de instalação nova é **Dark**, como implementado em `UorquiPreferen
 | --- | --- |
 | `SocialShell`, `UIKitSectionHeading` | Navegação e cabeçalhos responsivos; uma só fonte de verdade para área ativa |
 | `LiveDirectChat`, `DirectMessageBubble` | Conversas persistidas, SSE, estados entregue/lido, hora de leitura, respostas otimistas e fixadas, ações e menus sem ultrapassar a tela |
-| `LiveMessageComposer` | **+ anexos · texto expansível · emoji · microfone/enviar**; não fechar teclado desnecessariamente |
+| `LiveMessageComposer` | **+ anexos · Galeria com fotos/vídeos · texto expansível · emoji · microfone/enviar**; bloqueio de suspensão opcional durante gravação e compactação local de vídeo com limite final de 50 MB; não fechar teclado desnecessariamente |
 | `ConversationAttachmentsPanel`, `ChatMediaViewer`, `ChatAudioPlayer` | Histórico paginado de fotos/vídeos/áudios/arquivos; zoom, download, prévia responsiva |
 | `LiveCommunities`, `CommunityVoiceRoom` | Canais de texto, áudio e reunião; SSE, participantes, moderação, convites e texto associado às salas |
 | `CommunityModerationPanel` | Confirmação de exclusão visível, no próprio canal e fora da rolagem principal |

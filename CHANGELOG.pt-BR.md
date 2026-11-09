@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.14] — 09/11/2026
+
+- **Gravação de áudio:** o compositor compartilhado de conversas e canais solicita Screen Wake Lock durante gravação ou pausa e libera ao finalizar, descartar ou sair. Reativa ao voltar para a tela, quando o navegador/sistema permitir.
+- **Editar canal no header:** proprietários e administradores recebem Editar ao lado de Convidar no cabeçalho do canal; o atalho abre Moderação → Canais diretamente no canal selecionado, preservando permissões da API.
+- **Compactação de vídeos da Galeria:** Galeria passa a aceitar fotos e vídeos MP4/WebM/MOV; o vídeo da Câmera usa a mesma preparação. Vídeos originais de até 300 MB podem ser compactados localmente com canvas/MediaRecorder antes do envio. O limite final para o R2 **permanece em 50 MB**, e um original só é preservado se couber quando a compactação for indisponível ou ineficaz. A interface mostra o progresso e o aviso de fallback. Fotos continuam em lote; vídeos são selecionados individualmente.
+- **Riscos/testes:** verificar compatibilidade, preservação do áudio, duração da conversão, uso de memória e qualidade em dispositivos reais, sobretudo Safari/PWA iOS. A compressão em tempo real atualmente cobre clipes de até 3 minutos; os demais usam o original caso caibam. Sem mudança na API, banco ou limite do R2.
+
 ## [0.1.0-beta.13] — 08/11/2026
 
 - **Onboarding responsivo:** o guia mede a própria altura, escolhe espaço acima ou abaixo do item destacado na navegação mobile conforme o viewport e permite rolagem interna em telas baixas. No desktop, mantém a posição lateral.

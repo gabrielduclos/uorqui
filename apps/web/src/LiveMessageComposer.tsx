@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { ChatImageEditor } from './ChatImageEditor';
 import { cn } from '@/lib/utils';
+import { optimizeVideoAttachment } from './videoCompression';
 
 const EMOJI_GROUPS = [
   { pt: 'Expressões', en: 'Expressions', symbols: ['😀','😃','😁','😂','🤣','😊','😍','🥰','😘','😎','🥹','😢','😭','😡','🤔','😴','🤩','😮'] },
@@ -48,17 +49,23 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   const [recording,setRecording] = useState<'idle'|'recording'|'paused'>('idle');
   const [recordSeconds,setRecordSeconds] = useState(0);
   const [error,setError] = useState('');
+  const [optimizing,setOptimizing] = useState(false);
+  const [optimizationProgress,setOptimizationProgress] = useState(0);
+  const [videoNotice,setVideoNotice] = useState('');
+  const optimizationController=useRef<AbortController|null>(null);
+  const optimizingRef=useRef(false);
   const recorder = useRef<MediaRecorder | null>(null);
   const audioStream = useRef<MediaStream | null>(null);
   const recordingChunks = useRef<Blob[]>([]);
   const discardRecording = useRef(false);
   const mounted = useRef(true);
-  const canSend = (!!value.trim() || !!pending || pendingPhotos.length>0 || !!pendingLocation) && !sending && !locating && recording==='idle';
+  const canSend = (!!value.trim() || !!pending || pendingPhotos.length>0 || !!pendingLocation) && !sending && !locating && !optimizing && recording==='idle';
   const maxHeight = 208;
   useEffect(()=>{
     mounted.current = true;
     return ()=>{
       mounted.current = false;
+      optimizationController.current?.abort();
       if(recorder.current && recorder.current.state!=='inactive') { recorder.current.onstop=null; recorder.current.stop(); }
       audioStream.current?.getTracks().forEach(track=>track.stop());
       if(localUrl.current) URL.revokeObjectURL(localUrl.current);
@@ -71,13 +78,43 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     return ()=>window.clearInterval(interval);
   },[recording]);
 
+  // Screen Wake Lock is released as soon as a voice note ends or is discarded.
+  useEffect(()=>{
+    if(recording==='idle'||!('wakeLock' in navigator))return;
+    let stopped=false,requesting=false;
+    let lock:WakeLockSentinel|null=null;
+    const acquire=async()=>{
+      if(stopped||requesting||lock||document.visibilityState!=='visible')return;
+      requesting=true;
+      try{
+        const next=await navigator.wakeLock.request('screen');
+        if(stopped){void next.release().catch(()=>{});return;}
+        lock=next;
+        next.addEventListener('release',()=>{if(lock===next)lock=null;});
+      }catch{
+        // Browsers and the OS may refuse wake lock, e.g. in low-power mode.
+      }finally{requesting=false;}
+    };
+    const resume=()=>{if(document.visibilityState==='visible')void acquire();};
+    document.addEventListener('visibilitychange',resume);
+    window.addEventListener('focus',resume);
+    void acquire();
+    return ()=>{
+      stopped=true;
+      document.removeEventListener('visibilitychange',resume);
+      window.removeEventListener('focus',resume);
+      const current=lock;lock=null;
+      if(current)void current.release().catch(()=>{});
+    };
+  },[recording==='idle']);
+
   function clearPending() {
     if(localUrl.current)URL.revokeObjectURL(localUrl.current);
     localUrl.current=null;
     photoLocalUrls.current.forEach(url=>URL.revokeObjectURL(url));
     photoLocalUrls.current=[];
     setPending(null); setPendingUrl(null); setPendingPhotos([]); setPhotoUrls([]);
-    setEditingPhotoIndex(null); setEditorOpen(false);
+    setEditingPhotoIndex(null); setEditorOpen(false);setVideoNotice('');
   }
   function stagePhotos(files:File[]) {
     if(editing || !files.length)return;
@@ -125,6 +162,50 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     const url=URL.createObjectURL(file);
     localUrl.current=url;setPending(file);setPendingUrl(url);setError('');setAttachmentsOpen(false);
   }
+  async function stageVideo(file:File){
+    if(optimizingRef.current||editing)return;
+    if(!file.size||file.size>300*1024*1024||!['video/mp4','video/webm','video/quicktime'].includes(file.type)){
+      setError(pt?'Escolha um vídeo MP4, WebM ou MOV de até 300 MB para compactar.':
+        'Choose an MP4, WebM or MOV video up to 300 MB for compression.');return;
+    }
+    const controller=new AbortController();
+    optimizationController.current=controller;
+    optimizingRef.current=true;setOptimizing(true);setOptimizationProgress(0);setError('');
+    try{
+      const result=await optimizeVideoAttachment(file,controller.signal,percent=>{
+        if(mounted.current)setOptimizationProgress(percent);
+      });
+      if(controller.signal.aborted||!mounted.current)return;
+      if(result.file.size>50*1024*1024){
+        setError(pt?'Não foi possível reduzir o vídeo para até 50 MB neste navegador.':
+          'This browser could not reduce the video to 50 MB or less.');return;
+      }
+      stageFile(result.file);
+      setVideoNotice(result.compressed
+        ?(pt?'Vídeo compactado: ':'Video compressed: ')+(file.size/1048576).toFixed(1)+' MB → '+(result.file.size/1048576).toFixed(1)+' MB'
+        :(pt?'Vídeo já pequeno ou sem compactação disponível; original preservado.':
+          'Video already small or compression unavailable; original preserved.'));
+    }catch(error){
+      if(mounted.current&&!(error instanceof Error&&error.message==='ABORTED'))
+        setError(pt?'Falha ao preparar o vídeo.':'Could not prepare the video.');
+    }finally{
+      if(optimizationController.current===controller)optimizationController.current=null;
+      optimizingRef.current=false;
+      if(mounted.current)setOptimizing(false);
+    }
+  }
+  function selectGallery(files:File[]){
+    if(!files.length||optimizingRef.current)return;
+    const hasVideo=files.some(file=>file.type.startsWith('video/'));
+    if(!hasVideo){stagePhotos(files);return;}
+    if(files.length!==1){
+      setError(pt?'Selecione apenas um vídeo por vez na galeria. Fotos podem ser enviadas em lote.':
+        'Select one video at a time from Gallery. Photos can be sent in batches.');
+      return;
+    }
+    void stageVideo(files[0]);
+  }
+
   async function toggleRecording() {
     if(recorder.current?.state==='recording'){recorder.current.stop();return;}
     if(recorder.current?.state==='paused'){recorder.current.stop();return;}
@@ -190,7 +271,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
       setLocating(false);setError(pt?'Não foi possível obter sua localização. Verifique a permissão.':'Could not get your location. Check permissions.');
     },{enableHighAccuracy:false,timeout:12000,maximumAge:30000});
   }
-  function chosenFile(file?:File){if(file && !editing)stageFile(file);}
+  function chosenFile(file?:File){if(file && !editing){if(file.type.startsWith('video/'))void stageVideo(file);else stageFile(file);}}
   
 
   useLayoutEffect(() => {
@@ -237,6 +318,10 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
 
   return <form ref={controls} onSubmit={submit}
     className="relative flex w-full min-w-0 flex-wrap items-end gap-1 sm:gap-2" data-live-message-composer>
+    {optimizing&&<p role="status" className="w-full text-xs text-primary">
+      {pt?'Compactando vídeo… ':'Compressing video… '}{optimizationProgress}%
+    </p>}
+    {videoNotice&&!optimizing&&<p role="status" className="w-full text-xs text-muted-foreground">{videoNotice}</p>}
     {pendingPhotos.length>0 && <div className="w-full min-w-0 border border-border bg-muted/60 p-2 text-xs" role="status">
       <p className="mb-2 font-semibold">{pt?pendingPhotos.length+' foto(s) selecionada(s)':pendingPhotos.length+' selected photo(s)'}</p>
       <div className="grid max-h-48 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">
@@ -314,7 +399,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         </div> : <div>
           <div className="grid grid-cols-4 gap-1">
           {ATTACHMENTS.map(({icon: Icon,pt:labelPt,en},index) => <button key={en} type="button"
-            disabled={sending || editing || recording!=='idle'}
+            disabled={sending || editing || optimizing || recording!=='idle'}
             onClick={() => {
               if(index===1){setCameraOptions(true);return;}
               if(index===3){chooseLocation();return;}
@@ -329,12 +414,12 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
           </div>
         </div>}
         <p className="px-2 pt-2 text-[11px] text-muted-foreground">
-          {pt ? 'Anexos até 50 MB. Você pode conferir e editar antes de enviar.' : 'Attachments up to 50 MB. Preview and edit before sending.'}
+          {pt ? 'Anexos até 50 MB após compactação. Vídeos originais até 300 MB.' : 'Attachments up to 50 MB after compression. Videos up to 300 MB before compression.'}
         </p>
       </div>}
     </div>
-    <input ref={galleryRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" className="sr-only"
-      onChange={e => { const files=Array.from(e.target.files??[]); e.target.value=''; stagePhotos(files); }} />
+    <input ref={galleryRef} type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime" className="sr-only"
+      onChange={e => { const files=Array.from(e.target.files??[]); e.target.value=''; selectGallery(files); }} />
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,.mp3,.m4a,.ogg,.webm,.wav,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
@@ -383,7 +468,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         className="grid size-11 lg:size-12 shrink-0 place-items-center rounded-[5px] bg-primary text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
         <Send className="size-5"/>
       </button>
-      : <button type="button" onClick={()=>void toggleRecording()} disabled={sending || editing || (!!pending && recording==='idle') || pendingPhotos.length>0}
+      : <button type="button" onClick={()=>void toggleRecording()} disabled={sending || editing || optimizing || (!!pending && recording==='idle') || pendingPhotos.length>0}
         aria-label={recording!=='idle'?(pt?'Finalizar gravação':'Finish recording'):(pt?'Gravar áudio':'Record voice note')}
         className={cn('grid size-11 lg:size-12 shrink-0 place-items-center',recording!=='idle'?'bg-destructive text-destructive-foreground':'text-muted-foreground',sending && 'opacity-40')}>
         {recording!=='idle'?<Square className="size-4" fill="currentColor"/>:<Mic className="size-5"/>}
