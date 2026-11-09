@@ -74,7 +74,9 @@ test('Web Locks enforce one live tab per account; reopening reuses the browser i
   const mobile = await acquireDocumentLock(locks, 'uorqui:instance-lock:v2:account-A:mobile', false);
   assert.equal(typeof mobile, 'function', 'mobile slot independent');
   first();
-  await Promise.resolve();
+  // A Web Lock is freed asynchronously when its holder callback resolves.
+  // Let the fake lock manager finish the callback's finally before reopening.
+  await new Promise(resolve => setImmediate(resolve));
   const reopened = await acquireDocumentLock(locks, key, false);
   assert.equal(typeof reopened, 'function', 'closed tab releases lock on its own');
   reopened();
