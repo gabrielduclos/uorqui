@@ -2,6 +2,7 @@
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
+- **Fundo da lista de canais (beta.23):** a coluna de canais de texto, voz, reunião, Novo canal e Moderação usa a superfície `--kit-panel` (escuro `#0a0a0a`, claro `#ffffff`) do painel de trabalho em todos os tamanhos de tela. O menu principal permanece separado, com `--kit-sidebar`. Aplicar a regra somente no CSS global do workspace em `[data-uorqui-channel-nav]`, não criar uma paleta individual no React.
 - **Chats dos canais:** respostas com mensagem original, `@usuário` com sugestões, GIFs e lista de reagentes por emoji; não mostrar membros sem permissão.
 - **Privacidade:** cartão de exclusão definitiva no Perfil com duas confirmações (senha e `EXCLUIR`), estados de erro e aviso de mídia em limpeza posterior.
 - **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro. O modal, os erros, os botões e rótulos acessíveis seguem o idioma ativo (inicialmente o do navegador, respeitando a escolha salva), sem frases bilíngues separadas por barra.

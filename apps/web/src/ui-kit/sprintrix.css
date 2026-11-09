@@ -138,6 +138,11 @@
 [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-inset-panel]{
   background:var(--kit-panel);border-color:var(--border);box-shadow:var(--kit-shadow);
 }
+/* Channels belong to the content inset, not to the primary sidebar/canvas.
+   Match the surrounding workspace surface in both light and dark themes. */
+[data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-channel-nav]{
+  background:var(--kit-panel);
+}
 [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-main-header],
 [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-context-header]{
   background:var(--kit-panel);border-color:var(--border);
@@ -170,9 +175,6 @@
   [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-main-header],
   [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-context-header]{
     height:53px;min-height:53px;
-  }
-  [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-channel-nav]{
-    background:var(--background);
   }
 }
 @media(max-width:767px){

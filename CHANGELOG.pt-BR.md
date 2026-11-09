@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.23] — 09/11/2026
+
+- **Fundo da lista de canais:** a área com Canais de texto, Salas de voz, Salas de reunião, Novo canal e Moderação passa a usar `--kit-panel`, a mesma cor da superfície de trabalho ao redor, nos temas escuro e claro. Antes, uma regra específica do desktop forçava `--background`, destacando a coluna de maneira indevida.
+- **Menu principal preservado:** a barra de navegação principal mantém seu fundo `--kit-sidebar` / `--background`, sem mudanças em seleção, hover, textos ou divisórias. Ajuste centralizado no CSS do UI Kit, sem cores fixadas na página.
+- **Escopo e validação:** alteração somente visual, sem API, autenticação, banco nem migração. Conferir desktop/mobile/PWA e alternância de tema. CI com typecheck/build frontend, Worker, API e integração PostgreSQL.
+
 ## [0.1.0-beta.22] — 09/11/2026
 
 - **Canais abrem na mensagem mais recente:** a primeira entrada no canal de texto (ou a expansão do chat de sala de voz/reunião) fixa o histórico no final. Mesmo com cache imediato, busca de mensagens atualizada ou imagens/GIFs/anexos que mudam de tamanho depois, eventos automáticos de rolagem não interrompem a posição inicial.
