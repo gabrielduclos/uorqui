@@ -52,7 +52,7 @@
   --border:#e5e5e5;
   --input:#d4d4d4;
   --ring:#7c7c7c;
-  --kit-sidebar:#fafafa;
+  --kit-sidebar:#ededed;
   --kit-panel:#ffffff;
   --kit-row-hover:#f4f4f4;
   --kit-selected:#171717;
@@ -66,6 +66,11 @@
   border:0;
   box-shadow:none;
   transition:none!important;
+}
+/* Match mobile's primary navigation drawer to the desktop sidebar.
+   The content inset and channel list retain their own --kit-panel surface. */
+[data-uorqui-ui-kit="sprintrix-v1"] #uorqui-mobile-nav{
+  background:var(--kit-sidebar);
 }
 [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-dashboard-sidebar] > div:first-child{
   height:60px;min-height:60px;

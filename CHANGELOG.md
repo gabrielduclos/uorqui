@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.25] — 2026-11-09
+
+- **Light theme primary menu contrast:** the desktop sidebar uses a subtly darker neutral gray (`--kit-sidebar: #ededed`, formerly `#fafafa`) to distinguish navigation from the white content panel. The mobile primary-menu drawer now uses the same semantic sidebar token.
+- **Preserve other surfaces:** the dark theme remains unchanged (`--kit-sidebar: #181818`); the channel list, community rail and inset reading area keep their existing independent theme colors. Selected, hover and text styles remain unchanged.
+- **Tests and scope:** added assertions to existing Web UI CSS regression tests covering the light sidebar token, mobile menu and unchanged white panel. CSS + documentation only; no API, database, authentication or SQL migration. Validate on desktop and mobile in both themes.
+
 ## [0.1.0-beta.24] — 2026-11-09
 
 - **Actually unify channel navigation background:** fixed a higher-specificity rule in `apps/web/src/styles.css` that still set `--background` when the desktop sidebar was expanded, overriding the beta.23 UI Kit `--kit-panel` rule. The channel list (text, voice, meeting, creation, moderation) now inherits the same inset content surface as its header and adjacent content in dark and light themes, regardless of sidebar collapse state.

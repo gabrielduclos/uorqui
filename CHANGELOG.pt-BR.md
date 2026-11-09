@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.25] — 09/11/2026
+
+- **Contraste do menu principal no tema claro:** fundo da barra lateral desktop alterado de `#fafafa` para o cinza neutro `--kit-sidebar: #ededed`, um pouco mais escuro para distinguir a navegação do painel de conteúdo branco. O menu principal mobile usa o mesmo token.
+- **Outras superfícies preservadas:** tema escuro permanece em `--kit-sidebar: #181818`; a lista de canais, a barra de comunidades e o painel de leitura mantêm seus fundos próprios. Estados de seleção, hover e texto não foram alterados.
+- **Testes e escopo:** ampliação dos testes de regressão CSS do frontend para validar token claro, menu mobile e painel branco. Apenas CSS e documentação; sem alterações na API, autenticação, banco ou migração. Conferir desktop/mobile nos temas claro/escuro.
+
 ## [0.1.0-beta.24] — 09/11/2026
 
 - **Fundo da lista de canais realmente unificado:** removida a regra de maior especificidade de `apps/web/src/styles.css` que ainda aplicava `--background` quando o menu desktop estava expandido, ignorando o ajuste da beta.23 em `--kit-panel`. A lista com canais de texto, voz, reunião, criação e moderação agora usa a mesma superfície do cabeçalho e do restante do painel em tema escuro e claro, inclusive ao expandir/recolher o menu.

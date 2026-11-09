@@ -2,6 +2,7 @@
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
+- **Contraste do menu principal claro (beta.25):** menu desktop e menu lateral mobile usam `--kit-sidebar` (`#ededed` no tema claro, `#181818` no escuro), contrastando com o painel `--kit-panel` (`#ffffff` no claro). Não escurecer o fundo geral ou a lista de canais; estados de seleção e hover são mantidos.
 - **Fundo da lista de canais (beta.23/24):** a coluna de canais de texto, voz, reunião, Novo canal e Moderação usa a superfície `--kit-panel` (escuro `#0a0a0a`, claro `#ffffff`) do painel de trabalho, em todas as telas e **com o menu desktop expandido ou recolhido**. A beta.24 removeu uma regra `--background` mais específica em `styles.css` que anulava o ajuste anterior. O menu principal continua em `--kit-sidebar`. A única regra de cor é a do UI Kit em `[data-uorqui-channel-nav]`; sem paleta individual no React ou CSS global.
 - **Chats dos canais:** respostas com mensagem original, `@usuário` com sugestões, GIFs e lista de reagentes por emoji; não mostrar membros sem permissão.
 - **Privacidade:** cartão de exclusão definitiva no Perfil com duas confirmações (senha e `EXCLUIR`), estados de erro e aviso de mídia em limpeza posterior.
