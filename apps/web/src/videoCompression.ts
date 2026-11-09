@@ -1,7 +1,7 @@
 /**
  * Best-effort, local video compression using browser media APIs.
- * Keeps the audio track through Web Audio; never silently uploads a silent
- * transcode or a file larger than the source. Unsupported browsers fall back
+ * Attempts to retain audio through Web Audio, and falls back to the original
+ * when conversion is unsupported or increases size. Test audio on devices. Unsupported browsers fall back
  * to the original and normal attachment validation still applies.
  */
 export type VideoOptimizationResult={file:File;compressed:boolean};
@@ -10,9 +10,18 @@ export async function optimizeVideoAttachment(
   source:File,signal?:AbortSignal,onProgress?:(percent:number)=>void
 ):Promise<VideoOptimizationResult>{
   const unchanged={file:source,compressed:false};
-  if(!source.type.startsWith('video/')||!source.size||source.size>300*1024*1024)return unchanged;
+  if(!source.type.startsWith('video/')||!source.size||source.size<=8*1024*1024||source.size>300*1024*1024)return unchanged;
   if(signal?.aborted)throw Error('ABORTED');
   if(typeof MediaRecorder==='undefined'||typeof AudioContext==='undefined')return unchanged;
+  const withDeadline=async<T>(promise:Promise<T>,ms:number):Promise<T>=>{
+    let timer=0;
+    try{
+      return await Promise.race([
+        promise,
+        new Promise<T>((_,reject)=>{timer=window.setTimeout(()=>reject(Error('VIDEO_NOT_ALLOWED')),ms);})
+      ]);
+    }finally{window.clearTimeout(timer);}
+  };
   const canvas=document.createElement('canvas');
   if(typeof canvas.captureStream!=='function')return unchanged;
   const outputMime=[
@@ -46,7 +55,7 @@ export async function optimizeVideoAttachment(
     // Real-time browser transcoding is too costly for very long clips.
     if(!loaded||!Number.isFinite(duration)||duration<=0||duration>180||
        !video.videoWidth||!video.videoHeight)return unchanged;
-    const scale=Math.min(1,960/video.videoWidth,960/video.videoHeight);
+    const scale=Math.min(1,1280/video.videoWidth,720/video.videoHeight);
     canvas.width=Math.max(2,Math.round(video.videoWidth*scale/2)*2);
     canvas.height=Math.max(2,Math.round(video.videoHeight*scale/2)*2);
     const context=canvas.getContext('2d',{alpha:false});
@@ -85,10 +94,11 @@ export async function optimizeVideoAttachment(
     });
     // Ensure a play() failure does not cause a secondary unhandled rejection.
     void finished.catch(()=>{});
-    await audioContext.resume();
+    await withDeadline(audioContext.resume(),5000);
+    if(audioContext.state!=='running')return unchanged;
     if(signal?.aborted)throw Error('ABORTED');
     recorder.start(1000);
-    await video.play();
+    await withDeadline(video.play(),5000);
     let lastPercent=-1;
     const draw=()=>{
       if(signal?.aborted||video.ended||video.error)return;
@@ -103,7 +113,7 @@ export async function optimizeVideoAttachment(
     const mime=result.type==='video/mp4'?'video/mp4':result.type==='video/webm'?'video/webm':null;
     if(!mime||!result.size||result.size>=source.size*0.96)return unchanged;
     const extension=mime==='video/mp4'?'mp4':'webm';
-    const base=source.name.replace(/\.[^.]+$/,'');
+    const base=source.name.replace(/\.[^.]+$/,'').slice(0,145);
     onProgress?.(100);
     return {file:new File([result],base+'-compactado.'+extension,{type:mime}),compressed:true};
   }catch(error){
