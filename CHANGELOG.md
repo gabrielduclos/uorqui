@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.22] — 2026-11-09
+
+- **Channel opens at the latest message:** first entry into a text channel (or expanding a voice/meeting room's text chat) pins to the newest message. Opening with cached content, fetching the authoritative message list and late image/GIF/attachment layout changes no longer let programmatic scroll events cancel the initial bottom position.
+- **Reader controls history:** only an actual wheel, touch, pointer, keyboard scroll or jump to an original reply message ends the initial anchor. When reading older messages, incoming messages or media resizing do not drag the reader back to the bottom. Returning to the bottom resumes follow behavior and clears the new-messages indicator.
+- **Isolated by channel:** closing and reopening a channel, switching channels and hiding/expanding the voice text panel reset the opening behavior, avoiding scroll position carryover between channels.
+- **Regression checks:** new `ChannelScrollBehavior` tests cover browser-generated scroll during initial layout, media resizing, manual scroll, resuming after reaching the bottom, and room switching. Run only in GitHub Web UI CI (full workspaces); Cloudflare production build remains `tsc && vite`. No API/database/migration changes. Real-browser desktop/mobile/PWA validation still recommended.
+
 ## [0.1.0-beta.21] — 2026-11-09
 
 - **Cloudflare production build restored:** the web `build` script runs only TypeScript checking and Vite compilation. The instance-identity Node tests require the `tsx` loader, which Cloudflare Builds does not install when installing only the web workspace with Bun; these tests now run as a dedicated step in the GitHub Web UI workflow with full workspace dependencies. This unblocks publication of the persistent browser/PWA identity fix from beta.20.

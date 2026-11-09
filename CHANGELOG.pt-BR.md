@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.22] — 09/11/2026
+
+- **Canais abrem na mensagem mais recente:** a primeira entrada no canal de texto (ou a expansão do chat de sala de voz/reunião) fixa o histórico no final. Mesmo com cache imediato, busca de mensagens atualizada ou imagens/GIFs/anexos que mudam de tamanho depois, eventos automáticos de rolagem não interrompem a posição inicial.
+- **Leitura do histórico respeitada:** somente ações reais do usuário (roda do mouse, toque, mouse, teclado ou clique para abrir uma mensagem original) encerram a fixação inicial. Ao subir para ler mensagens antigas, novas mensagens ou mídia não forçam a rolagem de volta; ao retornar ao fim, o acompanhamento é reativado e o indicador de novas mensagens desaparece.
+- **Por canal:** fechar/reabrir o canal, alternar canais ou recolher/expandir chat de voz reinicia a posição de abertura sem reutilizar a rolagem do canal anterior.
+- **Testes:** `ChannelScrollBehavior` possui testes de rolagem programática durante abertura, crescimento de mídia, navegação manual, retorno ao final e troca de canal. Executados separadamente no CI Web UI com workspaces completos; build do Cloudflare permanece apenas TypeScript + Vite. Sem alteração de API, banco nem migração. Testes manuais em desktop/mobile/PWA ainda recomendados.
+
 ## [0.1.0-beta.21] — 09/11/2026
 
 - **Build de produção Cloudflare corrigido:** o comando `build` do frontend agora executa apenas TypeScript e Vite. Os testes Node de identidade utilizavam `tsx`, indisponível na instalação parcial da Cloudflare via Bun; agora rodam no workflow Web UI do GitHub Actions, que instala todas as dependências dos workspaces. Isso desbloqueia a publicação da identidade persistente do navegador/PWA introduzida na beta.20.

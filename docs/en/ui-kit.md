@@ -3,6 +3,7 @@
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
 - **Channel chat:** original-message replies, `@username` suggestions, GIFs and per-emoji reactor details, filtered by read permissions.
+- **Channel history position (beta.22):** entering a text channel or expanding a voice/meeting text panel opens at the most recent message, even with cache-first rendering and later GIF/attachment resize. Automatic layout scroll events cannot disable the opening anchor. Real reader scroll or jumping to a reply permits browsing older messages without snap-back; returning to bottom resumes follow. Isolate positions per channel.
 - **Privacy:** irreversible account deletion card in Profile with password and `EXCLUIR` confirmations, errors and delayed media-purge disclosure.
 - **Invites:** explicit join confirmation only after authentication, never blocking signup. Modal copy, errors, controls and accessibility labels render in the active locale (browser language initially, then any stored app selection), never bilingual slash-separated lines.
 
