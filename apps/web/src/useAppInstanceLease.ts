@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { subscribeDmStream } from './dmEventStream';
-import { acquireDocumentLock, anotherDocumentPresent, persistentInstanceId } from './appInstanceIdentity';
+import { acquireDocumentLockWithRetry, anotherDocumentPresent, persistentInstanceId } from './appInstanceIdentity';
 
 export type AppInstanceStatus = 'checking' | 'active' | 'blocked' | 'error';
 type InstanceKind = 'desktop' | 'mobile';
@@ -10,7 +10,6 @@ type ChannelNotice = { type?: string; accountId?: string; kind?: string; instanc
   pageId?: string; probeId?: string; replyTo?: string };
 const CHANNEL = 'uorqui:active-app-instance:v1';
 const PERIOD_MS = 15_000;
-const LOCK_RETRY_MS = 250;
 
 function deviceCategory(): InstanceKind {
   const agent = navigator.userAgent;
@@ -69,14 +68,14 @@ export function useAppInstanceLease(accountId: string | null) {
       // A browser-level identity MUST only be shared by one live document.
       // Browser Web Locks are atomic across same-origin pages and PWAs.
       if (!releaseLocal && hasLocks) {
-        let release = await acquireDocumentLock(navigator.locks, lockName, takeover);
-        // On a reload, the previous document can still be unwinding its lock.
-        // Wait briefly once before reporting a genuine second tab.
-        if (!release && !takeover) {
-          await new Promise(resolve => window.setTimeout(resolve, LOCK_RETRY_MS));
-          if (!alive || version !== sequence) return;
-          release = await acquireDocumentLock(navigator.locks, lockName, false);
-        }
+        // The previous document can still be releasing its Web Lock after
+        // reload/pagehide. Keep the startup splash visible during a bounded
+        // retry (2s), rather than falsely showing a second-session warning.
+        const release = await acquireDocumentLockWithRetry(
+          navigator.locks, lockName, takeover,
+          () => alive && version === sequence,
+          ms => new Promise(resolve => window.setTimeout(resolve, ms)),
+        );
         if (!alive || version !== sequence) { release?.(); return; }
         if (!release) { failures = 0; set('blocked'); return; }
         releaseLocal = release;

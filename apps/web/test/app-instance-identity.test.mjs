@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { acquireDocumentLock, anotherDocumentPresent, persistentInstanceId } from '../src/appInstanceIdentity.ts';
+import { acquireDocumentLock, acquireDocumentLockWithRetry, anotherDocumentPresent, persistentInstanceId } from '../src/appInstanceIdentity.ts';
 
 class FakeStorage {
   data = new Map();
@@ -112,4 +112,56 @@ test('BroadcastChannel fallback detects an actively open peer but not a closed o
   first.close();
   assert.equal(await anotherDocumentPresent(second, 'account-A', 'mobile', 'new-page', 15), false);
   second.close();
+});
+
+test('refresh waits for previous document to release Web Lock without taking over', async () => {
+  const locks = new FakeLocks();
+  const key = 'uorqui:instance-lock:v2:account-A:desktop';
+  const previous = await acquireDocumentLock(locks, key, false);
+  assert.equal(typeof previous, 'function');
+  let attempts = 0;
+  const reopened = await acquireDocumentLockWithRetry(
+    locks, key, false, () => true,
+    async () => {
+      attempts++;
+      if (attempts === 2) {
+        previous();
+        await new Promise(resolve => setImmediate(resolve));
+      }
+    },
+    8, 250,
+  );
+  assert.equal(typeof reopened, 'function', 'reload should not be mistaken for another tab');
+  assert.equal(attempts, 2, 'the old document must release before reacquiring');
+  reopened();
+});
+
+test('a genuinely open second tab stays blocked after bounded retry', async () => {
+  const locks = new FakeLocks();
+  const key = 'uorqui:instance-lock:v2:account-A:mobile';
+  const original = await acquireDocumentLock(locks, key, false);
+  let ticks = 0;
+  const contender = await acquireDocumentLockWithRetry(
+    locks, key, false, () => true,
+    async () => { ticks++; }, 3, 250,
+  );
+  assert.equal(contender, null);
+  assert.equal(ticks, 3);
+  original();
+});
+
+test('a cancelled navigation does not acquire a lock after the document is gone', async () => {
+  const locks = new FakeLocks();
+  const key = 'uorqui:instance-lock:v2:account-A:mobile';
+  const previous = await acquireDocumentLock(locks, key, false);
+  let alive = true;
+  const reloaded = await acquireDocumentLockWithRetry(
+    locks, key, false, () => alive,
+    async () => { alive = false; previous(); }, 3, 250,
+  );
+  assert.equal(reloaded, null);
+  await new Promise(resolve => setImmediate(resolve));
+  const newDocument = await acquireDocumentLock(locks, key, false);
+  assert.equal(typeof newDocument, 'function');
+  newDocument();
 });

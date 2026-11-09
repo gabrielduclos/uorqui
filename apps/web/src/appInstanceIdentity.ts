@@ -48,6 +48,36 @@ export function acquireDocumentLock(
   });
 }
 
+/** Browser navigation can keep the old document's Web Lock briefly while
+ * the replacement page is already loading. Retry in the background before
+ * declaring that a genuinely different tab owns the workspace.
+ */
+export async function acquireDocumentLockWithRetry(
+  locks: Pick<LockManager, 'request'>,
+  name: string,
+  takeover: boolean,
+  stillCurrent: () => boolean,
+  pause: (ms: number) => Promise<void>,
+  retries = 8,
+  delayMs = 250,
+): Promise<(() => void) | null> {
+  let release = await acquireDocumentLock(locks, name, takeover);
+  if (release || takeover || !stillCurrent()) {
+    if (release && !stillCurrent()) { release(); return null; }
+    return release;
+  }
+  for (let attempt = 0; attempt < retries; attempt++) {
+    await pause(delayMs);
+    if (!stillCurrent()) return null;
+    release = await acquireDocumentLock(locks, name, false);
+    if (release) {
+      if (!stillCurrent()) { release(); return null; }
+      return release;
+    }
+  }
+  return null;
+}
+
 type Presence = { type: string; accountId: string; kind: string; pageId: string; probeId?: string; replyTo?: string };
 
 /** Last-resort same-browser detection when the Web Locks API is unavailable.
