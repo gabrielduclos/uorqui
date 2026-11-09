@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.27] — 2026-11-09
+
+- **Mobile light navigation contrast:** the mobile top toolbar (hamburger, logo and notifications) now uses the same `--kit-sidebar: #ededed` light-theme background as the primary menu drawer and full outer canvas. Previously it was forcibly painted with the white reading-panel `--kit-panel` token, hiding the intended gray menu surface on mobile.
+- **Primary mobile drawer:** remove its generic `bg-background` utility in favor of the semantic `bg-[var(--kit-sidebar)]` token, matching the desktop sidebar and the scoped UI Kit rule. All content panels, community/channel navigation and conversations remain on the white `--kit-panel` surface in light mode.
+- **Scope, regressions and safety:** the mobile header override is **light-mode-only**; dark mode and desktop topbar backgrounds remain unchanged. Expand the Web UI CSS regression suite to catch the mobile topbar override and drawer token. Frontend style + documentation only; no API, SQL, or migration. Validate iOS/Android PWA after Cloudflare deployment.
+
 ## [0.1.0-beta.26] — 2026-11-09
 
 - **Complete light-theme background alignment:** the beta.25 sidebar was gray (`#ededed`) but the parent app canvas and outer gutters still used `--background: #fafafa`. The signed-in light palette now uses `--background: #ededed` and `--workspace-rail: #ededed`, aligning the entire background (including the area behind and beside the menu, plus collapsed-sidebar gutters) with `--kit-sidebar: #ededed`.

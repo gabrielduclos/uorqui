@@ -188,8 +188,10 @@
   [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-inset-panel]{
     margin:0;border:0;border-radius:0;
   }
-  [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-main-header]{
-    background:var(--kit-panel);
+  /* In mobile, the top bar is the primary menu surface. In light mode it
+     shares the same gray token as the hamburger drawer and outer canvas. */
+  :root.light [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-main-header]{
+    background:var(--kit-sidebar);
   }
   [data-uorqui-ui-kit="sprintrix-v1"] [data-uorqui-inset-panel] > nav[aria-label]{
     background:var(--kit-panel);

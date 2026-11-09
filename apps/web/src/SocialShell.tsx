@@ -632,7 +632,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
       {mobileMenuOpen&&<div className="absolute inset-0 z-[80] md:hidden">
         <button type="button" className="absolute inset-0 bg-black/60" aria-label={locale==='pt-BR'?'Fechar menu':'Close menu'} onClick={()=>setMobileMenuOpen(false)}/>
         <aside id="uorqui-mobile-nav" role="dialog" aria-modal="true" aria-label={locale==='pt-BR'?'Menu principal':'Main menu'}
-          className="relative flex h-full w-[min(82vw,288px)] flex-col overflow-hidden border-r border-border bg-background shadow-2xl pt-[env(safe-area-inset-top)]">
+          className="relative flex h-full w-[min(82vw,288px)] flex-col overflow-hidden border-r border-border bg-[var(--kit-sidebar)] shadow-2xl pt-[env(safe-area-inset-top)]">
           <div className="flex h-15 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
             <button type="button" onClick={()=>move('conversations')} aria-label={t('Uorqui — ir para o início')}>
               <UorquiWordmark className="h-[17px] w-auto max-w-[110px] text-foreground"/>
