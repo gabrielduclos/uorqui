@@ -26,6 +26,8 @@ jobs:
         run: npm install --include=dev --no-audit --no-fund
       - name: Test active instance identity and reload handover
         run: npm run test:instance -w @uorqui/web
+      - name: Test community channel opening and scroll control
+        run: npm run test:channel-scroll -w @uorqui/web
       - name: Type-check and build React application
         run: npm run build -w @uorqui/web
       - name: Validate Cloudflare Worker configuration
