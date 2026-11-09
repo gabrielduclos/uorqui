@@ -19,6 +19,8 @@ import { BetaBadge } from './BetaBadge';
 import { Button } from '@/components/ui/button';
 import { LegalPage, legalDocumentFromPath } from './LegalPages';
 import { CookieNotice } from './CookieNotice';
+import { AppInstanceBlocker } from './AppInstanceBlocker';
+import { useAppInstanceLease } from './useAppInstanceLease';
 
 const areas = [
   { title: 'Comunidades', icon: Users, description: 'Seu ponto de partida para canais de texto, salas de voz e reuniões.' },
@@ -112,6 +114,7 @@ function AppContent() {
   const [publicHandle, setPublicHandle] = useState<string | null>(() => publicProfileHandle(window.location.pathname));
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
+  const instance = useAppInstanceLease(account?.profile ? account.user.id : null);
 
   useEffect(() => {
     const onNavigation = () => {
@@ -212,6 +215,8 @@ function AppContent() {
     window.history.replaceState(null,'','/');
   }, []);
   const signOut = useCallback(async () => {
+    // Release only our owned slot; never invalidate the other active device.
+    await instance.release();
     // Revoke the authenticated subscription before ending the session.
     await deactivatePush().catch(()=>{});
     const response = await fetch('/api/auth/sign-out', {
@@ -226,7 +231,7 @@ function AppContent() {
     setChatMediaCacheAccount(null);
     setAccount(null);
     setInvitedCommunity(null);
-  }, []);
+  }, [instance.release]);
 
   const inviteErrorText=inviteError==='expired'
     ?(pt?'Este convite expirou ou foi revogado.':'This invitation is no longer valid.')
@@ -238,10 +243,13 @@ function AppContent() {
   return (
     <MotionConfig reducedMotion="user">
       {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
-        <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
-          invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
+        instance.status === 'active'
+          ? <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
+              invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
+          : <AppInstanceBlocker kind={instance.kind} status={instance.status}
+              onTakeover={instance.takeover} onRetry={instance.retry} onLogout={()=>void signOut()} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
-      {inviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
+      {instance.status === 'active' && inviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
         role="dialog" aria-modal={true} aria-label={pt?'Convite para comunidade':'Community invitation'}
         className="fixed inset-0 z-[410] flex items-center justify-center bg-black/65 p-4">
         <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl">
