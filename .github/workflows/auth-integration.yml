@@ -48,6 +48,8 @@ jobs:
         run: npm run build -w @uorqui/api
       - name: Exercise authentication and onboarding
         run: node --test apps/api/test/auth.integration.test.mjs
+      - name: Verify one active desktop/mobile instance per account
+        run: node --test apps/api/test/app-instances.integration.test.mjs
       - name: Exercise real direct messages between two users
         run: node --test apps/api/test/direct-messages.integration.test.mjs
       - name: Verify mailbox OAuth and account isolation with mocked providers
