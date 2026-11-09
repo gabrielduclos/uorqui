@@ -14,7 +14,7 @@
 - **GIF cards (beta.11):** show the animated GIF inline in private messages without a second link-preview card or metadata request; keep rich previews for ordinary links.
 
 
-- **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent.
+- **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent. OS notification clicks navigate an already-open React app directly; closed/background PWAs retain URL deep links. Email unread badges honor provider Inbox counts and ignore stale read-after-refresh races.
 
 
 - **Desktop permission prompts:** offer the daily push opt-in only when browser permission is undecided (`default`), never when granted or denied regardless of subscription sync state. The optional PWA install reminder remains independent; never stack prompts or request native permission without a click. Preserve mobile-specific installation rules.

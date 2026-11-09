@@ -1,5 +1,7 @@
 # Gmail and Outlook email
 
+**Unread badge (beta.17):** Uorqui shows the sum of unread Inbox messages across connected accounts. Gmail uses the `INBOX` label's `messagesUnread` (rather than the approximate `messages.list.resultSizeEstimate`); Microsoft Graph and manual IMAP use their provider's unread-Inbox count. Marking as read updates the sidebar immediately; older requests and background scans cannot overwrite newer counts. The Inbox refresh control and move-to-Spam/Trash operations also refresh the badge. Provider sync can still be delayed or fail; counters reconcile on the next successful check.
+
 [English](email.md) · [Português](../pt-BR/email.md)
 
 Email integrates Gmail API and Microsoft Graph through OAuth 2.0 with PKCE. It does not use the user's password or change Better Auth sign-in. Users can connect multiple different email addresses per provider; reconnecting the same address refreshes its saved authorization.

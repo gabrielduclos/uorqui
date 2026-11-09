@@ -1,5 +1,7 @@
 # E-mail: Gmail e Outlook OAuth, com IMAP/SMTP manual
 
+**Contador de não lidos (beta.17):** o Uorqui soma as mensagens não lidas da Caixa de entrada de todas as contas conectadas. No Gmail utiliza o número `messagesUnread` do marcador `INBOX`, em vez da estimativa `messages.list.resultSizeEstimate`; Outlook e IMAP manual usam seus totais do provedor. Marcar como lido ajusta o badge imediatamente e consultas/varreduras antigas não sobrescrevem o resultado novo. O botão Atualizar e as ações de mover para Spam/Lixeira também sincronizam a contagem. Falhas ou atrasos dos provedores ainda podem exigir o próximo ciclo de consulta.
+
 [English](../en/email.md) · [Português](email.md)
 
 O Uorqui conecta Gmail e Outlook.com/Microsoft 365 via OAuth, além de servidores IMAP/SMTP manuais. Permite vários endereços por provedor; os tokens OAuth e as credenciais manuais são criptografados com AES-256-GCM. O login do Uorqui (Better Auth) é separado da conexão de e-mail.

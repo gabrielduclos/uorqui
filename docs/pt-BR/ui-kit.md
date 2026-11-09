@@ -14,7 +14,7 @@
 - **GIFs nas mensagens (beta.11):** exibir a animação no chat privado sem carregar um segundo cartão de prévia de link ou consultar seus metadados. Links comuns continuam com prévia.
 
 
-- **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes.
+- **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes. O toque em push com app aberto navega diretamente no React; com PWA fechado/oculto, usa link persistente. O badge de e-mail segue o total da Caixa de entrada do provedor e evita respostas atrasadas após leituras.
 
 
 - **Convites de permissão no desktop:** oferecer push somente quando a permissão do navegador estiver pendente (`default`), nunca se estiver concedida ou negada, mesmo se a inscrição não sincronizar. O convite opcional para instalar PWA é independente; não sobrepor avisos nem abrir a permissão nativa sem clique. No mobile, manter as regras próprias de instalação.

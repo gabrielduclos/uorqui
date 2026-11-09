@@ -1,5 +1,7 @@
 # Notifications in Uorqui
 
+**Already-open app (beta.17):** tapping an OS notification now sends the destination to the visible Uorqui app so React changes to the appropriate conversation, community channel, mail message or activity without requiring a restart. Background/frozen/closed PWA windows still open the durable destination URL; the signed-in shell also consumes deep links on restoration, focus and history changes. OS push is separate from the in-app notification center.
+
 The app provides an authenticated activity inbox with unread badges and actions to mark one or all items as read.
 
 Recorded events: post likes and comments, new followers, friend requests, and accepted requests. Self-actions do not notify. Repeated likes and follows do not create duplicate activity records. Blocked accounts cannot create or expose activity between each other.

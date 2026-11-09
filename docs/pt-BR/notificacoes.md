@@ -1,5 +1,7 @@
 # Notificações no Uorqui
 
+**Aplicativo já aberto (beta.17):** ao tocar uma notificação do sistema com o Uorqui visível, o service worker envia o destino diretamente ao aplicativo para alternar para conversa, canal, e-mail ou atividade sem exigir reinicialização. Com PWA oculto, congelado ou fechado, a URL de destino continua funcionando; o React também captura links ao recuperar o foco ou navegar pelo histórico. Push do sistema e avisos internos são canais distintos.
+
 O aplicativo oferece uma central de atividades autenticada, com badge de não lidas e ações para marcar uma ou todas como lidas.
 
 Os eventos registrados são: curtidas e comentários em publicações, novos seguidores, solicitações de amizade e solicitações aceitas. Eventos originados pelo próprio usuário não geram notificação. Uma nova curtida ou novo seguidor repetido não duplica a mesma atividade. Contas bloqueadas não recebem nem exibem atividades relacionadas entre si.
