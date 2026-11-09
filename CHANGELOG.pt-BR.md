@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.24] — 09/11/2026
+
+- **Fundo da lista de canais realmente unificado:** removida a regra de maior especificidade de `apps/web/src/styles.css` que ainda aplicava `--background` quando o menu desktop estava expandido, ignorando o ajuste da beta.23 em `--kit-panel`. A lista com canais de texto, voz, reunião, criação e moderação agora usa a mesma superfície do cabeçalho e do restante do painel em tema escuro e claro, inclusive ao expandir/recolher o menu.
+- **Fonte única de cor:** a regra existente no UI Kit em `apps/web/src/ui-kit/sprintrix.css` controla o fundo da lista em todos os tamanhos de tela; o CSS global mantém somente a largura da coluna desktop. Menu principal e trilho de comunidades sem alterações.
+- **Teste de regressão:** novo teste Node sem dependências no CI do frontend impede que a declaração conflitante retorne e valida o uso de `--kit-panel`. Versões, READMEs, changelogs e UI Kit PT/EN atualizados. Mudança somente de CSS/testes/docs, sem alteração de API ou migração.
+
 ## [0.1.0-beta.23] — 09/11/2026
 
 - **Fundo da lista de canais:** a área com Canais de texto, Salas de voz, Salas de reunião, Novo canal e Moderação passa a usar `--kit-panel`, a mesma cor da superfície de trabalho ao redor, nos temas escuro e claro. Antes, uma regra específica do desktop forçava `--background`, destacando a coluna de maneira indevida.
