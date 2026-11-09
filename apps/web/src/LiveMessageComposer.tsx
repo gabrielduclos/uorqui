@@ -181,9 +181,10 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
           'This browser could not reduce the video to 50 MB or less.');return;
       }
       stageFile(result.file);
-      setVideoNotice(result.compressed?(pt?'Vídeo compactado antes do envio.':'Video compressed before upload.'):
-        (pt?'Compactação indisponível ou sem ganho de tamanho; vídeo original preservado.':
-          'Compression unavailable or did not save space; original video preserved.'));
+      setVideoNotice(result.compressed
+        ?(pt?'Vídeo compactado: ':'Video compressed: ')+(file.size/1048576).toFixed(1)+' MB → '+(result.file.size/1048576).toFixed(1)+' MB'
+        :(pt?'Vídeo já pequeno ou sem compactação disponível; original preservado.':
+          'Video already small or compression unavailable; original preserved.'));
     }catch(error){
       if(mounted.current&&!(error instanceof Error&&error.message==='ABORTED'))
         setError(pt?'Falha ao preparar o vídeo.':'Could not prepare the video.');
@@ -413,7 +414,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
           </div>
         </div>}
         <p className="px-2 pt-2 text-[11px] text-muted-foreground">
-          {pt ? 'Anexos até 50 MB. Você pode conferir e editar antes de enviar.' : 'Attachments up to 50 MB. Preview and edit before sending.'}
+          {pt ? 'Anexos até 50 MB após compactação. Vídeos originais até 300 MB.' : 'Attachments up to 50 MB after compression. Videos up to 300 MB before compression.'}
         </p>
       </div>}
     </div>
