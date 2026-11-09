@@ -219,12 +219,23 @@ self.addEventListener('notificationclick',event=>{
     const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     const client=pages.find(page=>page.focused)||pages.find(page=>page.visibilityState==='visible')||pages[0];
     if(client){
-      // postMessage after focus is unreliable on iOS: a frozen/terminated PWA
-      // may silently discard it. Navigate the client with the deep link so
-      // its URL survives a process restart and the app can restore the target.
+      // The open React app needs an explicit navigation event: navigating an
+      // existing client may reuse its document and does not fire popstate.
+      // For a truly background/frozen PWA retain the durable URL navigation.
+      if(client.visibilityState==='visible'){
+        try{
+          await client.focus();
+          client.postMessage({type:'uorqui:push-open',url});
+          return;
+        }catch{/* Fallback to URL navigation below. */}
+      }
       try{
         const navigated=await client.navigate(url);
-        if(navigated){await navigated.focus();return;}
+        if(navigated){
+          await navigated.focus();
+          navigated.postMessage({type:'uorqui:push-open',url});
+          return;
+        }
       }catch{/* Some browsers reject navigate() for stale clients. */}
     }
     await self.clients.openWindow(url);
