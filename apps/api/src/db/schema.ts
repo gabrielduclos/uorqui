@@ -38,6 +38,18 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** Ephemeral ownership of the workspace, separate from login sessions. */
+export const appInstanceLeases = pgTable('app_instance_leases', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: varchar('kind', { length: 8 }).notNull(),
+  instanceId: uuid('instance_id').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  primaryKey({ columns: [t.userId, t.kind] }),
+  check('app_instance_leases_kind_chk', sql`${t.kind} IN ('desktop','mobile')`),
+]);
+
 /** Mail credentials belong to the API and are encrypted with a dedicated key. */
 export const mailConnections = pgTable('mail_connections', {
   id: uuid('id').defaultRandom().primaryKey(),

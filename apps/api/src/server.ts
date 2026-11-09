@@ -28,6 +28,7 @@ import { closeDmEvents } from './dm-events.js';
 import {closeCommunityEvents} from './community-events.js';
 import { registerMailRoutes } from './mail-routes.js';
 import { startMailInboxPolling } from './mail-poller.js';
+import { registerAppInstanceRoutes } from './app-instance-routes.js';
 
 const app = Fastify({
   logger: {
@@ -289,6 +290,7 @@ app.post('/api/v1/onboarding', {
   }
 });
 
+registerAppInstanceRoutes(app, async request => readSession(request));
 registerProfileRoutes(app, async request => readSession(request));
 registerAccountDeletionRoutes(app,async request=>readSession(request));
 registerDirectMessageRoutes(app, async request => readSession(request));

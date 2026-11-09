@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.18] — 09/11/2026
+
+- **Uma instância por categoria:** uma aba/janela desktop e uma instância mobile/PWA por conta autenticada, inclusive entre navegadores distintos. A segunda aba fica bloqueada, sem sair da conta; **Usar nesta aba** assume explicitamente a vaga e suspende a anterior (desmonta chats, SSE e mídias), preservando o login.
+- **Controle atômico no servidor:** a migração `0043_app_instance_leases.sql` cria uma vaga por conta e categoria no PostgreSQL. A rota `POST /api/v1/instances/claim` adquire/renova a vaga ou devolve `409 INSTANCE_IN_USE`; somente `takeover:true` substitui a instância viva. Após 60 segundos sem renovação, a vaga expira; `/release` encerra somente a posse da instância certa. Requisições exigem autenticação e Origin válido. Se a migração ainda não foi aplicada durante o deploy escalonado, o serviço mantém o acesso normal, sem bloquear todas as contas; para efetivar o limite em produção, aplicar a migração antes de considerar o recurso ativo.
+- **Transferência rápida:** BroadcastChannel bloqueia a aba anterior no mesmo navegador; evento SSE `instance-lease` avisa outros navegadores quando houver transferência, com consulta a cada 15 segundos como fallback. Falhas persistentes de rede suspendem temporariamente a interface; não encerram a sessão. Mobile é detectado pelo agente do navegador (incluindo iPadOS), sem depender da largura da janela. O bloqueio limita as interfaces abertas, não substitui autorização de API contra clientes maliciosos.
+- **Escopo e testes:** integração com PostgreSQL temporário cobre isolamento por usuário/categoria, validação de origem, troca de controle, expiração e tentativa de liberação pela aba antiga. Validar abas duplicadas, PWA iOS/Android, desktop e celular simultâneos, encerramento de chamada de voz e retomada após queda de rede. Migração SQL aditiva; nenhuma revogação de login ou alteração das permissões de push.
+
 ## [0.1.0-beta.17] — 09/11/2026
 
 - **Contagem de e-mails não lidos:** o Gmail passa a consultar o valor `messagesUnread` do marcador `INBOX`, no lugar da estimativa `messages.list.resultSizeEstimate`. Outlook/IMAP mantêm seus totais do provedor. A interface ignora respostas antigas recebidas após marcar como lido/mover, sincroniza o badge no botão Atualizar e ao mover mensagens e não desconta e-mails de Spam/Enviados/Lixeira da Caixa de entrada.

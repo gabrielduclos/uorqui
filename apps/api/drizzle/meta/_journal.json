@@ -302,6 +302,13 @@
       "when": 1794000001000,
       "tag": "0042_notification_inbox_events",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794200001000,
+      "tag": "0043_app_instance_leases",
+      "breakpoints": true
     }
   ]
 }

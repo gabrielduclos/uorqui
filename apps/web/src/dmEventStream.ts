@@ -1,7 +1,7 @@
 /** A single authenticated SSE connection shared by unread badges and DM screens. */
 export type DmStreamEvent = {
   conversationId: string;
-  kind: 'message' | 'read' | 'conversation' | 'update' | 'received' | 'friendship-update' | 'notification';
+  kind: 'message' | 'read' | 'conversation' | 'update' | 'received' | 'friendship-update' | 'notification' | 'instance-lease';
   message?: {
     id: string; conversationId: string; authorId: string; clientId: string | null;
     body: string; createdAt: string; readAt: string | null; deliveredAt: string | null;
