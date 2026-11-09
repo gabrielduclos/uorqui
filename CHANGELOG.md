@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.23] — 2026-11-09
+
+- **Community channel list surface:** the section listing text, voice and meeting channels (including New channel and Moderation) now uses the same `--kit-panel` background as the surrounding inset workspace in both dark and light modes. The previous desktop override incorrectly used `--background`, making the section look like the outer canvas.
+- **Navigation remains distinct:** the primary desktop/mobile menu continues using its existing `--kit-sidebar` / `--background` color and no selected item, hover, typography or border styling changes. The adjustment is centralized in the signed-in UI Kit CSS, without page-specific hardcoded colors.
+- **Scope and verification:** CSS-only visual change, no API, auth or database changes; no migration. Verify desktop/mobile/PWA and theme switching. GitHub CI includes web typecheck/build, Worker check, API checks and PostgreSQL integration.
+
 ## [0.1.0-beta.22] — 2026-11-09
 
 - **Channel opens at the latest message:** first entry into a text channel (or expanding a voice/meeting room's text chat) pins to the newest message. Opening with cached content, fetching the authoritative message list and late image/GIF/attachment layout changes no longer let programmatic scroll events cancel the initial bottom position.

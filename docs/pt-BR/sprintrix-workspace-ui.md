@@ -19,6 +19,7 @@ A interface adapta padrões gerais observados na [caixa de entrada pública do S
 - Cabeçalho de 52 px com separador e trilha de navegação, seleção escura com texto claro e linhas compactas.
 - Navegação geral separada da coluna de servidores no estilo Stoat e dos canais existentes de texto, voz e reuniões.
 - Histórico ao lado da lista de canais. Recolher o menu geral o esconde por completo e amplia o conteúdo, como na referência; trocar de módulo preserva essa escolha e a coluna de servidores permanece independente.
+- **Superfície alinhada (beta.23):** os grupos de canais e suas ações de gerenciamento compartilham o fundo do painel de conteúdo (`--kit-panel`), em vez do fundo externo (`--background`). O menu principal mantém sua própria superfície nos temas claro e escuro.
 - Notificações ficam em Administração para todas as contas; Moderação continua condicionada à permissão.
 - Paleta base neutra: fundo cinza, área branca, seleção preta e coluna de servidores discretamente mais escura no tema claro; superfícies escuras neutras com seleção clara no tema escuro, incluindo mobile.
 - Conversas privadas com lista mais densa, divisórias, pesquisa e filtros compactos.

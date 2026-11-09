@@ -19,6 +19,7 @@ This UI adapts general workspace-dashboard patterns visible in the [Sprintrix pu
 - 52 px header with breadcrumb, dark selected menu items and compact list rows.
 - Primary/workspace navigation stays separate from the Stoat-style server column and existing text, voice and meeting channels.
 - Channel history sits beside the channel list. Collapsing the general menu hides it completely and expands the content, matching the reference; switching modules preserves that choice and the server column remains independent.
+- **Beta.23 surface alignment:** channel groups and their management actions share the inset content panel background (`--kit-panel`) instead of the outer workspace canvas (`--background`); the primary app menu retains its separate sidebar surface in dark and light modes.
 - Notifications live in Administration for every account; Moderation remains permission-gated.
 - Neutral base palette: gray canvas, white work surface, black selection and a slightly darker server column in light mode; neutral dark surfaces with light selection in dark mode, including mobile.
 - Denser, divider-oriented private conversation list and smaller filters/search.
