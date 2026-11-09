@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.26] — 09/11/2026
+
+- **Fundo claro completo uniformizado:** na beta.25, o menu estava cinza (`#ededed`), mas o canvas externo e as faixas ao redor ainda usavam `--background: #fafafa`. Agora, no tema claro logado, `--background: #ededed` e `--workspace-rail: #ededed` acompanham o `--kit-sidebar: #ededed`, aplicando a cor a todo o fundo, inclusive atrás do menu, nas bordas e quando o menu desktop está recolhido.
+- **Painéis brancos preservados:** superfície de trabalho, lista de canais e área de mensagens mantêm `--kit-panel: #ffffff` para contraste com todo o fundo externo. O tema escuro não muda, sem sobrescritas de CSS individuais ou alteração da paleta global para páginas públicas.
+- **Testes e escopo:** regressão de CSS atualizada para verificar os tokens iguais de fundo/menu/trilho no tema claro, painéis brancos e cores escuras intactas. Apenas CSS do UI Kit e documentação; sem API, banco, migração ou mudança nas sessões. Validar desktop expandido/recolhido e mobile nos dois temas.
+
 ## [0.1.0-beta.25] — 09/11/2026
 
 - **Contraste do menu principal no tema claro:** fundo da barra lateral desktop alterado de `#fafafa` para o cinza neutro `--kit-sidebar: #ededed`, um pouco mais escuro para distinguir a navegação do painel de conteúdo branco. O menu principal mobile usa o mesmo token.

@@ -34,8 +34,9 @@
   letter-spacing:-.01em;
 }
 :root.light [data-uorqui-ui-kit="sprintrix-v1"]{
-  --background:#fafafa;
-  --workspace-rail:#fafafa;
+  /* Keep the entire outer application canvas, menu and its gutters unified. */
+  --background:#ededed;
+  --workspace-rail:#ededed;
   --foreground:#171717;
   --card:#ffffff;
   --card-foreground:#171717;
