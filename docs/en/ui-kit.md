@@ -4,7 +4,7 @@
 
 - **Channel chat:** original-message replies, `@username` suggestions, GIFs and per-emoji reactor details, filtered by read permissions.
 - **Privacy:** irreversible account deletion card in Profile with password and `EXCLUIR` confirmations, errors and delayed media-purge disclosure.
-- **Invites:** explicit join confirmation only after authentication, never blocking signup.
+- **Invites:** explicit join confirmation only after authentication, never blocking signup. Modal copy, errors, controls and accessibility labels render in the active locale (browser language initially, then any stored app selection), never bilingual slash-separated lines.
 
 ## Principles
 
@@ -17,7 +17,7 @@
 - **Notification center:** compact scrollable **All, Messages, Mentions, Email, Invites, Contacts** tabs, category counts, relevant empty states and internal navigation. Browser push and in-app history are independent.
 
 
-- **Desktop permission prompts:** the daily push opt-in offer takes priority over optional PWA installation; never stack both prompts, and request native permission only after a click. Preserve mobile-specific installation rules.
+- **Desktop permission prompts:** offer the daily push opt-in only when browser permission is undecided (`default`), never when granted or denied regardless of subscription sync state. The optional PWA install reminder remains independent; never stack prompts or request native permission without a click. Preserve mobile-specific installation rules.
 
 
 - Email configuration provides Gmail OAuth, Outlook OAuth and manual IMAP/SMTP in one scrollable modal. OAuth options reflect per-provider configuration; the Outlook action remains disabled until Microsoft Entra credentials are present in Render.

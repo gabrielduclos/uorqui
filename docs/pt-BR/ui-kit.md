@@ -4,7 +4,7 @@
 
 - **Chats dos canais:** respostas com mensagem original, `@usuário` com sugestões, GIFs e lista de reagentes por emoji; não mostrar membros sem permissão.
 - **Privacidade:** cartão de exclusão definitiva no Perfil com duas confirmações (senha e `EXCLUIR`), estados de erro e aviso de mídia em limpeza posterior.
-- **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro.
+- **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro. O modal, os erros, os botões e rótulos acessíveis seguem o idioma ativo (inicialmente o do navegador, respeitando a escolha salva), sem frases bilíngues separadas por barra.
 
 ## Princípios
 
@@ -17,7 +17,7 @@
 - **Central de notificações:** abas compactas e roláveis **Todas, Mensagens, Menções, E-mail, Convites e Contatos**; contadores por categoria, estados vazios específicos e atalhos internos. Push nativo e histórico são conceitos independentes.
 
 
-- **Convites de permissão no desktop:** a oferta diária de push tem prioridade sobre a instalação opcional do PWA; nunca sobrepor os dois avisos, e abrir a permissão nativa apenas mediante clique. No mobile, manter as regras próprias de instalação.
+- **Convites de permissão no desktop:** oferecer push somente quando a permissão do navegador estiver pendente (`default`), nunca se estiver concedida ou negada, mesmo se a inscrição não sincronizar. O convite opcional para instalar PWA é independente; não sobrepor avisos nem abrir a permissão nativa sem clique. No mobile, manter as regras próprias de instalação.
 
 
 - O modal de e-mail reúne Gmail OAuth, Outlook OAuth e IMAP/SMTP manual, com rolagem independente. A disponibilidade do botão Outlook depende das credenciais Microsoft Entra no Render; isso não bloqueia os outros provedores.

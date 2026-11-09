@@ -8,9 +8,9 @@ Tapping post activity opens the related feed post; other activity opens the acto
 
 ## Desktop notification permission reminders
 
-On desktop browsers (workspace width at least 768 px, excluding iOS), **Enable notifications** is offered before the optional PWA installation banner when push is supported but not yet active. The installation reminder never displaces an in-progress notification reminder; if notifications were offered during this visit, installation can be suggested on a future visit instead.
+On desktop browsers (workspace width at least 768 px, excluding iOS), **Enable notifications** is offered before the optional PWA installation banner **only when the browser permission is still `default` (not decided)** and push is supported. A granted browser permission is authoritative for the permission reminder: even if the account's service-worker push subscription is missing or server sync failed, the daily permission prompt stays hidden. Reconnect from **Notifications → Settings → Permission on this device** instead. An optional PWA installation reminder is separate and never stacks with a permission reminder.
 
-The daily prompt is **per account and browser** using local storage. The operating-system permission dialog is requested **only on the user's button click**. A previous refusal opens instructions to allow notifications in site settings; no hidden permission requests occur. When already subscribed, the desktop may show the optional installation suggestion. Mobile behavior is unchanged: iPhone/iPad require an installed PWA for push, while other supported browsers can subscribe normally.
+The daily permission prompt is **per account and browser** using local storage and appears only while permission is undecided. The operating-system permission dialog is requested **only on the user's button click**. Previously denied permission does not cause another automatic request; guidance and manual reconnection are available in Settings. When already permitted, the desktop may show only the separate optional installation suggestion. Mobile behavior is unchanged: iPhone/iPad require an installed PWA for push, while other supported browsers can subscribe normally.
 
 The permanent device-level action remains available at **Notifications → Settings → Permission on this device**.
 

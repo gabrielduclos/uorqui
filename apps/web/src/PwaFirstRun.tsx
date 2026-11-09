@@ -12,6 +12,10 @@ function today(){
 export function PwaFirstRun({accountId}:{accountId:string}){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const push=useSocialPush(accountId);
+  // Browser permission and the account's push subscription are different states:
+  // a missing/stale subscription needs reconnection in Settings, not a new
+  // permission request when the browser has already granted notifications.
+  const canAskBrowserPermission=push.supported&&typeof Notification!=='undefined'&&Notification.permission==='default';
   const [installEvent,setInstallEvent]=useState<PwaInstallEvent|null>(pendingPwaInstall);
   const [installVisible,setInstallVisible]=useState(false);
   const [askPush,setAskPush]=useState(false);
@@ -32,7 +36,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
     // then offer installation on a later visit (never stack prompts together).
     // Previously the installation prompt preempted and cancelled the push offer.
     if(pushOfferedThisVisit.current||
-      (desktop&&push.supported&&push.status!=='ready'&&!pushAskedToday)){
+      (desktop&&canAskBrowserPermission&&push.status!=='ready'&&!pushAskedToday)){
       setInstallVisible(false);return;
     }
     const id='uorqui:social:install-invite:'+accountId;
@@ -42,9 +46,9 @@ export function PwaFirstRun({accountId}:{accountId:string}){
       setInstallVisible(true);
     },1300);
     return()=>window.clearTimeout(timer);
-  },[accountId,push.status,push.supported]);
+  },[accountId,push.status,canAskBrowserPermission]);
   useEffect(()=>{
-    if(!accountId||installVisible||!push.supported||push.status==='ready'||push.status==='busy'||push.status==='checking'){
+    if(!accountId||installVisible||!canAskBrowserPermission||push.status==='ready'||push.status==='busy'||push.status==='checking'){
       setAskPush(false);return;
     }
     const id='uorqui:social:push-ask:'+accountId;
@@ -59,7 +63,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
       setAskPush(true);
     },1600);
     return()=>window.clearTimeout(timer);
-  },[accountId,installVisible,push.status,push.supported]);
+  },[accountId,installVisible,push.status,canAskBrowserPermission]);
   function dismissPush(){
     try{localStorage.setItem('uorqui:social:push-ask:'+accountId,today());}catch{}
     setAskPush(false);
@@ -79,7 +83,7 @@ export function PwaFirstRun({accountId}:{accountId:string}){
     finally{setBusy(false);}
   }
   const installing=installVisible&&!installedPwa();
-  const permission=(!installing&&askPush&&push.status!=='ready');
+  const permission=(!installing&&askPush&&canAskBrowserPermission&&push.status!=='ready');
   if(!installing&&!permission)return null;
   return <section role="region" aria-label={pt?'Instalar e receber notificações':'Install and notifications'}
     className="fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[75] mx-auto max-w-sm rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-2xl md:bottom-5">

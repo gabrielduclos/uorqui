@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.16] — 09/11/2026
+
+- **Convites no idioma correto:** o diálogo de entrada após autenticação, botões, rótulos acessíveis, título alternativo e avisos de erro (convite inválido, banimento e falha) passam a seguir o idioma ativo do aplicativo. O idioma inicial vem de `navigator.language`; caso o usuário já tenha escolhido outro idioma, a preferência salva continua valendo. Não há textos misturados em PT/EN; a entrada depende sempre de aceite explícito.
+- **Sem nova oferta quando o desktop já permite push:** `PwaFirstRun` só oferece a autorização diária enquanto a permissão do navegador estiver como `default` (pendente). Com permissão concedida, falhas ou ausência de inscrição no serviço não exibem **Ativar notificações** novamente. A reconexão continua disponível em **Notificações → Ajustes → Permissão neste dispositivo**. O aviso de instalação do PWA permanece independente.
+- **Escopo e validação:** somente frontend; sem migração de banco, API, esquema push ou alteração de permissões. Conferir convites em PT/EN, troca de idioma com diálogo aberto e permissões concedida/negada/pendente no desktop, além da reconexão manual. Executar build/typecheck do web e CI de API/integração antes do merge.
+
 ## [0.1.0-beta.15] — 09/11/2026
 
 - **Compactação de vídeo aprimorada:** preparação no navegador com resolução máxima de 1280×720, cerca de 1,3 Mbps de vídeo e 96 kbps de áudio, preservando o arquivo original quando a compactação não for suportada ou não oferecer redução significativa. O limite de envio final permanece **50 MB**; não aumenta a capacidade permitida no R2.

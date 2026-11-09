@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.16] — 2026-11-09
+
+- **Language-aware community invitation:** the post-login invitation dialog, action labels, accessibility names, loading fallback and expired/banned/redeem error messages now use the app's active Portuguese/English locale. Initial locale follows `navigator.language`; an explicit saved language preference takes precedence. No bilingual slash-separated copy appears in the dialog, and joining still requires a click.
+- **No redundant desktop notification opt-in:** `PwaFirstRun` offers the daily push permission reminder only while the browser permission is `default` (not yet granted or denied). A browser that already allows notifications will never see an 'Enable notifications' prompt solely because the push subscription is temporarily missing, syncing or errored. Reconnection remains a user action under Notifications → Settings → Push permission. Optional PWA install reminders remain separate.
+- **Scope and verification:** frontend-only; no database, API, push schema or permission change. Validate English and Portuguese invitations (including switching language while the dialog is open), granted/denied/default browser permissions on desktop, and service-worker reconnection from Settings. Run Web UI build/typecheck, API and integration CI before merging.
+
 ## [0.1.0-beta.15] — 2026-11-09
 
 - **Video compression refinements:** browser-side video preparation uses a maximum 1280×720 frame, ~1.3 Mbps video and 96 kbps audio, keeps the original when compression is unsupported or saves no significant space, and still enforces the existing 50 MB final upload limit. No increased R2 storage cap.
