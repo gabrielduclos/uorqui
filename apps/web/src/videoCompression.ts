@@ -45,6 +45,7 @@ export async function optimizeVideoAttachment(
   video.src=url;
   let audioContext:AudioContext|null=null;
   let canvasStream:MediaStream|null=null;
+  let audioOutput:MediaStream|null=null;
   let recorder:MediaRecorder|null=null;
   let frame=0;
   let watchdog=0;
@@ -71,6 +72,7 @@ export async function optimizeVideoAttachment(
     if(!context)return unchanged;
     audioContext=new AudioContext();
     const audioTarget=audioContext.createMediaStreamDestination();
+    audioOutput=audioTarget.stream;
     const audioSource=audioContext.createMediaElementSource(video);
     audioSource.connect(audioTarget);
     canvasStream=canvas.captureStream(24);
@@ -141,6 +143,7 @@ export async function optimizeVideoAttachment(
     video.pause();
     if(recorder?.state!=='inactive'){try{recorder?.stop();}catch{}}
     canvasStream?.getTracks().forEach(track=>track.stop());
+    audioOutput?.getTracks().forEach(track=>track.stop());
     if(audioContext)void audioContext.close().catch(()=>{});
     if(screenWakeLock)void screenWakeLock.release().catch(()=>{});
     video.removeAttribute('src');video.load();
