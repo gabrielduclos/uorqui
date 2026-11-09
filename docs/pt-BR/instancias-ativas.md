@@ -4,6 +4,7 @@ O Uorqui permite **uma aba/janela desktop ativa** e **uma instância mobile (nav
 
 ## Experiência
 
+- **Inicialização (beta.19):** após recuperar a sessão, a confirmação da vaga ocorre por trás do `StartupSplash` original. A mesma tela inicial permanece até resolver a posse; não mostrar uma tela intermediária **Verificando instância ativa…**. Enquanto a posse não for confirmada, não montar o aplicativo.
 - A segunda aba da mesma categoria não monta o aplicativo e mostra a mensagem **Uorqui já está aberto**, com a ação **Usar nesta aba**.
 - O botão **Usar nesta aba** assume a vaga explicitamente. A instância anterior suspende a interface, encerrando suas assinaturas e conexões ao desmontar; **não perde o login** e pode reassumir depois. Existe também **Sair da conta**.
 - Falhas de comunicação exibem **Tentar novamente**, não um bloqueio falso por outra aba. Falhas repetidas na renovação suspendem a interface até confirmar a posse. Abrir uma instância mobile não derruba a desktop e vice-versa.

@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.19] — 09/11/2026
+
+- **Verificação de instância em segundo plano:** ao recuperar a conta autenticada, a checagem da vaga desktop/mobile acontece sob a tela inicial de carregamento do Uorqui, que permanece montada até o resultado. A interface deixa de exibir a tela separada **Verificando instância ativa…** e evita a troca intermediária de layout.
+- **Resultados diretos:** vaga livre abre o aplicativo; conflito abre **Uorqui já está aberto** com **Usar nesta aba**; erro de rede/servidor mantém **Tentar novamente** com o aplicativo suspenso. Permanecem as mesmas sessões, transferência, SSE e verificação a cada 15 segundos.
+- **Escopo e testes:** ajuste somente de interface na inicialização/bloqueio, sem migração SQL nem alterações na API. Validar abertura autenticada/recarregamento, segunda aba e troca de controle, retomada do segundo plano, falhas de rede, desktop/mobile/PWA e typecheck/build web.
+
 ## [0.1.0-beta.18] — 09/11/2026
 
 - **Uma instância por categoria:** uma aba/janela desktop e uma instância mobile/PWA por conta autenticada, inclusive entre navegadores distintos. A segunda aba fica bloqueada, sem sair da conta; **Usar nesta aba** assume explicitamente a vaga e suspende a anterior (desmonta chats, SSE e mídias), preservando o login.
