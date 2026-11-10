@@ -19,6 +19,8 @@
 
 - **Username editing (beta.39):** the @handle may change only once per rolling 15 days after a successful update; onboarding and unchanged resaves do not start or restart the clock. While locked, the profile editor disables only the @username input, displays the next eligible date in the selected locale and handles server rejection with `USERNAME_CHANGE_COOLDOWN` (HTTP 423). Existing full names remain editable.
 
+- **Community/channel sidebar (beta.40):** do not render a separate “Unread messages” summary card above the channel list or in the community directory. Preserve individual channel and community unread badges and the unified notification center; these are the only visible unread entry points in that navigation.
+
 ## Principles
 
 - **Channel reply references (beta.9):** a curved/right-turn arrow precedes **Sandra: looks good** in one compact line. Long quotes are ellipsized, with the original reachable by clicking the reference; the composer preview also stays on one line. Sender → original quote → reply content, with jump-to-original. Each channel message always shows avatar, sender details and timestamp, even in consecutive runs.
