@@ -4,10 +4,15 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.29` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.30` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Novidades do beta.30
+
+- **Fotos mais leves:** compactação automática de fotos JPEG/WebP/HEIC da galeria, câmera e área de transferência antes do envio nos chats e canais. GIFs, PNGs e anexos via **Arquivo** preservam o original; o navegador mantém o arquivo intacto se a conversão não ajudar.
+- **Sino com badge unificado:** soma mensagens, canais, convites, atividades e e-mails não lidos das contas conectadas; o badge nativo do PWA depende da compatibilidade do dispositivo.
 
 ## Alterações do beta.2
 
