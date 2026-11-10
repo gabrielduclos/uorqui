@@ -34,6 +34,10 @@ jobs:
         run: npm run test:image -w @uorqui/web
       - name: Test unread email and community-avatar regressions
         run: npm run test:notifications -w @uorqui/web
+      - name: Test 429 rate-limit backoff
+        run: npm run test:rate-limit -w @uorqui/web
+      - name: Test serialized bootstrap and public probe caching
+        run: npm run test:bootstrap -w @uorqui/web
       - name: Test backend unread mail notification synchronization
         run: node --test apps/api/test/mail-unread-notifications.test.mjs
       - name: Build web
