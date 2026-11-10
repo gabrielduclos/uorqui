@@ -323,6 +323,13 @@
       "when": 1794310600000,
       "tag": "0045_meeting_one_hour_deadline",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1794311200000,
+      "tag": "0046_username_change_cooldown",
+      "breakpoints": true
     }
   ]
 }
