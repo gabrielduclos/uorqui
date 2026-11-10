@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Check, MessageCircle, Search, UserPlus, Users, X, UserRoundX } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
@@ -105,28 +106,28 @@ export function FriendsPanel({ onMessage, onBack, busy }: { onMessage: (handle:s
 
   const item=(person:Friend,kind:Tab)=> <div key={person.handle}
     className="flex min-h-16 min-w-0 items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/60">
-    <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
+    <UserAvatar name={compactUserName(person.displayName)} image={person.avatarUrl} size="sm"/>
     <a href={'/@'+person.handle} onClick={event=>navigateToPublicProfile(event,person.handle)}
       className="min-w-0 flex-1 rounded-md focus-visible:outline-2 focus-visible:outline-ring">
-      <span className="block truncate text-sm font-semibold">{person.displayName}</span>
+      <span className="block truncate text-sm font-semibold">{compactUserName(person.displayName)}</span>
       <span className="block truncate text-xs text-muted-foreground">@{person.handle}</span>
     </a>
     {kind==='friends'?<>
       <Button type="button" size="icon" variant="ghost" disabled={busy} onClick={()=>void onMessage(person.handle)}
-        aria-label={pt?'Conversar com '+person.displayName:'Message '+person.displayName}
+        aria-label={pt?'Conversar com '+compactUserName(person.displayName):'Message '+compactUserName(person.displayName)}
         className="size-9 shrink-0 text-primary"><MessageCircle className="size-4"/></Button>
       <Button type="button" size="icon" variant="ghost" disabled={!!pending} onClick={()=>void action(person.handle,'remove')}
-        aria-label={pt?'Remover contato '+person.displayName:'Remove contact '+person.displayName}
+        aria-label={pt?'Remover contato '+compactUserName(person.displayName):'Remove contact '+compactUserName(person.displayName)}
         className="size-9 shrink-0 text-muted-foreground"><UserRoundX className="size-4"/></Button>
     </>:kind==='received'?<>
       <Button type="button" size="icon" variant="ghost" disabled={!!pending} onClick={()=>void action(person.handle,'accept')}
-        aria-label={pt?'Aceitar '+person.displayName:'Accept '+person.displayName}
+        aria-label={pt?'Aceitar '+compactUserName(person.displayName):'Accept '+compactUserName(person.displayName)}
         className="size-9 shrink-0 text-primary"><Check className="size-4"/></Button>
       <Button type="button" size="sm" variant="outline" disabled={!!pending} onClick={()=>void action(person.handle,'decline')}
-        aria-label={pt?'Recusar solicitação de '+person.displayName:'Decline request from '+person.displayName}
+        aria-label={pt?'Recusar solicitação de '+compactUserName(person.displayName):'Decline request from '+compactUserName(person.displayName)}
         className="h-9 shrink-0 gap-1 rounded-md px-2 text-xs"><X className="size-4"/>{pt?'Recusar':'Decline'}</Button>
     </>:<Button type="button" size="icon" variant="ghost" disabled={!!pending} onClick={()=>void action(person.handle,'remove')}
-      aria-label={pt?'Cancelar solicitação para '+person.displayName:'Cancel request to '+person.displayName}
+      aria-label={pt?'Cancelar solicitação para '+compactUserName(person.displayName):'Cancel request to '+compactUserName(person.displayName)}
       className="size-9 shrink-0 text-muted-foreground"><X className="size-4"/></Button>}
   </div>;
 
@@ -170,9 +171,9 @@ export function FriendsPanel({ onMessage, onBack, busy }: { onMessage: (handle:s
           {searching&&<p role="status" className="text-xs text-muted-foreground">{pt?'Buscando perfis públicos…':'Searching public profiles…'}</p>}
           {query.trim().length>=2&&results.length>0&&<div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border bg-card">
             {results.map(person=><div key={person.handle} className="flex min-h-16 min-w-0 items-center gap-3 px-3 py-2 hover:bg-accent/60">
-              <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
+              <UserAvatar name={compactUserName(person.displayName)} image={person.avatarUrl} size="sm"/>
               <a href={'/@'+person.handle} onClick={e=>navigateToPublicProfile(e,person.handle)}
-                className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.displayName}</span>
+                className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{compactUserName(person.displayName)}</span>
                 <span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></a>
               <Button type="button" size="sm" variant="outline" disabled={!!pending||pendingSet.has(person.handle)}
                 className="min-h-9 shrink-0 gap-1 rounded-md px-2 text-xs"
