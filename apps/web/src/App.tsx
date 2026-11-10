@@ -84,6 +84,21 @@ function Landing({ onAuthenticated }: { onAuthenticated: (account: Account) => v
 }
 
 const INVITE_KEY='uorqui:pending-community-invite';
+const CHANNEL_INVITE_KEY='uorqui:pending-restricted-channel-invite';
+type RestrictedChannelPreview={communityId:string;channelId:string;communityName:string;channelName:string;hasPassword:boolean;meetingApproval:boolean};
+function pendingRestrictedChannelInvite(){
+  const isChannelInvite=/^\/channel-invite\/?$/.test(window.location.pathname);
+  if(isChannelInvite){
+    const secret=new URLSearchParams(window.location.hash.slice(1)).get('token');
+    if(secret&&/^[A-Za-z0-9_-]{43}$/.test(secret)){
+      try{sessionStorage.setItem(CHANNEL_INVITE_KEY,secret);}catch{}
+      // The token stays out of navigation, referer headers and request URLs.
+      window.history.replaceState(null,'','/channel-invite');
+      return secret;
+    }
+  }
+  try{return sessionStorage.getItem(CHANNEL_INVITE_KEY);}catch{return null;}
+}
 function invitationFromUrl(){
   const match=/^\/invite\/([0-9a-f-]{36})\/?$/i.exec(window.location.pathname);
   return match?.[1]??new URLSearchParams(window.location.search).get('invite');
@@ -105,6 +120,10 @@ function AppContent() {
   const {locale}=useUorquiPreferences();
   const pt=locale==='pt-BR';
   const [inviteToken,setInviteToken]=useState<string|null>(pendingInvitation);
+  const [restrictedInviteToken,setRestrictedInviteToken]=useState<string|null>(pendingRestrictedChannelInvite);
+  const [restrictedInvitePreview,setRestrictedInvitePreview]=useState<RestrictedChannelPreview|null>(null);
+  const [restrictedInviteError,setRestrictedInviteError]=useState('');
+  const [restrictedInviteBusy,setRestrictedInviteBusy]=useState(false);
   const [invitePreview,setInvitePreview]=useState<string|null>(null);
   const [inviteError,setInviteError]=useState<''|'expired'|'banned'|'redeem'>('');
   const [inviteBusy,setInviteBusy]=useState(false);
@@ -120,6 +139,7 @@ function AppContent() {
     const onNavigation = () => {
       setPublicHandle(publicProfileHandle(window.location.pathname));
       setInviteToken(pendingInvitation());
+      setRestrictedInviteToken(pendingRestrictedChannelInvite());
       setIsVerificationResult(/^\/auth\/email-verification\/?$/.test(window.location.pathname));
       setLegalDocument(legalDocumentFromPath(window.location.pathname));
     };
@@ -166,6 +186,53 @@ function AppContent() {
       .catch(()=>{if(active)setInviteError('expired');});
     return ()=>{active=false;};
   },[inviteToken]);
+  useEffect(()=>{
+    if(!restrictedInviteToken||!account?.profile||instance.status!=='active')return;
+    let mounted=true;
+    setRestrictedInvitePreview(null);setRestrictedInviteError('');
+    void fetch('/api/v1/channel-invites/preview',{
+      method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({token:restrictedInviteToken})
+    }).then(async response=>{
+      if(!response.ok)throw Error('CHANNEL_INVITE_UNAVAILABLE');
+      return response.json() as Promise<{invitation:RestrictedChannelPreview}>;
+    }).then(data=>{
+      if(mounted)setRestrictedInvitePreview(data.invitation);
+    }).catch(()=>{
+      if(mounted)setRestrictedInviteError(pt?'Convite expirado, já utilizado ou sem autorização.':
+        'This invitation has expired, was already used, or is not available for this account.');
+    });
+    return ()=>{mounted=false;};
+  },[restrictedInviteToken,account?.profile,instance.status,pt]);
+
+  async function acceptRestrictedChannelInvite(){
+    if(!restrictedInviteToken||!account?.profile||restrictedInviteBusy||!restrictedInvitePreview)return;
+    setRestrictedInviteBusy(true);setRestrictedInviteError('');
+    try{
+      const response=await fetch('/api/v1/channel-invites/redeem',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({token:restrictedInviteToken})
+      });
+      if(!response.ok)throw Error('CHANNEL_INVITE_UNAVAILABLE');
+      const result=await response.json() as {communityId:string;channelId:string};
+      try{sessionStorage.removeItem(CHANNEL_INVITE_KEY);}catch{}
+      setRestrictedInviteToken(null);setRestrictedInvitePreview(null);
+      setInvitedCommunity(result.communityId);
+      window.history.replaceState(null,'','/');
+      window.setTimeout(()=>window.dispatchEvent(new CustomEvent('uorqui:open-community-link',{
+        detail:{communityId:result.communityId,channelId:result.channelId}
+      })),120);
+    }catch{
+      setRestrictedInviteError(pt?'Não foi possível aceitar o convite. Ele pode ter expirado ou já ter sido utilizado.':
+        'Unable to accept. This invitation might have expired or already been used.');
+    }finally{setRestrictedInviteBusy(false);}
+  }
+  function declineRestrictedChannelInvite(){
+    try{sessionStorage.removeItem(CHANNEL_INVITE_KEY);}catch{}
+    if(/^\/channel-invite/.test(window.location.pathname))window.history.replaceState(null,'','/');
+    setRestrictedInviteToken(null);setRestrictedInvitePreview(null);setRestrictedInviteError('');
+  }
+
   // Redeem only after an explicit user click. Registration or login never joins a community.
   async function acceptCommunityInvite(){
     if(!inviteToken||!account?.profile||inviteBusy||!invitePreview)return;
@@ -245,7 +312,7 @@ function AppContent() {
       {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
         instance.status === 'active'
           ? <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
-              invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || invitedCommunity)} />
+              invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || restrictedInviteToken || invitedCommunity)} />
           : instance.status === 'checking'
             // Keep the original startup splash mounted while the authenticated
             // instance lease is checked; never flash a separate checking screen.
@@ -253,7 +320,50 @@ function AppContent() {
             : <AppInstanceBlocker kind={instance.kind} status={instance.status}
                 onTakeover={instance.takeover} onRetry={instance.retry} onLogout={()=>void signOut()} />
       ) : !publicHandle ? (loading ? <StartupSplash /> : <Landing onAuthenticated={onAuthenticated} />) : null}
-      {instance.status === 'active' && inviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
+      {instance.status === 'active' && restrictedInviteToken && account?.profile && !publicHandle && !isVerificationResult && !legalDocument && <div
+        role="dialog" aria-modal={true} aria-label={pt?'Convite para canal fechado':'Restricted channel invitation'}
+        className="fixed inset-0 z-[420] flex items-center justify-center bg-black/65 p-4">
+        <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {pt?'Convite para canal fechado':'Restricted channel invitation'}
+              </p>
+              <h2 className="mt-1 break-words text-lg font-semibold">
+                {restrictedInvitePreview?'#'+restrictedInvitePreview.channelName:
+                  (pt?'Validando convite…':'Checking invitation…')}
+              </h2>
+              {restrictedInvitePreview&&<p className="mt-1 text-sm text-muted-foreground">{restrictedInvitePreview.communityName}</p>}
+            </div>
+            <button type="button" aria-label={pt?'Recusar convite':'Decline invitation'}
+              onClick={declineRestrictedChannelInvite} className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-secondary">
+              <X className="size-4"/></button>
+          </div>
+          {!restrictedInvitePreview&&!restrictedInviteError&&<Skeleton className="h-4 w-48"/>}
+          <p className="text-sm text-muted-foreground">
+            {restrictedInviteError||(pt?
+              'Ao aceitar, você entrará na comunidade e receberá acesso somente a este canal fechado.':
+              'Accepting joins the community and grants access to this restricted channel only.')}
+          </p>
+          {restrictedInvitePreview?.hasPassword&&<p className="text-xs text-muted-foreground">
+            {pt?'A senha do canal continuará sendo necessária.':'The channel password is still required.'}
+          </p>}
+          {restrictedInvitePreview?.meetingApproval&&<p className="text-xs text-muted-foreground">
+            {pt?'Reuniões com aprovação continuarão exigindo autorização para participar.':
+              'Meeting admission approval remains required.'}
+          </p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" disabled={restrictedInviteBusy}
+              onClick={declineRestrictedChannelInvite}>{pt?'Agora não':'Not now'}</Button>
+            <Button type="button" disabled={!restrictedInvitePreview||Boolean(restrictedInviteError)||restrictedInviteBusy}
+              onClick={()=>void acceptRestrictedChannelInvite()}>
+              {restrictedInviteBusy&&<Spinner className="size-4"/>}
+              {pt?'Aceitar e entrar no canal':'Accept and open channel'}
+            </Button>
+          </div>
+        </div>
+      </div>}
+      {instance.status === 'active' && inviteToken && account?.profile && !restrictedInviteToken && !publicHandle && !isVerificationResult && !legalDocument && <div
         role="dialog" aria-modal={true} aria-label={pt?'Convite para comunidade':'Community invitation'}
         className="fixed inset-0 z-[410] flex items-center justify-center bg-black/65 p-4">
         <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl">
