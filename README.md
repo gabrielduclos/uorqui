@@ -4,10 +4,15 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.30` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.31` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Beta.31 changes
+
+- **HTTP 429 mitigation:** serialized authentication bootstrap, bounded retry backoff, and 15-second edge caching for public status and readiness only. Private session responses are never cached.
+- **Network diagnosis:** `x-uorqui-upstream-429: 1` marks a 429 forwarded from the backend. Check Render instance limits if blocks persist; security controls remain enabled.
 
 ## Beta.30 changes
 
