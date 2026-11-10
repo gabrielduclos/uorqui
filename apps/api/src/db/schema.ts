@@ -368,6 +368,25 @@ export const communityBans = pgTable('community_bans', {
   index('community_bans_user_idx').on(table.userId),
 ]);
 
+/** Single-use, expiring, revocable capability to join one restricted channel.
+ * Only a SHA-256 hash is stored; the URL secret is never persisted.
+ */
+export const communityChannelInviteLinks = pgTable('community_channel_invite_links', {
+  tokenHash: varchar('token_hash',{length:64}).primaryKey(),
+  communityId: uuid('community_id').notNull().references(() => communities.id,{onDelete:'cascade'}),
+  channelId: uuid('channel_id').notNull().references(() => communityChannels.id,{onDelete:'cascade'}),
+  createdById: uuid('created_by_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  recipientId: uuid('recipient_id').references(() => users.id,{onDelete:'cascade'}),
+  createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at',{withTimezone:true}).notNull(),
+  revokedAt: timestamp('revoked_at',{withTimezone:true}),
+  redeemedAt: timestamp('redeemed_at',{withTimezone:true}),
+  redeemedById: uuid('redeemed_by_id').references(() => users.id,{onDelete:'set null'}),
+}, t=>[
+  index('community_channel_invites_creator_idx').on(t.channelId,t.createdById),
+  index('community_channel_invites_expiry_idx').on(t.expiresAt),
+]);
+
 /** Shareable community invitations: random 128-bit UUID bearer tokens, revocable and expiring. */
 export const communityInviteLinks = pgTable('community_invite_links', {
   id: uuid('id').defaultRandom().primaryKey(),
