@@ -2,7 +2,7 @@
 
 [Português](roadmap.md) · [English](../en/roadmap.md)
 
-**Status:** roadmap atualizado até o **beta técnico `0.1.0-beta.37`** e da mudança de direção aprovada em **02/11/2026**. Itens marcados indicam implementação ou teste CI, não publicação comprovada nem validação em aparelhos reais. O feed global foi aposentado em 02/11/2026; **Descobrir já está implementado**, com testes reais ainda pendentes. Ver [decisão](descobrir.md) e [auditoria](auditoria-manutencao.md).
+**Status:** roadmap atualizado até o **beta técnico `0.1.0-beta.38`** e da mudança de direção aprovada em **02/11/2026**. Itens marcados indicam implementação ou teste CI, não publicação comprovada nem validação em aparelhos reais. O feed global foi aposentado em 02/11/2026; **Descobrir já está implementado**, com testes reais ainda pendentes. Ver [decisão](descobrir.md) e [auditoria](auditoria-manutencao.md).
 
 ## Fase 0 — Descoberta e fundação
 
