@@ -4,7 +4,7 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.33` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.34` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -24,6 +24,11 @@
 
 - **Correção preventiva para HTTP 429:** abertura do login em sequência, espera maior após excesso de requisições e cache de 15 segundos apenas para status público e prontidão. Nenhuma resposta de sessão ou usuário é compartilhada.
 - **Diagnóstico no Network:** cabeçalho `x-uorqui-upstream-429: 1` identifica 429 repassado do backend; caso persista, verificar limites da instância Render, sem desativar a proteção de segurança.
+
+## Novidades do beta.34
+
+- **O link de reunião é separado do convite do canal.** O endereço da reunião é reutilizável por quem já tem acesso; não concede participação nem autorização. Convites de canal fechado continuam com link próprio e token de uso único.
+- **Reuniões duram no máximo uma hora por sessão,** com horário de término igual para todos e cronômetro na tela normal e minimizada. Ao zerar, a conexão é encerrada. Aplicar a migração PostgreSQL `0045_meeting_one_hour_deadline.sql` antes de publicar a API atualizada.
 
 ## Novidades do beta.30
 
