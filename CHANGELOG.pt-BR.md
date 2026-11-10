@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.33] — 10/11/2026
+
+- **Canal Geral inicia na última mensagem:** no desktop, a primeira sala já visível ao entrar na comunidade agora participa da rolagem inicial automática; a posição continua respeitada quando o usuário navega manualmente no histórico.
+- **Convites seguros para canais fechados:** apenas dono/admin ou moderador com acesso ao canal pode criar link de uso único com 24h de validade. Aceitar concede automaticamente participação na comunidade e acesso apenas ao canal convidado, sem dispensar senha ou aprovação de reunião.
+- **Links individuais por @usuário:** convite enviado por DM recebe um token próprio vinculado ao ID daquela conta; links copiados são de uso único e podem ser revogados pelo emissor.
+- **Segurança:** segredo criptograficamente aleatório de 256 bits, armazenado como SHA-256; enviado em fragmento da URL, confirmado após login, validado no servidor (origem, cargo, destinatário, banimento e expiração). Resgate transacional com bloqueio de linha impede consumo duplicado. Limite de 10 convites pendentes por emissor/canal.
+- **Banco e testes:** migração aditiva `0044_restricted_channel_invites.sql` aplicada ao Neon principal e registrada em Drizzle; regressões incluídas no CI. Consulte [modelo de convites de canais fechados](docs/pt-BR/convites-canais-fechados.md). Validação real de login/convite no PWA continua necessária.
+
 ## [0.1.0-beta.32] — 10/11/2026
 
 - **Rate limiting Cloudflare Free ativado em produção:** 1 regra WAF `http_ratelimit` da zona protege `/api/*` contra rajadas acima de **120 requisições por IP/ponto de presença da Cloudflare em 10 segundos**, com bloqueio por **10 segundos**. Sem contratar plano pago.
