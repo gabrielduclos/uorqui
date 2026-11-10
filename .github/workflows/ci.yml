@@ -32,6 +32,10 @@ jobs:
         run: npm run typecheck -w @uorqui/web
       - name: Test image compression fallbacks and cancellation
         run: npm run test:image -w @uorqui/web
+      - name: Test unread email and community-avatar regressions
+        run: npm run test:notifications -w @uorqui/web
+      - name: Test backend unread mail notification synchronization
+        run: node --test apps/api/test/mail-unread-notifications.test.mjs
       - name: Build web
         run: npm run build -w @uorqui/web
       - name: Test Resend provider diagnostics without external email
