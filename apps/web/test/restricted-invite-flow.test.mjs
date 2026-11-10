@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 
 const app=readFileSync(new URL('../src/App.tsx',import.meta.url),'utf8');
+const messageText=readFileSync(new URL('../src/MessageText.tsx',import.meta.url),'utf8');
 const channels=readFileSync(new URL('../src/LiveCommunities.tsx',import.meta.url),'utf8');
 const worker=readFileSync(new URL('../worker/index.ts',import.meta.url),'utf8');
 const wrangler=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
@@ -33,4 +34,11 @@ test('channel secret is kept in URL hash/session storage until explicit account 
   assert.match(app,/\/api\/v1\/channel-invites\/redeem/);
   assert.match(worker,/channelInviteNavigation/);
   assert.match(wrangler,/"\/channel-invite"/);
+});
+
+test('restricted links open through internal navigation without a new browser tab',()=>{
+  assert.match(messageText,/restrictedToken=new URLSearchParams\(url\.hash\.slice\(1\)\)\.get\('token'\)/);
+  assert.match(messageText,/url\.pathname\+url\.hash/);
+  assert.match(messageText,/window\.dispatchEvent\(new PopStateEvent\('popstate'\)\)/);
+  assert.match(app,/setRestrictedInviteToken\(pendingRestrictedChannelInvite\(\)\)/);
 });
