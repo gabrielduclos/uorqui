@@ -60,6 +60,13 @@ export function internalChatLink(href:string):{type:'channel';communityId:string
       uuid.test(url.pathname.split('/')[2]??'')&&
       (!channelId||uuid.test(channelId)))
       return {type:'invite',url:url.pathname+url.search};
+    // Keep one-use restricted channel capability links inside the app.
+    // The secret stays in the fragment and is consumed into sessionStorage by
+    // App.tsx immediately after the internal navigation event.
+    const restrictedToken=new URLSearchParams(url.hash.slice(1)).get('token');
+    if(/^\/channel-invite\/?$/.test(url.pathname)&&!url.search&&
+       restrictedToken&&/^[A-Za-z0-9_-]{43}$/.test(restrictedToken))
+      return {type:'invite',url:url.pathname+url.hash};
   }catch{/* External or malformed link. */}
   return null;
 }
