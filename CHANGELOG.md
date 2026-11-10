@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.30] — 2026-11-10
+
+- **One notification bell count:** aggregates unread direct messages, channel messages, community invitations, activity notifications and unread mail across connected accounts. The existing PWA app icon badge uses the same total when the platform supports native badging; the header badge displays `99+` above 99.
+- **Photo compression before chat upload:** photos chosen from Gallery, Camera or pasted into the composer are processed on-device using a shared helper. JPEG/WebP/decodable HEIC photos are downscaled to a 2048 px maximum edge and saved as WebP quality 85% only if the converted file saves at least 10%; unsupported encoders and failures keep the original. GIFs, PNG screenshots and images sent via File remain untouched.
+- **Safe sending:** the sender sees progress and may cancel before upload; compressed MIME type and filename are passed through existing DM and community attachment endpoints, without changing server contracts or offline DM outbox retries.
+- **Checks:** test for unchanged images, image conversion, unsupported WebP and cancellation; CI now runs frontend typecheck, photo tests and build. No database migration. Real mobile camera and installed-PWA checks still pending.
+
 ## [0.1.0-beta.29] — 2026-11-09
 
 - **Message timestamps change after midnight:** messages sent on the viewer's *current local calendar date* display only the time (e.g. `18:40`); previous days display a date and time (e.g. `08/11 18:40` in pt-BR), with the year included for messages from another calendar year. The original timestamp is preserved in the HTML `datetime` attribute.
