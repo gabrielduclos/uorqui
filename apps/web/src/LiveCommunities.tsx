@@ -22,7 +22,6 @@ import { LiveMessageComposer } from './LiveMessageComposer';
 import { MessageText } from './MessageText';
 import { ReplyReference, ReplyComposerPreview } from './ReplyReference';
 import { LinkPreview } from './LinkPreview';
-import type {UnreadLocation} from './useCommunityUnread';
 import {clearReadPush} from './readPushNotifications';
 import { CommunityMessageAttachment, type CommunityAttachment } from './CommunityMessageAttachment';
 import { invalidateChatMedia, invalidateCommunityMedia } from './chatMediaCache';
@@ -63,10 +62,10 @@ function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 function mayInviteRestricted(community:Community){return community.myRole==='owner'||community.myRole==='admin'||community.myRole==='moderator';}
 
-export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileOpenChange,onRestoreNavigation,initialCommunityId,requestedDestination,unreadChannels,unreadCommunities,unreadLocations,active}:{
+export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileOpenChange,onRestoreNavigation,initialCommunityId,requestedDestination,unreadChannels,unreadCommunities,active}:{
   myId:string;myName:string;myHandle:string;myAvatar:string|null;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
   requestedDestination?:{communityId:string;channelId:string|null;meeting?:boolean;nonce:number}|null;
-  unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
+  unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
   const todayKey=useLocalDayKey();
@@ -719,16 +718,6 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     closeChannel();setSelectedId(id);setCreateOpen(false);
     setError('');setNotice('');
   }
-  function openUnread(location:UnreadLocation){
-    requestedChannel.current={communityId:location.communityId,channelId:location.channelId};
-    setSelectedId(location.communityId);setCreateOpen(false);
-    setChannelId(location.channelId);setChannelOpen(true);setVoiceMinimized(true);
-    setError('');setNotice('');
-    if(location.channelKind!=='text' && voicePhase==='idle'){
-      // Reading room text must not automatically join a voice call.
-      setActiveVoiceRoom(null);
-    }
-  }
   async function create(event:FormEvent){
     event.preventDefault();
     if(!allowedSlug.test(createSlug)) {setError(pt?'Use um endereço com letras minúsculas, números ou hífens (3–64).':'Use a lowercase slug, numbers or hyphens (3–64).');return;}
@@ -966,16 +955,6 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             {createOpen?(pt?'Fechar formulário':'Close form'):(pt?'Nova comunidade':'New community')}</Button>
         </div>
         <div className={hidden+' p-3'}>
-          {!!unreadLocations.length&&!createOpen&&<section className="mb-4 rounded-xl border border-border bg-card p-3" aria-label={pt?'Canais com mensagens novas':'Channels with new messages'}>
-            <p className="mb-2 text-xs font-semibold text-primary">{pt?'Mensagens não lidas':'Unread messages'}</p>
-            <div className="space-y-1">
-              {unreadLocations.map(item=><button key={item.channelId} type="button" onClick={()=>openUnread(item)}
-                className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-xs hover:bg-secondary">
-                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':item.channelKind==='meeting'?'📹':'#'} {item.channelName}</span>
-                <span className="rounded-full bg-destructive px-1.5 py-0.5 font-bold text-white">{item.count>99?'99+':item.count}</span>
-              </button>)}
-            </div>
-          </section>}
           {!loading&&!owned.length&&!createOpen&&<section className="mb-4 space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
             <h3 className="text-sm font-semibold">{pt?'Comece por uma comunidade':'Start with a community'}</h3>
             <p className="text-xs leading-5 text-muted-foreground">{pt?'Encontre uma comunidade para participar ou crie a sua.':'Find a community to join or create your own.'}</p>
@@ -1034,16 +1013,6 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
           </div>
         </div>
         <div className={hidden+' space-y-4 p-3'}>
-          {!!unreadLocations.length&&<section aria-label={pt?'Comunidades e canais com mensagens não lidas':'Communities and channels with unread messages'} className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-            <p className="mb-2 text-xs font-semibold">{pt?'Mensagens não lidas':'Unread messages'}</p>
-            <div className="space-y-1">
-              {unreadLocations.map(item=><button type="button" key={item.channelId}
-                onClick={()=>openUnread(item)} className="flex min-h-9 w-full items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 text-left text-xs hover:bg-secondary">
-                <span className="min-w-0 flex-1 truncate"><strong>{item.communityName}</strong> · {item.channelKind==='voice'?'🔊':item.channelKind==='meeting'?'📹':'#'} {item.channelName}</span>
-                <span className="rounded-full bg-destructive px-1.5 py-0.5 font-bold text-white">{item.count>99?'99+':item.count}</span>
-              </button>)}
-            </div>
-          </section>}
           {community&&!memberView(community)&&<div className="space-y-3 rounded-xl border border-border bg-card p-3">
             <p className="text-sm text-muted-foreground">{community.visibility==='private'?(pt?'Entrada apenas por convite.':'Invitation only.'):
               community.visibility==='approval'?(pt?'O responsável aprova a entrada.':'A manager approves requests.'):(pt?'Entre para acessar os canais.':'Join to access channels.')}</p>
