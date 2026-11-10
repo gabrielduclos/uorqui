@@ -19,6 +19,7 @@ import { registerBlockRoutes } from './block-routes.js';
 import { registerCommunityRoutes } from './community-routes.js';
 import { registerCommunityMeetingRoutes } from './community-meeting-routes.js';
 import { registerCommunityInviteLinks } from './community-invite-links.js';
+import { registerChannelInviteRoutes } from './channel-invite-routes.js';
 import { registerCommunityVoiceRoutes } from './community-voice-routes.js';
 import { registerCommunityModerationRoutes } from './community-moderation-routes.js';
 import { registerContentReportRoutes } from './content-report-routes.js';
@@ -303,6 +304,7 @@ registerFriendRoutes(app, async request => readSession(request));
 registerBlockRoutes(app, async request => readSession(request));
 registerCommunityRoutes(app, async request => readSession(request));
 registerCommunityInviteLinks(app, async request => readSession(request));
+registerChannelInviteRoutes(app, async request => readSession(request));
 registerCommunityVoiceRoutes(app, async request => readSession(request));
 
 registerCommunityMeetingRoutes(app, async request => readSession(request));
