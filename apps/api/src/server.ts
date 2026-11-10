@@ -11,6 +11,7 @@ import { isDevelopmentSignupEnabled, isPublicSignupEnabled, isRegistrationAvaila
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
 import { registerProfileRoutes } from './profile-routes.js';
+import { nextUsernameChangeAt } from './username-cooldown.js';
 import { registerAccountDeletionRoutes } from './account-deletion-routes.js';
 import { registerDirectMessageRoutes } from './direct-message-routes.js';
 import { registerPushRoutes } from './push-routes.js';
@@ -271,6 +272,7 @@ app.get('/api/v1/me', async (request, reply) => {
     const existing = await createDatabase()
       .select({
         handle: users.handle,
+        handleChangedAt: users.handleChangedAt,
         displayName: profiles.displayName,
         bio: profiles.bio,
         avatarUrl: profiles.avatarUrl,
@@ -284,7 +286,15 @@ app.get('/api/v1/me', async (request, reply) => {
 
     return {
       user: { id: session.user.id, name: session.user.name, email: session.user.email },
-      profile: existing[0] ?? null,
+      profile: existing[0] ? {
+        handle: existing[0].handle,
+        displayName: existing[0].displayName,
+        bio: existing[0].bio,
+        avatarUrl: existing[0].avatarUrl,
+        coverUrl: existing[0].coverUrl,
+        isPublic: existing[0].isPublic,
+        handleChangeAvailableAt: nextUsernameChangeAt(existing[0].handleChangedAt),
+      } : null,
     };
   } catch (error) {
     request.log.error({ err: error }, 'Get profile failed');
