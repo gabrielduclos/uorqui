@@ -60,8 +60,8 @@ function body(value:unknown):RequestInit{
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
 
-export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNavigation,initialCommunityId,requestedDestination,unreadChannels,unreadCommunities,unreadLocations,active}:{
-  myId:string;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
+export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileOpenChange,onRestoreNavigation,initialCommunityId,requestedDestination,unreadChannels,unreadCommunities,unreadLocations,active}:{
+  myId:string;myName:string;myHandle:string;myAvatar:string|null;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
   requestedDestination?:{communityId:string;channelId:string|null;nonce:number}|null;
   unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
 }){
@@ -745,7 +745,7 @@ export default function LiveCommunities({myId,onMobileOpenChange,onRestoreNaviga
      const pending:PendingMessage={id:clientId,clientId,channelId:selected,body:text.trim(),createdAt:now,
        replyToId:source?.id??null,
        replyTo:source?{id:source.id,body:source.body,authorHandle:source.authorHandle,deleted:false}:null,
-      authorHandle:'',authorName:pt?'Você':'You',authorAvatar:null,editedAt:null,deletedAt:null,
+      authorHandle:myHandle,authorName:myName,authorAvatar:myAvatar,editedAt:null,deletedAt:null,
       canEdit:false,canDelete:false,canReact:false,reactions:[],pending:'sending',
       attachment:attachment?{id:clientId,name:attachment.name,type:attachment.type||'application/octet-stream',size:attachment.size}:null,
       attachmentUrl:preview};
