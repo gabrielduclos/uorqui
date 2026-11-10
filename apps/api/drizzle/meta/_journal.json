@@ -309,6 +309,13 @@
       "when": 1794200001000,
       "tag": "0043_app_instance_leases",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794310000000,
+      "tag": "0044_restricted_channel_invites",
+      "breakpoints": true
     }
   ]
 }
