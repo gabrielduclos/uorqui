@@ -134,7 +134,7 @@ export function ProfileEditor({ initial, onSaved, onDeleted }: {
       setDeleteBusy(false);
     }
   }
-  useEffect(() => setProfile(initial), [initial.handle, initial.displayName, initial.bio, initial.avatarUrl, initial.coverUrl, initial.isPublic]);
+  useEffect(() => setProfile(initial), [initial.handle, initial.displayName, initial.bio, initial.avatarUrl, initial.coverUrl, initial.isPublic, initial.handleChangeAvailableAt]);
 
   function update<K extends keyof UserProfileData>(key: K, value: UserProfileData[K]) {
     setProfile(prev => ({ ...prev, [key]: value }));
