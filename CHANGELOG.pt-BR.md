@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.40] — 10/11/2026
+
+- **Lista de canais mais limpa:** removidos os dois cards redundantes “Mensagens não lidas” da navegação de comunidades e canais, inclusive o painel destacado acima da lista de canais.
+- **Indicadores mantidos:** os badges individuais de cada comunidade e canal, o sino, a central de notificações e o indicador no ícone PWA permanecem como estavam. Nenhuma mudança na contagem de não lidas, banco, API ou push.
+- **Teste de regressão:** confirma que os cards desapareceram sem eliminar os contadores dos canais; incluído no CI da interface.
+
 ## [0.1.0-beta.39] — 10/11/2026
 
 - **Troca de @usuário a cada 15 dias:** cada conta pode alterar o identificador uma vez a cada 15 dias corridos. A escolha inicial no cadastro não consome a troca, e salvar outros campos ou manter o mesmo @ não reinicia o prazo. O servidor usa atualização atômica, devolve HTTP 423 com a próxima data permitida e o formulário desabilita o campo durante a espera.
