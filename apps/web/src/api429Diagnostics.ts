@@ -21,6 +21,10 @@ function safeRoute(path: string): string {
   return parts.map((part, index) => {
     if (!index || !part) return part;
     if (index <= 2 && (part === 'api' || part === 'v1' || part === 'auth')) return part;
+    // Even alphabetic resource IDs can be secret. Always redact values after
+    // collection segments, regardless of whether they look like a slug.
+    if (index >= 3 && new Set(['accounts','conversations','communities','channels',
+      'messages','profiles','users','friends','notifications']).has(parts[index-1])) return ':id';
     // Never capture arbitrary resource keys, long paths or private mailbox IDs.
     return /^[a-z][a-z0-9-]{1,28}$/.test(part) && !/\d{4,}/.test(part)
       ? part : ':id';
