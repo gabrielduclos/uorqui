@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.35` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.36` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -24,6 +24,12 @@
 
 - **HTTP 429 mitigation:** serialized authentication bootstrap, bounded retry backoff, and 15-second edge caching for public status and readiness only. Private session responses are never cached.
 - **Network diagnosis:** `x-uorqui-upstream-429: 1` marks a 429 forwarded from the backend. Check Render instance limits if blocks persist; security controls remain enabled.
+
+## Beta.36 changes
+
+- **Fewer account/session lookups:** app startup and the login panel share one in-flight `/api/v1/me` request per tab. A successful result is briefly reused in memory (8 seconds), while login/profile transitions force a fresh server check. 429/503 responses are never cached.
+- **Built-in browser diagnostics:** run `window.__uorquiAuthDiagnostics()` in DevTools. `networkLastMinute` counts real account lookups from **that tab in the previous 60 seconds**, `coalescedTotal` / `cacheHitsTotal` show avoided requests, and `rateLimitedTotal` counts 429 responses from this endpoint. No account or IP details are exposed.
+- **Rate-limit source:** Render logs reviewed do not show heavy `/api/auth/get-session` usage. The existing Cloudflare WAF rule counts users sharing a public IP together; verify the blocked response or WAF events before raising a traffic limit.
 
 ## Beta.35 changes
 
