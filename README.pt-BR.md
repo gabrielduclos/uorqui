@@ -4,7 +4,7 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.35` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.36` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -24,6 +24,12 @@
 
 - **Correção preventiva para HTTP 429:** abertura do login em sequência, espera maior após excesso de requisições e cache de 15 segundos apenas para status público e prontidão. Nenhuma resposta de sessão ou usuário é compartilhada.
 - **Diagnóstico no Network:** cabeçalho `x-uorqui-upstream-429: 1` identifica 429 repassado do backend; caso persista, verificar limites da instância Render, sem desativar a proteção de segurança.
+
+## Novidades do beta.36
+
+- **Menos consultas de sessão:** abertura e tela de acesso compartilham a mesma consulta `/api/v1/me` na aba; não há requisições duplicadas por renderização. Respostas de conta válidas têm um reaproveitamento breve na memória (8 s) e são revalidadas após login ou mudança de perfil. Erros 429 e 503 não são armazenados.
+- **Medição simples:** abra o console do navegador e execute `window.__uorquiAuthDiagnostics()`. O campo `networkLastMinute` é o número de consultas reais de conta enviadas **por aquela aba nos últimos 60 segundos**. `coalescedTotal` e `cacheHitsTotal` mostram chamadas evitadas; `rateLimitedTotal` conta respostas 429 dessa rota. Não expõe dados da conta.
+- **Diagnóstico da infraestrutura:** nos logs consultados do Render, não há indícios de que `/api/auth/get-session` esteja recebendo alta frequência. A regra Cloudflare WAF existente é por IP público, portanto usuários da mesma rede somam consumo; se reaparecer 429, confira os cabeçalhos da resposta e os eventos WAF antes de elevar o limite.
 
 ## Novidades do beta.35
 
