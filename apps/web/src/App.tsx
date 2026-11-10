@@ -4,6 +4,7 @@ import { Github, MessageCircle, Users, Mail, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import AuthPanel, { type Account } from './AuthPanel';
+import { getAccountProbe, invalidateAccountProbe } from './accountProbe';
 import { UorquiWordmark } from './UorquiWordmark';
 import { StartupSplash } from './StartupSplash';
 import SocialShell from './SocialShell';
@@ -154,7 +155,7 @@ function AppContent() {
     const timeout = window.setTimeout(() => controller.abort(), 3_500);
     void (async () => {
       try {
-        const response = await fetch('/api/v1/me', { credentials: 'same-origin', signal: controller.signal });
+        const response = await getAccountProbe({ signal: controller.signal });
         if (response.ok && !controller.signal.aborted) {
           const verified = await response.json() as Account;
           if (!controller.signal.aborted) {
@@ -272,6 +273,7 @@ function AppContent() {
     setAccount(next);
   }, []);
   const accountDeleted = useCallback(async () => {
+    invalidateAccountProbe();
     await deactivatePush().catch(()=>{});
     await clearProfileImageCache().catch(()=>{});
     clearChatMediaCache();
@@ -293,6 +295,7 @@ function AppContent() {
       body: '{}',
     });
     if (!response.ok) throw new Error('Logout failed');
+    invalidateAccountProbe();
     await clearProfileImageCache();
     setProfileImageCacheAccount(null);
     setChatMediaCacheAccount(null);
@@ -311,7 +314,7 @@ function AppContent() {
     <MotionConfig reducedMotion="user">
       {legalDocument ? <LegalPage document={legalDocument}/> : isVerificationResult ? <EmailVerificationResult/> : account?.profile ? (
         instance.status === 'active'
-          ? <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => setAccount(next)}
+          ? <SocialShell account={account} onLogout={signOut} onAccountDeleted={accountDeleted} onAccountUpdate={next => { invalidateAccountProbe(); setAccount(next); }}
               invitedCommunityId={invitedCommunity} deferOnboarding={Boolean(inviteToken || restrictedInviteToken || invitedCommunity)} />
           : instance.status === 'checking'
             // Keep the original startup splash mounted while the authenticated
