@@ -47,10 +47,12 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
     const interval=window.setInterval(()=>{if(document.visibilityState==='visible')refresh();},30000);
     window.addEventListener('uorqui:activity-update',refresh);
     window.addEventListener('uorqui:mail-unread-refresh',refresh);
+    window.addEventListener('uorqui:mail-unread-delta',refresh);
     window.addEventListener('focus',refresh);
     return()=>{alive=false;window.clearInterval(interval);
       window.removeEventListener('uorqui:activity-update',refresh);
       window.removeEventListener('uorqui:mail-unread-refresh',refresh);
+      window.removeEventListener('uorqui:mail-unread-delta',refresh);
       window.removeEventListener('focus',refresh);
     };
   },[accountId]);
