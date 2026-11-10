@@ -30,6 +30,7 @@ import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 import { ChannelScrollBehavior } from './channelScrollBehavior';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
+import { buildMeetingLink } from './meetingLink';
 
 /** Shared authorized avatar cache prevents repeated R2 downloads between
  * the community directory, channel header and the workspace icon rail. */
@@ -63,7 +64,7 @@ function mayInviteRestricted(community:Community){return community.myRole==='own
 
 export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileOpenChange,onRestoreNavigation,initialCommunityId,requestedDestination,unreadChannels,unreadCommunities,unreadLocations,active}:{
   myId:string;myName:string;myHandle:string;myAvatar:string|null;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
-  requestedDestination?:{communityId:string;channelId:string|null;nonce:number}|null;
+  requestedDestination?:{communityId:string;channelId:string|null;meeting?:boolean;nonce:number}|null;
   unreadChannels:Record<string,number>;unreadCommunities:Record<string,number>;unreadLocations:UnreadLocation[];active:boolean;
 }){
   const {locale}=useUorquiPreferences(),pt=locale==='pt-BR';
@@ -76,6 +77,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [detail,setDetail]=useState<Detail|null>(null);
   const [channelId,setChannelId]=useState<string|null>(null);
   const requestedChannel=useRef<{communityId:string;channelId:string}|null>(null);
+  const requestedMeeting=useRef<{communityId:string;channelId:string}|null>(null);
   const externalSelection=useRef(false);
   const [channelOpen,setChannelOpen]=useState(false);
   // On desktop the first text channel is rendered even if the mobile
@@ -122,6 +124,9 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [createDescription,setCreateDescription]=useState('');
   const [createVisibility,setCreateVisibility]=useState<Visibility>('public');
   const [channelInviteOpen,setChannelInviteOpen]=useState(false);
+  const [meetingShare,setMeetingShare]=useState<{url:string;name:string}|null>(null);
+  const [meetingShareCopied,setMeetingShareCopied]=useState(false);
+  const [meetingShareError,setMeetingShareError]=useState('');
   const [channelInviteLink,setChannelInviteLink]=useState('');
   const [channelInviteToken,setChannelInviteToken]=useState<string|null>(null);
   const [channelInviteHandle,setChannelInviteHandle]=useState('');
@@ -315,12 +320,13 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   // view; opening a voice room never starts a WebRTC session automatically.
   useEffect(()=>{
     const navigate=(event:Event)=>{
-      const target=(event as CustomEvent<{communityId?:string;channelId?:string}>).detail;
+      const target=(event as CustomEvent<{communityId?:string;channelId?:string;meeting?:boolean}>).detail;
       if(!target||typeof target.communityId!=='string'||!/^[0-9a-f-]{36}$/i.test(target.communityId))return;
       const selectedChannel=typeof target.channelId==='string'&&/^[0-9a-f-]{36}$/i.test(target.channelId)
         ?target.channelId:null;
       externalSelection.current=true;
       requestedChannel.current=selectedChannel?{communityId:target.communityId,channelId:selectedChannel}:null;
+      requestedMeeting.current=target.meeting&&selectedChannel?{communityId:target.communityId,channelId:selectedChannel}:null;
       setSelectedId(target.communityId);
       setCreateOpen(false);setError('');setNotice('');
       setChannelOpen(Boolean(selectedChannel));
@@ -340,10 +346,29 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     if(!requestedDestination||lastDestinationNonce.current===requestedDestination.nonce)return;
     lastDestinationNonce.current=requestedDestination.nonce;
     window.dispatchEvent(new CustomEvent('uorqui:open-community',{
-      detail:{communityId:requestedDestination.communityId,channelId:requestedDestination.channelId}
+      detail:{communityId:requestedDestination.communityId,channelId:requestedDestination.channelId,meeting:requestedDestination.meeting}
     }));
   },[requestedDestination]);
 
+  // Wait for a verified channel list before opening the WebRTC meeting view.
+  // A meeting link never bypasses membership, channel ACL or password checks.
+  useEffect(()=>{
+    const target=requestedMeeting.current;
+    if(!target||selectedId!==target.communityId||detail?.community.id!==target.communityId)return;
+    requestedMeeting.current=null;
+    const channel=detail.channels.find(ch=>ch.id===target.channelId&&ch.kind==='meeting');
+    if(!channel||!detail.community.myRole){
+      setNotice(pt?'Você precisa de autorização para acessar esta reunião.':'You need permission to access this meeting.');
+      return;
+    }
+    setChannelId(channel.id);setChannelOpen(true);
+    if(channel.hasPassword&&!channel.unlocked){
+      setNotice(pt?'Desbloqueie o canal para acessar a reunião.':'Unlock the channel to access the meeting.');
+      return;
+    }
+    openVoiceRoom({communityId:target.communityId,channelId:channel.id,
+      communityName:detail.community.name,channelName:channel.name,kind:'meeting'});
+  },[detail,selectedId,pt]);
   useEffect(()=>onMobileOpenChange?.(channelOpen),[channelOpen,onMobileOpenChange]);
   useEffect(()=>{
     window.dispatchEvent(new CustomEvent('uorqui:community-selected',{detail:{id:selectedId}}));
@@ -1385,7 +1410,12 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
         <CommunityVoiceRoom key={activeVoiceRoom.communityId+'/'+activeVoiceRoom.channelId}
           {...activeVoiceRoom} mode={voiceInline?'expanded':'floating'}
           onParticipantsChange={setVoiceParticipants} onPhaseChange={setVoicePhase}
-          onInvite={()=>void openChannelInvite()}
+          onShareMeeting={()=>{
+             const room=activeVoiceRoom;
+             if(!room||room.kind!=='meeting')return;
+             setMeetingShare({url:buildMeetingLink(window.location.origin,room.communityId,room.channelId),name:room.channelName});
+             setMeetingShareCopied(false);setMeetingShareError('');
+           }}
           onMinimize={()=>{
             if(voicePhase==='joined')closeChannel();
             else{setActiveVoiceRoom(null);setVoiceMinimized(true);}
@@ -1422,8 +1452,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
               'Um único convite leva ao canal escolhido e também permite entrar na comunidade.':
               'One invitation opens this channel and also grants community membership.'}</p>
             {activeChannel?.kind==='meeting'&&<p className="text-xs text-muted-foreground">{pt?
-              'Este é também o link da reunião. Se a sala exigir aprovação, o convidado ainda precisará ser aprovado.':
-              'This is also the meeting link. Approval is still required when enabled.'}</p>}
+              'O convite concede acesso ao canal. O link reutilizável da reunião fica disponível dentro da sala e não concede autorização.':
+              'This invitation grants channel access. The reusable meeting link is available inside the meeting room and grants no permissions.'}</p>}
             {activeChannel?.accessMode==='restricted'&&<p className="text-xs text-muted-foreground">{pt?
               'Link exclusivo: expira em 24 horas, funciona uma vez e concede acesso ao canal após o aceite. Somente dono, admin ou moderador autorizado pode gerar.':
               'Single-use link: expires in 24 hours and grants channel access after acceptance. Only the owner, admin, or an authorized moderator can create one.'}</p>}
