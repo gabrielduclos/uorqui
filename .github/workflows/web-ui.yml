@@ -24,6 +24,8 @@ jobs:
           node-version: '22'
       - name: Install workspaces
         run: npm install --include=dev --no-audit --no-fund
+      - name: Test first-and-last name presentation
+        run: npm run test:names -w @uorqui/web
       - name: Test active instance identity and reload handover
         run: npm run test:instance -w @uorqui/web
       - name: Test community channel opening and scroll control
