@@ -25,6 +25,8 @@
       "/%40*",
       "/auth/email-verification",
       "/auth/email-verification/",
+      "/channel-invite",
+      "/channel-invite/",
       "/media/profile/*",
       "/media/community/*",
       "/media/community-attachment/*",
