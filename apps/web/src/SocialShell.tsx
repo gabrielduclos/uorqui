@@ -764,7 +764,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
                 initialCommunityId={invitedCommunityId} requestedDestination={requestedCommunity}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
-                unreadLocations={communityUnread.locations}/>
+               />
             </motion.div>
             {area!=='communities'&&<motion.div key={area} data-uorqui-motion-panel initial={{opacity:0,x:navDirection*14}} animate={{opacity:1,x:0}}
               transition={WORKSPACE_PAGE_MOTION} className="h-full min-h-0 overflow-hidden">
