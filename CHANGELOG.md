@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.35] — 2026-11-10
+
+- **429/client IP audit:** the Worker → Render → Better Auth chain previously relied on an unverified `CF-Connecting-IP` header. Fastify's transport IP may identify the Render proxy, not the visitor. Actual live IP distribution cannot be confirmed without Render logs.
+- **Verified visitor address:** the Worker now signs Cloudflare's incoming visitor IP with HMAC-SHA256 using the already shared `DM_ATTACHMENT_PROOF_SECRET`, binding the signature to the method, URL pathname and timestamp. Render validates the signature within a 120-second window, rejects injected headers, and passes only a server-created IP header into Better Auth. Direct Render traffic falls back to its transport IP.
+- **Shared office networks:** the read-only `/get-session` path supports 240 requests per minute per public IP, while the default 60/min and stricter sign-in/registration rules remain enforced. Different users behind the same NAT can still legitimately have the same public address.
+- **Private diagnostics:** auth responses include `x-uorqui-ip-source` (`verified-cloudflare`, `transport`, `unavailable`). Better Auth 429 responses include `x-uorqui-rate-limit-scope: better-auth`; the Worker retains `x-uorqui-upstream-429: 1`. Error logs use only an abbreviated, pseudonymous HMAC key, never the raw visitor IP.
+- **Tests/deployment:** cross-runtime regression coverage for separate clients, IPv6, forged headers, expired signatures and mismatched paths/methods. No database migration. **Verify `verified-cloudflare` in response headers after both frontend Worker and API are deployed.**
+
 ## [0.1.0-beta.34] — 2026-11-10
 
 - **Reusable meeting link, distinct from channel invitation:** the meeting screen now shares a stable `/?community=<id>&channel=<id>&meeting=1` URL. It may be used by any number of already-authorized channel members; it never consumes or issues a channel-invite token, enrolls a user or grants channel permission. Login, membership, private-channel ACL/password and meeting approval remain server enforced. Opening a link displays the meeting room without automatically enabling microphone or camera.
