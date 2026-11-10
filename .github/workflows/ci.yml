@@ -41,6 +41,8 @@ jobs:
         run: npm run test:visitor-ip -w @uorqui/web
       - name: Test serialized bootstrap and public probe caching
         run: npm run test:bootstrap -w @uorqui/web
+      - name: Test deduplicated account lookups and session metrics
+        run: npm run test:account-probe -w @uorqui/web
       - name: Test restricted-channel invite flow and General default scroll
         run: npm run test:restricted-invites -w @uorqui/web
       - name: Test reusable meeting links and one-hour countdown
