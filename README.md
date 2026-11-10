@@ -4,10 +4,15 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.31` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.32` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Beta.32 changes
+
+- **Cloudflare Free API protection:** a live edge rate limit of 120 requests per 10 seconds per IP and colo, with a 10-second block. SSE transport and health endpoints are excluded, as is public status.
+- **Documented infrastructure:** rule parameters and rollback are described in [Cloudflare rate limiting](docs/en/cloudflare-rate-limiting.md). This protects against bursts but does not fix Render quota exhaustion.
 
 ## Beta.31 changes
 
