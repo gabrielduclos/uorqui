@@ -5,6 +5,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { eq } from 'drizzle-orm';
 import { getAuth } from './auth/auth.js';
 import { resolveVisitorIp, visitorIpLogKey } from './auth/verified-client-ip.js';
+import { AccountProbeMeter } from './auth/account-probe-metrics.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
 import { isDevelopmentSignupEnabled, isPublicSignupEnabled, isRegistrationAvailable, verifyRegistrationChallenge } from './auth/registration.js';
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
@@ -42,6 +43,16 @@ const app = Fastify({
   },
   bodyLimit: 64 * 1024,
 });
+
+// One aggregate, privacy-safe log record per minute, only when there are
+// actual /api/v1/me calls. Avoid logging account IDs, raw IPs or cookies.
+const accountProbeMeter = new AccountProbeMeter(process.env.AUTH_SECRET);
+const accountProbeTimer = setInterval(() => {
+  const summary = accountProbeMeter.drain();
+  if (summary) app.log.info({ accountProbes: summary }, 'Account probe volume');
+}, 60_000);
+accountProbeTimer.unref();
+app.addHook('onClose', async () => { clearInterval(accountProbeTimer); });
 
 await app.register(cors, {
   origin: allowedWebOrigins(),
@@ -239,6 +250,7 @@ async function readSession(request: { headers: Record<string, unknown> }) {
 app.get('/api/v1/me', async (request, reply) => {
   try {
     const session = await readSession(request);
+    accountProbeMeter.record(session?.user.id ?? null);
     if (!session) return reply.status(401).send({ error: 'Unauthorized' });
 
     const existing = await createDatabase()
