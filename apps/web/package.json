@@ -14,6 +14,7 @@
     "test:image": "node --import tsx --test test/image-compression.test.mjs",
     "test:notifications": "node --test test/notification-channel-regression.test.mjs",
     "test:rate-limit": "node --import tsx --test test/rate-limit-backoff.test.mjs",
+    "test:visitor-ip": "node --import tsx --test test/visitor-ip-proof.test.mjs",
     "test:bootstrap": "node --test test/api-bootstrap-load.test.mjs",
     "test:restricted-invites": "node --test test/restricted-invite-flow.test.mjs",
     "test:meeting": "node --import tsx --test test/meeting-links-and-timer.test.mjs",
