@@ -8,6 +8,8 @@ All subsequent changes must increase the version in all three npm manifests and 
 
 ## [0.1.0-beta.30] — 2026-11-10
 
+- **Optimistic channel profile picture:** pending channel messages immediately show the authenticated sender's name, @handle and avatar, including file attachments.
+- **Unread-only email notifications:** the All and Email tabs hide read mail alerts. Marking mail read or moving it reconciles the persistent database event, and periodic mailbox polling reconciles recent external provider reads. New notifications/push are generated only for unread messages; API and frontend regression checks added.
 - **One notification bell count:** aggregates unread direct messages, channel messages, community invitations, activity notifications and unread mail across connected accounts. The existing PWA app icon badge uses the same total when the platform supports native badging; the header badge displays `99+` above 99.
 - **Photo compression before chat upload:** photos chosen from Gallery, Camera or pasted into the composer are processed on-device using a shared helper. JPEG/WebP/decodable HEIC photos are downscaled to a 2048 px maximum edge and saved as WebP quality 85% only if the converted file saves at least 10%; unsupported encoders and failures keep the original. GIFs, PNG screenshots and images sent via File remain untouched.
 - **Safe sending:** the sender sees progress and may cancel before upload; compressed MIME type and filename are passed through existing DM and community attachment endpoints, without changing server contracts or offline DM outbox retries.
