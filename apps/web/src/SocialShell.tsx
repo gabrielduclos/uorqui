@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
@@ -487,7 +488,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
     const first=activity.items.find(item=>!item.readAt&&!known.has(item.id));
     if(first)showNotice('activity:'+first.id,
       locale==='pt-BR'?'Nova notificação':'New notification',
-      first.actorName+' · '+(first.kind==='friend_request'?
+      compactUserName(first.actorName)+' · '+(first.kind==='friend_request'?
         (locale==='pt-BR'?'solicitação de contato':'contact request'):
         first.kind==='friend_accepted'?(locale==='pt-BR'?'contato aceito':'contact accepted'):
         (locale==='pt-BR'?'atividade na comunidade':'community activity')),
@@ -624,8 +625,8 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
         <div className="flex shrink-0 flex-col px-3 pb-3 pt-2">
           <button type="button" onClick={()=>move('profile')} title={sidebarCollapsed?t('Abrir meu perfil'):undefined}
             aria-label={t('Abrir meu perfil')} className={cn('flex w-full min-w-0 items-center rounded-md py-1.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring',sidebarCollapsed?'justify-center px-0':'gap-2 px-2')}>
-            <ProfileAvatar name={account.profile?.displayName??account.user.name} image={account.profile?.avatarUrl} className="size-7"/>
-            {!sidebarCollapsed&&<span className="min-w-0"><span className="block truncate text-[12px] font-semibold">{account.profile?.displayName??account.user.name}</span><span className="block truncate text-[11px] text-muted-foreground">{account.profile?'@'+account.profile.handle:t('Conta Uorqui')}</span></span>}
+            <ProfileAvatar name={compactUserName(account.profile?.displayName??account.user.name)} image={account.profile?.avatarUrl} className="size-7"/>
+            {!sidebarCollapsed&&<span className="min-w-0"><span className="block truncate text-[12px] font-semibold">{compactUserName(account.profile?.displayName??account.user.name)}</span><span className="block truncate text-[11px] text-muted-foreground">{account.profile?'@'+account.profile.handle:t('Conta Uorqui')}</span></span>}
           </button>
         </div>
       </aside>
@@ -678,8 +679,8 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
             <button type="button" onClick={()=>move('profile')}
               className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-accent"
               aria-label={t('Abrir meu perfil')}>
-              <ProfileAvatar name={account.profile?.displayName??account.user.name} image={account.profile?.avatarUrl} className="size-8"/>
-              <span className="min-w-0"><span className="block truncate text-[13px] font-semibold">{account.profile?.displayName??account.user.name}</span>
+              <ProfileAvatar name={compactUserName(account.profile?.displayName??account.user.name)} image={account.profile?.avatarUrl} className="size-8"/>
+              <span className="min-w-0"><span className="block truncate text-[13px] font-semibold">{compactUserName(account.profile?.displayName??account.user.name)}</span>
                 <span className="block truncate text-xs text-muted-foreground">{account.profile?'@'+account.profile.handle:t('Conta Uorqui')}</span></span>
             </button>
           </div>
