@@ -551,11 +551,41 @@ export default {
 
     const upstream = new URL(current.pathname + current.search, origin);
     try {
+      // These two endpoints are public and identical for all users. A short
+      // edge cache prevents every login screen from hitting Render and Neon.
+      // Never cache /api/v1/me or any personal, authenticated or error response.
+      const publicProbe = request.method === 'GET' && !current.search &&
+        (current.pathname === '/api/v1/status' || current.pathname === '/health/ready');
+      const edgeCache = publicProbe
+        ? (globalThis.caches as CacheStorage & { default?: Cache }).default : undefined;
+      const cacheKey = publicProbe
+        ? new Request(current.origin + current.pathname, { method: 'GET' }) : undefined;
+      if (edgeCache && cacheKey) {
+        const hit = await edgeCache.match(cacheKey).catch(() => undefined);
+        if (hit) {
+          const headers = new Headers(hit.headers);
+          headers.set('cache-control', 'no-store');
+          headers.set('x-uorqui-probe-cache', 'HIT');
+          return new Response(hit.body, {status:hit.status,headers});
+        }
+      }
       const forwarded = new Request(upstream.toString(), request);
       forwarded.headers.delete('host');
       const response = await fetch(forwarded, { redirect: 'manual' });
+      if (publicProbe && response.ok && !response.headers.has('set-cookie') && edgeCache && cacheKey) {
+        const cached = response.clone();
+        const storeHeaders = new Headers(cached.headers);
+        storeHeaders.set('cache-control','public, max-age=15');
+        await edgeCache.put(cacheKey, new Response(cached.body, {
+          status:cached.status,headers:storeHeaders,
+        })).catch(() => {});
+      }
       const headers = new Headers(response.headers);
       headers.set('cache-control', 'no-store');
+      if (publicProbe) headers.set('x-uorqui-probe-cache', 'MISS');
+      // If this header is present on a 429 in DevTools, the block was returned
+      // by the upstream API/provider rather than produced by this Worker.
+      if (response.status === 429) headers.set('x-uorqui-upstream-429','1');
       return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     } catch { return jsonError(502, 'API unavailable'); }
   },
