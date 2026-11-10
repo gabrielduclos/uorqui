@@ -1,39 +1,43 @@
-# Rate limiting do Uorqui na Cloudflare
+# Registro de rate limit da Cloudflare — Uorqui
 
-**Ativo em produção em 10/11/2026** no domínio `uorqui.app`, plano **Free**.
+[Português](cloudflare-rate-limiting.md) · [English](../en/cloudflare-rate-limiting.md)
 
-## Regra ativa
+**Situação atual (verificada em 10/11/2026): DESATIVADO.** Não há regra personalizada ativa na fase `http_ratelimit` da zona `uorqui.app`. É uma configuração feita pelo painel/API da Cloudflare, **não** uma opção ativada pelo deploy do Git.
+
+## Regra histórica (preservada, sem execução)
 
 | Configuração | Valor |
 | --- | --- |
 | Nome | Uorqui API — limite por IP |
 | Fase | `http_ratelimit` |
-| Ação | `block`, resposta padrão HTTP 429 |
-| Limiar | 120 requisições por IP em 10 segundos |
-| Duração da mitigação | 10 segundos |
-| Características | `cf.colo.id` e `ip.src` |
-| Cloudflare Ruleset ID | `4140c7da5580456aa1d69c48c18b638d` |
+| **Ativa** | **Não (desativada em 10/11/2026)** |
+| Ação anterior | Bloqueio com HTTP 429 |
+| Limiar anterior | 120 requisições / 10 segundos por IP público e colo da Cloudflare |
+| Bloqueio anterior | 10 segundos |
+| Ruleset ID | `4140c7da5580456aa1d69c48c18b638d` |
 | Rule ID | `5d2e82e42e424683949333278747eb8e` |
-| Referência | `uorqui_api_per_ip_burst_limit_v1` |
 
-Expressão (Cloudflare Rules language):
+Expressão histórica:
 
 ```text
 (starts_with(http.request.uri.path, "/api/") and http.request.uri.path ne "/api/v1/status" and http.request.uri.path ne "/api/v1/dm/events" and http.request.uri.path ne "/api/v1/communities/events")
 ```
 
-Aplica-se às chamadas `/api/*`, incluindo autenticação, e-mail e comandos de mensagens. Exclui propositalmente os fluxos SSE de mensagens privadas e comunidades e a rota pública de status. As rotas `/health` e `/health/*` também ficam fora do limite, pois não correspondem a `/api/*`.
+A regra foi **criada depois dos primeiros erros 429**, então não explica as ocorrências iniciais. Entretanto, a contagem por IP poderia bloquear usuários legítimos com o mesmo Wi-Fi/IP público (NAT). Ela foi desativada para diagnóstico controlado, **não** por dispensar proteção contra abuso.
 
-O limite é avaliado **por endereço IP e ponto de presença da Cloudflare**, não é uma cota global exata. Redes corporativas com IP compartilhado podem atingir o limite mais facilmente. A Cloudflare Free permite uma única regra de rate limiting e a janela de 10 segundos, com bloqueio de 10 segundos. Não foram removidas proteções existentes nem alteradas regras gerenciadas.
+## Proteções que permanecem
 
-## Operação e diagnóstico
+- As proteções contra DDoS e as regras gerenciadas de segurança da Cloudflare não foram alteradas.
+- Os controles de autenticação do Fastify/Better Auth e limites próprios da aplicação continuam aplicáveis, inclusive com possibilidade de HTTP 429.
+- O Render também pode impor limites de tráfego; **nem todo HTTP 429 vem da Cloudflare**.
 
-1. Abra **Cloudflare → uorqui.app → Security → Security rules → Rate limiting rules** para conferir os bloqueios e ajustar a regra.
-2. Investigue primeiro se um HTTP 429 veio da origem ou da borda: `x-uorqui-upstream-429: 1` indica uma resposta 429 **repassada pelo Worker** da API de origem. Se o header não estiver presente, examine os eventos de segurança do Cloudflare antes de concluir a causa.
-3. A regra reduz tráfego anormal encaminhado ao Render, mas **não elimina um 429 causado por cotas de tráfego, serviços indisponíveis ou limites impostos pelo Render**. Nesses casos, verificar o serviço de API e suas métricas.
-4. Se usuários legítimos forem afetados, ajuste o limiar monitorando o tráfego real ou desative apenas esta regra no painel. Não desative globalmente WAF, proteção DDoS ou autenticação.
-5. Os endpoints de mídia podem aumentar a quantidade de solicitações por IP; monitore envios em lote e organizações que compartilham IP. Teste login, chats, comunidades, emails e SSE após alterações.
+## Como investigar um novo HTTP 429
 
-**Versão documental:** `0.1.0-beta.32`. A configuração é um recurso **remoto, aplicado diretamente na Cloudflare**; fazer rollback de um commit Git não desfaz a regra. Consulte também [Notas de versão](../../CHANGELOG.pt-BR.md).
+1. Execute `window.__uorquiRateLimitDiagnostics()` e `window.__uorquiAuthDiagnostics()` (beta.36) para consultar dados sanitizados da aba atual.
+2. `x-uorqui-upstream-429: 1` significa que o Worker repassou um erro da origem/API; a ausência **não prova** bloqueio da Cloudflare.
+3. Confira Security Events na Cloudflare, logs do Render, `x-uorqui-rate-limit-scope` quando houver e o comportamento do Better Auth. Correlacione horário e rota; IP compartilhado não é sinônimo de um usuário.
+4. Se um novo limite na borda for necessário, aplique-o primeiro a rotas sensíveis e teste vários usuários no mesmo IP público, em vez de reativar automaticamente a regra global anterior.
 
-Referência: [Rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/).
+**Atenção:** reverter um commit do Git **não** altera essa configuração remota da Cloudflare. Verifique no painel antes de declarar que a regra está ativa ou não. Veja [notas de versão](../../CHANGELOG.pt-BR.md) e [estudo de caso](portfolio.md).
+
+[Documentação de rate limit da Cloudflare](https://developers.cloudflare.com/waf/rate-limiting-rules/).
