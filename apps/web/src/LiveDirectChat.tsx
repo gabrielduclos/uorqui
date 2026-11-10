@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { directApiRequest as api } from './lib/apiClient';
 import { Spinner } from '@/components/ui/spinner';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
@@ -1046,8 +1047,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           <p className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{pt ? 'Pessoas' : 'People'} {searching ? '…' : ''}</p>
           {people.map(person => <button type="button" key={person.handle} disabled={busy} onClick={() => void startPerson(person.handle)}
             className="flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out md:hover:bg-accent max-md:active:scale-[0.985] max-md:active:bg-primary/15 max-md:active:shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none">
-            <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.displayName}</span>
+            <UserAvatar name={compactUserName(person.displayName)} image={person.avatarUrl} size="sm"/>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{compactUserName(person.displayName)}</span>
               <span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
             <UserPlus className="size-4 shrink-0 text-muted-foreground"/>
           </button>)}
@@ -1057,9 +1058,9 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             index<visibleThreads.length-1 && "after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0 after:h-px after:bg-border/50",
             activeId === thread.id && mobileOpened && 'bg-secondary')}
           aria-current={activeId === thread.id && mobileOpened ? 'true' : undefined}>
-          <UserAvatar name={thread.peerName} image={thread.peerAvatarUrl} size="sm"/>
+          <UserAvatar name={compactUserName(thread.peerName)} image={thread.peerAvatarUrl} size="sm"/>
           <span className="min-w-0 flex-1">
-            <span className="flex items-center justify-between gap-2"><span className={cn('truncate text-sm font-semibold', thread.unreadCount > 0 && 'font-bold')}>{thread.peerName}</span>
+            <span className="flex items-center justify-between gap-2"><span className={cn('truncate text-sm font-semibold', thread.unreadCount > 0 && 'font-bold')}>{compactUserName(thread.peerName)}</span>
               <time className="shrink-0 text-[10px] text-muted-foreground">{formatMessageTimestamp(thread.lastReactionAt && (!thread.lastAt || thread.lastReactionAt > thread.lastAt) ? thread.lastReactionAt : thread.lastAt, locale, todayKey)}</time></span>
             <span className="mt-1 flex items-center justify-between gap-2">
               <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', thread.unreadCount > 0 && 'font-medium text-foreground/75')}>
@@ -1067,13 +1068,13 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                 {thread.lastReactionEmoji && thread.lastReactionAt && (!thread.lastAt || thread.lastReactionAt > thread.lastAt)
                   ? (thread.lastReactionAuthorId === myId
                       ? (pt ? 'Você reagiu ' + thread.lastReactionEmoji + ' à mensagem' : 'You reacted ' + thread.lastReactionEmoji + ' to a message')
-                      : (pt ? thread.peerName + ' reagiu ' + thread.lastReactionEmoji + ' à sua mensagem' : thread.peerName + ' reacted ' + thread.lastReactionEmoji + ' to your message'))
+                      : (pt ? compactUserName(thread.peerName) + ' reagiu ' + thread.lastReactionEmoji + ' à sua mensagem' : compactUserName(thread.peerName) + ' reacted ' + thread.lastReactionEmoji + ' to your message'))
                   : thread.lastDeleted ? (pt ? 'Mensagem excluída' : 'Deleted message')
                   : (thread.lastBody || thread.lastAttachmentType)
                     ? (thread.lastReplyToId
                         ? (thread.lastAuthorId === myId
                           ? (pt ? 'Você respondeu: ' : 'You replied: ')
-                          : (pt ? thread.peerName + ' respondeu: ' : thread.peerName + ' replied: '))
+                          : (pt ? compactUserName(thread.peerName) + ' respondeu: ' : compactUserName(thread.peerName) + ' replied: '))
                         : (thread.lastAuthorId === myId ? (pt ? 'Você: ' : 'You: ') : ''))
                       + (isCommunityGifUrl(thread.lastBody)?'GIF':(thread.lastBody || attachmentLabel(thread.lastAttachmentType,locale)))
                     : '@' + thread.peerHandle}
@@ -1104,8 +1105,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           </button>
           <a href={'/@' + active.peerHandle} onClick={event => navigateToPublicProfile(event, active.peerHandle)}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-left hover:bg-accent/50">
-            <UserAvatar name={active.peerName} image={active.peerAvatarUrl} size="sm"/>
-            <span className="min-w-0"><span className="block truncate text-sm font-semibold">{active.peerName}</span>
+            <UserAvatar name={compactUserName(active.peerName)} image={active.peerAvatarUrl} size="sm"/>
+            <span className="min-w-0"><span className="block truncate text-sm font-semibold">{compactUserName(active.peerName)}</span>
               <span className="block truncate text-xs text-muted-foreground">@{active.peerHandle}</span></span>
           </a>
           <Button type="button" variant="ghost" size="icon"
@@ -1159,7 +1160,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
               onClick={()=>void togglePinned(null)}><PinOff className="size-4"/></Button>
           </div>}
           {galleryOpen&&<ConversationAttachmentsPanel conversationId={active.id} locale={locale}
-            peerName={active.peerName} onClose={()=>setGalleryOpen(false)}
+            peerName={compactUserName(active.peerName)} onClose={()=>setGalleryOpen(false)}
             onJump={id=>{setGalleryOpen(false);void jumpToRepliedMessage(id);}}/>}
           <div ref={scrollBox} onScroll={onMessagesScroll}
             data-testid="messages-scroll" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
@@ -1172,7 +1173,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message} todayKey={todayKey}
                     onOpenMedia={setMediaViewerId}
-                    mine={message.authorId === myId} locale={locale} myId={myId} peerName={active.peerName} onReply={respond}
+                    mine={message.authorId === myId} locale={locale} myId={myId} peerName={compactUserName(active.peerName)} onReply={respond}
                     onJumpToReply={id => void jumpToRepliedMessage(id)} highlighted={highlightId === message.id}
                     isPinned={pinnedMessage?.id===message.id}
                     onPin={pinBusy?undefined:target=>void togglePinned(pinnedMessage?.id===target.id?null:target)}
@@ -1216,7 +1217,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
               className="grid size-9 place-items-center hover:bg-accent"><X className="size-4"/></button>
           </div>}
           {replySource && !editing && <ReplyComposerPreview
-            author={replySource.authorId === myId ? (pt ? 'Você' : 'You') : active.peerName}
+            author={replySource.authorId === myId ? (pt ? 'Você' : 'You') : compactUserName(active.peerName)}
             body={replySource.body || replySource.attachment?.name} locale={locale}
             onCancel={() => setReplySource(null)}/>}
           {active.canMessage && gifPickerOpen && <CommunityMediaPicker tab="gif" pt={pt}
@@ -1286,7 +1287,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left"
         onClick={() => { openThread(incoming.id); setIncoming(null); }}>
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/15 font-bold text-primary">U</span>
-        <span className="min-w-0"><strong className="block truncate text-xs">{incoming.name}</strong>
+        <span className="min-w-0"><strong className="block truncate text-xs">{compactUserName(incoming.name)}</strong>
           <small className="block truncate text-xs text-muted-foreground">{incoming.preview}</small></span>
       </button>
       <button type="button" onClick={() => setIncoming(null)}
