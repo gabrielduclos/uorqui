@@ -12,6 +12,7 @@
     "test:channel-theme": "node --test test/channel-nav-theme.test.mjs",
     "test:message-time": "node --import tsx --test test/message-timestamp.test.mjs",
     "test:image": "node --import tsx --test test/image-compression.test.mjs",
+    "test:notifications": "node --test test/notification-channel-regression.test.mjs",
     "preview": "vite preview",
     "check:worker": "wrangler deploy --dry-run",
     "preview:worker": "npm run build && wrangler dev",
