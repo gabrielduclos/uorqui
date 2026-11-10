@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.30] — 10/11/2026
+
+- **Contador unificado no sino:** soma mensagens privadas não lidas, mensagens de canais, convites de comunidades, notificações de atividade e e-mails não lidos das contas conectadas. O badge do ícone PWA utiliza a mesma soma nos navegadores que permitem; o cabeçalho mostra `99+` acima de 99.
+- **Compactação de fotos antes do envio:** imagens de Galeria, Câmera ou coladas no compositor utilizam processamento local compartilhado. Fotos JPEG/WebP/HEIC decodificáveis são redimensionadas até 2048 px no maior lado e convertidas em WebP com qualidade 85%, somente com economia mínima de 10%. GIFs, capturas PNG e imagens enviadas pela opção Arquivo preservam o original.
+- **Envio seguro:** progresso e cancelamento antes do upload; nomes, tipos de arquivo, fila offline e endpoints atuais de chat privado/canais preservados. Navegadores sem conversão compatível enviam o original.
+- **Validação:** testes de conversão, preservação, fallback e cancelamento; CI passa a checar tipos e build do frontend. Sem migração no banco. Validação em câmera mobile/PWA instalado ainda pendente.
+
 ## [0.1.0-beta.29] — 09/11/2026
 
 - **Data e hora nas mensagens ao virar o dia:** mensagens de **hoje**, conforme o calendário local do dispositivo, exibem somente a hora (ex.: `18:40`). Mensagens de dias anteriores exibem **data + hora** (ex.: `08/11 18:40`); mensagens de outro ano também apresentam o ano. O horário original permanece salvo no atributo HTML `datetime`.
