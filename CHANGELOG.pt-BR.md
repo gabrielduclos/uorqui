@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.38] — 10/11/2026
+
+- **Equilíbrio entre produto e portfólio:** READMEs em português e inglês reorganizados como apresentação do produto, com recursos, jornada de uso, arquitetura, execução local, situação operacional e link específico para o portfólio, sem colocar a narrativa de currículo em primeiro plano.
+- **Navegação da documentação:** novos índices em português/inglês organizam módulos do produto, desenvolvimento, segurança/operação, versões e estudo de caso separado. Há caminhos distintos para usuários, colaboradores, operações e recrutadores.
+- **Portfólio preservado e sem repetição:** o estudo de caso técnico anterior continua disponível com evidências, compromissos de engenharia e transparência sobre ferramentas de IA. O README passa a priorizar o Uorqui como produto.
+- **Coerência de versões:** atualização dos três manifestos npm e referências da versão atual nos guias principais e estudo de caso.
+- **Impacto:** somente documentação e metadados de versão; nenhum comportamento de execução, banco, API, autorização, Cloudflare ou deploy alterado. Revisar links e navegação nos dois idiomas; validações reais continuam pendentes.
+
 ## [0.1.0-beta.37] — 10/11/2026
 
 - **Documentação voltada ao portfólio:** READMEs em português e inglês reorganizados para apresentar problema, recursos atuais, arquitetura, evidências e limites do beta; detalhes técnicos aprofundados em um novo [estudo de caso bilíngue](docs/pt-BR/portfolio.md).
