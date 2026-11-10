@@ -4,10 +4,15 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.31` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.32` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Novidades do beta.32
+
+- **Proteção de API pela Cloudflare Free:** rate limiting ativo de 120 requisições por 10 segundos por IP (e localidade de borda), com bloqueio de 10 segundos. Rotas SSE e de saúde não são afetadas; o status público também é isento.
+- **Infraestrutura documentada:** detalhes da regra e sua reversão em [Cloudflare rate limiting](docs/pt-BR/cloudflare-rate-limiting.md). Este bloqueio de rajadas não resolve cotas esgotadas ou falhas do Render.
 
 ## Novidades do beta.31
 
