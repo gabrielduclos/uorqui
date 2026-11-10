@@ -1,6 +1,6 @@
 # Salas de voz e reuniões com áudio e vídeo
 
-Atualizado em **06/11/2026** para o beta técnico `0.1.0-beta.2`.
+Atualizado em **10/11/2026** para o beta técnico `0.1.0-beta.37`.
 
 O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O usuário entra na chamada explicitamente; abrir a sala não ativa câmera ou microfone automaticamente.
 
@@ -13,7 +13,7 @@ O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O 
 - É possível **fixar outra câmera** manualmente, navegar pelas miniaturas e voltar ao destaque automático. A apresentação de tela pode ocupar a imagem principal.
 - O botão **Compartilhar tela** está disponível nas salas de voz e nas reuniões: usa `getDisplayMedia` e permite exibir a tela e a câmera simultaneamente. O botão fica indisponível quando o navegador não oferece essa API; em celulares e PWAs, a captura varia conforme o sistema e navegador.
 - Os controles de microfone, câmera, apresentação, encerramento e saída da tela cheia continuam acessíveis na visualização ampliada.
-- O botão **Convidar** da sala de reunião e o botão do cabeçalho do canal abrem o **mesmo modal de convite**. Um link temporário inclui entrada na comunidade e acesso direto ao canal/reunião, por cópia ou chat 1:1. Entrada na reunião e permissões continuam obrigatórias.
+- **Link de reunião e convite do canal são coisas diferentes.** O link da reunião pode ser reutilizado por pessoas já autorizadas no canal, mas **não** concede participação na comunidade nem acesso ao canal. O convite para canal fechado tem token separado, de uso único, duração limitada e confirmação explícita; é possível compartilhá-lo por chat individual.
 
 ## Aprovação e segurança
 
@@ -33,7 +33,7 @@ O Uorqui oferece canais de **texto**, **voz** e **reunião** nas comunidades. O 
 
 ## Arquitetura e limites
 
-- WebRTC usa uma malha **P2P de até seis pessoas** com sinalização na API Fastify e sessões persistidas em Neon PostgreSQL; não há gravação da reunião pela aplicação.
+- WebRTC usa uma malha **P2P de até seis pessoas** com sinalização na API Fastify e sessões persistidas em Neon PostgreSQL. **Cada sessão de reunião dura no máximo 60 minutos**, com prazo definido pelo servidor e cronômetro regressivo para os participantes; quando acaba, a conexão é encerrada. É um limite **por sessão**, não uma cota diária por comunidade. A aplicação não grava a reunião.
 - O compartilhamento de tela e o vídeo dependem de suporte e permissões do navegador. TURN, redes distintas, iOS/Android e PWA instalado **ainda exigem testes práticos**.
-- As migrações versionadas `0030`–`0032` introduziram os canais de reunião, o controle de entrada e as senhas. Migrações históricas não devem ser apagadas só porque seus recursos foram aposentados.
+- As migrações versionadas `0030`–`0032`, `0044` e `0045` cobrem canais de reunião, entrada, senhas, convites fechados e prazo de sessão. Migrações históricas não devem ser apagadas só porque seus recursos foram aposentados.
 - CI de TypeScript, build e integração não substitui um teste real com dois ou mais aparelhos e redes diferentes.
