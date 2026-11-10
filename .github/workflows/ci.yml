@@ -53,6 +53,8 @@ jobs:
         run: node --test apps/api/test/restricted-channel-invites.test.mjs
       - name: Test backend unread mail notification synchronization
         run: node --test apps/api/test/mail-unread-notifications.test.mjs
+      - name: Test anonymized per-account session traffic metrics
+        run: node --test apps/api/test/account-probe-metrics.test.mjs
       - name: Build web
         run: npm run build -w @uorqui/web
       - name: Test Resend provider diagnostics without external email
