@@ -1,39 +1,43 @@
-# Uorqui Cloudflare rate limiting
+# Cloudflare API rate-limit incident note — Uorqui
 
-**Live in production since November 10, 2026** on `uorqui.app`, Cloudflare **Free** zone.
+[English](cloudflare-rate-limiting.md) · [Português](../pt-BR/cloudflare-rate-limiting.md)
 
-## Active rule
+**Current state (checked November 10, 2026): DISABLED.** No active custom `http_ratelimit` rule remains in the `uorqui.app` zone. This is an infrastructure setting managed in the Cloudflare dashboard/API, **not** a toggle deployed from Git.
+
+## Historical rule (preserved, not executing)
 
 | Setting | Value |
 | --- | --- |
-| Name | Uorqui API — limite por IP |
+| Rule name | Uorqui API — limite por IP |
 | Phase | `http_ratelimit` |
-| Action | `block` (default HTTP 429 response) |
-| Threshold | 120 requests per IP per 10 seconds |
-| Mitigation | 10 seconds |
-| Characteristics | `cf.colo.id` and `ip.src` |
-| Cloudflare Ruleset ID | `4140c7da5580456aa1d69c48c18b638d` |
+| **Enabled** | **False (disabled November 10, 2026)** |
+| Former action | Block with HTTP 429 |
+| Former threshold | 120 requests / 10 seconds per public IP and Cloudflare colo |
+| Former block period | 10 seconds |
+| Ruleset ID | `4140c7da5580456aa1d69c48c18b638d` |
 | Rule ID | `5d2e82e42e424683949333278747eb8e` |
-| Reference | `uorqui_api_per_ip_burst_limit_v1` |
 
-Expression:
+Historical match expression:
 
 ```text
 (starts_with(http.request.uri.path, "/api/") and http.request.uri.path ne "/api/v1/status" and http.request.uri.path ne "/api/v1/dm/events" and http.request.uri.path ne "/api/v1/communities/events")
 ```
 
-Matches `/api/*`, including authentication, email, and chat commands. The public status endpoint and both direct-message/community SSE transports are deliberately excluded. `/health` and `/health/*` do not match the `/api/*` prefix.
+The rule was **created after the initial 429 reports** and therefore cannot explain the earliest failures. Its IP-based counters could nevertheless block legitimate users sharing one Wi-Fi/public NAT address. It was disabled as a controlled diagnostic step, **not** because Uorqui no longer requires abuse protection.
 
-Rate counters are **per source IP and Cloudflare data center**, not an exact globally shared quota. Company networks sharing a public IP may hit the threshold more easily. Cloudflare Free supports one rate limiting rule with a 10-second counting period and a 10-second blocking period.
+## What remains protected
 
-## Operations
+- Cloudflare's DDoS and existing managed security protections are unchanged.
+- Fastify/Better Auth authentication safeguards and application-level controls still apply. Those can independently return 429.
+- Render may apply its own inbound service limits; an HTTP 429 is **not necessarily from Cloudflare**.
 
-1. Check or update the rule under **Cloudflare → uorqui.app → Security → Security rules → Rate limiting rules**.
-2. On 429 responses, `x-uorqui-upstream-429: 1` means the Uorqui Worker **forwarded an upstream 429**. If absent, inspect Cloudflare security events before attributing the cause.
-3. This limits abnormal API request bursts but **cannot fix Render-side quota exhaustion, provider throttling, or upstream failures**.
-4. If legitimate users are blocked, adjust the threshold or disable **only this rule**, leaving the existing WAF, DDoS, and authentication protections untouched.
-5. Monitor shared-NAT organizations, bulk media uploads, sign-in, messages, mail, and SSE behavior.
+## Diagnose a new HTTP 429
 
-**Documentation version:** `0.1.0-beta.32`. This is a **remote Cloudflare configuration**; reverting Git commits does not remove or roll back the rule. See the [changelog](../../CHANGELOG.md).
+1. Use browser `window.__uorquiRateLimitDiagnostics()` and `window.__uorquiAuthDiagnostics()` (available in beta.36) to inspect sanitized, current-tab evidence.
+2. `x-uorqui-upstream-429: 1` indicates a response forwarded from the API origin by the Worker; its absence alone does **not** prove a Cloudflare block.
+3. Check Cloudflare Security Events, Render logs, `x-uorqui-rate-limit-scope` where present, and Better Auth behavior. Correlate time and request route; don't assume a shared IP is one user.
+4. If the API genuinely needs a new edge rule, scope it to sensitive routes and test with several users on one public IP rather than re-enabling the former blanket rule by default.
 
-Reference: [Cloudflare rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/).
+**Operational reminder:** reverting a Git commit does not change this remote Cloudflare setting. Verify the dashboard before claiming the rule is enabled/disabled. See [changelog](../../CHANGELOG.md) and [portfolio case study](portfolio.md).
+
+[Cloudflare rate limiting documentation](https://developers.cloudflare.com/waf/rate-limiting-rules/).

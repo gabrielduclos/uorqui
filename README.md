@@ -1,141 +1,77 @@
 # Uorqui
 
-**Open-source social platform centered on communities, discovery, and one-to-one messaging.**
+**Open-source communication platform for communities, private messages and collaborative spaces.**
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.36` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+**Technical beta `0.1.0-beta.37`** · [Try the live beta](https://uorqui.app) · [Portfolio case study](docs/en/portfolio.md) · [Source code](https://github.com/gabrielduclos/uorqui)
 
-**Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
+> This is a working, actively developed **technical beta**, not a production-readiness or security certification. Device-level voice/video, installed PWA, notifications and email-provider scenarios are still being validated.
 
+## What problem does Uorqui solve?
 
-## Beta.33 changes
+People often move between a messaging app, a community server, a meeting link and their inbox to stay in touch. Uorqui explores a **community-first communication workspace**: find a community, participate in its channels, talk privately to a person, and manage connected email in a single responsive interface.
 
-- **General opens at the latest message:** the initial desktop channel anchors at the newest message without an extra click.
-- **Restricted channel invitation links:** only owners, admins, and authorized moderators can generate 24-hour single-use links; accepting grants scoped channel access and community membership. Direct DM invites are account-bound. Unused invitations can be revoked, and channel passwords / meeting approval are still enforced.
-- **Security and database:** 256-bit hashed secrets, explicit consent and atomic redemption. Migration `0044` applied to Neon. See [restricted channel invitations](docs/en/restricted-channel-invitations.md). Real-device end-to-end testing is pending.
+The initial validation audience includes gaming communities, but the product is not limited to gaming. A global social-post feed was deliberately **retired** in favor of Discover, which focuses on communities and relevant participation.
 
-## Beta.32 changes
+## Explore the product
 
-- **Cloudflare Free API protection:** a live edge rate limit of 120 requests per 10 seconds per IP and colo, with a 10-second block. SSE transport and health endpoints are excluded, as is public status.
-- **Documented infrastructure:** rule parameters and rollback are described in [Cloudflare rate limiting](docs/en/cloudflare-rate-limiting.md). This protects against bursts but does not fix Render quota exhaustion.
-
-## Beta.31 changes
-
-- **HTTP 429 mitigation:** serialized authentication bootstrap, bounded retry backoff, and 15-second edge caching for public status and readiness only. Private session responses are never cached.
-- **Network diagnosis:** `x-uorqui-upstream-429: 1` marks a 429 forwarded from the backend. Check Render instance limits if blocks persist; security controls remain enabled.
-
-## Beta.36 changes
-
-- **Fewer account/session lookups:** app startup and the login panel share one in-flight `/api/v1/me` request per tab. A successful result is briefly reused in memory (8 seconds), while login/profile transitions force a fresh server check. 429/503 responses are never cached.
-- **Built-in browser diagnostics:** run `window.__uorquiAuthDiagnostics()` in DevTools. `networkLastMinute` counts real account lookups from **that tab in the previous 60 seconds**, `coalescedTotal` / `cacheHitsTotal` show avoided requests, and `rateLimitedTotal` counts 429 responses from this endpoint. No account or IP details are exposed.
-- **Per-account Render telemetry:** search API logs for `Account probe volume`. Once per minute with traffic on `/api/v1/me`, the API logs an aggregate request count, distinct account count, and per-account average/peak using only HMAC-pseudonymized IDs, never emails or IPs in this metric.
-- **Where did a 429 originate?** In the browser console run `window.__uorquiRateLimitDiagnostics()`. Recent entries include sanitized routes, timestamps, `origin` (`render-upstream` or `edge-or-unknown`) and `scope` (`application`, `better-auth`, `unclassified`). Render upstream with no application scope could indicate platform-level throttling before Fastify, but does not prove it alone.
-- **Render Free is a plausible cause:** Render's [official troubleshooting guide](https://render.com/docs/troubleshooting-deploys) confirms inbound traffic limits can return 429, and that Free service thresholds are significantly lower. The reviewed app logs do not conclusively identify the original source. Cloudflare WAF rate limiting was added **after** the first errors and cannot have caused their onset.
-
-## Beta.35 changes
-
-- **Reliable IP-based auth limiting:** the Cloudflare Worker signs the original visitor IP; Render verifies it before Better Auth uses the address. Read-only session refreshes allow higher throughput for offices sharing a public IP, while sensitive authentication limits stay enforced.
-- **Production diagnosis:** after deploying both Worker and API, check `x-uorqui-ip-source: verified-cloudflare` on `/api/auth/get-session`. For a Better Auth 429, `x-uorqui-rate-limit-scope: better-auth` identifies the limiter; no raw IP is exposed.
-
-## Beta.34 changes
-
-- **Meeting links are not channel invitations.** A reusable meeting URL opens the authorized room without granting anyone membership or permissions; restricted-channel invitations keep their separate single-use token flow.
-- **Meetings last at most one hour per session,** with the same server deadline for all participants and a countdown in expanded and floating modes. Ended meetings disconnect automatically. PostgreSQL migration `0045_meeting_one_hour_deadline.sql` is applied on the Uorqui Neon main branch.
-
-## Beta.30 changes
-
-- **Lighter photos:** automatic client-side photo optimization for Gallery, Camera and pasted JPEG/WebP/HEIC images in direct chats and channels. GIFs, PNGs and **File** attachments remain untouched; browsers keep the original when optimization is ineffective.
-- **Unified notification bell:** combines unread DMs, channel messages, invites, activity and unread email from connected accounts. Native PWA icon badging depends on platform support.
-- **Community messages and notifications:** optimistic channel messages show the sender's profile picture immediately. Notification Email tabs list only pending unread events; mailbox reads/moves reconcile the backend alert status.
-
-## Beta.2 changes
-
-- **Explicit invitation consent:** users decide whether to join a community after signing in or registering.
-- **Channels:** threaded replies, `@` member mentions, reactor identity lists and pinned guidelines.
-- **GIFs:** enabled in 1:1 messages as well; expanded GIPHY search and pagination requires `VITE_GIPHY_API_KEY` **at web build time**. Without a key, only the limited bundled catalog is used.
-- **Privacy:** Profile → Delete my account requires a password and `EXCLUIR` confirmation. Data is erased from the active database and R2 cleanup is queued. Shared DM conversations are also deleted for the other participant; provider backups are not removed immediately. Validate the R2 cleanup task before enabling deletion in production.
-
-## Product
-
-Uorqui brings together four connected experiences:
-
-- **Direct messages:** private 1:1 conversations, optimistic replies, reactions, media attachments, an all-history media/files gallery, shared pinned messages, delivery/read status, background push and SSE updates. Contacts are accessed from Messages. No conventional private group chats.
-- **Discover:** a home screen without global posts, featuring recommended public communities, search and activity from communities a user has joined. Obsolete global feed UI, API, and PostgreSQL tables were retired November 2, 2026.
-- **Communities:** public/private membership, invitations, text channels, moderation, WebRTC voice rooms and **audio/video meetings** (up to six), with invite links or Uorqui DMs, admission approval, request notifications and optional password-protected channels. Open/restricted channels have member permissions; meeting rooms support screen sharing, active-speaker highlighting and fullscreen camera/PiP view.
-
-- **Email:** Gmail and Outlook OAuth or manual IMAP/SMTP, multiple connected accounts, inbox/sent/spam/trash, replies and bulk actions, safe HTML viewer and browser-opening external links.
-
-The initial audience includes gaming communities, but Uorqui is designed for general-purpose use.
-
-> **Global feed retired November 2, 2026:** the new Discover experience replaces public posts. The API and Worker deployment passed live smoke checks, and the legacy feed tables were removed from production Neon after verified snapshot backups. Four older feed media files are retained in R2 for recovery; do not delete them without a verified copy. Read the [Discover decision](docs/en/discover.md).
-
-Community approvals refresh the applicant's community list through account-targeted SSE without reloading. Admins manage channel names, descriptions, passwords and access in Moderation. Each channel offers a single invite link that joins the community and opens that channel; meeting invitations use the same flow. New channels suggest editable numbered names by type. See [Meetings](docs/en/video-meetings.md).
-
-## Beta status
-
-| Area | Current technical state |
+| Experience | Implemented in the beta |
 | --- | --- |
-| Login and profiles | Better Auth sessions, email verification/recovery flow, profile visibility and blocking implemented; real signup + email delivery need final validation |
-| Direct messages | Persisted 1:1 messages, attachments, media/files gallery, pinned messages, reactions, read/delivery state, SSE and push |
-| Legacy feed | Retired from app, API and PostgreSQL; Neon recovery snapshots and four legacy R2 files retained |
-| Discover | Public community recommendations, search and authorized joined-community activity; live API smoke checks passed, device testing pending |
-| Communities | Text, voice and video meeting channels; permissions, invites, channel passwords, moderation and private media cache; real-device AV tests pending |
-| Email | Gmail/Outlook OAuth and manual IMAP/SMTP connectors, mailbox folders, reply/move operations, isolated responsive HTML viewer; external browser and device tests ongoing |
-| Deployment | React PWA on Cloudflare Worker `main`, Fastify on Render and PostgreSQL on Neon |
-| Public launch | **Not yet approved:** real-device camera/microphone tests, push delivery, TURN/network coverage, operational monitoring and installed-PWA checks after the custom-domain change |
+| **1:1 messaging** | Persistent messages, optimistic UI, replies, reactions, pinned messages, file/media sharing, delivery/read state, SSE updates, push and media gallery |
+| **Communities** | Public/private spaces, text and voice channels, roles, moderation, scoped access, optional channel passwords and protected invitation flows |
+| **Meetings** | Audio/video WebRTC rooms (up to six participants), approval mode, reusable links for already authorized users, screen sharing and a **60-minute session countdown** |
+| **Discover & notifications** | Community search/recommendations, activity from joined communities, personal notification inbox and unread indicators for messages/channels/email |
+| **Connected email** | Multiple accounts, unified mailbox navigation, Gmail OAuth, optional Outlook OAuth and manual IMAP/SMTP; availability depends on provider and deployment configuration |
 
-The project has automated CI for the API, UI and integration flows. Passing CI does **not** mean the iOS/Android installed-PWA experience has been fully certified.
+## Engineering overview
 
-**Domain status (verified November 1, 2026):** Cloudflare associates `uorqui.app` with the new Worker `main`. Successful login with an account from the new Uorqui has been reported. Installed-PWA updates and device-level verification remain outstanding. The legacy business messenger has its **own** Worker and databases; its accounts and messages are not automatically imported.
-
-## Architecture
-
-- **Frontend:** React, TypeScript, Tailwind CSS, Cloudflare Workers Static Assets, PWA and service worker.
-- **Backend:** Node.js 22, Fastify, Better Auth and SSE events.
-- **Database:** Neon PostgreSQL with Drizzle ORM and versioned migrations.
-- **Media:** Cloudflare R2 with authorization checks.
-- **Voice:** WebRTC peer-to-peer; TURN is optional and connectivity must be tested across networks.
-- **Deployment:** Cloudflare Builds and Render, with GitHub Actions verification.
-
-This beta version is defined consistently in all three npm manifests; the UI shows a Beta marker. See [release notes](CHANGELOG.md) for scope and risks. **Starting after `v0.1.0-beta.9`, every change must be versioned**, including documentation-only PRs: [versioning policy](docs/en/versions.md).
-
-## Documentation
-
-| Topic | English | Português |
+| Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Beta release notes | [Changelog](CHANGELOG.md) | [Notas da versão](CHANGELOG.pt-BR.md) |
-| Version policy | [Release versions](docs/en/versions.md) | [Política de versões](docs/pt-BR/versoes.md) |
-| Local setup | [Getting started](docs/en/getting-started.md) | [Primeiros passos](docs/pt-BR/primeiros-passos.md) |
-| API & deployment | [API hosting](docs/en/api-hosting.md) | [Hospedagem da API](docs/pt-BR/hospedagem-api.md) |
-| Cloudflare Worker | [Workers](docs/en/cloudflare-workers.md) | [Workers](docs/pt-BR/cloudflare-workers.md) |
-| Architecture | [Architecture](docs/en/architecture.md) | [Arquitetura](docs/pt-BR/arquitetura.md) |
-| Features and goals | [Product](docs/en/product.md) | [Produto](docs/pt-BR/produto.md) |
-| Discovery decision | [Discover](docs/en/discover.md) | [Descobrir](docs/pt-BR/descobrir.md) |
-| Roadmap | [Roadmap](docs/en/roadmap.md) | [Roadmap](docs/pt-BR/roadmap.md) |
-| Channel permissions | [Open and closed channels](docs/en/channel-permissions.md) | [Canais por permissão](docs/pt-BR/permissoes-canais.md) |
-| Code audit & cleanup | [November 3 audit](docs/en/maintenance-audit.md) | [Auditoria de 03/11](docs/pt-BR/auditoria-manutencao.md) |
-| Voice and meetings | [Meetings](docs/en/video-meetings.md) | [Reuniões](docs/pt-BR/reunioes-video.md) |
-| UI design system | [UI kit](docs/en/ui-kit.md) | [UI kit](docs/pt-BR/ui-kit.md) |
-| Domain migration | [Portuguese runbook](docs/pt-BR/migracao-dominio-uorqui-app.md) | [Plano de migração](docs/pt-BR/migracao-dominio-uorqui-app.md) |
-| Contributing | [Contributing](CONTRIBUTING.md) | [Contribuindo](CONTRIBUTING.pt-BR.md) |
-| Security | [Security policy](SECURITY.md) | [Política de segurança](SECURITY.pt-BR.md) |
+| Web / PWA | React, TypeScript, Vite, Tailwind CSS | Responsive application, offline-capable shell, client state and interaction |
+| Edge | Cloudflare Worker and Static Assets | Host the SPA, same-origin API proxy and edge transport |
+| API | Node.js 22, Fastify, Better Auth | Sessions, authorization, HTTP endpoints, SSE and business rules |
+| Data | Neon PostgreSQL, Drizzle ORM | Persistent accounts, messages, memberships, notification state and migrations |
+| Files and calls | Cloudflare R2, Web Push, WebRTC | Protected media, device notifications, peer-to-peer voice/video |
+| Delivery | Render, Cloudflare Builds, GitHub Actions | Separate API and frontend deployments; automated checks |
 
-## Development
+**Notable decisions:** a modular-monolith API; server-enforced membership and permissions; PostgreSQL-backed event delivery with SSE for near-real-time UI; optimistic messaging with reconciliation; signed visitor-IP forwarding between the edge and API; reusable **meeting links separate from access-granting channel invitations**; and versioned database migrations.
 
-Node.js 22+ and PostgreSQL are required for complete authenticated testing:
+See the [architecture](docs/en/architecture.md), [messaging](docs/en/messenger.md), [meetings](docs/en/video-meetings.md) and [portfolio engineering decisions](docs/en/portfolio.md).
 
-```sh
+## Portfolio: what this repository demonstrates
+
+This repository is an **end-to-end product and engineering case study**, not just a UI template. It documents product scope decisions, frontend/backend integration, database migrations, authentication boundaries, realtime behavior, operational diagnosis of HTTP 429 errors, CI and deployment trade-offs.
+
+The project uses **AI-assisted development tools** for parts of implementation, debugging and documentation. The portfolio focuses on explaining decisions, verification and limitations rather than claiming that every line of code was written unaided. Read the [case study, evidence and open issues](docs/en/portfolio.md).
+
+## Current maturity
+
+- **Implemented:** working PWA and API beta, direct messaging, communities, Discover, email integration paths, WebRTC rooms, notifications, automated tests and versioned migrations.
+- **Validation still needed:** cross-network TURN and live device calls, installed iOS/Android PWA behavior, real-provider mail flows, push delivery and operating-cost/scale testing.
+- **Rate limits:** the broad Cloudflare IP-based API rule introduced on November 10 was **disabled that same day** after shared-network concerns; backend authentication and other security controls remain. See the [operational note](docs/en/cloudflare-rate-limiting.md). The original HTTP 429 source remains unconfirmed.
+
+**Do not interpret feature presence or CI pass status as full production validation.** Current releases are beta-only.
+
+## Run locally
+
+Requires Node.js **22+** and PostgreSQL (local or an isolated Neon development branch for authenticated features).
+
+```bash
+git clone https://github.com/gabrielduclos/uorqui.git
+cd uorqui
 npm install
 npm run dev
 npm run typecheck
 npm run build
 ```
 
-Web: `http://localhost:5173`; API: `http://127.0.0.1:3001`. The interface can start without a connected database, but authentication and live features will not work. Follow [Getting started](docs/en/getting-started.md) to use a private test database and local secrets.
+Frontend: `http://localhost:5173` · API: `http://127.0.0.1:3001`. Use [Getting started](docs/en/getting-started.md) for environment settings and migrations. **Never reuse production credentials for development.**
 
-## Open source
+## Documentation
 
-Licensed under [MIT](LICENSE). See [contribution guidelines](CONTRIBUTING.md) and [responsible security reporting](SECURITY.md). Do not submit credentials, customer data or sensitive vulnerability details in public issues.
+- **Start here:** [Portfolio / engineering case study](docs/en/portfolio.md) · [Architecture](docs/en/architecture.md) · [Product scope](docs/en/product.md) · [Roadmap](docs/en/roadmap.md)
+- **Developer guide:** [Getting started](docs/en/getting-started.md) · [Cloudflare deployment](docs/en/cloudflare-workers.md) · [UI kit](docs/en/ui-kit.md)
+- **Quality and history:** [Changelog](CHANGELOG.md) · [Version policy](docs/en/versions.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-**Uorqui — converse, discover, belong.**
+MIT licensed. **Uorqui — converse, discover, belong.**

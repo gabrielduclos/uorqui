@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.37] — 10/11/2026
+
+- **Documentação voltada ao portfólio:** READMEs em português e inglês reorganizados para apresentar problema, recursos atuais, arquitetura, evidências e limites do beta; detalhes técnicos aprofundados em um novo [estudo de caso bilíngue](docs/pt-BR/portfolio.md).
+- **Narrativa técnica verificável:** links para módulos reais de frontend/backend, migrações Drizzle, testes, workflows e decisões de arquitetura. Transparência sobre uso de IA no desenvolvimento; métricas de escala, adoção e estabilidade não são afirmadas sem evidências; pendências de validação identificadas.
+- **Situação operacional corrigida:** regra ampla de rate limit por IP criada na Cloudflare em 10/11 **desativada no mesmo dia**; proteções DDoS/gerenciadas e autenticação no backend preservadas. A origem inicial dos erros 429 segue sem confirmação.
+- **Correções de precisão:** links de reunião separados dos convites de canal fechado e limite de 60 minutos **por sessão**; remoção da afirmação de que o feed global ainda existe; cabeçalhos de versões antigas atualizados nos guias principais.
+- **Escopo:** apenas documentação e versões nos manifestos. Nenhuma mudança de código de execução, contrato de API, migração, banco ou deploy. Links e textos em ambos os idiomas devem ser revisados; testes reais e validação de produção ainda pendem.
+
 ## [0.1.0-beta.36] — 10/11/2026
 
 - **Consultas de conta deduplicadas:** `App` e `AuthPanel` agora usam um único transporte para `GET /api/v1/me`, evitando requisições simultâneas durante a inicialização e no StrictMode. Respostas 200 podem ser reaproveitadas na mesma aba por até 8 segundos; 401, por apenas 2 segundos. Respostas 429/5xx e erros de rede **nunca** entram no cache. Cada consumidor recebe uma cópia própria da resposta.

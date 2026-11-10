@@ -12,7 +12,7 @@ Facilitar a descoberta de comunidades relevantes, as conexões individuais e a p
 - **Mensageiro:** conversas privadas entre duas pessoas, sem grupos tradicionais; fotos, vídeos, áudios, arquivos e links continuam nas mensagens.
 - **Comunidades:** espaços organizados, públicos ou privados, com canais de texto, compartilhamento de mídias e salas de voz.
 
-São experiências conectadas, não produtos separados que apenas compartilham uma conta. A direção aprovada em 02/11/2026 é detalhada em [Descobrir](descobrir.md); o beta existente ainda contém o feed antigo, cuja retirada está pendente.
+São experiências conectadas, não produtos separados que apenas compartilham uma conta. A direção aprovada em 02/11/2026 é detalhada em [Descobrir](descobrir.md); o feed global antigo já foi retirado do beta e do backend.
 
 ## Por que começar com gamers?
 

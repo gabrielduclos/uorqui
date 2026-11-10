@@ -2,7 +2,7 @@
 
 [English](roadmap.md) · [Português](../pt-BR/roadmap.md)
 
-**Status:** roadmap for the **technical beta `0.1.0-beta.1`** and the direction approved **November 2, 2026**. Checked items refer to implemented code or CI, not confirmed deployment or real-device acceptance. The global feed was retired on November 2, 2026; **Discover is implemented**, with real-device validation pending. See the [decision](discover.md) and [maintenance audit](maintenance-audit.md).
+**Status:** roadmap maintained through **technical beta `0.1.0-beta.37`** and the direction approved **November 2, 2026**. Checked items refer to implemented code or CI, not confirmed deployment or real-device acceptance. The global feed was retired on November 2, 2026; **Discover is implemented**, with real-device validation pending. See the [decision](discover.md) and [maintenance audit](maintenance-audit.md).
 
 ## Phase 0 — Discovery and foundation
 

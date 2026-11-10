@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.37] — 2026-11-10
+
+- **Portfolio-first documentation:** reorganized the English and Portuguese READMEs around the product problem, current capabilities, architecture, evidence and beta limitations; moved detailed technical context into a new bilingual [engineering case study](docs/en/portfolio.md).
+- **Verifiable technical narrative:** linked to actual frontend/backend modules, Drizzle migrations, tests, delivery workflows and architectural decisions. Disclosed AI-assisted development, clarified that performance/adoption/production-readiness claims require evidence, and listed realistic follow-up validations.
+- **Correct operational status:** documented that the broad Cloudflare per-IP API rate-limit rule created on November 10 was **disabled the same day**; DDoS, managed Cloudflare security and backend auth protections remain unchanged. The original 429 source is still unconfirmed.
+- **Accuracy fixes:** clarified meeting links vs. restricted-channel invitations and the 60-minute **per-session** meeting deadline; removed the claim that the global feed still exists and refreshed outdated technical-guide beta headers.
+- **Scope:** documentation and manifest version updates only. No application runtime, API schema, database migration or deployment change. Review the links and statements in both languages; real-device and production validation remain open.
+
 ## [0.1.0-beta.36] — 2026-11-10
 
 - **Single-flight account bootstrap:** `App` and `AuthPanel` now share `GET /api/v1/me` requests, eliminating overlapping requests on initial load and during React StrictMode. Successful responses are reused in the same tab for up to 8 seconds, 401 for 2 seconds; 429, 5xx and network errors are **never cached**. Each consumer receives an independent response clone.

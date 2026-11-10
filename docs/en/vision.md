@@ -12,7 +12,7 @@ Help people discover relevant communities, build individual connections, and par
 - **Messaging:** private conversations between two people, not conventional group chats; photos, video, audio, documents and links remain in messages.
 - **Communities:** organized public/private spaces with text channels, media sharing and live voice rooms.
 
-These are connected journeys, not products sharing only a login. The November 2, 2026 direction is detailed in [Discover](discover.md); the existing beta still contains a legacy feed, pending migration.
+These are connected journeys, not products sharing only a login. The November 2, 2026 direction is detailed in [Discover](discover.md); the legacy global feed has already been retired from the beta and its backend.
 
 ## Why start with gamers?
 
