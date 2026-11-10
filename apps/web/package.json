@@ -1,6 +1,6 @@
 {
   "name": "@uorqui/web",
-  "version": "0.1.0-beta.30",
+  "version": "0.1.0-beta.31",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "test:image": "node --import tsx --test test/image-compression.test.mjs",
     "test:notifications": "node --test test/notification-channel-regression.test.mjs",
     "test:rate-limit": "node --import tsx --test test/rate-limit-backoff.test.mjs",
+    "test:bootstrap": "node --test test/api-bootstrap-load.test.mjs",
     "preview": "vite preview",
     "check:worker": "wrangler deploy --dry-run",
     "preview:worker": "npm run build && wrangler dev",
