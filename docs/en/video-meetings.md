@@ -1,6 +1,6 @@
 # Voice rooms and audio/video meetings
 
-Updated **November 6, 2026** for technical beta `0.1.0-beta.2`.
+Updated **November 10, 2026** for technical beta `0.1.0-beta.37`.
 
 Uorqui has **text**, **voice**, and **meeting** community channels. Joining a call is an explicit action: simply opening a room never enables the microphone or camera.
 
@@ -13,7 +13,7 @@ Uorqui has **text**, **voice**, and **meeting** community channels. Joining a ca
 - Participants can **pin a different camera**, navigate thumbnails, and return to automatic speaker focus. A shared screen may occupy the main view.
 - **Share screen** is available in both voice and meeting channels, using browser `getDisplayMedia`; it can coexist with a live camera. The button is disabled when the API is unavailable. Mobile and installed-PWA support varies by OS/browser.
 - Fullscreen retains microphone, camera, sharing, leave-call and exit-fullscreen controls.
-- The **Invite** action in the meeting room and the channel header opens the **same invitation dialog**. A temporary link joins the community and opens that exact channel/meeting, either by copying or Uorqui 1:1 DM; access checks remain mandatory.
+- **Meeting links and channel invitations serve different purposes.** A meeting link can be reused by people who already have channel permission. It does **not** join a community or grant new channel access. A restricted-channel invitation has its own single-use, time-limited token and explicit acceptance; sharing via 1:1 messages is supported.
 
 ## Admission and authorization
 
@@ -32,7 +32,7 @@ Uorqui has **text**, **voice**, and **meeting** community channels. Joining a ca
 
 ## Architecture and limitations
 
-- Calls use a **six-person peer-to-peer WebRTC mesh** with Fastify signaling and Neon PostgreSQL sessions. The application does not record meeting audio/video.
+- Calls use a **six-person peer-to-peer WebRTC mesh** with Fastify signaling and Neon PostgreSQL sessions. **Each meeting session is capped at 60 minutes** by a shared server deadline; the UI shows a countdown and clients disconnect when it expires. This is a per-session limit, **not** a daily limit per community. The application does not record meeting audio/video.
 - Screen capture and camera controls require browser support and permissions. TURN relay, cross-network reliability, Android/iOS browsers and installed-PWA behavior **still need real-device testing**.
-- Versioned migrations `0030`–`0032` introduced meeting channels, admission and password protection. Historic migrations must be retained even when features are retired.
+- Versioned migrations `0030`–`0032`, `0044` and `0045` cover meeting channels, admission, password protection, restricted invitations and the server-side meeting deadline. Historic migrations must be retained even when features are retired.
 - Passing TypeScript, build and API integration checks does not certify a live multi-device call.
