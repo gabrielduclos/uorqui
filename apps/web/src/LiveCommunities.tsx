@@ -437,6 +437,19 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
         'Could not create this channel invitation. Check permissions or try again.');
     }finally{setChannelInviteLoading(false);}
   }
+  async function revokeChannelInvite(){
+    if(!channelInviteToken)return;
+    setChannelInviteLoading(true);setChannelInviteError('');
+    try{
+      await api('/api/v1/channel-invites/revoke',body({token:channelInviteToken}));
+      setChannelInviteLink('');setChannelInviteToken(null);
+      setChannelInviteSuccess(pt?'Convite revogado. O link não pode mais ser utilizado.':
+        'Invitation revoked. The link can no longer be used.');
+    }catch{
+      setChannelInviteError(pt?'Não foi possível revogar o convite. Tente novamente.':
+        'Unable to revoke the invitation. Please retry.');
+    }finally{setChannelInviteLoading(false);}
+  }
   async function copyChannelInvite(){
     if(!channelInviteLink)return;
     try{
@@ -1424,6 +1437,11 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                 <Button type="button" size="sm" variant="outline" className="w-full" onClick={()=>void copyChannelInvite()}>
                   <Copy className="size-4"/>{pt?'Copiar link':'Copy link'}
                 </Button>
+                {channelInviteToken&&<Button type="button" size="sm" variant="ghost"
+                  className="w-full text-destructive" disabled={channelInviteLoading}
+                  onClick={()=>void revokeChannelInvite()}>
+                  <X className="size-4"/>{pt?'Revogar este convite':'Revoke this invitation'}
+                </Button>}
               </div>}
             {channelInviteLink&&<form className="space-y-2 border-t border-border pt-3" onSubmit={event=>void inviteContactToChannel(event)}>
               <label className="block text-xs font-semibold" htmlFor="uorqui-channel-invite-handle">{pt?'Enviar pelo Uorqui':'Send in Uorqui'}</label>
