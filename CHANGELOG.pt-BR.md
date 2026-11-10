@@ -9,8 +9,8 @@ Mudanças posteriores ao marco exigem aumento de versão nos três manifestos np
 ## [0.1.0-beta.39] — 10/11/2026
 
 - **Padronização dos nomes:** fora da página de perfil, o Uorqui apresenta apenas o primeiro e o último nome (ex.: "Gabriel Axel Fernando de Oliveira Duclos" vira "Gabriel Duclos"). O nome completo continua no perfil público e na edição de perfil.
-- **Abrangência:** conversas privadas e suas prévias, canais e respostas, sugestões de menção, contatos, contas bloqueadas, moderação, notificações, menus e participantes de chamadas/reuniões adotam uma função de exibição compartilhada.
-- **Sem migração de dados:** nome completo armazenado, identificador @usuário, busca pelo nome original, respostas da API e registros do usuário permanecem intactos. A mudança afeta apenas a apresentação no frontend, incluindo títulos e textos acessíveis.
+- **Abrangência:** conversas privadas e suas prévias, canais e respostas, sugestões de menção, contatos, contas bloqueadas, moderação, notificações, menus e participantes de chamadas/reuniões adotam uma função de exibição compartilhada. Títulos de notificações push e nomes de remetentes em convites também seguem a regra no servidor.
+- **Sem migração de dados:** nome completo armazenado, identificador @usuário, busca pelo nome original, respostas da API e registros do usuário permanecem intactos. A alteração afeta apenas a apresentação (frontend e texto do push), incluindo títulos e descrições acessíveis; não altera o banco nem os contratos da API.
 - **Testes:** novos casos para nomes longos, simples, espaços, acentos e ausência de nome no CI da interface. Validação de ponta a ponta em dispositivos e PWA continua pendente.
 
 ## [0.1.0-beta.38] — 10/11/2026
