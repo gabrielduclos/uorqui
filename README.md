@@ -29,7 +29,9 @@
 
 - **Fewer account/session lookups:** app startup and the login panel share one in-flight `/api/v1/me` request per tab. A successful result is briefly reused in memory (8 seconds), while login/profile transitions force a fresh server check. 429/503 responses are never cached.
 - **Built-in browser diagnostics:** run `window.__uorquiAuthDiagnostics()` in DevTools. `networkLastMinute` counts real account lookups from **that tab in the previous 60 seconds**, `coalescedTotal` / `cacheHitsTotal` show avoided requests, and `rateLimitedTotal` counts 429 responses from this endpoint. No account or IP details are exposed.
-- **Rate-limit source:** Render logs reviewed do not show heavy `/api/auth/get-session` usage. The existing Cloudflare WAF rule counts users sharing a public IP together; verify the blocked response or WAF events before raising a traffic limit.
+- **Per-account Render telemetry:** search API logs for `Account probe volume`. Once per minute with traffic on `/api/v1/me`, the API logs an aggregate request count, distinct account count, and per-account average/peak using only HMAC-pseudonymized IDs, never emails or IPs in this metric.
+- **Where did a 429 originate?** In the browser console run `window.__uorquiRateLimitDiagnostics()`. Recent entries include sanitized routes, timestamps, `origin` (`render-upstream` or `edge-or-unknown`) and `scope` (`application`, `better-auth`, `unclassified`). Render upstream with no application scope could indicate platform-level throttling before Fastify, but does not prove it alone.
+- **Render Free is a plausible cause:** Render's [official troubleshooting guide](https://render.com/docs/troubleshooting-deploys) confirms inbound traffic limits can return 429, and that Free service thresholds are significantly lower. The reviewed app logs do not conclusively identify the original source. Cloudflare WAF rate limiting was added **after** the first errors and cannot have caused their onset.
 
 ## Beta.35 changes
 
