@@ -10,7 +10,7 @@ test('community optimistic bubble uses the current profile before the send compl
   assert.match(shell,/myName=\{account\.profile\?\.displayName\?\?account\.user\.name\}/);
   assert.match(shell,/myAvatar=\{account\.profile\?\.avatarUrl\?\?null\}/);
   assert.match(channels,/authorHandle:myHandle,authorName:myName,authorAvatar:myAvatar/);
-  assert.match(channels,/UserAvatar name=\{message\.authorName\} image=\{message\.authorAvatar\}/);
+  assert.match(channels,/UserAvatar name=\{compactUserName\(message\.authorName\)\} image=\{message\.authorAvatar\}/);
 });
 
 test('email notifications show only events that are still unread',()=>{
