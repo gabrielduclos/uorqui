@@ -31,6 +31,20 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
     return reply.code(reconnect ? 409 : 503).send({ error: reconnect ? 'MAIL_RECONNECT' : 'MAIL_UNAVAILABLE' });
   }
 
+  // Provider reads/moves also dismiss their persistent email alerts. A failed
+  // notification update must not invalidate a provider operation that succeeded.
+  async function acknowledgeMailEvents(accountId: string, messageIds: string[]) {
+    if (!messageIds.length) return;
+    try {
+      await getPool().query(
+        "UPDATE notification_inbox_events SET read_at=COALESCE(read_at,now()) " +
+        "WHERE kind='email' AND mail_account_id=$1 AND mail_message_id=ANY($2::text[]) AND read_at IS NULL",
+        [accountId, messageIds]);
+    } catch {
+      // Inbox polling reconciles recent provider reads independently.
+    }
+  }
+
   // Provider message IDs are opaque and can be long. Keep them out of request URLs.
   const mailMessageBody = {
     type: 'object', additionalProperties: false, required: ['messageId'],
@@ -214,6 +228,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
         const { messageId } = request.body as { messageId: string };
         const result = await withMailbox(id, accountId, async (connection, token) => {
           await markMailRead(connection.provider, token, messageId);
+          await acknowledgeMailEvents(accountId, [messageId]);
           try {
             const unread = await countInboxUnread(connection.provider, token);
             await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1', [accountId, unread]);
@@ -254,6 +269,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
           for (const item of batch) (item.ok ? read : failed).push(item.messageId);
         }
         if (read.length) {
+          await acknowledgeMailEvents(accountId, read);
           try {
             const unread = await countInboxUnread(connection.provider, token);
             await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1', [accountId, unread]);
@@ -281,6 +297,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const result = await withMailbox(id, accountId, async (connection, token) => {
         const moved = await moveMailMessages(connection.provider, token, ids, destination);
         if (moved.moved.length) {
+          await acknowledgeMailEvents(accountId, moved.moved);
           try {
             const unread = await countInboxUnread(connection.provider, token);
             await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1',[accountId,unread]);
@@ -299,6 +316,7 @@ export function registerMailRoutes(app: FastifyInstance, readSession: SessionRea
       const { accountId, messageId } = request.params as { accountId: string; messageId: string };
       const result = await withMailbox(id, accountId, async (connection, token) => {
         await markMailRead(connection.provider, token, messageId);
+        await acknowledgeMailEvents(accountId, [messageId]);
         try {
           const unread = await countInboxUnread(connection.provider, token);
           await getPool().query('UPDATE mail_inbox_state SET unread_count=$2,last_checked_at=now() WHERE account_id=$1',[accountId,unread]);
