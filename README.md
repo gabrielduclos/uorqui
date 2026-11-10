@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.33` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.34` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
@@ -24,6 +24,11 @@
 
 - **HTTP 429 mitigation:** serialized authentication bootstrap, bounded retry backoff, and 15-second edge caching for public status and readiness only. Private session responses are never cached.
 - **Network diagnosis:** `x-uorqui-upstream-429: 1` marks a 429 forwarded from the backend. Check Render instance limits if blocks persist; security controls remain enabled.
+
+## Beta.34 changes
+
+- **Meeting links are not channel invitations.** A reusable meeting URL opens the authorized room without granting anyone membership or permissions; restricted-channel invitations keep their separate single-use token flow.
+- **Meetings last at most one hour per session,** with the same server deadline for all participants and a countdown in expanded and floating modes. Ended meetings disconnect automatically. Apply PostgreSQL migration `0045_meeting_one_hour_deadline.sql` before deploying the new API.
 
 ## Beta.30 changes
 
