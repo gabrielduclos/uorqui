@@ -1,77 +1,98 @@
 # Uorqui
 
-**Open-source communication platform for communities, private messages and collaborative spaces.**
+**Open-source communication platform combining communities, one-to-one messaging, meetings and connected email.**
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-**Technical beta `0.1.0-beta.37`** · [Try the live beta](https://uorqui.app) · [Portfolio case study](docs/en/portfolio.md) · [Source code](https://github.com/gabrielduclos/uorqui)
+**Technical beta `0.1.0-beta.38`** · [Open Uorqui](https://uorqui.app) · [Product documentation](docs/en/README.md) · [Engineering case study](docs/en/portfolio.md)
 
-> This is a working, actively developed **technical beta**, not a production-readiness or security certification. Device-level voice/video, installed PWA, notifications and email-provider scenarios are still being validated.
+> **Beta, not a stable release.** Features listed below are implemented in the project; real-device, provider-integration and load validation are still in progress. Check the [roadmap](docs/en/roadmap.md) before depending on the service for critical work.
 
-## What problem does Uorqui solve?
+## About the product
 
-People often move between a messaging app, a community server, a meeting link and their inbox to stay in touch. Uorqui explores a **community-first communication workspace**: find a community, participate in its channels, talk privately to a person, and manage connected email in a single responsive interface.
+Uorqui brings everyday communication into one place. People can find communities, participate in topic-based channels, exchange private messages, join small voice/video meetings and view connected mailboxes without switching between unrelated interfaces.
 
-The initial validation audience includes gaming communities, but the product is not limited to gaming. A global social-post feed was deliberately **retired** in favor of Discover, which focuses on communities and relevant participation.
+The initial testing audience includes gaming communities, but the design supports other kinds of groups and collaborative spaces. **Discover** replaced a retired global post feed: the focus is on participation, not infinite scrolling.
 
-## Explore the product
+### What you can do
 
-| Experience | Implemented in the beta |
-| --- | --- |
-| **1:1 messaging** | Persistent messages, optimistic UI, replies, reactions, pinned messages, file/media sharing, delivery/read state, SSE updates, push and media gallery |
-| **Communities** | Public/private spaces, text and voice channels, roles, moderation, scoped access, optional channel passwords and protected invitation flows |
-| **Meetings** | Audio/video WebRTC rooms (up to six participants), approval mode, reusable links for already authorized users, screen sharing and a **60-minute session countdown** |
-| **Discover & notifications** | Community search/recommendations, activity from joined communities, personal notification inbox and unread indicators for messages/channels/email |
-| **Connected email** | Multiple accounts, unified mailbox navigation, Gmail OAuth, optional Outlook OAuth and manual IMAP/SMTP; availability depends on provider and deployment configuration |
-
-## Engineering overview
-
-| Layer | Technology | Responsibility |
+| Area | Capabilities in the current beta | Documentation |
 | --- | --- | --- |
-| Web / PWA | React, TypeScript, Vite, Tailwind CSS | Responsive application, offline-capable shell, client state and interaction |
-| Edge | Cloudflare Worker and Static Assets | Host the SPA, same-origin API proxy and edge transport |
-| API | Node.js 22, Fastify, Better Auth | Sessions, authorization, HTTP endpoints, SSE and business rules |
-| Data | Neon PostgreSQL, Drizzle ORM | Persistent accounts, messages, memberships, notification state and migrations |
-| Files and calls | Cloudflare R2, Web Push, WebRTC | Protected media, device notifications, peer-to-peer voice/video |
-| Delivery | Render, Cloudflare Builds, GitHub Actions | Separate API and frontend deployments; automated checks |
+| **Direct messages** | Persistent 1:1 conversations, replies, reactions, media and documents, pinned messages, delivery/read states, realtime updates and push | [Messaging](docs/en/messenger.md) |
+| **Communities** | Public/private communities, moderated text and voice channels, roles, scoped permissions, passwords and secure invitations | [Product](docs/en/product.md) · [Permissions](docs/en/channel-permissions.md) |
+| **Voice and video** | Small WebRTC rooms with meeting approval, screen sharing, reusable meeting links for authorized participants and a 60-minute limit per meeting session | [Meetings](docs/en/video-meetings.md) |
+| **Discover and notifications** | Community discovery, joined-community activity, notifications and unread counters for messages and mail | [Discover](docs/en/discover.md) · [Notifications](docs/en/notifications.md) |
+| **Connected email** | Multi-account navigation and unified inbox, Gmail OAuth, optional Outlook OAuth and manual IMAP/SMTP connections | [Email](docs/en/email.md) |
 
-**Notable decisions:** a modular-monolith API; server-enforced membership and permissions; PostgreSQL-backed event delivery with SSE for near-real-time UI; optimistic messaging with reconciliation; signed visitor-IP forwarding between the edge and API; reusable **meeting links separate from access-granting channel invitations**; and versioned database migrations.
+**Access matters:** a meeting link does not grant community or channel membership. Joining a restricted channel uses a separate invitation and server-side authorization. Email providers and device capabilities depend on their configuration and availability.
 
-See the [architecture](docs/en/architecture.md), [messaging](docs/en/messenger.md), [meetings](docs/en/video-meetings.md) and [portfolio engineering decisions](docs/en/portfolio.md).
+### Typical workflow
 
-## Portfolio: what this repository demonstrates
+1. **Discover** a community or accept an invitation, then open an authorized text or voice channel.
+2. **Communicate** with a member through a private 1:1 conversation, including attachments and message replies.
+3. **Collaborate** in a voice or meeting room, with permissions, admission rules and a visible countdown.
+4. **Stay informed** through the notification inbox or review messages from connected email accounts.
 
-This repository is an **end-to-end product and engineering case study**, not just a UI template. It documents product scope decisions, frontend/backend integration, database migrations, authentication boundaries, realtime behavior, operational diagnosis of HTTP 429 errors, CI and deployment trade-offs.
+## How it works
 
-The project uses **AI-assisted development tools** for parts of implementation, debugging and documentation. The portfolio focuses on explaining decisions, verification and limitations rather than claiming that every line of code was written unaided. Read the [case study, evidence and open issues](docs/en/portfolio.md).
+The codebase uses a **TypeScript monorepo** with a React PWA, a Node.js/Fastify API and PostgreSQL. The API is a modular monolith rather than a collection of microservices.
 
-## Current maturity
+| Component | Stack | Responsibility |
+| --- | --- | --- |
+| Web and PWA | React, TypeScript, Vite, Tailwind CSS | Responsive UI, navigation and optimistic updates |
+| Edge | Cloudflare Workers Static Assets | Serve the SPA and proxy API requests on the same origin |
+| Backend | Node.js 22, Fastify, Better Auth | Authenticated endpoints, business rules and SSE |
+| Persistence | Neon PostgreSQL, Drizzle | Accounts, conversations, memberships, permission checks and migrations |
+| Media and live communication | Cloudflare R2, Web Push, WebRTC | Protected attachments, notifications and peer-to-peer calls |
+| Delivery | Render, Cloudflare Builds, GitHub Actions | Separate deployments and automated verification |
 
-- **Implemented:** working PWA and API beta, direct messaging, communities, Discover, email integration paths, WebRTC rooms, notifications, automated tests and versioned migrations.
-- **Validation still needed:** cross-network TURN and live device calls, installed iOS/Android PWA behavior, real-provider mail flows, push delivery and operating-cost/scale testing.
-- **Rate limits:** the broad Cloudflare IP-based API rule introduced on November 10 was **disabled that same day** after shared-network concerns; backend authentication and other security controls remain. See the [operational note](docs/en/cloudflare-rate-limiting.md). The original HTTP 429 source remains unconfirmed.
+More detail: [Architecture](docs/en/architecture.md) · [Worker and proxy](docs/en/cloudflare-workers.md) · [UI kit](docs/en/ui-kit.md).
 
-**Do not interpret feature presence or CI pass status as full production validation.** Current releases are beta-only.
+## Get started locally
 
-## Run locally
-
-Requires Node.js **22+** and PostgreSQL (local or an isolated Neon development branch for authenticated features).
+**Requirements:** Node.js 22+, npm and PostgreSQL for authentication and persistent features. A local PostgreSQL instance or an isolated Neon development branch is recommended.
 
 ```bash
 git clone https://github.com/gabrielduclos/uorqui.git
 cd uorqui
 npm install
 npm run dev
+```
+
+Web: `http://localhost:5173` · API: `http://127.0.0.1:3001`.
+
+To enable authenticated features, configure `apps/api/.env` using the safe example, connect a **development-only** database and run the documented Drizzle migrations. The UI can start without a database; authenticated features cannot. Follow the [complete setup guide](docs/en/getting-started.md) before using `npm run db:migrate`. Do not use production secrets locally.
+
+Validate code changes with:
+
+```bash
 npm run typecheck
 npm run build
 ```
 
-Frontend: `http://localhost:5173` · API: `http://127.0.0.1:3001`. Use [Getting started](docs/en/getting-started.md) for environment settings and migrations. **Never reuse production credentials for development.**
+For the integration and UI test suites, see [quality and contribution docs](docs/en/README.md).
 
-## Documentation
+## Release and operational status
 
-- **Start here:** [Portfolio / engineering case study](docs/en/portfolio.md) · [Architecture](docs/en/architecture.md) · [Product scope](docs/en/product.md) · [Roadmap](docs/en/roadmap.md)
-- **Developer guide:** [Getting started](docs/en/getting-started.md) · [Cloudflare deployment](docs/en/cloudflare-workers.md) · [UI kit](docs/en/ui-kit.md)
-- **Quality and history:** [Changelog](CHANGELOG.md) · [Version policy](docs/en/versions.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+- **Available for controlled beta:** app shell, messaging, communities, Discover, meetings, notifications and configurable email integrations.
+- **Still under validation:** installed iOS/Android PWA, cross-network WebRTC and TURN, end-to-end provider mail flows, push delivery, accessibility, realistic load and operating costs.
+- **HTTP 429 investigation:** backend authentication limits remain in effect. The broad Cloudflare per-IP API rule was disabled on November 10, 2026; the first 429 origin has not been conclusively identified. See [operations](docs/en/cloudflare-rate-limiting.md).
 
-MIT licensed. **Uorqui — converse, discover, belong.**
+Implemented features and passing CI **do not** establish production-scale reliability. Refer to the [roadmap](docs/en/roadmap.md) and [release notes](CHANGELOG.md) for known gaps and changes.
+
+## Documentation by audience
+
+| You want to… | Start here |
+| --- | --- |
+| **Understand or use the product** | [Product guide and feature map](docs/en/README.md) · [Product details](docs/en/product.md) |
+| **Develop or contribute** | [Local setup](docs/en/getting-started.md) · [Architecture](docs/en/architecture.md) · [Contributing](CONTRIBUTING.md) |
+| **Operate or troubleshoot** | [API hosting](docs/en/api-hosting.md) · [Cloudflare Workers](docs/en/cloudflare-workers.md) · [Security](SECURITY.md) |
+| **Evaluate the engineering as a portfolio** | [Case study, decisions and evidence](docs/en/portfolio.md) · [Source tests](apps/api/test) |
+
+The **README and product guides describe Uorqui itself**; the portfolio case study separately explains engineering choices, trade-offs, lessons and verification evidence.
+
+## Open source
+
+MIT license · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [Version policy](docs/en/versions.md).
+
+**Uorqui — converse, discover, belong.**

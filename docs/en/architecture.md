@@ -2,7 +2,7 @@
 
 [English](architecture.md) · [Português](../pt-BR/arquitetura.md)
 
-> **Current technical beta `0.1.0-beta.37` (documentation review November 10, 2026).** The PWA and Fastify API are deployed for controlled testing on Cloudflare/Render with Neon PostgreSQL. This is not a stable public release; real-device and email tests remain open.
+> **Current technical beta `0.1.0-beta.38` (documentation review November 10, 2026).** The PWA and Fastify API are deployed for controlled testing on Cloudflare/Render with Neon PostgreSQL. This is not a stable public release; real-device and email tests remain open.
 
 ## Design approach
 

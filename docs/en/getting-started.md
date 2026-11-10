@@ -2,7 +2,7 @@
 
 [English](getting-started.md) · [Português](../pt-BR/primeiros-passos.md)
 
-> **Technical beta `0.1.0-beta.37`:** direct messages, Discover (the global feed was retired), communities, meetings, connected email and authentication are implemented for controlled testing. Real-device PWA, email and push tests are still incomplete. These instructions are for local development; never use production database credentials.
+> **Technical beta `0.1.0-beta.38`:** direct messages, Discover (the global feed was retired), communities, meetings, connected email and authentication are implemented for controlled testing. Real-device PWA, email and push tests are still incomplete. These instructions are for local development; never use production database credentials.
 
 ## Requirements
 
