@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.39] — 10/11/2026
+
+- **Padronização dos nomes:** fora da página de perfil, o Uorqui apresenta apenas o primeiro e o último nome (ex.: "Gabriel Axel Fernando de Oliveira Duclos" vira "Gabriel Duclos"). O nome completo continua no perfil público e na edição de perfil.
+- **Abrangência:** conversas privadas e suas prévias, canais e respostas, sugestões de menção, contatos, contas bloqueadas, moderação, notificações, menus e participantes de chamadas/reuniões adotam uma função de exibição compartilhada.
+- **Sem migração de dados:** nome completo armazenado, identificador @usuário, busca pelo nome original, respostas da API e registros do usuário permanecem intactos. A mudança afeta apenas a apresentação no frontend, incluindo títulos e textos acessíveis.
+- **Testes:** novos casos para nomes longos, simples, espaços, acentos e ausência de nome no CI da interface. Validação de ponta a ponta em dispositivos e PWA continua pendente.
+
 ## [0.1.0-beta.38] — 10/11/2026
 
 - **Equilíbrio entre produto e portfólio:** READMEs em português e inglês reorganizados como apresentação do produto, com recursos, jornada de uso, arquitetura, execução local, situação operacional e link específico para o portfólio, sem colocar a narrativa de currículo em primeiro plano.
