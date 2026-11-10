@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { apiRequest as api } from './lib/apiClient';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Dialog, Tabs } from 'radix-ui';
@@ -234,11 +235,11 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
                 navigateToPublicProfile(event,person.handle);
                 setOpen(false);
               }}
-              aria-label={pt?'Ver perfil de '+person.displayName:'View profile of '+person.displayName}
+              aria-label={pt?'Ver perfil de '+compactUserName(person.displayName):'View profile of '+compactUserName(person.displayName)}
               className="flex min-h-12 min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring">
-              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">{person.displayName.charAt(0).toUpperCase()}</div>
+              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">{compactUserName(person.displayName).charAt(0).toUpperCase()}</div>
               <div className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">{person.displayName}</span>
+                <span className="block truncate text-sm font-semibold">{compactUserName(person.displayName)}</span>
                 <span className="block truncate text-xs text-muted-foreground">@{person.handle} · {person.role}</span>
               </div>
               <span className="shrink-0 text-[11px] font-medium text-primary">{pt?'Ver perfil':'View profile'}</span>
