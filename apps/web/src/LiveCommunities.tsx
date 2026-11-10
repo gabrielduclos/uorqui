@@ -1430,6 +1430,37 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
           }}
           onLeave={()=>{setActiveVoiceRoom(null);setVoiceParticipants([]);setVoicePhase('idle');}}/>
       </VoicePortalShell>,document.body)}
+    <Dialog.Root open={Boolean(meetingShare)} onOpenChange={next=>{if(!next){setMeetingShare(null);setMeetingShareError('');}}}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[310] bg-black/65"/>
+        <Dialog.Content aria-describedby={undefined}
+          className="fixed left-1/2 top-1/2 z-[315] w-[min(92vw,470px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-2xl outline-none">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <Dialog.Title className="text-base font-semibold">{pt?'Link da reunião':'Meeting link'}</Dialog.Title>
+              <p className="mt-1 truncate text-xs text-muted-foreground">{meetingShare?.name}</p>
+            </div>
+            <Dialog.Close asChild><Button type="button" size="icon" variant="ghost" aria-label={pt?'Fechar':'Close'}><X className="size-5"/></Button></Dialog.Close>
+          </div>
+          <p className="mb-3 text-sm text-muted-foreground">{pt?
+            'Este link pode ser usado por várias pessoas que já têm acesso ao canal. Ele não é um convite, não concede permissões e respeita as aprovações da reunião.':
+            'This reusable link works for anyone already authorized in the channel. It is not an invitation, grants no permissions and respects meeting approval.'}</p>
+          <label htmlFor="uorqui-meeting-share-url" className="mb-1 block text-xs font-semibold">{pt?'Endereço da reunião':'Meeting URL'}</label>
+          <Input id="uorqui-meeting-share-url" readOnly value={meetingShare?.url??''}
+            onFocus={event=>event.currentTarget.select()} className="h-10 text-xs"/>
+          <Button type="button" className="mt-3 w-full gap-2" variant="outline"
+            disabled={!meetingShare} onClick={async()=>{
+              if(!meetingShare)return;
+              try{await navigator.clipboard.writeText(meetingShare.url);setMeetingShareCopied(true);setMeetingShareError('');}
+              catch{setMeetingShareError(pt?'Selecione e copie o endereço manualmente.':'Select and copy the address manually.');}
+            }}>
+            {meetingShareCopied?<Check className="size-4"/>:<Copy className="size-4"/>}
+            {meetingShareCopied?(pt?'Link copiado':'Link copied'):(pt?'Copiar link da reunião':'Copy meeting link')}
+          </Button>
+          {meetingShareError&&<p role="alert" className="mt-2 text-xs text-destructive">{meetingShareError}</p>}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
     <Dialog.Root open={channelInviteOpen} onOpenChange={next=>{
       if(channelInviteSending)return;
       setChannelInviteOpen(next);
