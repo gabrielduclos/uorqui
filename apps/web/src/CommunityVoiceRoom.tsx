@@ -7,13 +7,14 @@ import { useUorquiPreferences } from './UorquiPreferences';
 import { VoiceActivityMonitor } from './VoiceActivityMonitor';
 import { playVoiceRoomCue, unlockVoiceRoomAudio } from './communityVoiceSounds';
 import { navigateToPublicProfile } from './publicProfileNavigation';
+import { formatMeetingCountdown, meetingSecondsLeft } from './meetingCountdown';
 
 export type CommunityVoiceParticipant={sessionId:string;handle:string;displayName:string;avatarUrl:string|null;muted:boolean;deafened:boolean;isSelf:boolean;speaking?:boolean};
 export type VoiceRoomTarget={communityId:string;channelId:string;communityName:string;channelName:string;kind:'voice'|'meeting'};
 export type VoicePhase='idle'|'joining'|'joined';
 type VoicePeer=CommunityVoiceParticipant & {joinedAt:string};
 type VoiceSignal={id:string;senderSessionId:string;kind:'offer'|'answer'|'candidate';payload:RTCSessionDescriptionInit|RTCIceCandidateInit};
-type VoiceJoin={sessionId:string;peers:VoicePeer[];rtc:{iceServers:RTCIceServer[];relayAvailable:boolean};maxParticipants:number};
+type VoiceJoin={sessionId:string;peers:VoicePeer[];rtc:{iceServers:RTCIceServer[];relayAvailable:boolean};maxParticipants:number;expiresAt:string|null};
 type VoiceState={peers:VoicePeer[];signals:VoiceSignal[];cursor:string};
 
 async function req<T>(url:string,init?:RequestInit):Promise<T>{
@@ -55,10 +56,10 @@ function MeetingVideo({stream,label,className,mirror=false}:{
 const json=(value:unknown):RequestInit=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
 
 /** A small P2P mesh: audio is end-to-end encrypted by DTLS/SRTP, never stored by the app. */
-export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,kind='voice',mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange,onInvite}:{
+export default function CommunityVoiceRoom({communityId,channelId,communityName,channelName,kind='voice',mode='expanded',onMinimize,onRestore,onLeave,onPhaseChange,onParticipantsChange,onShareMeeting}:{
   communityId:string;channelId:string;communityName:string;channelName:string;kind?:'voice'|'meeting';
   mode?:'expanded'|'floating';onMinimize?:()=>void;onRestore?:()=>void;onLeave?:()=>void;
-  onInvite?:()=>void;
+  onShareMeeting?:()=>void;
   onPhaseChange?:(phase:VoicePhase)=>void;
   onParticipantsChange?:(participants:CommunityVoiceParticipant[])=>void;
 }){
@@ -82,10 +83,14 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const [cameras,setCameras]=useState<Record<string,MediaStream>>({});
   const [cameraOn,setCameraOn]=useState(false);
   const [cameraBusy,setCameraBusy]=useState(false);
-  const [meetingInfo,setMeetingInfo]=useState<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}|null>(null);
+  const [meetingInfo,setMeetingInfo]=useState<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[];expiresAt:string|null}|null>(null);
   const [meetingAction,setMeetingAction]=useState('');
   const [meetingNotice,setMeetingNotice]=useState('');
+  const [meetingExpiresAt,setMeetingExpiresAt]=useState<string|null>(null);
+  const [clockNow,setClockNow]=useState(()=>Date.now());
   const meeting=kind==='meeting';
+  const remainingSeconds=meeting&&phase==='joined'?meetingSecondsLeft(meetingExpiresAt,clockNow):null;
+  const meetingCountdown=remainingSeconds===null?null:formatMeetingCountdown(remainingSeconds);
   const running=useRef(false);
   const disposed=useRef(false);
   const joining=useRef(false);
@@ -114,7 +119,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const meetingBase='/api/v1/communities/'+communityId+'/channels/'+channelId+'/meeting';
   const fetchMeetingInfo=useCallback(async()=>{
     if(!meeting)return;
-    try{const data=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}>(meetingBase);
+    try{const data=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[];expiresAt:string|null}>(meetingBase);
       if(!disposed.current)setMeetingInfo(data);
     }catch{if(!disposed.current)setMeetingNotice(pt?'Não foi possível atualizar as permissões.':'Could not update meeting permissions.');}
   },[meeting,meetingBase,pt]);
@@ -134,6 +139,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
     if(foregroundTimer.current!==null)window.clearTimeout(foregroundTimer.current);
     foregroundTimer.current=null;
     setMicInterrupted(false);
+    setMeetingExpiresAt(null);
     running.current=false;
     const sessionId=selfSession.current;selfSession.current=null;
     for(const timer of timers.current)window.clearInterval(timer);
@@ -151,6 +157,29 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       void fetch(base+'/sessions/'+sessionId,{method:'DELETE',credentials:'same-origin',cache:'no-store',keepalive:true}).catch(()=>{});
     }
   },[base]);
+
+  // Read an absolute server deadline so backgrounding the PWA cannot pause it.
+  useEffect(()=>{
+    if(!meeting||phase!=='joined'||!meetingExpiresAt)return;
+    const tick=()=>{
+      const now=Date.now();
+      setClockNow(now);
+      if(meetingSecondsLeft(meetingExpiresAt,now)===0&&running.current){
+        stop();
+        setMeetingNotice(pt?'O limite de 1 hora foi atingido. A reunião foi encerrada.':
+          'The one-hour limit was reached. The meeting has ended.');
+      }
+    };
+    tick();
+    const timer=window.setInterval(tick,1000);
+    document.addEventListener('visibilitychange',tick);
+    window.addEventListener('focus',tick);
+    return()=>{
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange',tick);
+      window.removeEventListener('focus',tick);
+    };
+  },[meeting,phase,meetingExpiresAt,stop,pt]);
 
   const watchMic=useCallback((track:MediaStreamTrack)=>{
     track.onmute=()=>{if(running.current&&!mutedRef.current)setMicInterrupted(true);};
@@ -430,7 +459,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       let admission=meetingInfo;
       if(!admission){
         try{
-          admission=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[]}>(meetingBase);
+          admission=await req<{policy:'open'|'approval';manager:boolean;status:'none'|'pending'|'approved'|'declined';pending:{handle:string;displayName:string}[];expiresAt:string|null}>(meetingBase);
           setMeetingInfo(admission);
         }catch{setMeetingNotice(pt?'Não foi possível verificar a entrada. Tente novamente.':'Could not check meeting admission. Try again.');return;}
       }
@@ -483,6 +512,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         return;
       }
       local.current=stream;selfSession.current=sessionId;
+      if(meeting){setMeetingExpiresAt(result.expiresAt);setClockNow(Date.now());}
       if(meeting&&stream.getVideoTracks().length){setCameraOn(true);setCameras(old=>({...old,[sessionId]:stream!}));}
       voiceMonitor.current=new VoiceActivityMonitor();voiceMonitor.current.add(sessionId,stream);
       config.current=result.rtc.iceServers;
@@ -792,8 +822,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {meeting&&onInvite&&<Button type="button" variant="outline" size="sm" className="min-h-10 gap-1.5" onClick={onInvite}>
-            <Link2 className="size-4"/>{pt?'Convidar':'Invite'}
+          {meeting&&onShareMeeting&&<Button type="button" variant="outline" size="sm" className="min-h-10 gap-1.5" onClick={onShareMeeting}>
+            <Link2 className="size-4"/>{pt?'Link da reunião':'Meeting link'}
           </Button>}
           <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground" role="status">
             <span className={'size-2 rounded-full '+(phase==='joined'?'bg-emerald-500':phase==='joining'?'bg-amber-500':'bg-muted-foreground/40')}/>
