@@ -95,7 +95,7 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
     {key:'all',pt:'Todas',en:'All',icon:Bell,count:0},
     {key:'messages',pt:'Mensagens',en:'Messages',icon:MessageCircle,count:directUnread.length+channelAlerts.length},
     {key:'mentions',pt:'Menções',en:'Mentions',icon:AtSign,count:mentions.filter(x=>!x.readAt).length},
-    {key:'email',pt:'E-mail',en:'Email',icon:Mail,count:Math.max(unreadMailCount,emails.filter(x=>!x.readAt).length)},
+    {key:'email',pt:'E-mail',en:'Email',icon:Mail,count:Math.max(unreadMailCount,emails.length)},
     {key:'invites',pt:'Convites',en:'Invites',icon:Users,count:communityInvites.length+inviteActivities.filter(x=>!x.readAt).length},
     {key:'contacts',pt:'Contatos',en:'Contacts',icon:UserPlus,count:contactActivities.filter(x=>!x.readAt).length}
   ];
