@@ -19,7 +19,10 @@ export function registerCommunityMeetingRoutes(app:FastifyInstance,session:Sessi
   }
   async function context(id:string,channelId:string,userId:string){
     const r=await getPool().query(
-      'SELECT ch.id,ch.meeting_join_policy AS "policy",m.role '+
+      'SELECT ch.id,ch.meeting_join_policy AS "policy",m.role, '+
+      "CASE WHEN ch.meeting_expires_at>now() AND EXISTS ("+
+      "SELECT 1 FROM community_voice_sessions live WHERE live.channel_id=ch.id AND live.last_seen_at>now()-interval '180 seconds'"+
+      ') THEN ch.meeting_expires_at ELSE NULL END AS "expiresAt" '+
       'FROM community_channels ch JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$3 '+
       "WHERE ch.id=$2 AND ch.community_id=$1 AND ch.kind='meeting' "+
       "AND (ch.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS "+
@@ -29,7 +32,7 @@ export function registerCommunityMeetingRoutes(app:FastifyInstance,session:Sessi
       "AND NOT EXISTS "+
       '(SELECT 1 FROM community_bans b WHERE b.community_id=$1 AND b.user_id=$3)',
       [id,channelId,userId]);
-    return r.rows[0] as {id:string;policy:'open'|'approval';role:'owner'|'admin'|'moderator'|'member'}|undefined;
+    return r.rows[0] as {id:string;policy:'open'|'approval';role:'owner'|'admin'|'moderator'|'member';expiresAt:Date|null}|undefined;
   }
   const canManage=(role:string)=>role==='owner'||role==='admin';
   app.get('/api/v1/communities/:id/channels/:channelId/meeting',{schema:{params}},async(request,reply)=>{
@@ -43,7 +46,7 @@ export function registerCommunityMeetingRoutes(app:FastifyInstance,session:Sessi
         "SELECT u.handle,COALESCE(p.display_name,u.handle) AS \"displayName\" FROM meeting_access_requests r "+
         'JOIN users u ON u.id=r.user_id JOIN profiles p ON p.user_id=u.id '+
         "WHERE r.channel_id=$1 AND r.status='pending' ORDER BY r.requested_at LIMIT 30",[channelId]):{rows:[]};
-      return reply.header('Cache-Control',headers).send({policy:room.policy,manager,status:manager||room.policy==='open'?'approved':own.rows[0]?.status??'none',pending:pending.rows});
+      return reply.header('Cache-Control',headers).send({policy:room.policy,manager,status:manager||room.policy==='open'?'approved':own.rows[0]?.status??'none',pending:pending.rows,expiresAt:room.expiresAt});
     }catch(error){request.log.error({err:error},'Read meeting policy');return reply.code(503).send({error:'Meeting unavailable'});}
   });
 
