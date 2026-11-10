@@ -8,6 +8,8 @@ Mudanças posteriores ao marco exigem aumento de versão nos três manifestos np
 
 ## [0.1.0-beta.30] — 10/11/2026
 
+- **Foto na mensagem otimista dos canais:** o componente recebe nome, @ e avatar da conta autenticada e apresenta a foto do autor ainda durante o envio, inclusive em mensagens com anexo.
+- **Somente e-mails realmente pendentes nas notificações:** listagens "Todas" e "E-mail" excluem avisos lidos. Marcar e-mails como lidos ou movê-los sincroniza o aviso persistente no banco; a consulta periódica reconcilia leituras recentes realizadas fora do Uorqui. Novos avisos/push são criados apenas para e-mails não lidos. Testes de regressão no frontend e API incluídos.
 - **Contador unificado no sino:** soma mensagens privadas não lidas, mensagens de canais, convites de comunidades, notificações de atividade e e-mails não lidos das contas conectadas. O badge do ícone PWA utiliza a mesma soma nos navegadores que permitem; o cabeçalho mostra `99+` acima de 99.
 - **Compactação de fotos antes do envio:** imagens de Galeria, Câmera ou coladas no compositor utilizam processamento local compartilhado. Fotos JPEG/WebP/HEIC decodificáveis são redimensionadas até 2048 px no maior lado e convertidas em WebP com qualidade 85%, somente com economia mínima de 10%. GIFs, capturas PNG e imagens enviadas pela opção Arquivo preservam o original.
 - **Envio seguro:** progresso e cancelamento antes do upload; nomes, tipos de arquivo, fila offline e endpoints atuais de chat privado/canais preservados. Navegadores sem conversão compatível enviam o original.
