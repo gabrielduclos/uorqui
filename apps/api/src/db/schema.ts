@@ -219,6 +219,8 @@ export const communityChannels = pgTable('community_channels', {
   description: text('description'),
   kind: varchar('kind', { length: 8 }).notNull(),
   meetingJoinPolicy: varchar('meeting_join_policy', { length: 12 }).notNull().default('open'),
+  // Shared one-hour deadline for the current meeting session (not per user).
+  meetingExpiresAt: timestamp('meeting_expires_at', { withTimezone: true }),
   passwordHash: text('password_hash'),
   accessMode: varchar('access_mode', { length: 12 }).notNull().default('open'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
