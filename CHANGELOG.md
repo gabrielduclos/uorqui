@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.36] — 2026-11-10
+
+- **Single-flight account bootstrap:** `App` and `AuthPanel` now share `GET /api/v1/me` requests, eliminating overlapping requests on initial load and during React StrictMode. Successful responses are reused in the same tab for up to 8 seconds, 401 for 2 seconds; 429, 5xx and network errors are **never cached**. Each consumer receives an independent response clone.
+- **Fresh auth transitions:** successful login and onboarding bypass old session snapshots; logout, account deletion and profile update invalidate them. One consumer abandoning a request never aborts another consumer. All protected endpoints still authorize the session server-side.
+- **Privacy-safe in-tab diagnostics:** `window.__uorquiAuthDiagnostics()` reports actual `/api/v1/me` network calls in the last 60 seconds, deduplications, cache hits, 429s and most recent HTTP status. Does not track other endpoints, other tabs or other users on the same Wi-Fi; contains no IP addresses, emails or cookies.
+- **Render production investigation:** returned logs for 2026-11-10 11:30–12:30 BRT show four incoming `GET /api/v1/me` requests, no direct `GET /api/auth/get-session`, and no confirmed 429 emitted by the app. A Cloudflare-side rate limit may prevent requests from reaching Render. The existing WAF rule groups requests from users sharing a public IP; inspect the blocked response or WAF events before changing limits.
+- **Regressions:** new tests for single-flight requests, 401/429/503 behavior, fresh identity, cancellation and diagnostic counters. CI includes tests; no schema migration or increased request limits.
+
 ## [0.1.0-beta.35] — 2026-11-10
 
 - **429/client IP audit:** the Worker → Render → Better Auth chain previously relied on an unverified `CF-Connecting-IP` header. Fastify's transport IP may identify the Render proxy, not the visitor. Actual live IP distribution cannot be confirmed without Render logs.
