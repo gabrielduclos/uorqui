@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { and, eq, ilike, or } from 'drizzle-orm';
+import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import { createDatabase, getPool } from './db/client.js';
 import { profiles, users } from './db/schema.js';
+import { nextUsernameChangeAt } from './username-cooldown.js';
 
 type SessionReader = (request: FastifyRequest) => Promise<{ user: { id: string } } | null>;
 
@@ -11,6 +12,14 @@ const profileFields = {
   bio: profiles.bio, avatarUrl: profiles.avatarUrl, coverUrl: profiles.coverUrl,
   isPublic: profiles.isPublic, createdAt: users.createdAt,
 };
+
+const privateProfileFields = { ...profileFields, handleChangedAt: users.handleChangedAt };
+
+class UsernameCooldownError extends Error {
+  constructor(readonly nextChangeAt: string | null) {
+    super('USERNAME_CHANGE_COOLDOWN');
+  }
+}
 
 const UUID_RE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const mediaPath = new RegExp('^/media/profile/(' + UUID_RE + ')/(avatar|cover)/(' + UUID_RE + ')\\.(webp|jpg|png)$');
@@ -208,11 +217,25 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
 
     try {
       const record = await createDatabase().transaction(async (tx) => {
-        const [owner] = await tx.select({ id: users.id })
-          .from(users).where(eq(users.id, session.user.id)).limit(1);
+        const [owner] = await tx.select({
+          id: users.id, handle: users.handle, handleChangedAt: users.handleChangedAt,
+        }).from(users).where(eq(users.id, session.user.id)).limit(1);
         if (!owner) return null;
-        if (body.handle !== undefined) {
-          await tx.update(users).set({ handle: body.handle }).where(eq(users.id, session.user.id));
+        // Ignore repeated submissions of the current @username. An actual
+        // change is an atomic conditional update, safe under concurrent writes.
+        if (body.handle !== undefined && body.handle !== owner.handle) {
+          const [changed] = await tx.update(users)
+            .set({ handle: body.handle, handleChangedAt: sql`now()` })
+            .where(and(eq(users.id, session.user.id),
+              sql`(${users.handleChangedAt} IS NULL OR ${users.handleChangedAt} <= now() - interval '15 days')`))
+            .returning({ id: users.id });
+          if (!changed) {
+            const [fresh] = await tx.select({
+              handle: users.handle, handleChangedAt: users.handleChangedAt,
+            }).from(users).where(eq(users.id, session.user.id)).limit(1);
+            if (fresh && fresh.handle !== body.handle)
+              throw new UsernameCooldownError(nextUsernameChangeAt(fresh.handleChangedAt));
+          }
         }
         const changes = {
           ...(displayName !== undefined ? { displayName } : {}),
@@ -223,7 +246,7 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
           updatedAt: new Date(),
         };
         await tx.update(profiles).set(changes).where(eq(profiles.userId, session.user.id));
-        const [updated] = await tx.select(profileFields)
+        const [updated] = await tx.select(privateProfileFields)
           .from(users).innerJoin(profiles, eq(users.id, profiles.userId))
           .where(eq(users.id, session.user.id)).limit(1);
         return updated ?? null;
@@ -233,9 +256,15 @@ export function registerProfileRoutes(app: FastifyInstance, readSession: Session
         profile: {
           handle: record.handle, displayName: record.displayName, bio: record.bio,
           avatarUrl: record.avatarUrl, coverUrl: record.coverUrl, isPublic: record.isPublic,
+          handleChangeAvailableAt: nextUsernameChangeAt(record.handleChangedAt),
         },
       });
     } catch (error) {
+      if (error instanceof UsernameCooldownError) {
+        return reply.status(423).header('Cache-Control', 'no-store').send({
+          error: 'USERNAME_CHANGE_COOLDOWN', nextChangeAt: error.nextChangeAt,
+        });
+      }
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
         return reply.status(409).send({ error: 'Handle unavailable' });
       }
