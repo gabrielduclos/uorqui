@@ -10,6 +10,7 @@ on:
   pull_request:
     paths:
       - "apps/api/**"
+      - "apps/web/**"
       - "package.json"
       - ".github/workflows/ci.yml"
 jobs:
@@ -38,6 +39,10 @@ jobs:
         run: npm run test:rate-limit -w @uorqui/web
       - name: Test serialized bootstrap and public probe caching
         run: npm run test:bootstrap -w @uorqui/web
+      - name: Test restricted-channel invite flow and General default scroll
+        run: npm run test:restricted-invites -w @uorqui/web
+      - name: Test one-use channel invite authorization and migration shape
+        run: node --test apps/api/test/restricted-channel-invites.test.mjs
       - name: Test backend unread mail notification synchronization
         run: node --test apps/api/test/mail-unread-notifications.test.mjs
       - name: Build web
