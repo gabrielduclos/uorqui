@@ -1,3 +1,5 @@
+import {signedVisitorIpHeaders, VISITOR_IP_PROOF_HEADERS} from './clientIpProof';
+
 interface ProfileMediaObject {
   body: ReadableStream;
   size: number;
@@ -572,6 +574,15 @@ export default {
       }
       const forwarded = new Request(upstream.toString(), request);
       forwarded.headers.delete('host');
+      // The incoming client must NEVER be able to provide the internal proof.
+      // Rebuild it exclusively from the Cloudflare-verified visitor address.
+      for (const name of VISITOR_IP_PROOF_HEADERS) forwarded.headers.delete(name);
+      forwarded.headers.delete('x-uorqui-verified-client-ip');
+      if (current.pathname.startsWith('/api/auth/')) {
+        const proof = await signedVisitorIpHeaders(request, env.DM_ATTACHMENT_PROOF_SECRET);
+        if (proof) for (const [name, value] of Object.entries(proof))
+          forwarded.headers.set(name, value);
+      }
       const response = await fetch(forwarded, { redirect: 'manual' });
       if (publicProbe && response.ok && !response.headers.has('set-cookie') && edgeCache && cacheKey) {
         const cached = response.clone();
