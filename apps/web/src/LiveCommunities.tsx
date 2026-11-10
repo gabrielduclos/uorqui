@@ -77,6 +77,18 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const requestedChannel=useRef<{communityId:string;channelId:string}|null>(null);
   const externalSelection=useRef(false);
   const [channelOpen,setChannelOpen]=useState(false);
+  // On desktop the first text channel is rendered even if the mobile
+  // "channelOpen" flag has not been set. Anchor that visible history too.
+  const [desktopChannelVisible,setDesktopChannelVisible]=useState(
+    ()=>typeof window!=='undefined'&&window.matchMedia('(min-width: 768px)').matches
+  );
+  useEffect(()=>{
+    const media=window.matchMedia('(min-width: 768px)');
+    const sync=()=>setDesktopChannelVisible(media.matches);
+    media.addEventListener('change',sync);
+    return ()=>media.removeEventListener('change',sync);
+  },[]);
+  const channelHistoryVisible=channelOpen||desktopChannelVisible;
   const [voiceParticipants,setVoiceParticipants]=useState<CommunityVoiceParticipant[]>([]);
   const [activeVoiceRoom,setActiveVoiceRoom]=useState<VoiceRoomTarget|null>(null);
   const [voiceMinimized,setVoiceMinimized]=useState(false);
@@ -167,11 +179,11 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   // Opening a channel (or expanding a voice room's text panel) must start
   // at the latest message. User-directed history scrolling wins afterwards.
   useEffect(()=>{
-    if(!channelOpen || !active || (activeChannel?.kind!=='text' && !voiceTextExpanded)){
+    if(!channelHistoryVisible || !active || (activeChannel?.kind!=='text' && !voiceTextExpanded)){
       activeScrollKey.current=null;
       channelScrollRef.current.reset();
     }
-  },[channelOpen,active,activeChannel?.kind,voiceTextExpanded]);
+  },[channelHistoryVisible,active,activeChannel?.kind,voiceTextExpanded]);
   const channelDescription=activeChannel?.description?.trim()??'';
   function suggestedChannelName(kind:Channel['kind']){
     const base=kind==='text'?'Sala de texto':kind==='voice'?'Sala de voz':'Sala de reunião';
@@ -519,7 +531,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   useLayoutEffect(()=>{
     const element=scrollRef.current;
     const key=currentMessageKey;
-    if(!active||!channelOpen||!element||!key||messagesForKey!==key||messagesLoading)return;
+    if(!active||!channelHistoryVisible||!element||!key||messagesForKey!==key||messagesLoading)return;
     const latest=messages.at(-1)?.id??null;
     if(channelScrollRef.current.open(key)){
       activeScrollKey.current=key;
@@ -546,14 +558,14 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     }
     previousLastMessage.current=latest;
     previousMessageCount.current=messages.length;
-  },[active,channelOpen,messages,selectedId,channelId,messagesForKey,messagesLoading,currentMessageKey]);
+  },[active,channelHistoryVisible,messages,selectedId,channelId,messagesForKey,messagesLoading,currentMessageKey]);
 
   // Image previews and GIFs may expand after channel data is painted. Keep
   // the bottom anchored only while the reader has not scrolled away.
   useLayoutEffect(()=>{
     const element=scrollRef.current,content=messageContentRef.current;
     const key=currentMessageKey;
-    if(!active||!channelOpen||!element||!content||!key||messagesForKey!==key||messagesLoading)return;
+    if(!active||!channelHistoryVisible||!element||!content||!key||messagesForKey!==key||messagesLoading)return;
     let previousHeight=element.scrollHeight;
     let frame=0;
     const pin=()=>{
@@ -580,7 +592,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
       window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(openingFrame);
     };
-  },[active,channelOpen,currentMessageKey,messagesForKey,messagesLoading,voiceTextExpanded]);
+  },[active,channelHistoryVisible,currentMessageKey,messagesForKey,messagesLoading,voiceTextExpanded]);
   useEffect(()=>{
     if(activeChannel?.kind==='text'||!voiceTextExpanded)return;
     const frame=window.requestAnimationFrame(()=>{
