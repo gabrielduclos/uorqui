@@ -132,6 +132,7 @@ const en: Record<string, string> = {
   'Como devemos chamar você?': 'What should we call you?',
   'Voltar para entrar': 'Back to sign in',
   'Servidor indisponível. Tente novamente.': 'Server unavailable. Try again.',
+  'O servidor está limitando temporariamente as conexões (429). Uma nova tentativa será feita após o intervalo de segurança.': 'The server is temporarily rate limiting connections (429). We will retry after the safety delay.',
   'Converse, compartilhe e participe das suas comunidades.': 'Chat, share and join your communities.',
   'Converse, compartilhe e participe de comunidades em um só lugar.': 'Chat, share and join communities in one place.',
   
