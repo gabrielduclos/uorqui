@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.35] — 10/11/2026
+
+- **429 e identificação do IP:** auditoria da cadeia Cloudflare Worker → Render → Better Auth identificou dependência direta do cabeçalho `CF-Connecting-IP` no backend, sem prova de origem, e `request.ip` do Fastify representando a conexão com o proxy. Não é possível comprovar a distribuição real dos IPs sem logs do Render.
+- **IP verificado sem permitir falsificação:** o Worker assina o IP recebido na borda Cloudflare com HMAC-SHA256 e o segredo compartilhado já utilizado nos anexos (`DM_ATTACHMENT_PROOF_SECRET`), incluindo método, caminho e timestamp. O backend valida assinatura, formato do endereço e validade de 120 segundos; remove cabeçalhos controlados pelo visitante antes de chamar o Better Auth. Chamadas diretas ao Render usam somente o IP da conexão de transporte, não cabeçalhos encaminhados arbitrários.
+- **Menos colisões para usuários em uma mesma empresa:** consultas de sessão (`/get-session`) passam a aceitar até 240 chamadas por minuto por endereço de rede. O limite geral de 60/min e as proteções específicas de login, cadastro e recuperação permanecem ativados. Usuários no mesmo Wi-Fi podem continuar compartilhando o mesmo **IP público verdadeiro** (NAT).
+- **Diagnóstico sem revelar IPs:** respostas de `/api/auth/*` trazem `x-uorqui-ip-source` (`verified-cloudflare`, `transport` ou `unavailable`). Se houver 429 do Better Auth, também trazem `x-uorqui-rate-limit-scope: better-auth`. O Worker já distingue 429 recebido da API com `x-uorqui-upstream-429: 1`. Logs de 429 na API incluem somente um identificador HMAC abreviado, nunca o IP real.
+- **Regressão e implantação:** novo teste valida dois IPs distintos, IPv6, cabeçalhos falsificados, assinatura vencida, rota/método alterados e ausência de segredo. CI incorpora a suíte. Sem alteração de esquema do banco. **Confirmar o header `verified-cloudflare` após atualizar o Worker e a API no ambiente de produção.**
+
 ## [0.1.0-beta.34] — 10/11/2026
 
 - **Link reutilizável da reunião separado do convite:** a tela da reunião passa a compartilhar `/?community=<id>&channel=<id>&meeting=1`. Várias pessoas já autorizadas podem abrir o mesmo endereço, sem gerar/consumir token de convite, entrar automaticamente na comunidade ou receber permissão. Login, participação, canal fechado/senha e aprovação da reunião continuam validados pelo servidor. Abrir o link mostra a sala, mas não liga câmera ou microfone automaticamente.
