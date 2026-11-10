@@ -24,6 +24,14 @@ function buildAuth() {
 
   return betterAuth({
     ...authPolicy,
+    // Render's public edge sets this header to the verified client IP.
+    // Do not trust the client-controlled leftmost X-Forwarded-For value.
+    advanced: {
+      ...authPolicy.advanced,
+      ipAddress: {
+        ipAddressHeaders: ['cf-connecting-ip'],
+      },
+    },
     database: drizzleAdapter(createDatabase(), {
       provider: 'pg',
       schema: authSchema,
