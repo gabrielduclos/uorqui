@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useUorquiPreferences } from './UorquiPreferences';
 import { StartupSplash } from './StartupSplash';
 import { rateLimitRetryDelay } from './rateLimitBackoff';
+import { getAccountProbe, invalidateAccountProbe } from './accountProbe';
 import type { UserProfileData } from './UserProfiles';
 
 type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify' | 'reset';
@@ -117,9 +118,12 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     setCaptchaToken('');
   };
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (fresh = false) => {
     try {
-      const { response, body } = await requestJson('/api/v1/me');
+      // Share initial account lookups with App and React StrictMode. After a
+      // successful sign-in or onboarding, bypass any pre-auth 401 snapshot.
+      const response = await getAccountProbe({ fresh });
+      const body: unknown = await response.json().catch(() => ({}));
       if (response.ok) {
         const data = body as Account;
         setAccount(data);
@@ -131,7 +135,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         // escaped a temporary upstream rate limit.
         if (response.status === 429) {
           setApiRateLimited(true);
-          setApiRetryFloorMs(rateLimitRetryDelay(response.headers.get('Retry-After')));
+          setApiRetryFloorMs(rateLimitRetryDelay(response.headers.get('Retry-After') ?? response.headers.get('X-Retry-After')));
           setApiReady(false);
         }
         setAccount(null);
@@ -155,7 +159,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       const limited = [statusResponse.response, readiness?.response]
         .find(response => response?.status === 429);
       setApiRateLimited(Boolean(limited));
-      setApiRetryFloorMs(limited ? rateLimitRetryDelay(limited.headers.get('Retry-After')) : 0);
+      setApiRetryFloorMs(limited ? rateLimitRetryDelay(limited.headers.get('Retry-After') ?? limited.headers.get('X-Retry-After')) : 0);
       const available = statusResponse.response.ok && readiness?.response.ok === true;
       setApiReady(available);
       setStatus(statusResponse.response.ok ? statusResponse.body as ApiStatus : {});
@@ -304,7 +308,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       if (signup && requiresVerification) {
         navigate('verify');
         setMessage(t("Conta criada! Enviamos um link de confirmação para seu e-mail."));
-      } else await refresh();
+      } else await refresh(true);
     });
   }
 
@@ -380,7 +384,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         method: 'POST',
         body: JSON.stringify({ handle: handle.trim().toLowerCase(), displayName: displayName.trim() }),
       });
-      if (response.ok) await refresh();
+      if (response.ok) await refresh(true);
       else setMessage(readableError(body, t("Não foi possível salvar o perfil.")));
     });
   }
@@ -389,6 +393,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     await doAction(async () => {
       const { response } = await requestJson('/api/auth/sign-out', { method: 'POST', body: '{}' });
       if (!response.ok) throw new Error('Logout unsuccessful');
+      invalidateAccountProbe();
       setAccount(null);
       setPassword('');
       navigate('login');
