@@ -46,6 +46,15 @@ async function requestJson(path: string, options?: RequestInit) {
   return { response, body };
 }
 
+/** Honor upstream Retry-After without allowing a malformed header to stall login forever. */
+function rateLimitRetryDelay(header: string | null): number {
+  const raw = header?.trim() ?? '';
+  const seconds = /^\d{1,8}$/.test(raw) ? Number(raw) * 1000 : NaN;
+  const dateDelay = raw && !Number.isFinite(seconds) ? Date.parse(raw) - Date.now() : NaN;
+  const proposed = Number.isFinite(seconds) ? seconds : dateDelay;
+  return Number.isFinite(proposed) ? Math.min(180_000, Math.max(30_000, proposed)) : 30_000;
+}
+
 function readableError(body: unknown, fallback: string): string {
   if (typeof body === 'object' && body !== null) {
     for (const key of ['message', 'error']) {
@@ -87,6 +96,8 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const [apiChecked, setApiChecked] = useState(false);
   // Render Free can take about a minute to wake after an idle period.
   const [apiRetryStep, setApiRetryStep] = useState(0);
+  const [apiRetryFloorMs,setApiRetryFloorMs] = useState(0);
+  const [apiRateLimited,setApiRateLimited] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -103,7 +114,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
-  const connecting = !account && (loading || (!apiReady && (!apiChecked || apiRetryStep < 5)));
+  const connecting = !account && (loading || (!apiRateLimited && !apiReady && (!apiChecked || apiRetryStep < 5)));
   const canRegister = apiReady && status.registrationAvailable === true;
   const requiresVerification = status.emailVerificationRequired === true;
   const siteKey = status.turnstileSiteKey ?? null;
@@ -135,29 +146,36 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
   const checkApi = useCallback(async () => {
     setApiChecked(false);
     try {
-      const [statusResponse, readiness] = await Promise.all([
-        requestJson('/api/v1/status'), requestJson('/health/ready'),
-      ]);
-      const available = statusResponse.response.ok && readiness.response.ok;
+      // Do not trigger three concurrent origin requests during a rate-limit window.
+      // Status is public and lightweight; readiness/database and session are probed
+      // only after the previous dependency succeeds.
+      const statusResponse = await requestJson('/api/v1/status');
+      const readiness = statusResponse.response.ok ? await requestJson('/health/ready') : null;
+      const limited = [statusResponse.response, readiness?.response]
+        .find(response => response?.status === 429);
+      setApiRateLimited(Boolean(limited));
+      setApiRetryFloorMs(limited ? rateLimitRetryDelay(limited.headers.get('Retry-After')) : 0);
+      const available = statusResponse.response.ok && readiness?.response.ok === true;
       setApiReady(available);
       setStatus(statusResponse.response.ok ? statusResponse.body as ApiStatus : {});
       if (available) {
-        // Recover an already open login screen without requiring a reload.
         setMessage(previous => previous === t("Não foi possível acessar a API. Tente novamente mais tarde.") ? '' : previous);
-        void refresh();
+        await refresh();
+      } else {
+        setLoading(false);
       }
     } catch {
       setApiReady(false);
       setStatus({});
+      setLoading(false);
     } finally {
       setApiChecked(true);
     }
   }, [refresh, t]);
 
   useEffect(() => {
-    void refresh();
     void checkApi();
-  }, [refresh, checkApi]);
+  }, [checkApi]);
 
   useEffect(() => {
     // Short probes keep the form responsive. Rechecks run quietly after a
@@ -167,9 +185,9 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
     const timer = window.setTimeout(() => {
       setApiRetryStep(current => current + 1);
       void checkApi();
-    }, delays[apiRetryStep]);
+    }, Math.max(delays[apiRetryStep], apiRetryFloorMs));
     return () => window.clearTimeout(timer);
-  }, [apiChecked, apiReady, apiRetryStep, checkApi]);
+  }, [apiChecked, apiReady, apiRetryStep, apiRetryFloorMs, checkApi]);
 
   // Turnstile is rendered only for forms requiring a public anti-bot challenge.
   useEffect(() => {
@@ -407,9 +425,11 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       </div>}
 
       {apiChecked&&!apiReady&&!account&&!loading&&<div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/35 bg-amber-500/10 p-3 text-sm">
-        <span>{apiRetryStep < 5
-          ? t('Conectando ao servidor… A primeira conexão pode demorar um pouco.')
-          : t('Servidor indisponível. Tente novamente.')}</span>
+        <span>{apiRateLimited
+          ? t('O servidor está limitando temporariamente as conexões (429). Uma nova tentativa será feita após o intervalo de segurança.')
+          : apiRetryStep < 5
+            ? t('Conectando ao servidor… A primeira conexão pode demorar um pouco.')
+            : t('Servidor indisponível. Tente novamente.')}</span>
         <Button type="button" variant="outline" size="sm" onClick={retryConnection}>{t('Tentar novamente')}</Button>
       </div>}
       {loading ? (
