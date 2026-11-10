@@ -126,7 +126,16 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
         setDisplayName(data.user.name);
         setMessage('');
         if (data.profile) onAuthenticated?.(data);
-      } else setAccount(null);
+      } else {
+        // A healthy status endpoint does not guarantee the session endpoint
+        // escaped a temporary upstream rate limit.
+        if (response.status === 429) {
+          setApiRateLimited(true);
+          setApiRetryFloorMs(rateLimitRetryDelay(response.headers.get('Retry-After')));
+          setApiReady(false);
+        }
+        setAccount(null);
+      }
     } catch {
       setAccount(null);
       setMessage(t("Não foi possível acessar a API. Tente novamente mais tarde."));
