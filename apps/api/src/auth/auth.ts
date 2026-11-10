@@ -24,12 +24,13 @@ function buildAuth() {
 
   return betterAuth({
     ...authPolicy,
-    // Render's public edge sets this header to the verified client IP.
-    // Do not trust the client-controlled leftmost X-Forwarded-For value.
+    // The Fastify route always REPLACES this internal header with a validated
+    // Worker signature or transport fallback. Direct Render requests cannot
+    // spoof CF-Connecting-IP or X-Forwarded-For to evade rate limits.
     advanced: {
       ...authPolicy.advanced,
       ipAddress: {
-        ipAddressHeaders: ['cf-connecting-ip'],
+        ipAddressHeaders: ['x-uorqui-verified-client-ip'],
       },
     },
     database: drizzleAdapter(createDatabase(), {
@@ -70,6 +71,12 @@ function buildAuth() {
       storage: 'memory',
       window: 60,
       max: 60,
+      // Read-only session refreshes happen across many tabs and PWA instances.
+      // Keep login/signup security limits, but avoid exhausting this endpoint
+      // when multiple authorized users share one office NAT.
+      customRules: {
+        '/get-session': { window: 60, max: 240 },
+      },
     },
   });
 }
