@@ -16,6 +16,8 @@
 - **Privacidade:** cartão de exclusão definitiva no Perfil com duas confirmações (senha e `EXCLUIR`), estados de erro e aviso de mídia em limpeza posterior.
 - **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro. O modal, os erros, os botões e rótulos acessíveis seguem o idioma ativo (inicialmente o do navegador, respeitando a escolha salva), sem frases bilíngues separadas por barra.
 
+- **Edição do @usuário (beta.39):** após uma alteração efetiva, é necessário esperar 15 dias corridos para trocar novamente. Cadastro inicial e salvar sem alterar o @ não iniciam nem renovam o prazo. Durante o bloqueio, somente o campo @usuário fica desabilitado; a próxima data aparece no idioma ativo e o erro do servidor é `USERNAME_CHANGE_COOLDOWN` (HTTP 423). O nome completo segue editável.
+
 ## Princípios
 
 - **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** em uma única linha compacta. Trechos longos recebem reticências, com acesso à mensagem original pelo clique; a prévia no editor também ocupa só uma linha. A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
