@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.32] — 10/11/2026
+
+- **Rate limiting Cloudflare Free ativado em produção:** 1 regra WAF `http_ratelimit` da zona protege `/api/*` contra rajadas acima de **120 requisições por IP/ponto de presença da Cloudflare em 10 segundos**, com bloqueio por **10 segundos**. Sem contratar plano pago.
+- **Preservação do chat:** `/api/v1/dm/events`, `/api/v1/communities/events` (SSE) e o status público `/api/v1/status` ficam fora da regra. Rotas de saúde não correspondem a `/api/*`. Sem mudanças no contrato de API, R2 ou banco de dados.
+- **Operação/reversão:** expressão, IDs, diagnóstico, limites para empresas com IP compartilhado e rollback pela Cloudflare documentados em [Rate limiting da Cloudflare](docs/pt-BR/cloudflare-rate-limiting.md). Reverter Git não remove a regra aplicada na Cloudflare.
+- **Limitação:** protege contra rajadas anormais, mas não remove erros HTTP 429 causados por cotas ou limites da infraestrutura Render.
+
 ## [0.1.0-beta.31] — 10/11/2026
 
 - **Proteção contra HTTP 429:** autenticação consulta status, prontidão e sessão em sequência, evitando rajadas simultâneas. Ao receber 429, respeita `Retry-After` limitado a 30–180 segundos e informa o problema sem manter o carregamento infinito.
