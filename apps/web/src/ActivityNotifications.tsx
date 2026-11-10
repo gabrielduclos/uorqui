@@ -74,7 +74,8 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
       window.removeEventListener('focus',messageRefresh);};
   },[accountId]);
   const mentions=inboxEvents.filter(item=>item.kind==='mention');
-  const emails=inboxEvents.filter(item=>item.kind==='email');
+  // Email notifications represent pending unread items, not a history of already opened mail.
+  const emails=inboxEvents.filter(item=>item.kind==='email'&&!item.readAt);
   const contactActivities=items.filter(item=>item.kind==='friend_request'||item.kind==='friend_accepted');
   const inviteActivities=items.filter(item=>item.kind==='community_join_request'||item.kind==='meeting_join_request');
   const allTab=activeTab==='all';
