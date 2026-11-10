@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import { fromNodeHeaders } from 'better-auth/node';
 import { eq } from 'drizzle-orm';
 import { getAuth } from './auth/auth.js';
+import { resolveVisitorIp, visitorIpLogKey } from './auth/verified-client-ip.js';
 import { allowedWebOrigins } from './auth/web-origins.js';
 import { isDevelopmentSignupEnabled, isPublicSignupEnabled, isRegistrationAvailable, verifyRegistrationChallenge } from './auth/registration.js';
 import { createDatabase, closeDatabase, getPool } from './db/client.js';
@@ -130,6 +131,12 @@ app.route({
       return reply.status(503).send({ error: 'Authentication not configured' });
     }
     try {
+      const authPath = (request.raw.url ?? request.url).split('?')[0];
+      const visitor = resolveVisitorIp(request.headers, request.method, authPath,
+        request.ip, process.env.DM_ATTACHMENT_PROOF_SECRET);
+      // Never expose the raw address: only the origin of the IP resolution is
+      // returned for diagnostics, including 429s from Better Auth.
+      reply.header('x-uorqui-ip-source', visitor.source);
       // Verify the challenge on the server, including direct requests to Render.
       // A browser-only CAPTCHA check would be trivial to bypass.
       let authBody = request.body;
@@ -137,7 +144,7 @@ app.route({
       if (isPublicSignupEnabled() && request.method === 'POST' && guarded.has(request.url.split('?')[0])) {
         const payload = request.body as Record<string, unknown> | undefined;
         const token = typeof payload?.captchaToken === 'string' ? payload.captchaToken : '';
-        if (!await verifyRegistrationChallenge(token, request.ip)) {
+        if (!await verifyRegistrationChallenge(token, visitor.ip ?? undefined)) {
           return reply.status(403).send({ error: 'Verificação de segurança não concluída. Tente novamente.' });
         }
         const { captchaToken: _captchaToken, ...clean } = payload ?? {};
@@ -170,12 +177,27 @@ app.route({
         url.searchParams.set('callbackURL', result.toString());
       }
       const headers = fromNodeHeaders(request.headers);
+      // Always overwrite any browser-supplied internal header, even when the
+      // request reaches the Render API directly without the Cloudflare Worker.
+      headers.delete('x-uorqui-verified-client-ip');
+      headers.delete('x-uorqui-edge-ip');
+      headers.delete('x-uorqui-edge-ts');
+      headers.delete('x-uorqui-edge-proof');
+      if (visitor.ip) headers.set('x-uorqui-verified-client-ip', visitor.ip);
       const authRequest = new Request(url, {
         method: request.method,
         headers,
         ...(authBody ? { body: JSON.stringify(authBody) } : {}),
       });
       const response = await getAuth().handler(authRequest);
+      if (response.status === 429) {
+        reply.header('x-uorqui-rate-limit-scope', 'better-auth');
+        request.log.warn({
+          path: authPath,
+          ipSource: visitor.source,
+          ipKey: visitorIpLogKey(visitor.ip, process.env.DM_ATTACHMENT_PROOF_SECRET),
+        }, 'Better Auth rate limit reached');
+      }
       if(isSignup&&response.ok){
         const created=await response.clone().json().catch(()=>null) as {user?:{id?:string}}|null;
         const userId=created?.user?.id;
