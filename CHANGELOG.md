@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.33] — 2026-11-10
+
+- **General channel opens at the newest message:** the initially visible desktop text channel now runs the same automatic anchoring as manually selected channels; user-directed history scrolling remains in control.
+- **Secure restricted-channel invitations:** only owners, admins and authorized moderators can generate single-use links expiring after 24 hours. Explicit acceptance grants membership and access to only that channel; channel passwords and meeting approval are unaffected.
+- **Direct invites bound to accounts:** sending a channel invitation via DM creates a new token bound to the recipient user ID; shareable one-use tokens can be revoked by the issuer.
+- **Security:** 256-bit unpredictable token stored only as a SHA-256 digest; carried in the URL fragment, accepted only after login, and checked for origin, issuer role, account binding, bans and expiry. Atomic row-locked redemption and 10 outstanding links per issuer/channel.
+- **Database and QA:** additive migration `0044_restricted_channel_invites.sql` applied to Neon main and recorded in Drizzle; regression checks added to CI. See [restricted channel invitation security](docs/en/restricted-channel-invitations.md). Real-device end-to-end invitation testing is still pending.
+
 ## [0.1.0-beta.32] — 2026-11-10
 
 - **Cloudflare Free rate limit activated in production:** one zone-level `http_ratelimit` WAF rule protects `/api/*` from bursts of over **120 requests per 10 seconds per source IP and Cloudflare colo**. Blocks for **10 seconds**, then permits new requests. Uses the Free plan's available rule; no subscription upgrade needed.
