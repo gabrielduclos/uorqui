@@ -228,7 +228,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
   }, [area, account.user.id, tourVisible]);
   const communityUnreadCount = Object.values(communityUnread.communities).reduce((sum, count) => sum + count, 0);
   // Count unread channel locations once per channel, not once per message.
-  const notificationBadgeCount = activity.unread + communityUnread.locations.length + communityUnread.invites.length;
+  const notificationBadgeCount = Math.max(0, unreadMessageCount) + Math.max(0, communityUnread.total) + communityUnread.invites.length + Math.max(0, activity.unread) + Math.max(0, unreadMailCount);
   // One total shared across messages, community channels, invitations, activity
   // and ALL connected mailboxes. Recalculate when any unread source changes.
   const pwaUnreadCount=Math.max(0,unreadMessageCount)+
