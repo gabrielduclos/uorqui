@@ -2,7 +2,7 @@
 
 [Português](portfolio.md) · [English](../en/portfolio.md) · [Voltar ao README](../../README.pt-BR.md) · [Beta ao vivo](https://uorqui.app)
 
-**Tipo:** PWA original de comunicação e código aberto · **Situação:** beta técnico `0.1.0-beta.39` · **Repositório:** [gabrielduclos/uorqui](https://github.com/gabrielduclos/uorqui) · **Licença:** MIT
+**Tipo:** PWA original de comunicação e código aberto · **Situação:** beta técnico `0.1.0-beta.40` · **Repositório:** [gabrielduclos/uorqui](https://github.com/gabrielduclos/uorqui) · **Licença:** MIT
 
 ## O desafio
 
