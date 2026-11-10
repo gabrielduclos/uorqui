@@ -27,6 +27,7 @@ import { resetDmInboxSession } from './dmEventStream';
 import { clearChatMediaCache } from './chatMediaCache';
 import { clearCommunityMessageCache } from './communityMessageCache';
 import {useCommunityUnread} from './useCommunityUnread';
+import { isMeetingLink } from './meetingLink';
 import { useWorkspaceCommunities } from './WorkspaceCommunities';
 import { UIKitSectionHeading, UIKitCount } from './ui-kit/components';
 import { WorkspaceCommandPalette, type WorkspaceCommand } from './WorkspaceCommandPalette';
@@ -237,7 +238,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
   useEffect(()=>{updatePwaAppBadge(pwaUnreadCount);},[account.user.id,pwaUnreadCount]);
   const [requestedChatHandle, setRequestedChatHandle] = useState<string | null>(null);
   const [requestedConversation,setRequestedConversation]=useState<{id:string;nonce:number}|null>(null);
-  const [requestedCommunity,setRequestedCommunity]=useState<{communityId:string;channelId:string|null;nonce:number}|null>(null);
+  const [requestedCommunity,setRequestedCommunity]=useState<{communityId:string;channelId:string|null;meeting:boolean;nonce:number}|null>(null);
   const [requestedActivity,setRequestedActivity]=useState<{id:string;nonce:number}|null>(null);
   const navigationNonce=useRef(0);
   const [inAppNotices,setInAppNotices]=useState<InAppNotice[]>([]);
@@ -318,7 +319,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
       move('conversations');
     }else if(community&&validUuid.test(community)){
       setRequestedCommunity({communityId:community,channelId:channel&&validUuid.test(channel)?channel:null,
-        nonce:++navigationNonce.current});
+        meeting:isMeetingLink(params),nonce:++navigationNonce.current});
       move('communities');
     }else if(notification&&validUuid.test(notification)){
       setRequestedActivity({id:notification,nonce:++navigationNonce.current});
@@ -408,7 +409,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
       if(!['conversation','community','notification','mailAccount','communityInvite','mailInbox']
         .some(key=>current.searchParams.has(key)))return;
       const destination=current.toString();
-      for(const key of ['conversation','community','channel','notification','mailAccount','mailMessage','communityInvite','mailInbox'])
+      for(const key of ['conversation','community','channel','meeting','notification','mailAccount','mailMessage','communityInvite','mailInbox'])
         current.searchParams.delete(key);
       window.history.replaceState({},'',current.pathname+current.search+current.hash);
       openPushDestination(destination);
