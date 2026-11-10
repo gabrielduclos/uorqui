@@ -316,6 +316,13 @@
       "when": 1794310000000,
       "tag": "0044_restricted_channel_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1794310600000,
+      "tag": "0045_meeting_one_hour_deadline",
+      "breakpoints": true
     }
   ]
 }
