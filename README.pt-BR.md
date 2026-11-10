@@ -28,7 +28,7 @@
 ## Novidades do beta.34
 
 - **O link de reunião é separado do convite do canal.** O endereço da reunião é reutilizável por quem já tem acesso; não concede participação nem autorização. Convites de canal fechado continuam com link próprio e token de uso único.
-- **Reuniões duram no máximo uma hora por sessão,** com horário de término igual para todos e cronômetro na tela normal e minimizada. Ao zerar, a conexão é encerrada. Aplicar a migração PostgreSQL `0045_meeting_one_hour_deadline.sql` antes de publicar a API atualizada.
+- **Reuniões duram no máximo uma hora por sessão,** com horário de término igual para todos e cronômetro na tela normal e minimizada. Ao zerar, a conexão é encerrada. Migração PostgreSQL `0045_meeting_one_hour_deadline.sql` aplicada no Neon principal do Uorqui.
 
 ## Novidades do beta.30
 
