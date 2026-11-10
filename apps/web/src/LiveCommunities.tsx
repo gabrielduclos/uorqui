@@ -59,6 +59,7 @@ function body(value:unknown):RequestInit{
 }
 function memberView(community:Community){return !!community.myRole;}
 function manage(community:Community){return community.myRole==='owner'||community.myRole==='admin';}
+function mayInviteRestricted(community:Community){return community.myRole==='owner'||community.myRole==='admin'||community.myRole==='moderator';}
 
 export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileOpenChange,onRestoreNavigation,initialCommunityId,requestedDestination,unreadChannels,unreadCommunities,unreadLocations,active}:{
   myId:string;myName:string;myHandle:string;myAvatar:string|null;onMobileOpenChange?:(value:boolean)=>void;onRestoreNavigation?:()=>void;initialCommunityId?:string|null;
@@ -122,6 +123,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [createVisibility,setCreateVisibility]=useState<Visibility>('public');
   const [channelInviteOpen,setChannelInviteOpen]=useState(false);
   const [channelInviteLink,setChannelInviteLink]=useState('');
+  const [channelInviteToken,setChannelInviteToken]=useState<string|null>(null);
   const [channelInviteHandle,setChannelInviteHandle]=useState('');
   const [channelInviteLoading,setChannelInviteLoading]=useState(false);
   const [channelInviteSending,setChannelInviteSending]=useState(false);
@@ -403,25 +405,36 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
 
   async function openChannelInvite(){
     if(!selectedId||!activeChannel||!community?.myRole)return;
+    if(activeChannel.accessMode==='restricted'&&!mayInviteRestricted(community))return;
     setChannelInviteOpen(true);setChannelInviteLoading(true);
-    setChannelInviteLink('');setChannelInviteHandle('');setChannelInviteError('');setChannelInviteSuccess('');
+    setChannelInviteLink('');setChannelInviteToken(null);
+    setChannelInviteHandle('');setChannelInviteError('');setChannelInviteSuccess('');
     try{
-      const existing=await api<{link:{id:string}|null}>('/api/v1/communities/'+selectedId+'/share');
-      let token=existing.link?.id;
-      if(!token&&manage(community)){
-        const created=await api<{link:{id:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
-        token=created.link.id;
+      if(activeChannel.accessMode==='restricted'){
+        // Each link is a 24-hour, single-use capability. A targeted DM invite
+        // gets its OWN account-bound token instead of reusing this generic link.
+        const created=await api<{token:string}>(
+          '/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/invites',body({}));
+        const link=new URL('/channel-invite',window.location.origin);
+        link.hash=new URLSearchParams({token:created.token}).toString();
+        setChannelInviteToken(created.token);
+        setChannelInviteLink(link.toString());
+      }else{
+        const existing=await api<{link:{id:string}|null}>('/api/v1/communities/'+selectedId+'/share');
+        let token=existing.link?.id;
+        if(!token&&manage(community)){
+          const created=await api<{link:{id:string}}>('/api/v1/communities/'+selectedId+'/share',body({}));
+          token=created.link.id;
+        }
+        if(!token)throw new Error('INVITE_LINK_UNAVAILABLE');
+        const link=new URL('/invite/'+encodeURIComponent(token),window.location.origin);
+        link.searchParams.set('channel',activeChannel.id);
+        setChannelInviteLink(link.toString());
       }
-      if(!token)throw new Error('INVITE_LINK_UNAVAILABLE');
-      // This link joins the community and routes directly to the chosen channel.
-      // Passwords, restricted grants and meeting approval remain server-enforced.
-      const link=new URL('/invite/'+encodeURIComponent(token),window.location.origin);
-      link.searchParams.set('channel',activeChannel.id);
-      setChannelInviteLink(link.toString());
     }catch{
       setChannelInviteError(pt?
-        'Não há link ativo. Peça a um administrador para criar o primeiro convite para este canal.':
-        'No active link. Ask an administrator to create the first channel invitation.');
+        'Não foi possível gerar o link deste canal. Confira suas permissões ou tente novamente.':
+        'Could not create this channel invitation. Check permissions or try again.');
     }finally{setChannelInviteLoading(false);}
   }
   async function copyChannelInvite(){
@@ -441,13 +454,27 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     }
     setChannelInviteSending(true);setChannelInviteError('');setChannelInviteSuccess('');
     try{
-      const target=await api<{id:string}>('/api/v1/dm/conversations',body({handle}));
-      await api('/api/v1/dm/conversations/'+target.id+'/messages',body({
-        clientId:crypto.randomUUID(),
-        body:(pt?'Venha para o canal ':'Join the channel ')+
-          (activeChannel.kind==='text'?'#':activeChannel.kind==='meeting'?'📹 ':'🔊 ')+
-          activeChannel.name+' · '+community.name+'\n'+channelInviteLink
-      }));
+      let directLink=channelInviteLink,tokenToRevoke:string|null=null;
+      if(activeChannel.accessMode==='restricted'){
+        const created=await api<{token:string}>(
+          '/api/v1/communities/'+selectedId+'/channels/'+activeChannel.id+'/invites',body({handle}));
+        tokenToRevoke=created.token;
+        const link=new URL('/channel-invite',window.location.origin);
+        link.hash=new URLSearchParams({token:created.token}).toString();
+        directLink=link.toString();
+      }
+      try{
+        const target=await api<{id:string}>('/api/v1/dm/conversations',body({handle}));
+        await api('/api/v1/dm/conversations/'+target.id+'/messages',body({
+          clientId:crypto.randomUUID(),
+          body:(pt?'Venha para o canal ':'Join the channel ')+
+            (activeChannel.kind==='text'?'#':activeChannel.kind==='meeting'?'📹 ':'🔊 ')+
+            activeChannel.name+' · '+community.name+'\n'+directLink
+        }));
+      }catch(error){
+        if(tokenToRevoke)void api('/api/v1/channel-invites/revoke',body({token:tokenToRevoke})).catch(()=>{});
+        throw error;
+      }
       setChannelInviteSuccess(pt?'Convite enviado para @'+handle+' pelo chat.':'Invitation sent to @'+handle+' via chat.');
       setChannelInviteHandle('');
     }catch{
@@ -1124,11 +1151,11 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             title={pt?'Editar canal':'Edit channel'} onClick={()=>setEditChannelId(activeChannel.id)}>
             <Pencil className="size-4"/><span className="hidden sm:inline">{pt?'Editar':'Edit'}</span>
           </Button>}
-          <Button type="button" size="sm" variant="ghost" className="shrink-0 gap-2 px-2 sm:px-3"
+          {(activeChannel.accessMode!=='restricted'||mayInviteRestricted(community))&&<Button type="button" size="sm" variant="ghost" className="shrink-0 gap-2 px-2 sm:px-3"
             aria-label={pt?'Convidar para este canal':'Invite to this channel'}
             onClick={()=>void openChannelInvite()}>
             <UserPlus className="size-4"/><span className="hidden sm:inline">{pt?'Convidar':'Invite'}</span>
-          </Button>
+          </Button>}
         </header>
         {!channelLocked&&channelDescription&&<section aria-label={pt?'Descrição fixa do canal':'Pinned channel description'}
           className="z-10 shrink-0 border-b border-border bg-card/80 px-4 py-2 sm:px-5">
@@ -1385,8 +1412,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
               'Este é também o link da reunião. Se a sala exigir aprovação, o convidado ainda precisará ser aprovado.':
               'This is also the meeting link. Approval is still required when enabled.'}</p>}
             {activeChannel?.accessMode==='restricted'&&<p className="text-xs text-muted-foreground">{pt?
-              'O convite não libera automaticamente o acesso a um canal fechado.':
-              'This invitation does not automatically grant access to restricted channels.'}</p>}
+              'Link exclusivo: expira em 24 horas, funciona uma vez e concede acesso ao canal após o aceite. Somente dono, admin ou moderador autorizado pode gerar.':
+              'Single-use link: expires in 24 hours and grants channel access after acceptance. Only the owner, admin, or an authorized moderator can create one.'}</p>}
             {activeChannel?.hasPassword&&<p className="text-xs text-muted-foreground">{pt?
               'O convidado precisará da senha do canal.':'The invitee will need the channel password.'}</p>}
             {channelInviteLoading?<WorkspaceContentLoading label={pt?'Gerando convite':'Preparing invitation'} rows={2}/>:
