@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { useCallback, useEffect, useState } from 'react';
 import { ShieldBan, UserRoundX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ export function BlockedAccountsPanel(){
     {blocked.length>0&&<div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border bg-card">
       {blocked.map(person=><div key={person.handle} className="flex min-h-16 min-w-0 items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/60">
         <div className="grid size-9 shrink-0 place-items-center rounded-md bg-secondary"><UserRoundX className="size-4 text-muted-foreground"/></div>
-        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.displayName}</span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{compactUserName(person.displayName)}</span>
           <span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
         <Button size="sm" variant="outline" disabled={!!busy} className="min-h-9 shrink-0 rounded-md text-xs"
           onClick={()=>void unblock(person.handle)}>{pt?'Desbloquear':'Unblock'}</Button>
