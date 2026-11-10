@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -447,7 +448,7 @@ export default function AuthPanel({ onAuthenticated }: { onAuthenticated?: (acco
       ) : account ? (
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-muted/40 p-4">
-            <p className="font-semibold">{account.profile?.displayName ?? account.user.name}</p>
+            <p className="font-semibold">{compactUserName(account.profile?.displayName ?? account.user.name)}</p>
             <p className="mt-1 break-all text-sm text-muted-foreground">{account.profile ? '@' + account.profile.handle : account.user.email}</p>
           </div>
           {!account.profile && (
