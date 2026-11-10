@@ -29,7 +29,9 @@
 
 - **Menos consultas de sessão:** abertura e tela de acesso compartilham a mesma consulta `/api/v1/me` na aba; não há requisições duplicadas por renderização. Respostas de conta válidas têm um reaproveitamento breve na memória (8 s) e são revalidadas após login ou mudança de perfil. Erros 429 e 503 não são armazenados.
 - **Medição simples:** abra o console do navegador e execute `window.__uorquiAuthDiagnostics()`. O campo `networkLastMinute` é o número de consultas reais de conta enviadas **por aquela aba nos últimos 60 segundos**. `coalescedTotal` e `cacheHitsTotal` mostram chamadas evitadas; `rateLimitedTotal` conta respostas 429 dessa rota. Não expõe dados da conta.
-- **Diagnóstico da infraestrutura:** nos logs consultados do Render, não há indícios de que `/api/auth/get-session` esteja recebendo alta frequência. A regra Cloudflare WAF existente é por IP público, portanto usuários da mesma rede somam consumo; se reaparecer 429, confira os cabeçalhos da resposta e os eventos WAF antes de elevar o limite.
+- **Métrica por conta no Render:** procure `Account probe volume` nos logs. A cada minuto com tráfego de `/api/v1/me`, serão exibidos totais por processo, número de contas e pico/média por conta com identificadores pseudonimizados, sem e-mails ou IPs nessa medição.
+- **Quem retornou o 429?** No console, execute `window.__uorquiRateLimitDiagnostics()`. A última lista mostra rota anonimizada, momento, `origin` (`render-upstream` ou `edge-or-unknown`) e `scope` (`application`, `better-auth` ou `unclassified`). `render-upstream` sem `scope` pode indicar que o próprio Render bloqueou a requisição antes de chegar ao Fastify, mas a resposta não prova isso sozinha.
+- **Render Free é uma causa possível:** a documentação oficial [Render — troubleshooting](https://render.com/docs/troubleshooting-deploys) confirma que limites de tráfego de entrada da plataforma podem causar 429, com limites muito menores em instâncias gratuitas. Nos registros revisados não encontramos 429 conclusivo da aplicação. A regra WAF da Cloudflare foi adicionada **após** o início do problema, por isso não explica a primeira ocorrência.
 
 ## Novidades do beta.35
 
