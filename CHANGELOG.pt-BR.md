@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.36] — 10/11/2026
+
+- **Consultas de conta deduplicadas:** `App` e `AuthPanel` agora usam um único transporte para `GET /api/v1/me`, evitando requisições simultâneas durante a inicialização e no StrictMode. Respostas 200 podem ser reaproveitadas na mesma aba por até 8 segundos; 401, por apenas 2 segundos. Respostas 429/5xx e erros de rede **nunca** entram no cache. Cada consumidor recebe uma cópia própria da resposta.
+- **Sessão preservada e invalidada corretamente:** login concluído e onboarding forçam leitura nova, e logout, exclusão de conta e alteração do perfil invalidam qualquer cópia local. Se um consumidor abortar a espera, a consulta compartilhada continua disponível para os demais; o servidor permanece responsável por autorizar todas as rotas.
+- **Diagnóstico por aba sem dados pessoais:** no console do navegador, `window.__uorquiAuthDiagnostics()` mostra quantas chamadas de `/api/v1/me` partiram daquela aba nos últimos 60 segundos, número de consultas evitadas, respostas 429 e último status. **Não** mede outras rotas, outras abas nem usuários no Wi-Fi e não contém cookies, endereços IP ou e-mails.
+- **Análise de produção (Render):** nos logs retornados para 10/11/2026 das 11h30 às 12h30 BRT, foram identificados quatro registros de entrada `GET /api/v1/me` e nenhum `GET /api/auth/get-session`. Não se confirmou 429 na aplicação; o bloqueio pode ocorrer na Cloudflare antes do Render. A proteção WAF de 120 requisições/10 segundos é por IP público e localidade e pode agrupar vários usuários em uma mesma rede. **A origem real do 429 ainda requer a resposta bloqueada ou eventos WAF**.
+- **Verificação:** suíte automatizada para requisições simultâneas, respostas 401/429/503, transições de autenticação, cancelamento de consumidores e métricas integrada à CI. Nenhuma migração e nenhum aumento adicional nos limites de requisições.
+
 ## [0.1.0-beta.35] — 10/11/2026
 
 - **429 e identificação do IP:** auditoria da cadeia Cloudflare Worker → Render → Better Auth identificou dependência direta do cabeçalho `CF-Connecting-IP` no backend, sem prova de origem, e `request.ip` do Fastify representando a conexão com o proxy. Não é possível comprovar a distribuição real dos IPs sem logs do Render.
