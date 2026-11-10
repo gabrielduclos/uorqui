@@ -2,7 +2,7 @@
 
 [Português](primeiros-passos.md) · [English](../en/getting-started.md)
 
-> **Beta técnico `0.1.0-beta.1`:** mensageiro individual, feed, comunidades, salas de voz e autenticação estão implementados e publicados. Ainda faltam testes de ponta a ponta em celulares reais, e-mail e push. Este guia é para desenvolvimento local; não utilize os segredos ou o banco de produção.
+> **Beta técnico `0.1.0-beta.37`:** mensagens individuais, Descobrir (feed global descontinuado), comunidades, reuniões, e-mail conectado e autenticação estão implementados para testes controlados. Ainda faltam testes de ponta a ponta em celulares reais, e-mail e push. Este guia é para desenvolvimento local; não utilize os segredos ou o banco de produção.
 
 ## Requisitos
 
