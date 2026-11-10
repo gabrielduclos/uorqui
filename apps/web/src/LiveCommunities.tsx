@@ -1540,7 +1540,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             onClick={event=>{navigateToPublicProfile(event,user.handle);setInspectReaction(null);}}
             className="flex min-h-12 items-center gap-3 rounded-lg px-2 hover:bg-secondary">
             <UserAvatar name={compactUserName(user.name)} image={user.avatarUrl} size="sm"/>
-            <span className="min-w-0"><strong className="block truncate text-sm"{compactUserName(user.name)}</strong>
+            <span className="min-w-0"><strong className="block truncate text-sm">{compactUserName(user.name)}</strong>
               <span className="text-xs text-muted-foreground">@{user.handle}</span></span>
           </a>)}
         </div>
