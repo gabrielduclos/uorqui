@@ -6,6 +6,7 @@ import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { ChatImageEditor } from './ChatImageEditor';
 import { cn } from '@/lib/utils';
 import { optimizeVideoAttachment } from './videoCompression';
+import { optimizeImageAttachment } from './imageCompression';
 
 const EMOJI_GROUPS = [
   { pt: 'Expressões', en: 'Expressions', symbols: ['😀','😃','😁','😂','🤣','😊','😍','🥰','😘','😎','🥹','😢','😭','😡','🤔','😴','🤩','😮'] },
@@ -51,6 +52,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
   const [error,setError] = useState('');
   const [optimizing,setOptimizing] = useState(false);
   const [optimizationProgress,setOptimizationProgress] = useState(0);
+  const [optimizationKind,setOptimizationKind] = useState<'image'|'video'>('video');
   const [optimizingFile,setOptimizingFile] = useState<{name:string;size:number}|null>(null);
   const [videoNotice,setVideoNotice] = useState('');
   const optimizationController=useRef<AbortController|null>(null);
@@ -118,7 +120,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     setEditingPhotoIndex(null); setEditorOpen(false);setVideoNotice('');
   }
   function stagePhotos(files:File[]) {
-    if(editing || !files.length)return;
+    if(editing || optimizingRef.current || !files.length)return;
     const next=[...(pending?.type.startsWith('image/')?[pending]:[]),...pendingPhotos,...files];
     if(next.length>10){setError(pt?'Selecione no máximo 10 fotos por envio.':'Select up to 10 photos per batch.');return;}
     const valid=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif']);
@@ -171,7 +173,7 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     }
     const controller=new AbortController();
     optimizationController.current=controller;
-    optimizingRef.current=true;setOptimizing(true);setOptimizationProgress(0);
+    optimizingRef.current=true;setOptimizing(true);setOptimizationKind('video');setOptimizationProgress(0);
     setOptimizingFile({name:file.name,size:file.size});
     setVideoNotice('');setError('');
     try{
@@ -255,9 +257,40 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     audioStream.current?.getTracks().forEach(t=>t.stop());
     setRecording('idle');recordingChunks.current=[];
   }
+  async function sendOptimizedPhotos() {
+    if (optimizingRef.current || !pendingPhotos.length) return;
+    const files = [...pendingPhotos], caption = value.trim();
+    const controller = new AbortController();
+    optimizationController.current = controller;
+    optimizingRef.current = true;
+    setOptimizing(true);setOptimizationKind('image');setOptimizationProgress(0);
+    setVideoNotice('');setError('');
+    try {
+      const ready: File[] = [];
+      for (let index = 0; index < files.length; index++) {
+        setOptimizingFile({name: files[index].name, size: files[index].size});
+        ready.push(await optimizeImageAttachment(files[index], controller.signal));
+        if (controller.signal.aborted || !mounted.current) return;
+        setOptimizationProgress(Math.round((index + 1) / files.length * 100));
+      }
+      if (controller.signal.aborted || !mounted.current) return;
+      clearPending();
+      onChange('');
+      ready.forEach((file, index) => onAttach(file, index === 0 ? caption : ''));
+    } catch (error) {
+      if (!mounted.current) return;
+      if (controller.signal.aborted || (error instanceof Error && error.message === 'ABORTED'))
+        setVideoNotice(pt ? 'Compactação cancelada. Nenhuma foto foi enviada.' : 'Compression cancelled. No photo was sent.');
+      else setError(pt ? 'Não foi possível preparar as fotos.' : 'Could not prepare the photos.');
+    } finally {
+      if (optimizationController.current === controller) optimizationController.current = null;
+      optimizingRef.current = false;
+      if (mounted.current) {setOptimizing(false);setOptimizingFile(null);}
+    }
+  }
   function sendSelected(){
     if(!canSend)return;
-    if(pendingPhotos.length){const files=[...pendingPhotos],caption=value.trim();clearPending();onChange('');files.forEach((file,index)=>onAttach(file,index===0?caption:''));}
+    if(pendingPhotos.length){void sendOptimizedPhotos();}
     else if(pending){const file=pending;const caption=value.trim();clearPending();onChange('');onAttach(file,caption);}
     else if(pendingLocation){const {latitude,longitude}=pendingLocation;setPendingLocation(null);const caption=value.trim();onChange('');onShareLocation(latitude,longitude,caption);}
     else onSubmit();
@@ -326,17 +359,18 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     {optimizing&&<div className="w-full min-w-0 space-y-2 rounded-lg border border-border bg-card p-3" role="status" aria-live="polite">
       <div className="flex items-center gap-2 text-xs">
         <span className="min-w-0 flex-1 truncate font-semibold" title={optimizingFile?.name}>
-          {pt?'Compactando vídeo':'Compressing video'} · {optimizingFile?(optimizingFile.size/1048576).toFixed(1)+' MB':''}
+          {optimizationKind==='image'?(pt?'Compactando foto':'Compressing photo'):(pt?'Compactando vídeo':'Compressing video')} · {optimizingFile?(optimizingFile.size/1048576).toFixed(1)+' MB':''}
         </span>
         <span className="shrink-0 text-muted-foreground">{optimizationProgress}%</span>
         <button type="button" className="min-h-9 shrink-0 rounded-md border border-border px-2 text-xs hover:bg-accent"
           onClick={()=>optimizationController.current?.abort()}>{pt?'Cancelar':'Cancel'}</button>
       </div>
       <progress max={100} value={optimizationProgress} className="h-2 w-full accent-primary"
-        aria-label={pt?'Progresso da compactação':'Video compression progress'}/>
+        aria-label={pt?'Progresso da compactação':optimizationKind==='image'?'Image compression progress':'Video compression progress'}/>
       <p className="text-[11px] text-muted-foreground">
-        {pt?'Processando no dispositivo. O vídeo só será enviado depois de compactado.':
-          'Processing on this device. Video will be uploaded only after compression.'}
+        {optimizationKind==='image'
+          ?(pt?'Processando no dispositivo. As fotos serão enviadas após a otimização.':'Processing on this device. Photos will be sent after optimization.')
+          :(pt?'Processando no dispositivo. O vídeo só será enviado depois de compactado.':'Processing on this device. Video will be uploaded only after compression.')}
       </p>
     </div>}
     {videoNotice&&!optimizing&&<p role="status" className="w-full text-xs text-muted-foreground">{videoNotice}</p>}
@@ -346,8 +380,8 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
         {pendingPhotos.map((file,index)=><div key={photoUrls[index]} className="relative min-w-0 border border-border bg-background p-1">
           <img src={photoUrls[index]} alt={pt?'Foto '+(index+1):'Photo '+(index+1)} className="h-20 w-full object-contain"/>
           <div className="flex items-center justify-between gap-1 pt-1">
-            <button type="button" aria-label={pt?'Editar foto '+(index+1):'Edit photo '+(index+1)} onClick={()=>{setEditingPhotoIndex(index);setEditorOpen(true);}} className="grid size-7 place-items-center hover:bg-accent"><Pencil className="size-3.5"/></button>
-            <button type="button" aria-label={pt?'Remover foto '+(index+1):'Remove photo '+(index+1)} onClick={()=>removePhoto(index)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-3.5"/></button>
+            <button type="button" aria-label={pt?'Editar foto '+(index+1):'Edit photo '+(index+1)} disabled={optimizing} onClick={()=>{setEditingPhotoIndex(index);setEditorOpen(true);}} className="grid size-7 place-items-center hover:bg-accent"><Pencil className="size-3.5"/></button>
+            <button type="button" aria-label={pt?'Remover foto '+(index+1):'Remove photo '+(index+1)} disabled={optimizing} onClick={()=>removePhoto(index)} className="grid size-7 place-items-center hover:bg-accent"><X className="size-3.5"/></button>
           </div>
         </div>)}
       </div>
@@ -439,11 +473,11 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
     <input ref={galleryRef} type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime" className="sr-only"
       onChange={e => { const files=Array.from(e.target.files??[]); e.target.value=''; selectGallery(files); }} />
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
-      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
+      onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file?.type.startsWith('image/'))stagePhotos([file]);else chosenFile(file); }} />
     <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,.mp3,.m4a,.ogg,.webm,.wav,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <textarea ref={textareaRef} rows={1} value={value} disabled={recording!=='idle'}
-      onPaste={e=>{const file=Array.from(e.clipboardData.items).find(item=>item.kind==='file' && item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();stageFile(file);}}}
+      onPaste={e=>{const file=Array.from(e.clipboardData.items).find(item=>item.kind==='file' && item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();stagePhotos([file]);}}}
       onChange={event => onChange(event.target.value)} onKeyDown={keyDown} maxLength={4000}
       aria-label={pt ? 'Escrever mensagem' : 'Write a message'}
       data-message-composer placeholder={editing ? (pt ? 'Editar mensagem…' : 'Edit message…') : (pt ? 'Mensagem…' : 'Message…')}
