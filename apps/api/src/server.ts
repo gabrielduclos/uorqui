@@ -54,6 +54,21 @@ const accountProbeTimer = setInterval(() => {
 accountProbeTimer.unref();
 app.addHook('onClose', async () => { clearInterval(accountProbeTimer); });
 
+// Separate application-level throttling from Better Auth. This hook does not
+// weaken limits, retry writes or expose private request data.
+app.addHook('onSend', async (request, reply, payload) => {
+  if (reply.statusCode !== 429) return payload;
+  if (!reply.hasHeader('x-uorqui-rate-limit-scope'))
+    reply.header('x-uorqui-rate-limit-scope', 'application');
+  // Route patterns contain only :parameters, never account or invitation IDs.
+  const route = request.routeOptions.url ?? '/unknown';
+  if (!route.startsWith('/api/auth/')) {
+    request.log.warn({ route, scope: 'application' },
+      'Uorqui application rate limit reached');
+  }
+  return payload;
+});
+
 await app.register(cors, {
   origin: allowedWebOrigins(),
   credentials: true,
