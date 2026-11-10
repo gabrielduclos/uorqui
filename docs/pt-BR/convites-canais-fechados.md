@@ -7,7 +7,7 @@
 - Canais em modo **Fechado / restricted** usam links próprios de autorização; não reaproveitam convites gerais da comunidade.
 - Apenas **dono, administradores e moderadores com acesso ao canal** podem criar os links.
 - O link copiado é de **uso único**, válido por **24 horas**. Qualquer usuário autenticado que possua o link pode usá-lo antes de terceiros — compartilhe apenas com o convidado desejado.
-- Ao enviar um convite pelo **@usuário** no chat privado, a API gera um novo link que só pode ser aceito **pelaquela conta específica** (vinculado ao ID, não apenas ao @).
+- Ao enviar um convite pelo **@usuário** no chat privado, a API gera um novo link que só pode ser aceito **por aquela conta específica** (vinculado ao ID, não apenas ao @).
 - Abrir o link mostra uma confirmação. Entrar/criar uma conta ou apenas visualizar a prévia **não** concede nenhuma permissão.
 - Após clicar em **Aceitar e entrar no canal**, o servidor registra em uma transação a participação na comunidade, a autorização para **aquele canal** e o consumo do convite.
 - Links usados, expirados, revogados, de emissores banidos ou sem cargo/permissão válida deixam de funcionar.
