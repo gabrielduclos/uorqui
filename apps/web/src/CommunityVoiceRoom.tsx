@@ -784,6 +784,10 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       </div>
     </div>}
     <div className="flex min-w-0 items-center gap-1 p-1.5">
+      {meetingCountdown&&<span role="timer" aria-live="off" aria-label={(pt?'Tempo restante: ':'Time remaining: ')+meetingCountdown}
+        className={'shrink-0 rounded-md border px-2 py-1 text-xs font-semibold tabular-nums '+(remainingSeconds!==null&&remainingSeconds<=300?'border-destructive/60 text-destructive':'border-border text-foreground')}>
+        {meetingCountdown}
+      </span>}
       <button type="button" className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-accent"
         onClick={onRestore} aria-label={pt?'Voltar para a sala de voz':'Return to voice room'}>
         <span className="relative grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
@@ -822,6 +826,11 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {meetingCountdown&&<span role="timer" aria-live="off" aria-label={(pt?'Tempo restante: ':'Time remaining: ')+meetingCountdown}
+            className={'rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums '+(remainingSeconds!==null&&remainingSeconds<=300?'border-destructive/60 text-destructive':'border-border text-foreground')}
+            title={pt?'Tempo restante da reunião (máximo de 1 hora)':'Time remaining (1-hour maximum)'}>
+            {meetingCountdown}
+          </span>}
           {meeting&&onShareMeeting&&<Button type="button" variant="outline" size="sm" className="min-h-10 gap-1.5" onClick={onShareMeeting}>
             <Link2 className="size-4"/>{pt?'Link da reunião':'Meeting link'}
           </Button>}
