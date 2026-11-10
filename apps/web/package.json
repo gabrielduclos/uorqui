@@ -10,6 +10,7 @@
     "test:instance": "node --import tsx --test test/app-instance-identity.test.mjs",
     "typecheck": "tsc --noEmit",
     "test:channel-scroll": "node --import tsx --test test/channel-scroll.test.mjs",
+    "test:channel-unread-card": "node --test test/channel-unread-card.test.mjs",
     "test:channel-theme": "node --test test/channel-nav-theme.test.mjs",
     "test:message-time": "node --import tsx --test test/message-timestamp.test.mjs",
     "test:image": "node --import tsx --test test/image-compression.test.mjs",
