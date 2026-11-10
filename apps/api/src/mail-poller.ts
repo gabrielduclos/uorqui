@@ -50,6 +50,15 @@ async function pollAccount(account: Account) {
         [account.id,snapshot.unreadCount,snapshotStartedAt]);
     }
     if (snapshot.messages.length) {
+      // Reconcile mail read in Gmail/Outlook/IMAP even when it happened outside
+      // Uorqui. Limit reconciliation to the recent inbox snapshot.
+      const alreadyRead = snapshot.messages.filter(message => !message.unread).map(message => message.id);
+      if (alreadyRead.length) {
+        await client.query(
+          "UPDATE notification_inbox_events SET read_at=COALESCE(read_at,now()) " +
+          "WHERE kind='email' AND mail_account_id=$1 AND mail_message_id=ANY($2::text[]) AND read_at IS NULL",
+          [account.id, alreadyRead]);
+      }
       const params: string[] = [account.id];
       const values = snapshot.messages.map((message,i)=>{
         params.push(message.id);
@@ -62,7 +71,7 @@ async function pollAccount(account: Account) {
         const unseen = new Set(added.rows.map(row => row.message_id));
         const baseline = new Date(prior.rows[0].initialized_at);
         notifications = snapshot.messages.filter(message =>
-          unseen.has(message.id) && newlyArrivedMail(message, baseline));
+          message.unread && unseen.has(message.id) && newlyArrivedMail(message, baseline));
       }
     }
     // Persist email notifications independent of Web Push subscriptions. A
