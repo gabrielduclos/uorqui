@@ -13,6 +13,7 @@
 
 - **Lighter photos:** automatic client-side photo optimization for Gallery, Camera and pasted JPEG/WebP/HEIC images in direct chats and channels. GIFs, PNGs and **File** attachments remain untouched; browsers keep the original when optimization is ineffective.
 - **Unified notification bell:** combines unread DMs, channel messages, invites, activity and unread email from connected accounts. Native PWA icon badging depends on platform support.
+- **Community messages and notifications:** optimistic channel messages show the sender's profile picture immediately. Notification Email tabs list only pending unread events; mailbox reads/moves reconcile the backend alert status.
 
 ## Beta.2 changes
 
