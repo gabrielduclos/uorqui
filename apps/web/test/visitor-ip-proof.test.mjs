@@ -23,7 +23,7 @@ test('Cloudflare-signed IPs remain separate on the Render auth endpoint', async 
   assert.deepEqual(resultA,{ip:'198.51.100.11',source:'verified-cloudflare'});
   assert.deepEqual(resultB,{ip:'198.51.100.12',source:'verified-cloudflare'});
   assert.notEqual(visitorIpLogKey(resultA.ip,secret),visitorIpLogKey(resultB.ip,secret));
-  assert.doesNotMatch(visitorIpLogKey(resultA.ip,secret),/198\\.51\\.100\\.11/);
+  assert.equal(visitorIpLogKey(resultA.ip,secret)?.includes('198.51.100.11'),false);
 });
 
 test('IPv6 visitor IP is signed and accepted', async () => {
