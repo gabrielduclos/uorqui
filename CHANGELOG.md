@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.32] — 2026-11-10
+
+- **Cloudflare Free rate limit activated in production:** one zone-level `http_ratelimit` WAF rule protects `/api/*` from bursts of over **120 requests per 10 seconds per source IP and Cloudflare colo**. Blocks for **10 seconds**, then permits new requests. Uses the Free plan's available rule; no subscription upgrade needed.
+- **Preserves chat availability:** excludes `/api/v1/dm/events`, `/api/v1/communities/events` (SSE) and public `/api/v1/status`. Health endpoints are outside `/api/*`. No application request contracts, R2 bucket rules, or database tables were changed.
+- **Operations and rollback:** complete rule expression, Cloudflare ruleset/rule IDs, diagnostics, shared-IP considerations and Cloudflare-side rollback are documented in [Cloudflare rate limiting](docs/en/cloudflare-rate-limiting.md). A Git code rollback does not disable an active Cloudflare rule.
+- **Scope:** mitigates abnormal API bursts but does **not** eliminate upstream provider HTTP 429 responses caused by Render limits.
+
 ## [0.1.0-beta.31] — 2026-11-10
 
 - **HTTP 429 resilience:** login boot now requests public status, readiness, then session sequentially instead of firing concurrent probes. For rate-limited responses, it honors a bounded `Retry-After` with a 30–180 second backoff and shows a clear in-app message instead of an endless loading screen.
