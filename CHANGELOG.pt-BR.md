@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.31] — 10/11/2026
+
+- **Proteção contra HTTP 429:** autenticação consulta status, prontidão e sessão em sequência, evitando rajadas simultâneas. Ao receber 429, respeita `Retry-After` limitado a 30–180 segundos e informa o problema sem manter o carregamento infinito.
+- **Menos chamadas ao backend:** o Worker da Cloudflare guarda somente respostas públicas bem-sucedidas de `/api/v1/status` e `/health/ready` por 15 segundos em cada localidade. Sessão (`/api/v1/me`), mensagens e e-mails não entram no cache. Respostas de erro não são armazenadas.
+- **Diagnóstico:** respostas 429 encaminhadas do servidor recebem o cabeçalho `x-uorqui-upstream-429: 1`; respostas das rotas públicas recebem `x-uorqui-probe-cache: HIT|MISS`. Assim, o painel Network diferencia bloqueio do servidor de origem de bloqueio antes do Worker.
+- **Limites de infraestrutura:** o Fastify e o proxy não geram 429 nessas rotas; o plano/provedor de hospedagem pode limitar conexões de entrada. Reduzir chamadas não remove um limite imposto pelo provedor. Sem migração no banco.
+- **Testes:** adicionada cobertura para espera após 429 e cache dos endpoints públicos no CI. Validar o ambiente da Cloudflare e do Render depois da publicação.
+
 ## [0.1.0-beta.30] — 10/11/2026
 
 - **Foto na mensagem otimista dos canais:** o componente recebe nome, @ e avatar da conta autenticada e apresenta a foto do autor ainda durante o envio, inclusive em mensagens com anexo.
