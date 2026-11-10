@@ -8,6 +8,9 @@ Mudanças posteriores ao marco exigem aumento de versão nos três manifestos np
 
 ## [0.1.0-beta.39] — 10/11/2026
 
+- **Troca de @usuário a cada 15 dias:** cada conta pode alterar o identificador uma vez a cada 15 dias corridos. A escolha inicial no cadastro não consome a troca, e salvar outros campos ou manter o mesmo @ não reinicia o prazo. O servidor usa atualização atômica, devolve HTTP 423 com a próxima data permitida e o formulário desabilita o campo durante a espera.
+- **Migração de banco:** `0046_username_change_cooldown` adiciona um campo de data opcional a `users`, preservando os cadastros atuais e permitindo a primeira troca. Executar a migração antes do deploy da nova API; para reverter, voltar o código antes de remover a coluna. Os outros dados do perfil continuam editáveis durante o bloqueio.
+
 - **Padronização dos nomes:** fora da página de perfil, o Uorqui apresenta apenas o primeiro e o último nome (ex.: "Gabriel Axel Fernando de Oliveira Duclos" vira "Gabriel Duclos"). O nome completo continua no perfil público e na edição de perfil.
 - **Abrangência:** conversas privadas e suas prévias, canais e respostas, sugestões de menção, contatos, contas bloqueadas, moderação, notificações, menus e participantes de chamadas/reuniões adotam uma função de exibição compartilhada. Títulos de notificações push e nomes de remetentes em convites também seguem a regra no servidor.
 - **Sem migração de dados:** nome completo armazenado, identificador @usuário, busca pelo nome original, respostas da API e registros do usuário permanecem intactos. A alteração afeta apenas a apresentação (frontend e texto do push), incluindo títulos e descrições acessíveis; não altera o banco nem os contratos da API.
