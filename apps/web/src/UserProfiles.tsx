@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ProfilePhotoCropper, type ProfileImageKind } from './ProfilePhotoCropper';
@@ -83,8 +84,8 @@ export function UserDirectory({ currentHandle }: { currentHandle?: string }) {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!loading && query.trim().length >= 2 && people.length === 0 && !error && <p className="text-sm text-muted-foreground">{pt ? 'Nenhum perfil público encontrado.' : 'No public profiles found.'}</p>}
       {people.map(person => <a key={person.handle} href={'/@' + person.handle} onClick={event => navigateToPublicProfile(event, person.handle)} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
-        <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm" />
-        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.displayName}</span><span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
+        <UserAvatar name={compactUserName(person.displayName)} image={person.avatarUrl} size="sm" />
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{compactUserName(person.displayName)}</span><span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
         <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
       </a>)}
     </CardContent>
