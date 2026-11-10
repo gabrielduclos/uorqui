@@ -17,6 +17,7 @@
     "test:visitor-ip": "node --import tsx --test test/visitor-ip-proof.test.mjs",
     "test:bootstrap": "node --test test/api-bootstrap-load.test.mjs",
     "test:account-probe": "node --import tsx --test test/account-probe.test.mjs",
+    "test:429-origin": "node --import tsx --test test/api-429-diagnostics.test.mjs",
     "test:restricted-invites": "node --test test/restricted-invite-flow.test.mjs",
     "test:meeting": "node --import tsx --test test/meeting-links-and-timer.test.mjs",
     "preview": "vite preview",
