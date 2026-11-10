@@ -557,7 +557,7 @@ export default {
       const publicProbe = request.method === 'GET' && !current.search &&
         (current.pathname === '/api/v1/status' || current.pathname === '/health/ready');
       const edgeCache = publicProbe
-        ? (globalThis.caches as CacheStorage & { default?: Cache }).default : undefined;
+        ? (globalThis.caches as (CacheStorage & { default?: Cache }) | undefined)?.default : undefined;
       const cacheKey = publicProbe
         ? new Request(current.origin + current.pathname, { method: 'GET' }) : undefined;
       if (edgeCache && cacheKey) {
