@@ -28,7 +28,7 @@
 ## Beta.34 changes
 
 - **Meeting links are not channel invitations.** A reusable meeting URL opens the authorized room without granting anyone membership or permissions; restricted-channel invitations keep their separate single-use token flow.
-- **Meetings last at most one hour per session,** with the same server deadline for all participants and a countdown in expanded and floating modes. Ended meetings disconnect automatically. Apply PostgreSQL migration `0045_meeting_one_hour_deadline.sql` before deploying the new API.
+- **Meetings last at most one hour per session,** with the same server deadline for all participants and a countdown in expanded and floating modes. Ended meetings disconnect automatically. PostgreSQL migration `0045_meeting_one_hour_deadline.sql` is applied on the Uorqui Neon main branch.
 
 ## Beta.30 changes
 
