@@ -473,19 +473,20 @@ export default {
     // Explicitly return the SPA entry on public profile URLs while retaining the
     // requested /@handle in the browser for React's route parser.
     const communityInviteNavigation = /^\/invite\/[0-9a-f-]{36}\/?$/i.test(current.pathname);
+    const channelInviteNavigation = /^\/channel-invite\/?$/.test(current.pathname);
     const publicProfileNavigation = /^\/(?:@|%40)[a-z][a-z0-9_]{2,31}\/?$/i.test(current.pathname);
     const emailVerificationNavigation = /^\/auth\/email-verification\/?$/.test(current.pathname);
     const legalNavigation = /^\/(termos|terms|privacidade|privacy|cookies)\/?$/.test(current.pathname);
     // Always revalidate the SPA bootstrap document. A stale index.html can
     // reference deleted hashed JS bundles and leave the login as a blank page.
     const appEntryNavigation = current.pathname === '/' || current.pathname === '/index.html';
-    if ((appEntryNavigation || publicProfileNavigation || communityInviteNavigation || emailVerificationNavigation || legalNavigation) && (request.method === 'GET' || request.method === 'HEAD')) {
+    if ((appEntryNavigation || publicProfileNavigation || communityInviteNavigation || channelInviteNavigation || emailVerificationNavigation || legalNavigation) && (request.method === 'GET' || request.method === 'HEAD')) {
       const response = await env.ASSETS.fetch(new Request(new URL('/index.html', current), {
         method: 'GET', headers: { accept: 'text/html' },
       }));
       const headers = new Headers(response.headers);
       headers.set('Cache-Control', 'no-store');
-      if(communityInviteNavigation)headers.set('Referrer-Policy','no-referrer');
+      if(communityInviteNavigation||channelInviteNavigation)headers.set('Referrer-Policy','no-referrer');
       return new Response(response.body, { status: response.status, headers });
     }
     const apiPath = current.pathname.startsWith('/api/');
