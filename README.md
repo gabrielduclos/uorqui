@@ -4,10 +4,16 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.32` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.33` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Beta.33 changes
+
+- **General opens at the latest message:** the initial desktop channel anchors at the newest message without an extra click.
+- **Restricted channel invitation links:** only owners, admins, and authorized moderators can generate 24-hour single-use links; accepting grants scoped channel access and community membership. Direct DM invites are account-bound. Unused invitations can be revoked, and channel passwords / meeting approval are still enforced.
+- **Security and database:** 256-bit hashed secrets, explicit consent and atomic redemption. Migration `0044` applied to Neon. See [restricted channel invitations](docs/en/restricted-channel-invitations.md). Real-device end-to-end testing is pending.
 
 ## Beta.32 changes
 
