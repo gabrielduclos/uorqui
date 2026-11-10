@@ -5,6 +5,7 @@ import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { StartupSplash } from './StartupSplash';
+import { rateLimitRetryDelay } from './rateLimitBackoff';
 import type { UserProfileData } from './UserProfiles';
 
 type AuthView = 'welcome' | 'login' | 'register' | 'forgot' | 'verify' | 'reset';
@@ -44,15 +45,6 @@ async function requestJson(path: string, options?: RequestInit) {
   });
   const body: unknown = await response.json().catch(() => ({}));
   return { response, body };
-}
-
-/** Honor upstream Retry-After without allowing a malformed header to stall login forever. */
-function rateLimitRetryDelay(header: string | null): number {
-  const raw = header?.trim() ?? '';
-  const seconds = /^\d{1,8}$/.test(raw) ? Number(raw) * 1000 : NaN;
-  const dateDelay = raw && !Number.isFinite(seconds) ? Date.parse(raw) - Date.now() : NaN;
-  const proposed = Number.isFinite(seconds) ? seconds : dateDelay;
-  return Number.isFinite(proposed) ? Math.min(180_000, Math.max(30_000, proposed)) : 30_000;
 }
 
 function readableError(body: unknown, fallback: string): string {
