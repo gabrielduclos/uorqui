@@ -18,6 +18,8 @@
 
 - **Edição do @usuário (beta.39):** após uma alteração efetiva, é necessário esperar 15 dias corridos para trocar novamente. Cadastro inicial e salvar sem alterar o @ não iniciam nem renovam o prazo. Durante o bloqueio, somente o campo @usuário fica desabilitado; a próxima data aparece no idioma ativo e o erro do servidor é `USERNAME_CHANGE_COOLDOWN` (HTTP 423). O nome completo segue editável.
 
+- **Navegação de comunidades e canais (beta.40):** não apresentar um card separado de “Mensagens não lidas” acima da lista de canais nem no diretório de comunidades. Manter os badges individuais nos canais/comunidades e a central de notificações, evitando duplicar avisos na navegação.
+
 ## Princípios
 
 - **Seta nas respostas dos canais (beta.9):** a seta de retorno precede **Sandra: belezinha** em uma única linha compacta. Trechos longos recebem reticências, com acesso à mensagem original pelo clique; a prévia no editor também ocupa só uma linha. A ordem é autor → citação → resposta, com clique na mensagem original. Toda mensagem exibe foto, nome, username e horário, inclusive nas sequências do mesmo autor.
