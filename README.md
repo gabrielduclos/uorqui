@@ -4,10 +4,15 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-> **Version: `0.1.0-beta.29` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
+> **Version: `0.1.0-beta.30` — initial technical beta (November 2026).** Deployed for controlled testing, **not** a stable/general-availability release. End-to-end checks on real phones, push and email verification/recovery still need completion. The custom domain has been transferred to the new Worker.
 
 **Official beta:** [uorqui.app](https://uorqui.app) · **Technical preview:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Source:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Beta.30 changes
+
+- **Lighter photos:** automatic client-side photo optimization for Gallery, Camera and pasted JPEG/WebP/HEIC images in direct chats and channels. GIFs, PNGs and **File** attachments remain untouched; browsers keep the original when optimization is ineffective.
+- **Unified notification bell:** combines unread DMs, channel messages, invites, activity and unread email from connected accounts. Native PWA icon badging depends on platform support.
 
 ## Beta.2 changes
 
