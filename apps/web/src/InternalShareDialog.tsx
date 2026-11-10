@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MessageCircle, Search, X } from 'lucide-react';
@@ -105,7 +106,7 @@ export function InternalShareDialog({source,onClose,onSent}:{source:InternalShar
       if(!id){id=crypto.randomUUID();clientIds.set(person.handle,id);}
       await sendToRecipient(source!,targetId,id);
       setCompleted(old=>[...old,person.handle]);
-      onSent?.(person.displayName);
+      onSent?.(compactUserName(person.displayName));
       window.dispatchEvent(new Event('uorqui:shared-to-chat'));
     }catch(e){
       const status=(e as {status?:number}).status??0;
@@ -133,8 +134,8 @@ export function InternalShareDialog({source,onClose,onSent}:{source:InternalShar
         {recipients.map(person=><button type="button" role="listitem" key={person.handle}
           onClick={()=>void select(person)} disabled={!!busy||!person.canMessage||completed.includes(person.handle)}
           className="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-muted disabled:opacity-65">
-          <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm"/>
-          <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{person.displayName}</strong>
+          <UserAvatar name={compactUserName(person.displayName)} image={person.avatarUrl} size="sm"/>
+          <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{compactUserName(person.displayName)}</strong>
             <span className="block truncate text-xs text-muted-foreground">@{person.handle}{person.conversationId?' · '+(pt?'Conversa':'Chat'):''}</span>
           </span>
           {busy===person.handle?<Spinner className="size-4"/>:completed.includes(person.handle)?

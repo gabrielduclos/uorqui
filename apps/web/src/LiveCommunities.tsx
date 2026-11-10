@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { apiRequest as api } from './lib/apiClient';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -1088,11 +1089,11 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                     aria-label={pt?'Pessoas na sala '+ch.name:'People in '+ch.name}>
                     {occupants.map(person=><div key={person.sessionId}
                       className="flex min-h-9 items-center gap-2 rounded-lg px-2 py-1 text-xs text-muted-foreground"
-                      title={person.displayName}>
+                      title={compactUserName(person.displayName)}>
                       <span className={cn('size-2 shrink-0 rounded-full',person.speaking?'animate-pulse bg-emerald-500':'bg-emerald-500/50')}
                         aria-label={person.speaking?(pt?'Falando':'Speaking'):(pt?'Conectado':'Connected')}/>
                       <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                        {person.displayName}{person.isSelf&&(pt?' (você)':' (you)')}</span>
+                        {compactUserName(person.displayName)}{person.isSelf&&(pt?' (você)':' (you)')}</span>
                       <span title={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}
                         aria-label={person.muted?(pt?'Microfone desligado':'Microphone muted'):(pt?'Microfone ligado':'Microphone on')}>
                         {person.muted?<MicOff className="size-3.5 shrink-0 text-destructive"/>:
@@ -1150,7 +1151,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                 <p className="text-xs font-semibold">{pt?'Pedidos de entrada':'Join requests'}</p>
                 {detail.pendingRequests.map(person=><div key={person.handle} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-xs">
-                    {person.displayName} (@{person.handle})</span>
+                    {compactUserName(person.displayName)} (@{person.handle})</span>
                   <Button size="sm" variant="outline" loading={busyAction==='approve:'+person.handle} disabled={busy} onClick={()=>void act(()=>api('/api/v1/communities/'+community.id+'/requests/'+person.handle+'/approve',{method:'POST'}),pt?'Membro aprovado.':'Member approved.',community.id,'approve:'+person.handle)}>
                     <Check className="size-4"/></Button>
                 </div>)}
@@ -1279,17 +1280,17 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             </div>}
             <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{renderedMessages.map(message=><div id={'community-msg-'+message.id} key={message.clientId}
               className="flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20">
-              <UserAvatar name={message.authorName} image={message.authorAvatar} size="sm"/>
+              <UserAvatar name={compactUserName(message.authorName)} image={message.authorAvatar} size="sm"/>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-2">{message.authorHandle?
                   <a href={'/@'+message.authorHandle} onClick={event=>navigateToPublicProfile(event,message.authorHandle)}
                     className="rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-                    {message.authorName}</a>:
-                  <strong className="text-sm">{message.authorName}</strong>}
+                    {compactUserName(message.authorName)}</a>:
+                  <strong className="text-sm">{compactUserName(message.authorName)}</strong>}
                   <span className="text-[11px] text-muted-foreground">@{message.authorHandle}</span>
                   <time dateTime={message.createdAt} className="text-[11px] text-muted-foreground">{formatMessageTimestamp(message.createdAt,locale,todayKey)}</time></div>
                 {message.replyToId&&!message.deletedAt&&<ReplyReference
-                  author={renderedMessages.find(source=>source.id===message.replyToId)?.authorName??message.replyTo?.authorHandle??(pt?'Mensagem':'Message')}
+                  author={compactUserName(renderedMessages.find(source=>source.id===message.replyToId)?.authorName??message.replyTo?.authorHandle??(pt?'Mensagem':'Message'))}
                   body={message.replyTo?.body} deleted={message.replyTo?.deleted}
                   locale={locale}
                   onJump={()=>{if(currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);
@@ -1353,7 +1354,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             </button>
           </div>}
           <div className="relative shrink-0 border-t border-border/70 bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-            {replySource&&<ReplyComposerPreview key={replySource.id} author={'@'+replySource.authorHandle}
+            {replySource&&<ReplyComposerPreview key={replySource.id} author={compactUserName(replySource.authorName)||'@'+replySource.authorHandle}
               body={replySource.body||replySource.attachment?.name} locale={locale}
               onCancel={()=>setReplySource(null)}/>}
             {mediaPicker==='gif'&&<CommunityMediaPicker key="gif" tab="gif" pt={pt}
@@ -1368,9 +1369,9 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                 onClick={()=>insertMention(member.handle)}
                 className={cn('flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left hover:bg-secondary',
                   mentionIndex===index&&'bg-secondary')}>
-                <UserAvatar name={member.displayName} image={member.avatarUrl} size="sm"/>
+                <UserAvatar name={compactUserName(member.displayName)} image={member.avatarUrl} size="sm"/>
                 <span className="min-w-0 flex-1 truncate text-xs"><strong>@{member.handle}</strong>
-                  <span className="ml-2 text-muted-foreground">{member.displayName}</span></span>
+                  <span className="ml-2 text-muted-foreground">{compactUserName(member.displayName)}</span></span>
               </button>)}
             </div>}
             <div onKeyDownCapture={event=>{
@@ -1538,8 +1539,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
           {inspectReaction?.users.map(user=><a key={user.handle} href={'/@'+user.handle}
             onClick={event=>{navigateToPublicProfile(event,user.handle);setInspectReaction(null);}}
             className="flex min-h-12 items-center gap-3 rounded-lg px-2 hover:bg-secondary">
-            <UserAvatar name={user.name} image={user.avatarUrl} size="sm"/>
-            <span className="min-w-0"><strong className="block truncate text-sm">{user.name}</strong>
+            <UserAvatar name={compactUserName(user.name)} image={user.avatarUrl} size="sm"/>
+            <span className="min-w-0"><strong className="block truncate text-sm">{compactUserName(user.name)}</strong>
               <span className="text-xs text-muted-foreground">@{user.handle}</span></span>
           </a>)}
         </div>

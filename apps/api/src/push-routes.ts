@@ -18,6 +18,12 @@ const subscriptionBody={type:'object',additionalProperties:false,required:['subs
 const deliveryBody={type:'object',additionalProperties:false,required:['messageId','conversationId','proof'],
   properties:{messageId:{type:'string',format:'uuid'},conversationId:{type:'string',format:'uuid'},
     proof:{type:'string',maxLength:1000}}};
+// Web Push is outside the React UI; apply the same presentation rule as the
+// client formatter without changing full names stored in accounts.
+function compactPushName(value:unknown):string{
+  const parts=String(value??'').trim().split(/\s+/).filter(Boolean);
+  return parts.length>1?parts[0]+' '+parts[parts.length-1]:(parts[0]??'');
+}
 const noCache='private, no-store';
 const publicKey=()=>process.env.VAPID_PUBLIC_KEY?.trim()??'';
 const privateKey=()=>process.env.VAPID_PRIVATE_KEY?.trim()??'';
@@ -163,7 +169,7 @@ export async function pushDirectMessage(messageId:string){
     const proof=signPushDelivery(m.recipient,m.conversation_id,m.id,new Date(m.revision).toISOString());
     try{
       const status=await sendPush(sub,{kind:'dm',recipientId:m.recipient,conversationId:m.conversation_id,
-        messageId:m.id,title:String(m.sender).slice(0,80),
+        messageId:m.id,title:compactPushName(m.sender).slice(0,80),
         ...(channelInvitation?.communityId?{communityId:channelInvitation.communityId,channelId:channelInvitation.channelId}:{}),
         body:channelInvitation?'Convite para o canal '+channelInvitation.label:
           m.attachment_type?'Novo anexo recebido':'Nova mensagem privada',proof});
@@ -194,7 +200,7 @@ export async function pushCommunityInvite(recipientId:string,communityId:string,
     try{
       const status=await sendPush(sub,{kind:'community-invite',
         recipientId,communityId, title:'Convite para comunidade',
-        body:(String(invite.actor_name)+' convidou você para '+String(invite.name)).slice(0,180)});
+        body:(compactPushName(invite.actor_name)+' convidou você para '+String(invite.name)).slice(0,180)});
       if(status===404||status===410)await getPool().query(
         'DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2',[sub.endpoint,recipientId]);
     }catch{/* Best-effort delivery; invite remains visible in Communities. */}
@@ -292,7 +298,7 @@ export async function pushActivityNotification(notificationId:string){
   await Promise.allSettled(subs.rows.map(async sub=>{
     try{
       const status=await sendPush(sub,{kind:'activity',recipientId:n.recipient_id,
-        notificationId:n.id,title:String(n.actor_name).slice(0,80),
+        notificationId:n.id,title:compactPushName(n.actor_name).slice(0,80),
         body:((verb[n.kind]??'Nova atividade no Uorqui')+
           (n.community_name?' · '+String(n.community_name):'')+
           (n.kind==='meeting_join_request'&&n.meeting_name?' · '+String(n.meeting_name):'')).slice(0,180)});

@@ -365,7 +365,8 @@ test('email notification inbox supports ownership, read, delete and mailbox casc
   assert.equal((await notificationRequest('/inbox-events/'+id+'/read',{user:bob,method:'PATCH'})).statusCode,404);
   assert.equal((await notificationRequest('/inbox-events/'+id+'/read',{method:'PATCH',origin:'https://untrusted.example'})).statusCode,403);
   assert.equal((await notificationRequest('/inbox-events/'+id+'/read',{method:'PATCH'})).statusCode,200);
-  assert.ok((await notificationRequest('/inbox-events')).json().events.find(item=>item.id===id).readAt);
+  assert.equal((await notificationRequest('/inbox-events')).json().events.some(item=>item.id===id),false,
+    'read email notifications are removed from the unread-only inbox');
   assert.equal((await notificationRequest('/inbox-events/'+id,{user:bob,method:'DELETE'})).statusCode,404);
   assert.equal((await notificationRequest('/inbox-events/read-all',{method:'POST'})).statusCode,200);
   assert.equal((await notificationRequest('/inbox-events/'+id,{method:'DELETE'})).statusCode,200);

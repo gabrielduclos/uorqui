@@ -2,6 +2,7 @@
 
 > **Visual contract for the November 6, 2026 beta.** The UI kit is repository documentation, not a separate demo app or public route. The actual production components live in `apps/web/src`.
 
+- **User names (beta.39):** outside actual profile screens, use `compactUserName` from `apps/web/src/userDisplayName.ts` to render the **first + last** part of a person's saved display name. Keep full names on profile pages/editors, and keep `@handle`, API payloads and searchable stored names unchanged. Apply this consistently to chats, channel messages/replies/mentions, contacts, notifications, menus, moderation, voice meetings and accessibility labels. Web Push sender/actor strings follow the equivalent formatting in `apps/api/src/push-routes.ts`. One-word names stay unchanged.
 - **Meeting link and timer (beta.34):** the **Meeting link** control in `CommunityVoiceRoom` opens a dedicated share dialog with a reusable URL, distinct from the channel membership invitation. Navigation does not authorize access: membership, ACL, password and admission remain enforced. A single countdown appears in the header and floating view (`60:00` initially), highlights the last five minutes and disconnects at zero. The server deadline is not reset by minimization, PWA resuming or late joins.
 - **Navigation and restricted rooms (beta.33):** the default desktop text channel anchors to the newest messages automatically. Restricted channel invitation actions are shown only to owners, admins, or moderators with access; one-use 24-hour links grant scoped access after explicit acceptance, can be revoked, and per-handle DM links are bound to the recipient account. Passwords and meeting approval stay independent.
 - **API connection state (beta.31):** authentication separates temporary HTTP 429 from service unavailability and avoids indefinite startup loading. The client probes public status, readiness and session in sequence with bounded backoff. The Worker only caches short-lived public probe responses, never authenticated data.
@@ -15,6 +16,8 @@
 - **Channel history position (beta.22):** entering a text channel or expanding a voice/meeting text panel opens at the most recent message, even with cache-first rendering and later GIF/attachment resize. Automatic layout scroll events cannot disable the opening anchor. Real reader scroll or jumping to a reply permits browsing older messages without snap-back; returning to bottom resumes follow. Isolate positions per channel.
 - **Privacy:** irreversible account deletion card in Profile with password and `EXCLUIR` confirmations, errors and delayed media-purge disclosure.
 - **Invites:** explicit join confirmation only after authentication, never blocking signup. Modal copy, errors, controls and accessibility labels render in the active locale (browser language initially, then any stored app selection), never bilingual slash-separated lines.
+
+- **Username editing (beta.39):** the @handle may change only once per rolling 15 days after a successful update; onboarding and unchanged resaves do not start or restart the clock. While locked, the profile editor disables only the @username input, displays the next eligible date in the selected locale and handles server rejection with `USERNAME_CHANGE_COOLDOWN` (HTTP 423). Existing full names remain editable.
 
 ## Principles
 

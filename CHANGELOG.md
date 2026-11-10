@@ -6,6 +6,16 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.39] — 2026-11-10
+
+- **15-day username change cooldown:** account owners can change their unique @handle at most once per rolling 15 days. Initial onboarding does not consume a change; saving without modifying the handle does not extend the cooldown. The server enforces an atomic conditional update, returns HTTP 423 with the next eligible timestamp on rejection, and the profile editor disables changes with a localized eligibility notice.
+- **Data migration:** Drizzle migration `0046_username_change_cooldown` adds a nullable timestamp to `users`, retaining existing accounts and giving them one initial permitted change. Run migrations before deploying the new API; rollback requires reverting the code before dropping the column. Other profile fields remain editable while a username is locked.
+
+- **Consistent user names:** app surfaces display only the first and last elements of a user's display name (for example, "Gabriel Axel Fernando de Oliveira Duclos" becomes "Gabriel Duclos"). The full saved name remains visible in the user's profile, including public profile pages and profile editing.
+- **Coverage:** direct conversations and previews, community channels and replies, member mentions, contact searches/results, blocked accounts, moderation, notifications, sidebars and voice/video meeting participants use the same shared presentation formatter. Web Push sender titles and community-invitation actor names use the equivalent server-side display rule.
+- **No data migration:** existing full names, unique @handles, name-based search, API responses and stored user records remain unchanged. Only presentation strings change (React tooltips, accessible labels and Web Push text); storage and API schemas are unaffected.
+- **Tests:** new name-formatting unit cases (multiple/single names, whitespace, accents and missing values) run in Web UI CI alongside typecheck/build. Review actual responsive screens, meeting video labels and PWA notifications on devices; those end-to-end checks are still pending.
+
 ## [0.1.0-beta.38] — 2026-11-10
 
 - **Balanced product and portfolio presentation:** reorganized the bilingual READMEs as product entry points with functionality, user workflows, architecture, local setup, operational maturity and a dedicated portfolio link rather than a portfolio-first narrative.

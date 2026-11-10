@@ -6,6 +6,16 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.39] — 10/11/2026
+
+- **Troca de @usuário a cada 15 dias:** cada conta pode alterar o identificador uma vez a cada 15 dias corridos. A escolha inicial no cadastro não consome a troca, e salvar outros campos ou manter o mesmo @ não reinicia o prazo. O servidor usa atualização atômica, devolve HTTP 423 com a próxima data permitida e o formulário desabilita o campo durante a espera.
+- **Migração de banco:** `0046_username_change_cooldown` adiciona um campo de data opcional a `users`, preservando os cadastros atuais e permitindo a primeira troca. Executar a migração antes do deploy da nova API; para reverter, voltar o código antes de remover a coluna. Os outros dados do perfil continuam editáveis durante o bloqueio.
+
+- **Padronização dos nomes:** fora da página de perfil, o Uorqui apresenta apenas o primeiro e o último nome (ex.: "Gabriel Axel Fernando de Oliveira Duclos" vira "Gabriel Duclos"). O nome completo continua no perfil público e na edição de perfil.
+- **Abrangência:** conversas privadas e suas prévias, canais e respostas, sugestões de menção, contatos, contas bloqueadas, moderação, notificações, menus e participantes de chamadas/reuniões adotam uma função de exibição compartilhada. Títulos de notificações push e nomes de remetentes em convites também seguem a regra no servidor.
+- **Sem migração de dados:** nome completo armazenado, identificador @usuário, busca pelo nome original, respostas da API e registros do usuário permanecem intactos. A alteração afeta apenas a apresentação (frontend e texto do push), incluindo títulos e descrições acessíveis; não altera o banco nem os contratos da API.
+- **Testes:** novos casos para nomes longos, simples, espaços, acentos e ausência de nome no CI da interface. Validação de ponta a ponta em dispositivos e PWA continua pendente.
+
 ## [0.1.0-beta.38] — 10/11/2026
 
 - **Equilíbrio entre produto e portfólio:** READMEs em português e inglês reorganizados como apresentação do produto, com recursos, jornada de uso, arquitetura, execução local, situação operacional e link específico para o portfólio, sem colocar a narrativa de currículo em primeiro plano.

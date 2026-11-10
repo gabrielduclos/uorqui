@@ -2,6 +2,7 @@
 
 > **Contrato visual do beta de 06/11/2026.** Este UI Kit é documentação no GitHub; não existe uma rota de demonstração ou segundo frontend. O produto usa os componentes reais em `apps/web/src`.
 
+- **Nomes de pessoas (beta.39):** fora das telas de perfil, usar `compactUserName` de `apps/web/src/userDisplayName.ts` para exibir somente o **primeiro + último nome** do nome salvo. O nome completo permanece nos perfis e na edição; `@usuário`, dados da API e conteúdo pesquisável não são alterados. Aplicar em mensagens, canais/respostas/menções, contatos, notificações, menus, moderação, reuniões e descrições acessíveis. Nomes de remetentes e autores do Web Push usam a regra equivalente em `apps/api/src/push-routes.ts`. Nomes com uma palavra permanecem como estão.
 - **Link e cronômetro da reunião (beta.34):** o botão **Link da reunião** em `CommunityVoiceRoom` abre um diálogo próprio que exibe endereço reutilizável, separado do convite de canal. Não confundir navegação com autorização: a sala só abre para membros com acesso verificado, senha e aprovação quando exigidas. Um cronômetro regressivo comum aparece no cabeçalho e na janela flutuante (`60:00` ao iniciar), alerta nos últimos 5 minutos e desconecta ao zerar. O prazo vem do servidor e não reinicia ao minimizar, voltar do PWA ou entrar tardiamente.
 - **Navegação e canais fechados (beta.33):** o primeiro canal de texto renderizado no desktop ancora automaticamente nas mensagens mais recentes sem clique. No modal de convite de canais fechados, somente dono/admin/moderador autorizado vê a ação; o link exclusivo de 24 horas e uso único permite autorização automática somente após o aceite explícito, com opção de revogar. Convites diretos por @usuário geram tokens vinculados à conta. Senhas e aprovação de reunião continuam obrigatórias quando configuradas.
 - **Conexão com API (beta.31):** o estado inicial de autenticação separa indisponibilidade e bloqueio HTTP 429, informa o limite temporário e evita uma tela de carregamento permanente. O cliente consulta status público, prontidão e sessão sequencialmente; respeita espera de segurança. O Worker só faz cache curto dos endpoints públicos, sem armazenar respostas de usuário.
@@ -14,6 +15,8 @@
 - **Chats dos canais:** respostas com mensagem original, `@usuário` com sugestões, GIFs e lista de reagentes por emoji; não mostrar membros sem permissão.
 - **Privacidade:** cartão de exclusão definitiva no Perfil com duas confirmações (senha e `EXCLUIR`), estados de erro e aviso de mídia em limpeza posterior.
 - **Convites:** confirmação de ingresso somente depois da autenticação, sem bloquear a tela de cadastro. O modal, os erros, os botões e rótulos acessíveis seguem o idioma ativo (inicialmente o do navegador, respeitando a escolha salva), sem frases bilíngues separadas por barra.
+
+- **Edição do @usuário (beta.39):** após uma alteração efetiva, é necessário esperar 15 dias corridos para trocar novamente. Cadastro inicial e salvar sem alterar o @ não iniciam nem renovam o prazo. Durante o bloqueio, somente o campo @usuário fica desabilitado; a próxima data aparece no idioma ativo e o erro do servidor é `USERNAME_CHANGE_COOLDOWN` (HTTP 423). O nome completo segue editável.
 
 ## Princípios
 

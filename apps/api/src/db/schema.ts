@@ -35,6 +35,7 @@ export const accountMediaCleanupJobs = pgTable('account_media_cleanup_jobs', {
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   handle: varchar('handle', { length: 32 }).notNull().unique(),
+  handleChangedAt: timestamp('handle_changed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

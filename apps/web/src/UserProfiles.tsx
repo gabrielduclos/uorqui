@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ProfilePhotoCropper, type ProfileImageKind } from './ProfilePhotoCropper';
@@ -20,6 +21,8 @@ export type UserProfileData = {
   avatarUrl: string | null;
   coverUrl: string | null;
   isPublic: boolean;
+  /** Only provided by the signed-in profile endpoints. */
+  handleChangeAvailableAt?: string | null;
 };
 export type PublicProfileData = Omit<UserProfileData, 'isPublic'> & {
   id:string;createdAt:string|null;isPrivate:boolean;mine:boolean;
@@ -83,8 +86,8 @@ export function UserDirectory({ currentHandle }: { currentHandle?: string }) {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!loading && query.trim().length >= 2 && people.length === 0 && !error && <p className="text-sm text-muted-foreground">{pt ? 'Nenhum perfil público encontrado.' : 'No public profiles found.'}</p>}
       {people.map(person => <a key={person.handle} href={'/@' + person.handle} onClick={event => navigateToPublicProfile(event, person.handle)} className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
-        <UserAvatar name={person.displayName} image={person.avatarUrl} size="sm" />
-        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.displayName}</span><span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
+        <UserAvatar name={compactUserName(person.displayName)} image={person.avatarUrl} size="sm" />
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{compactUserName(person.displayName)}</span><span className="block truncate text-xs text-muted-foreground">@{person.handle}</span></span>
         <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
       </a>)}
     </CardContent>
@@ -131,7 +134,7 @@ export function ProfileEditor({ initial, onSaved, onDeleted }: {
       setDeleteBusy(false);
     }
   }
-  useEffect(() => setProfile(initial), [initial.handle, initial.displayName, initial.bio, initial.avatarUrl, initial.coverUrl, initial.isPublic]);
+  useEffect(() => setProfile(initial), [initial.handle, initial.displayName, initial.bio, initial.avatarUrl, initial.coverUrl, initial.isPublic, initial.handleChangeAvailableAt]);
 
   function update<K extends keyof UserProfileData>(key: K, value: UserProfileData[K]) {
     setProfile(prev => ({ ...prev, [key]: value }));
@@ -160,7 +163,7 @@ export function ProfileEditor({ initial, onSaved, onDeleted }: {
         throw new Error(pt ? 'Falha no armazenamento da imagem. Tente novamente.' : 'Photo storage failed. Please try again.');
       }
       invalidateProfileImage(kind === 'avatar' ? initial.avatarUrl : initial.coverUrl);
-      onSaved(result.profile);
+      onSaved({ ...result.profile, handleChangeAvailableAt: profile.handleChangeAvailableAt });
       setProfile(prev => ({ ...prev, [kind === 'avatar' ? 'avatarUrl' : 'coverUrl']: result.url ?? null }));
       setSelected(null);
       setNotice(pt ? 'Imagem atualizada com sucesso.' : 'Image updated successfully.');
@@ -186,8 +189,12 @@ export function ProfileEditor({ initial, onSaved, onDeleted }: {
           isPublic: profile.isPublic,
         }),
       });
-      const result = await response.json().catch(() => ({})) as { profile?: UserProfileData; error?: string };
+      const result = await response.json().catch(() => ({})) as { profile?: UserProfileData; error?: string; nextChangeAt?: string | null };
       if (!response.ok || !result.profile) {
+        if (response.status === 423 && result.error === 'USERNAME_CHANGE_COOLDOWN') {
+          setProfile(previous => ({ ...previous, handle: initial.handle, handleChangeAvailableAt: result.nextChangeAt ?? null }));
+          throw new Error(pt ? 'Você só pode alterar seu @usuário a cada 15 dias.' : 'You can only change your @username once every 15 days.');
+        }
         if (response.status === 409) throw new Error(pt ? 'Este @usuário já está sendo utilizado.' : 'That @username is already taken.');
         if (response.status === 401) throw new Error(pt ? 'Sua sessão expirou. Entre novamente.' : 'Your session expired. Sign in again.');
         throw new Error(pt ? 'Não foi possível salvar o perfil. Confira os campos e a conexão.' : 'Could not save your profile. Check the fields and your connection.');
@@ -203,6 +210,11 @@ export function ProfileEditor({ initial, onSaved, onDeleted }: {
 
   // Always navigate to the last saved handle, not an unsaved edit in the form.
   const url = '/@' + initial.handle;
+  const usernameAvailableAt = profile.handleChangeAvailableAt ?? null;
+  const usernameLocked = Boolean(usernameAvailableAt && new Date(usernameAvailableAt).getTime() > Date.now());
+  const usernameAvailableLabel = usernameLocked && usernameAvailableAt
+    ? new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(usernameAvailableAt))
+    : null;
   return <div className="mx-auto w-full max-w-3xl space-y-5 p-4 pb-20 sm:p-7">
     <div><h2 className="text-2xl font-bold">{pt ? 'Meu perfil' : 'My profile'}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{pt ? 'Edite seus dados e escolha o que ficará público.' : 'Edit your information and choose what is public.'}</p></div>
@@ -226,7 +238,10 @@ export function ProfileEditor({ initial, onSaved, onDeleted }: {
         <form onSubmit={submit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1.5 text-sm"><span className="font-medium">{pt ? 'Nome exibido' : 'Display name'}</span><Input required minLength={2} maxLength={120} value={profile.displayName} onChange={e => update('displayName', e.target.value)} /></label>
-            <label className="space-y-1.5 text-sm"><span className="font-medium">@{pt ? 'usuário' : 'username'}</span><Input required minLength={3} maxLength={32} pattern="[a-z][a-z0-9_]{2,31}" value={profile.handle} onChange={e => update('handle', e.target.value.toLowerCase())} /></label>
+            <label className="space-y-1.5 text-sm"><span className="font-medium">@{pt ? 'usuário' : 'username'}</span><Input required minLength={3} maxLength={32} pattern="[a-z][a-z0-9_]{2,31}" value={profile.handle} disabled={usernameLocked} onChange={e => update('handle', e.target.value.toLowerCase())} />
+              <span className="block text-xs text-muted-foreground">{usernameAvailableLabel
+                ? (pt ? 'Você poderá trocar seu @usuário novamente em ' : 'You can change your @username again on ') + usernameAvailableLabel
+                : (pt ? 'Você pode alterar seu @usuário. Após a troca, aguarde 15 dias para mudar novamente.' : 'You may change your @username. After changing it, wait 15 days before changing it again.')}</span></label>
           </div>
           <label className="block space-y-1.5 text-sm"><span className="font-medium">{pt ? 'Biografia' : 'Bio'}</span>
             <textarea value={profile.bio ?? ''} maxLength={500} rows={3} onChange={e => update('bio', e.target.value)} className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder={pt ? 'Conte algo sobre você…' : 'Tell people about yourself…'} />

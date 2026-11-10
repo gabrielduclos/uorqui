@@ -25,6 +25,8 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Test username cooldown policy
+        run: node --import tsx --test apps/api/test/username-cooldown.test.mjs
       - name: Typecheck API
         run: npm run typecheck -w @uorqui/api
       - name: Build API

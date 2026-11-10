@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 
 import {useEffect,useState} from 'react';
 import {AtSign,Bell,Check,CheckCheck,Hash,Headphones,Mail,MessageCircle,Settings,UserPlus,UserRoundCheck,Users,Video,X} from 'lucide-react';
@@ -273,9 +274,9 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           {directUnread.map(chat=><button key={chat.id} type="button" onClick={()=>onOpenDm(chat.id)}
             className="flex min-h-14 w-full min-w-0 items-center gap-3 border-b border-border/70 px-3 py-2.5 text-left last:border-0 hover:bg-secondary/70">
-            <UserAvatar name={chat.peerName} image={chat.peerAvatarUrl} size="sm"/>
+            <UserAvatar name={compactUserName(chat.peerName)} image={chat.peerAvatarUrl} size="sm"/>
             <span className="min-w-0 flex-1">
-              <strong className="block truncate text-sm">{chat.peerName}</strong>
+              <strong className="block truncate text-sm">{compactUserName(chat.peerName)}</strong>
               <span className="block truncate text-xs text-muted-foreground">{chat.lastBody||'@'+chat.peerHandle}</span>
             </span>
             <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
@@ -359,9 +360,9 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
         return <div key={item.id} className={'flex min-h-18 flex-wrap items-center gap-2 rounded-xl border px-3 py-3 transition-colors hover:bg-secondary/70 '+(item.readAt?'border-transparent':'border-primary/20 bg-primary/5')}>
           <button type="button" onClick={()=>onOpen(item)}
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
-            aria-label={item.actorName+' '+verbs[item.kind]+(destination?' · '+destination:'')+(!item.readAt?(pt?', não lida':', unread'):'')}>
-            <UserAvatar name={item.actorName} image={item.actorAvatar} size="sm"/>
-            <span className="min-w-0 flex-1"><span className="block text-sm"><strong>{item.actorName}</strong> {verbs[item.kind]}</span>
+            aria-label={compactUserName(item.actorName)+' '+verbs[item.kind]+(destination?' · '+destination:'')+(!item.readAt?(pt?', não lida':', unread'):'')}>
+            <UserAvatar name={compactUserName(item.actorName)} image={item.actorAvatar} size="sm"/>
+            <span className="min-w-0 flex-1"><span className="block text-sm"><strong>{compactUserName(item.actorName)}</strong> {verbs[item.kind]}</span>
               {destination&&<span className="mt-1 block truncate text-xs font-semibold text-primary" title={destination}>
                 <Users className="mr-1 inline size-3.5" aria-hidden="true"/>{destination}
               </span>}
@@ -372,7 +373,7 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
               {!item.readAt&&<span aria-hidden="true" className="size-2 rounded-full bg-primary"/>}</span>
           </button>
           <button type="button" disabled={!!deletingId} onClick={()=>void deleteNotification(item.id)}
-            aria-label={pt?'Excluir notificação de '+item.actorName:'Delete notification from '+item.actorName}
+            aria-label={pt?'Excluir notificação de '+compactUserName(item.actorName):'Delete notification from '+compactUserName(item.actorName)}
             title={pt?'Excluir notificação':'Delete notification'}
             className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40">
             {deletingId===item.id?<Spinner className="size-4"/>:<X className="size-4"/>}
@@ -385,11 +386,11 @@ export function ActivityNotifications({items,unread,loading,error,accountId,chan
               {friendDone[item.id]==='accept'?(pt?'Contato adicionado':'Contact request accepted'):(pt?'Solicitação recusada':'Request declined')}
             </span>:<>
               <Button type="button" size="sm" disabled={!!friendBusy} onClick={()=>void respondToFriend(item,'accept')}
-                aria-label={pt?'Aceitar contato de '+item.actorName:'Accept contact request from '+item.actorName}>
+                aria-label={pt?'Aceitar contato de '+compactUserName(item.actorName):'Accept contact request from '+compactUserName(item.actorName)}>
                 {friendBusy===item.id?<Spinner className="size-3.5"/>:<Check className="size-3.5"/>}{pt?'Aceitar':'Accept'}
               </Button>
               <Button type="button" size="sm" variant="outline" disabled={!!friendBusy} onClick={()=>void respondToFriend(item,'decline')}
-                aria-label={pt?'Recusar contato de '+item.actorName:'Decline contact request from '+item.actorName}>
+                aria-label={pt?'Recusar contato de '+compactUserName(item.actorName):'Decline contact request from '+compactUserName(item.actorName)}>
                 <X className="size-3.5"/>{pt?'Recusar':'Decline'}
               </Button>
             </>}

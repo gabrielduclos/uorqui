@@ -1,3 +1,4 @@
+import { compactUserName } from './userDisplayName';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Headphones, Maximize2, Minimize2, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Volume2, VolumeX, Users, Video, VideoOff, Link2, Check } from 'lucide-react';
@@ -749,8 +750,8 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
   const stageStream=showScreen&&featuredScreenId?screens[featuredScreenId]:mainCamera;
   const stageTitle=showScreen
     ?featuredScreenId===selfSession.current?(pt?'Sua tela':'Your screen'):
-      (pt?'Tela de ':'Screen from ')+(peers.find(peer=>peer.sessionId===featuredScreenId)?.displayName??'')
-    :mainParticipant?.displayName??(pt?'Aguardando câmeras':'Waiting for cameras');
+      (pt?'Tela de ':'Screen from ')+(compactUserName(peers.find(peer=>peer.sessionId===featuredScreenId)?.displayName))
+    :(compactUserName(mainParticipant?.displayName) || (pt?'Aguardando câmeras':'Waiting for cameras'));
   useEffect(()=>{
     if(!fullMeeting)return;
     const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setFullMeeting(false);setPinnedCamera(null);}};
@@ -772,14 +773,14 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       <div className={'relative aspect-video min-w-0 overflow-hidden rounded-lg border bg-black/90 '+
         (floatingSpeakerActive?'border-emerald-400 ring-1 ring-emerald-400/60':'border-border/60')}>
         {floatingSpeakerStream?<MeetingVideo stream={floatingSpeakerStream}
-          label={floatingSpeaker?.displayName??''} className="absolute inset-0 size-full object-cover"/>:
+          label={compactUserName(floatingSpeaker?.displayName)} className="absolute inset-0 size-full object-cover"/>:
           <div className="grid size-full place-items-center">
-            {floatingSpeaker?<UserAvatar name={floatingSpeaker.displayName} image={floatingSpeaker.avatarUrl} size="sm"/>:
+            {floatingSpeaker?<UserAvatar name={compactUserName(floatingSpeaker.displayName)} image={floatingSpeaker.avatarUrl} size="sm"/>:
               <Users className="size-6 text-white/50"/>}
           </div>}
         <span className="absolute inset-x-0 bottom-0 flex min-w-0 items-center gap-1 bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
           {floatingSpeakerActive&&<span className="size-1.5 shrink-0 animate-pulse rounded-full bg-emerald-400"/>}
-          <span className="truncate">{floatingSpeaker?.displayName??(pt?'Aguardando':'Waiting')}</span>
+          <span className="truncate">{(compactUserName(floatingSpeaker?.displayName) || (pt?'Aguardando':'Waiting'))}</span>
         </span>
       </div>
     </div>}
@@ -860,7 +861,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
         {meetingInfo.manager&&meetingInfo.pending.length>0&&<div className="mt-3 border-t border-border pt-2">
           <h4 className="font-semibold">{pt?'Solicitações de entrada':'Join requests'} ({meetingInfo.pending.length})</h4>
           {meetingInfo.pending.map(person=><div key={person.handle} className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
-            <span className="min-w-0 flex-1 truncate">{person.displayName} (@{person.handle})</span>
+            <span className="min-w-0 flex-1 truncate">{compactUserName(person.displayName)} (@{person.handle})</span>
             <Button type="button" size="sm" disabled={!!meetingAction} onClick={()=>void decideMeeting(person.handle,'approve')}><Check className="size-4"/>{pt?'Aprovar':'Approve'}</Button>
             <Button type="button" variant="outline" size="sm" disabled={!!meetingAction} onClick={()=>void decideMeeting(person.handle,'decline')}>{pt?'Recusar':'Decline'}</Button>
           </div>)}
@@ -886,7 +887,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
             aria-pressed={pinnedCamera===id} title={pt?'Toque para destacar esta câmera':'Select this camera'}>
             <ScreenTile stream={stream} pt={pt} kind="camera"
               active={speaking.has(id)}
-              label={id===selfSession.current?(pt?'Sua câmera':'Your camera'):(peers.find(p=>p.sessionId===id)?.displayName??'')}/>
+              label={id===selfSession.current?(pt?'Sua câmera':'Your camera'):(compactUserName(peers.find(p=>p.sessionId===id)?.displayName))}/>
             {pinnedCamera===id&&<span className="mt-1 block text-center text-[11px] text-primary">{pt?'Fixada':'Pinned'}</span>}
           </button>)}
         </div>:<p className="text-xs text-muted-foreground">{pt?'Nenhuma câmera ativada. Você ainda pode conversar por áudio.':'No cameras enabled. Audio is still available.'}</p>}
@@ -894,7 +895,7 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
       {phase==='joined'&&Object.keys(screens).length>0&&<div className="mx-auto mt-3 grid w-full max-w-5xl grid-cols-1 gap-2 sm:grid-cols-2">
         {Object.entries(screens).map(([id,stream])=><ScreenTile key={id} stream={stream} label={id===selfSession.current?
           (pt?'Sua tela':'Your screen'):
-          (pt?'Tela de ':'Screen from ')+(peers.find(p=>p.sessionId===id)?.displayName??'')}/>)}
+          (pt?'Tela de ':'Screen from ')+(compactUserName(peers.find(p=>p.sessionId===id)?.displayName))}/>)}
       </div>}
       {phase!=='joined'?<div className="flex min-h-0 flex-col items-center justify-center gap-2 py-4 text-center sm:gap-3 sm:py-8">
         <div className="grid size-12 place-items-center rounded-xl border border-border bg-card shadow-sm sm:size-16"><Headphones className="size-6 text-primary sm:size-8"/></div>
@@ -918,11 +919,11 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
               className={'relative flex min-h-24 min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border bg-card px-2 py-2 text-center shadow-sm transition-[box-shadow,border-color] sm:min-h-32 sm:gap-2 sm:py-3 '+(talking?'border-emerald-500 ring-2 ring-emerald-500/65 shadow-[0_0_16px_rgba(16,185,129,0.35)]':'border-border/70')}>
               {talking&&<span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-emerald-400 animate-pulse"/>}
               <div className={'rounded-full p-1 '+(talking?'ring-2 ring-emerald-500':ready?'ring-1 ring-border':'ring-2 ring-border')}>
-                <UserAvatar name={peer.displayName} image={peer.avatarUrl} size="sm"/>
+                <UserAvatar name={compactUserName(peer.displayName)} image={peer.avatarUrl} size="sm"/>
               </div>
               <div className="min-w-0 max-w-full">
                 <a href={'/@'+peer.handle} onClick={event=>navigateToPublicProfile(event,peer.handle)}
-                  className="block truncate rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{peer.displayName}</a>
+                  className="block truncate rounded-sm text-sm font-semibold hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{compactUserName(peer.displayName)}</a>
                 <p className="truncate text-xs text-muted-foreground">{peer.isSelf?(pt?'Você':'You'):'@'+peer.handle}</p>
               </div>
               <div className="absolute right-1 top-1 flex items-center gap-1 sm:right-2 sm:top-2">
@@ -1030,15 +1031,15 @@ export default function CommunityVoiceRoom({communityId,channelId,communityName,
             <button type="button" key={'thumb:'+id}
               onClick={()=>{setPinnedCamera(id);setPresentedScreenId(null);}}
               className={'relative aspect-video h-16 shrink-0 overflow-hidden rounded-lg border-2 '+(speaking.has(id)?'border-emerald-400':'border-white/25')}
-              aria-label={(pt?'Destacar câmera de ':'Focus camera of ')+(peers.find(peer=>peer.sessionId===id)?.displayName??'')}>
-              <MeetingVideo stream={stream} label={peers.find(peer=>peer.sessionId===id)?.displayName??''} className="size-full object-cover"/>
-              <span className="absolute inset-x-0 bottom-0 truncate bg-black/70 px-1 py-0.5 text-[10px]">{peers.find(peer=>peer.sessionId===id)?.displayName??''}</span>
+              aria-label={(pt?'Destacar câmera de ':'Focus camera of ')+(compactUserName(peers.find(peer=>peer.sessionId===id)?.displayName))}>
+              <MeetingVideo stream={stream} label={compactUserName(peers.find(peer=>peer.sessionId===id)?.displayName)} className="size-full object-cover"/>
+              <span className="absolute inset-x-0 bottom-0 truncate bg-black/70 px-1 py-0.5 text-[10px]">{compactUserName(peers.find(peer=>peer.sessionId===id)?.displayName)}</span>
             </button>)}
           {Object.entries(screens).map(([id,stream])=>
             <button type="button" key={'screen:'+id}
               onClick={()=>{setPinnedCamera(null);setPresentedScreenId(id);}}
               className={'relative aspect-video h-16 shrink-0 overflow-hidden rounded-lg border-2 '+(showScreen&&featuredScreenId===id?'border-primary':'border-white/25')}
-              aria-label={(pt?'Ver tela de ':'View screen from ')+(peers.find(peer=>peer.sessionId===id)?.displayName??'')}>
+              aria-label={(pt?'Ver tela de ':'View screen from ')+(compactUserName(peers.find(peer=>peer.sessionId===id)?.displayName))}>
               <MeetingVideo stream={stream} label={pt?'Tela compartilhada':'Shared screen'} className="size-full object-contain"/>
               <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 truncate bg-black/70 px-1 py-0.5 text-[10px]">
                 <MonitorUp className="size-3"/>{pt?'Tela':'Screen'}
