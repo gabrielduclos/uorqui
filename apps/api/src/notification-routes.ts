@@ -100,7 +100,7 @@ export function registerNotificationRoutes(app:FastifyInstance,readSession:Sessi
         'LEFT JOIN community_channel_password_access unlocked ON unlocked.channel_id=ch.id AND unlocked.user_id=$1 '+
         'LEFT JOIN community_channel_member_access access ON access.channel_id=ch.id AND access.user_id=$1 '+
         'WHERE n.recipient_id=$1 AND ( '+
-        "(n.kind='email' AND mc.id IS NOT NULL) OR (n.kind='mention' AND m.id IS NOT NULL AND cm.user_id IS NOT NULL "+
+        "(n.kind='email' AND mc.id IS NOT NULL AND n.read_at IS NULL) OR (n.kind='mention' AND m.id IS NOT NULL AND cm.user_id IS NOT NULL "+
         "AND (ch.password_hash IS NULL OR cm.role IN ('owner','admin') OR unlocked.user_id IS NOT NULL) "+
         "AND (ch.access_mode='open' OR cm.role IN ('owner','admin') OR access.user_id IS NOT NULL) "+
         'AND NOT EXISTS (SELECT 1 FROM community_bans banned WHERE banned.community_id=c.id AND banned.user_id=$1) '+
