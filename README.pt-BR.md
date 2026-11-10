@@ -13,6 +13,7 @@
 
 - **Fotos mais leves:** compactação automática de fotos JPEG/WebP/HEIC da galeria, câmera e área de transferência antes do envio nos chats e canais. GIFs, PNGs e anexos via **Arquivo** preservam o original; o navegador mantém o arquivo intacto se a conversão não ajudar.
 - **Sino com badge unificado:** soma mensagens, canais, convites, atividades e e-mails não lidos das contas conectadas; o badge nativo do PWA depende da compatibilidade do dispositivo.
+- **Comunidades e notificações:** foto e nome do autor aparecem já no envio otimista dos canais. A aba E-mail de Notificações lista apenas avisos pendentes; ler ou mover mensagens na caixa sincroniza os avisos com o backend.
 
 ## Alterações do beta.2
 
