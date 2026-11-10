@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.40] — 2026-11-10
+
+- **Community navigation cleanup:** removed both redundant “Unread messages” summary cards from the community list and channel sidebar, including the prominent panel above channel entries.
+- **Indicators kept:** unread badges beside each channel and community, the main notification bell, the notifications inbox and PWA app badges remain intact. No changes to unread tracking, database, APIs or push delivery.
+- **Regression test:** checks that the summary panels are absent while channel-level unread indicators remain, included in Web UI CI.
+
 ## [0.1.0-beta.39] — 2026-11-10
 
 - **15-day username change cooldown:** account owners can change their unique @handle at most once per rolling 15 days. Initial onboarding does not consume a change; saving without modifying the handle does not extend the cooldown. The server enforces an atomic conditional update, returns HTTP 423 with the next eligible timestamp on rejection, and the profile editor disables changes with a localized eligibility notice.
