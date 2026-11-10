@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.34] — 2026-11-10
+
+- **Reusable meeting link, distinct from channel invitation:** the meeting screen now shares a stable `/?community=<id>&channel=<id>&meeting=1` URL. It may be used by any number of already-authorized channel members; it never consumes or issues a channel-invite token, enrolls a user or grants channel permission. Login, membership, private-channel ACL/password and meeting approval remain server enforced. Opening a link displays the meeting room without automatically enabling microphone or camera.
+- **One-hour meeting session limit:** a shared PostgreSQL `meeting_expires_at` deadline starts when the first admitted participant joins a meeting. Later participants and reconnects use the same deadline. Expired meetings can no longer refresh heartbeat, fetch session state, appear in presence or negotiate WebRTC. Starting a new meeting after everyone leaves (or expiration) creates a fresh one-hour window.
+- **Countdown on both layouts:** a live `60:00` timer is shown in the expanded meeting and floating call, turns prominent during the final five minutes and automatically disconnects/cleans up local media at zero, including after a PWA resumes from background.
+- **Migration and checks:** additive `0045_meeting_one_hour_deadline.sql` plus matching Drizzle snapshot and migration journal. Unit/regression tests verify reusable URL semantics, absolute countdown and backend authorization/deadline guards. **Apply migration 0045 before deploying this API change.** Real-device multi-user/WebRTC validation is still required.
+
 ## [0.1.0-beta.33] — 2026-11-10
 
 - **General channel opens at the newest message:** the initially visible desktop text channel now runs the same automatic anchoring as manually selected channels; user-directed history scrolling remains in control.
