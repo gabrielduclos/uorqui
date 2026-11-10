@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.34] — 10/11/2026
+
+- **Link reutilizável da reunião separado do convite:** a tela da reunião passa a compartilhar `/?community=<id>&channel=<id>&meeting=1`. Várias pessoas já autorizadas podem abrir o mesmo endereço, sem gerar/consumir token de convite, entrar automaticamente na comunidade ou receber permissão. Login, participação, canal fechado/senha e aprovação da reunião continuam validados pelo servidor. Abrir o link mostra a sala, mas não liga câmera ou microfone automaticamente.
+- **Reunião limitada a 1 hora:** o primeiro participante autorizado inicia um prazo único em PostgreSQL (`meeting_expires_at`). Pessoas que entram depois ou reconectam não renovam o tempo. Ao expirar, o servidor bloqueia sinais WebRTC, heartbeat, leitura da sessão e presença. Depois que todos saem, a próxima reunião recebe um novo período de 1 hora.
+- **Cronômetro regressivo:** `60:00` no modo normal e minimizado, alerta visual nos últimos cinco minutos e encerramento automático da conexão/mídia local ao zerar, mesmo após retorno do PWA do segundo plano.
+- **Migração e testes:** `0045_meeting_one_hour_deadline.sql`, snapshot/journal Drizzle e regressões para link, cronômetro, prazo e permissões. **Aplicar a migração 0045 antes de publicar a alteração da API.** Testes em dispositivos reais com vários participantes ainda necessários.
+
 ## [0.1.0-beta.33] — 10/11/2026
 
 - **Canal Geral inicia na última mensagem:** no desktop, a primeira sala já visível ao entrar na comunidade agora participa da rolagem inicial automática; a posição continua respeitada quando o usuário navega manualmente no histórico.
