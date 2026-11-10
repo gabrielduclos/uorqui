@@ -37,6 +37,8 @@ jobs:
         run: npm run test:notifications -w @uorqui/web
       - name: Test 429 rate-limit backoff
         run: npm run test:rate-limit -w @uorqui/web
+      - name: Verify signed visitor IP and secure 429 attribution
+        run: npm run test:visitor-ip -w @uorqui/web
       - name: Test serialized bootstrap and public probe caching
         run: npm run test:bootstrap -w @uorqui/web
       - name: Test restricted-channel invite flow and General default scroll
