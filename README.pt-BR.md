@@ -4,10 +4,16 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-> **Versão: `0.1.0-beta.32` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
+> **Versão: `0.1.0-beta.33` — beta técnico inicial (novembro de 2026).** Publicado para testes controlados, **não** é uma versão estável nem lançamento geral. Ainda faltam validar cadastro/e-mail de ponta a ponta, notificações e PWAs em dispositivos reais. O domínio oficial já foi transferido para o novo Worker.
 
 **Beta oficial:** [uorqui.app](https://uorqui.app) · **Endereço técnico:** [main.uorqui1.workers.dev](https://main.uorqui1.workers.dev) · **Código:** [GitHub](https://github.com/gabrielduclos/uorqui)
 
+
+## Novidades do beta.33
+
+- **Geral na última mensagem:** entrar em uma comunidade no desktop agora posiciona automaticamente o canal inicial na conversa mais recente, mesmo sem tocar nele.
+- **Links de acesso aos canais fechados:** somente dono, admin e moderador autorizado podem gerar convites exclusivos de 24h e uso único. Ao aceitar, a pessoa recebe autorização específica para o canal e entra na comunidade. Convites enviados diretamente por @usuário ficam vinculados à conta convidada; é possível revogar links não usados. Senha e aprovação de reunião permanecem independentes.
+- **Segurança e banco:** tokens aleatórios de 256 bits protegidos por hash, confirmação explícita e validação transacional. Migração `0044` aplicada ao Neon. Consulte [convites de canais fechados](docs/pt-BR/convites-canais-fechados.md). Testes de ponta a ponta em dispositivos reais ainda são necessários.
 
 ## Novidades do beta.32
 
