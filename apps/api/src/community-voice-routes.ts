@@ -60,7 +60,7 @@ async function roomPeers(channelId:string,me:string,sessionId:string){
     'FROM community_voice_sessions s JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=s.user_id '+
     'JOIN community_channels c ON c.id=s.channel_id JOIN community_members m ON m.community_id=c.community_id AND m.user_id=s.user_id '+
     'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
-    "WHERE s.channel_id=$1 AND (c.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access grant_access WHERE grant_access.channel_id=c.id AND grant_access.user_id=s.user_id)) AND "+activePresence+' '+
+    "WHERE s.channel_id=$1 AND (c.kind<>'meeting' OR c.meeting_expires_at>now()) AND (c.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access grant_access WHERE grant_access.channel_id=c.id AND grant_access.user_id=s.user_id)) AND "+activePresence+' '+
     'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=$2) '+
     'OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) ORDER BY s.joined_at,s.id LIMIT 8',
     [channelId,me],
@@ -94,7 +94,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(s.user_id,$2::uuid) AND f.user_b_id=GREATEST(s.user_id,$2::uuid) '+
         "WHERE ch.community_id=$1 AND ch.kind IN ('voice','meeting') AND (ch.password_hash IS NULL OR EXISTS (SELECT 1 FROM community_members viewer WHERE viewer.community_id=ch.community_id AND viewer.user_id=$2 AND viewer.role IN ('owner','admin')) OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=ch.id AND g.user_id=$2)) "+
         "AND (ch.access_mode='open' OR EXISTS (SELECT 1 FROM community_members viewer WHERE viewer.community_id=ch.community_id AND viewer.user_id=$2 AND viewer.role IN ('owner','admin')) OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=ch.id AND g.user_id=$2)) "+
-        "AND (ch.access_mode='open' OR present.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=ch.id AND g.user_id=s.user_id)) AND "+activePresence+' '+
+        "AND (ch.kind<>'meeting' OR ch.meeting_expires_at>now()) AND (ch.access_mode='open' OR present.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=ch.id AND g.user_id=s.user_id)) AND "+activePresence+' '+
         'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE '+
         '(b.blocker_id=s.user_id AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=s.user_id)) '+
         'ORDER BY s.channel_id,s.joined_at,s.id LIMIT 300',[id,me]);
@@ -114,6 +114,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const {id,channelId}=request.params as {id:string;channelId:string};
       const {sessionId}=request.body as {sessionId:string};
       const client=await getPool().connect();
+      let meetingExpiresAt:string|null=null;
       try{
         await client.query('BEGIN');
         // Serialize the per-room capacity check and seat acquisition.
@@ -122,7 +123,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         if(!ok.rowCount){await client.query('ROLLBACK');return reply.code(403).send({error:'MEMBERS_ONLY'});}
         // A member must have an explicit approval before joining a restricted meeting.
         const access=await client.query(
-          "SELECT ch.kind,ch.meeting_join_policy,m.role,req.status FROM community_channels ch "+
+          'SELECT ch.kind,ch.meeting_join_policy,ch.meeting_expires_at AS "meetingExpiresAt",m.role,req.status FROM community_channels ch '+
           "JOIN community_members m ON m.community_id=ch.community_id AND m.user_id=$3 "+
           "LEFT JOIN meeting_access_requests req ON req.channel_id=ch.id AND req.user_id=$3 "+
           "WHERE ch.community_id=$1 AND ch.id=$2",[id,channelId,me]);
@@ -134,9 +135,25 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         }
         await client.query("DELETE FROM community_voice_sessions WHERE last_seen_at < now()-interval '180 seconds'");
         await client.query("DELETE FROM community_voice_signals WHERE created_at < now()-interval '3 minutes'");
+        // The deadline belongs to the meeting, not to any participant. Once
+        // expired, evict all old sessions before allowing a fresh meeting.
+        const meetingExpired=room?.kind==='meeting'&&
+          (!room.meetingExpiresAt||new Date(room.meetingExpiresAt).getTime()<=Date.now());
+        if(meetingExpired)await client.query('DELETE FROM community_voice_sessions WHERE channel_id=$1',[channelId]);
         const seats=await client.query('SELECT user_id FROM community_voice_sessions WHERE channel_id=$1',[channelId]);
         if(seats.rows.length>=6&&!seats.rows.some(row=>row.user_id===me)){
           await client.query('ROLLBACK');return reply.code(409).send({error:'VOICE_ROOM_FULL'});
+        }
+        if(room?.kind==='meeting'){
+          // First admitted member starts a fresh 60-minute window. Late joins
+          // share its deadline, and cannot extend it by leaving or rejoining.
+          if(meetingExpired||seats.rows.length===0){
+            const updated=await client.query(
+              'UPDATE community_channels SET meeting_expires_at=now()+interval \'1 hour\' '+
+              'WHERE id=$1 AND community_id=$2 AND kind=\'meeting\' '+
+              'RETURNING meeting_expires_at AS "expiresAt"',[channelId,id]);
+            meetingExpiresAt=new Date(updated.rows[0].expiresAt).toISOString();
+          }else meetingExpiresAt=new Date(room.meetingExpiresAt).toISOString();
         }
         await client.query(
           'INSERT INTO community_voice_sessions(id,channel_id,user_id) VALUES($1,$2,$3) '+
@@ -146,7 +163,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
       void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
       return reply.header('Cache-Control',noCache).send({
-        sessionId,peers:await roomPeers(channelId,me,sessionId),rtc:await rtcConfig(),maxParticipants:6,
+        sessionId,peers:await roomPeers(channelId,me,sessionId),rtc:await rtcConfig(),maxParticipants:6,expiresAt:meetingExpiresAt,
       });
     }catch(error){request.log.error({err:error},'Join voice room');return reply.code(503).send({error:'Unavailable'});}
   });
@@ -158,7 +175,9 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
       const {sessionId,after='0'}=request.query as {sessionId:string;after?:string};
       if(!await authorized(id,channelId,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
       const found=await getPool().query(
-        "SELECT 1 FROM community_voice_sessions WHERE id=$1 AND channel_id=$2 AND user_id=$3 AND last_seen_at>now()-interval '180 seconds'",
+        "SELECT 1 FROM community_voice_sessions s JOIN community_channels ch ON ch.id=s.channel_id "+
+        "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND s.last_seen_at>now()-interval '180 seconds' "+
+        "AND (ch.kind<>'meeting' OR ch.meeting_expires_at>now())",
         [sessionId,channelId,me]);
       if(!found.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       const cursor=Number(after);
@@ -193,7 +212,8 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         'UPDATE community_voice_sessions s SET last_seen_at=now(),muted=$4,deafened=$6 '+
         'FROM community_channels c JOIN community_members m ON m.community_id=c.community_id AND m.user_id=$3 '+
         "WHERE s.id=$1 AND s.channel_id=$2 AND s.user_id=$3 AND c.id=$2 AND c.community_id=$5 AND c.kind IN ('voice','meeting') AND (c.password_hash IS NULL OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=c.id AND g.user_id=$3)) "+
-        "AND (c.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=c.id AND g.user_id=$3)) AND s.last_seen_at>now()-interval '180 seconds' RETURNING s.id",
+        "AND (c.access_mode='open' OR m.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=c.id AND g.user_id=$3)) "+
+        "AND (c.kind<>'meeting' OR c.meeting_expires_at>now()) AND s.last_seen_at>now()-interval '180 seconds' RETURNING s.id",
         [sessionId,channelId,me,muted,id,deafened]);
       if(!result.rowCount)return reply.code(410).send({error:'VOICE_SESSION_ENDED'});
       void publishCommunityEvent(id,channelId,'voice').catch(()=>{});
@@ -231,6 +251,7 @@ export function registerCommunityVoiceRoutes(app:FastifyInstance,readSession:Ses
         "AND (c.password_hash IS NULL OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_password_access g WHERE g.channel_id=c.id AND g.user_id=$6)) "+
         "AND (c.access_mode='open' OR mine.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=c.id AND g.user_id=$6)) "+
         "AND (c.access_mode='open' OR theirs.role IN ('owner','admin') OR EXISTS (SELECT 1 FROM community_channel_member_access g WHERE g.channel_id=c.id AND g.user_id=t.user_id)) "+
+        "AND (c.kind<>'meeting' OR c.meeting_expires_at>now()) "+
         "AND s.last_seen_at>now()-interval '180 seconds' AND t.last_seen_at>now()-interval '180 seconds' "+
         'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=t.user_id) '+
         'OR (b.blocker_id=t.user_id AND b.blocked_id=s.user_id)) RETURNING id',
