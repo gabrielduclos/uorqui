@@ -2,7 +2,7 @@
 
 [Português](arquitetura.md) · [English](../en/architecture.md)
 
-> **Versão `0.1.0-beta.1`.** O PWA e a API Fastify estão publicados para testes controlados na Cloudflare/Render com PostgreSQL Neon. Não é lançamento público estável; testes de e-mail e aparelhos reais continuam pendentes.
+> **Beta técnico atual `0.1.0-beta.37` (revisão documental em 10/11/2026).** O PWA e a API Fastify estão publicados para testes controlados na Cloudflare/Render com PostgreSQL Neon. Não é lançamento público estável; testes de e-mail e aparelhos reais continuam pendentes.
 
 ## Abordagem
 
