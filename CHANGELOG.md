@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.38] — 2026-11-10
+
+- **Balanced product and portfolio presentation:** reorganized the bilingual READMEs as product entry points with functionality, user workflows, architecture, local setup, operational maturity and a dedicated portfolio link rather than a portfolio-first narrative.
+- **Documentation navigation:** created English/Portuguese documentation hubs grouping product modules, technical setup, security/operations, releases and the separate engineering case study. Readers can follow paths relevant to users, contributors, operators or recruiters.
+- **Portfolio preserved, not duplicated:** the existing technical case study remains available for inspectable implementation evidence, trade-offs and transparent use of AI-assisted tools. The main README keeps its focus on Uorqui itself.
+- **Version consistency:** bumped the three npm manifests and synchronized the current-release references in major guide headers and the case study.
+- **Impact:** docs and version metadata only; no production runtime, DB schema, API, authorization, Cloudflare configuration or deployment behavior modified. Check the links and navigation in both languages; real-device and integration acceptance remains outstanding.
+
 ## [0.1.0-beta.37] — 2026-11-10
 
 - **Portfolio-first documentation:** reorganized the English and Portuguese READMEs around the product problem, current capabilities, architecture, evidence and beta limitations; moved detailed technical context into a new bilingual [engineering case study](docs/en/portfolio.md).
