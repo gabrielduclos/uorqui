@@ -757,6 +757,8 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
               transition={WORKSPACE_PAGE_MOTION}
               className="h-full min-h-0 overflow-hidden">
               <LiveCommunities myId={account.user.id} active={area==='communities'}
+                myName={account.profile?.displayName??account.user.name}
+                myHandle={account.profile?.handle??''} myAvatar={account.profile?.avatarUrl??null}
                 onMobileOpenChange={setChannelOpened} onRestoreNavigation={()=>move('communities')}
                 initialCommunityId={invitedCommunityId} requestedDestination={requestedCommunity}
                 unreadChannels={communityUnread.channels} unreadCommunities={communityUnread.communities}
