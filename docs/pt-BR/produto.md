@@ -4,6 +4,12 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Histórico dos canais, menções autorizadas e links (beta.43)
+
+Os canais exibem divisões por dia no calendário local e uma pesquisa com seletor de período: Hoje, Ontem, Últimos 7 dias, Esta semana, Semana passada, Este mês e Mais antigas. A busca consulta o histórico no PostgreSQL, com as mesmas permissões de acesso à leitura e resultados paginados em lotes de até 100; não depende apenas do cache. Enquanto há um filtro, as mensagens não são marcadas como lidas automaticamente. URLs HTTP/HTTPS da descrição fixa ficam clicáveis, reutilizando a navegação segura já existente.
+
+Sugestões de @usuário consultam apenas os membros autorizados no canal selecionado; concessões, senha, banimentos e bloqueios são verificados no backend. Proprietários/admins preservam o acesso implícito; dados privados de perfil continuam protegidos. As notificações de menção também verificam acesso no servidor.
+
 ## Menções em mensagens da comunidade (beta.42)
 
 Ao digitar `@` no início ou em qualquer parte da mensagem de um canal, depois de um espaço ou pontuação, a lista de membros da comunidade é exibida. Selecionar uma pessoa insere o @usuário onde está o cursor, sem apagar o restante do texto. Mover o cursor para uma menção incompleta também atualiza as sugestões. Somente membros autorizados recebem eventos de menção; endereços de e-mail não são interpretados como menções.

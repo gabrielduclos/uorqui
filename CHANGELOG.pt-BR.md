@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.43] — 11/11/2026
+
+- **Menções autorizadas por canal:** o autocompletar de @usuário mostra só quem pode acessar o canal atual. Canais restritos exigem concessão; canais com senha, desbloqueio (exceto proprietário/admin). Usuários bloqueados ou banidos ficam de fora. A lista atualiza quando as permissões mudam, e menções sem autorização não viram links de perfil. O servidor continua verificando o acesso antes de notificar.
+- **Pesquisa e filtros no histórico:** separadores por dia como Hoje, Ontem e Semana passada, campo de pesquisa e seletor de período. A busca ocorre no servidor, inclusive em mensagens anteriores às 100 mais recentes, com paginação. Os filtros consideram o calendário local.
+- **Links na descrição:** URLs HTTP/HTTPS válidas ficam clicáveis na descrição fixa do canal, com as regras de navegação e segurança existentes.
+- **Testes:** concessão, desbloqueio, revogação e segurança das menções, busca no servidor e agrupamento por data local.
+- **Migração:** nenhuma.
+
 ## [0.1.0-beta.42] — 11/11/2026
 
 - **Menções no meio de frases:** corrigido o autocompletar de @usuário nos canais depois de espaços ou pontuação, inclusive em trechos já escritos (ex.: `Bom dia @ana`).

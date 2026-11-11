@@ -89,7 +89,7 @@ export function openInternalChatLink(event:MouseEvent<HTMLAnchorElement>,href:st
   return true;
 }
 
-function MentionText({text}:{text:string}){
+function MentionText({text,allowedHandles}:{text:string;allowedHandles?:ReadonlySet<string>}){
   const mentions=/(^|[^a-zA-Z0-9_])@([a-z][a-z0-9_]{2,31})(?![a-zA-Z0-9_])/gi;
   const parts:ReactNode[]=[];
   let offset=0;
@@ -97,6 +97,11 @@ function MentionText({text}:{text:string}){
     const start=(match.index??0)+match[1].length;
     if(start>offset)parts.push(text.slice(offset,start));
     const handle=match[2].toLowerCase();
+    if(allowedHandles&&!allowedHandles.has(handle)){
+      parts.push(text.slice(start,start+match[2].length+1));
+      offset=start+match[2].length+1;
+      continue;
+    }
     parts.push(<a key={start} href={'/@'+handle}
       className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
       onClick={event=>{
@@ -111,11 +116,11 @@ function MentionText({text}:{text:string}){
   return <>{parts.length?parts:text}</>;
 }
 
-export function MessageText({text,mentions=false}:{text:string;mentions?:boolean}){
+export function MessageText({text,mentions=false,allowedHandles}:{text:string;mentions?:boolean;allowedHandles?:ReadonlySet<string>}){
   return <>{splitMessageLinks(text).map((part,index)=>
     <Fragment key={index}>{part.href?
       <a href={part.href} target={internalChatLink(part.href)?undefined:'_blank'} rel="noopener noreferrer nofollow ugc"
         className="break-all underline decoration-current underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
-        onClick={event=>{if(!openInternalChatLink(event,part.href!))event.stopPropagation();}}>{part.text}</a>:mentions?<MentionText text={part.text}/>:part.text}</Fragment>
+        onClick={event=>{if(!openInternalChatLink(event,part.href!))event.stopPropagation();}}>{part.text}</a>:mentions?<MentionText text={part.text} allowedHandles={allowedHandles}/>:part.text}</Fragment>
   )}</>;
 }

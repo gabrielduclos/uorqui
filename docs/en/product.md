@@ -4,6 +4,12 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Channel history, scoped mentions and description links (beta.43)
+
+Channel messages show local-calendar day separators and a text search / period filter (Today, Yesterday, Last 7 days, This week, Last week, This month, Older). Search runs against PostgreSQL with the same channel gates as message reads; it fetches 100 matches per page with a Load earlier control instead of relying on the latest 100 cached messages. Search avoids automatically marking filtered messages as read. Safe HTTP(S) URLs in the pinned description use the established internal invitation routing.
+
+@mention suggestions come from a channel-specific endpoint for members with current access, including explicit restricted-channel grants and password unlocks, while excluding bans and mutual blocks. Owners/admins retain their implicit access; private profile data is not exposed to other members. The existing notification sender independently enforces channel permissions.
+
 ## Inline community mentions (beta.42)
 
 Typing `@` at the start or anywhere inside a channel message after a space or punctuation opens the matching community-member picker. Choosing a member inserts the handle at the caret, without deleting following text. Moving the caret into an unfinished mention also updates suggestions. Only valid, authorized recipients receive mention inbox events; ordinary email addresses are not treated as mentions.

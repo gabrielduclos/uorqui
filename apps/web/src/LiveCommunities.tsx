@@ -1,6 +1,6 @@
 import { compactUserName } from './userDisplayName';
 import { apiRequest as api } from './lib/apiClient';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog } from 'radix-ui';
 import { VoicePortalShell } from './VoicePortalShell';
@@ -30,6 +30,7 @@ import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 import { ChannelScrollBehavior } from './channelScrollBehavior';
 import { activeCommunityMention, replaceCommunityMention } from './communityMentions';
+import { channelHistorySearchPath, channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod } from './channelHistory';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 import { buildMeetingLink } from './meetingLink';
 
@@ -157,6 +158,17 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [replySource,setReplySource]=useState<Message|null>(null);
   const [inspectReaction,setInspectReaction]=useState<{messageId:string;emoji:string;users:{handle:string;name:string;avatarUrl:string|null}[];loading:boolean;error:string}|null>(null);
   const [mentionMembers,setMentionMembers]=useState<{handle:string;displayName:string;avatarUrl:string|null}[]>([]);
+  const [mentionMembersForKey,setMentionMembersForKey]=useState<string|null>(null);
+  const [historyPeriod,setHistoryPeriod]=useState<ChannelHistoryPeriod>('all');
+  const [channelSearch,setChannelSearch]=useState('');
+  const [filteredMessages,setFilteredMessages]=useState<Message[]>([]);
+  const [filteredForKey,setFilteredForKey]=useState<string|null>(null);
+  const filteredRequestKey=useRef('');
+  const [filteredHasMore,setFilteredHasMore]=useState(false);
+  const [filteredLoading,setFilteredLoading]=useState(false);
+  const [filteredMoreLoading,setFilteredMoreLoading]=useState(false);
+  const [filteredError,setFilteredError]=useState(false);
+  const searchInputRef=useRef<HTMLInputElement>(null);
   const [mentionAt,setMentionAt]=useState<{start:number;end:number;query:string}|null>(null);
   const [mentionIndex,setMentionIndex]=useState(0);
   const [mediaPicker,setMediaPicker]=useState<'emoji'|'gif'|null>(null);
@@ -206,7 +218,10 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const descriptionNeedsMore=channelDescription.length>180||channelDescription.split('\n').length>3;
   useEffect(()=>setDescriptionExpanded(false),[channelId,selectedId]);
   const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
-  const mentionOptions=mentionAt?mentionMembers.filter(member=>
+  const mentionsKey=selectedId&&channelId?selectedId+'/'+channelId:null;
+  const authorizedMentionMembers=mentionMembersForKey===mentionsKey?mentionMembers:[];
+  const allowedMentionHandles=new Set([...authorizedMentionMembers.map(member=>member.handle.toLowerCase()),myHandle.toLowerCase()]);
+  const mentionOptions=mentionAt?authorizedMentionMembers.filter(member=>
     (member.handle+' '+member.displayName).toLowerCase().includes(mentionAt.query.toLowerCase())).slice(0,7):[];
   function updateMention(value:string,caret:number,selectionEnd=caret){
     setMentionAt(caret===selectionEnd?activeCommunityMention(value,caret):null);
@@ -227,14 +242,16 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     });
   }
   useEffect(()=>{
-    if(!selectedId||!channelId||channelLocked){setMentionMembers([]);return;}
+    setMentionMembers([]);setMentionMembersForKey(null);
+    if(!selectedId||!channelId||channelLocked||!activeChannel)return;
     let live=true;
+    const key=selectedId+'/'+channelId;
     void api<{members:{handle:string;displayName:string;avatarUrl:string|null}[]}>(
-      '/api/v1/communities/'+selectedId+'/invitable-members'
-    ).then(data=>{if(live)setMentionMembers(data.members);})
-      .catch(()=>{if(live)setMentionMembers([]);});
+      '/api/v1/communities/'+selectedId+'/channels/'+channelId+'/mentionable-members'
+    ).then(data=>{if(live){setMentionMembers(data.members);setMentionMembersForKey(key);}})
+      .catch(()=>{if(live){setMentionMembers([]);setMentionMembersForKey(null);}});
     return ()=>{live=false;};
-  },[selectedId,channelId,channelLocked]);
+  },[selectedId,channelId,channelLocked,activeChannel?.accessMode,detail?.channels]);
   const community=detail?.community??null;
   // A revoked grant removes a closed room from the authorized channel list.
   // Unmount its WebRTC component rather than keeping a stale floating call.
@@ -245,8 +262,52 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     setNotice(pt?'Você não tem mais acesso a esta sala.':'You no longer have access to this room.');
   },[detail,activeVoiceRoom,selectedId,pt]);
   const currentMessageKey=selectedId&&channelId?selectedId+'/'+channelId:null;
+  const searchActive=historyPeriod!=='all'||!!channelSearch.trim();
   const visibleMessages=messagesForKey===currentMessageKey?messages:[];
-  const renderedMessages=[...visibleMessages,...pendingMessages.filter(p=>p.channelId===channelId&&!visibleMessages.some(m=>m.clientId===p.clientId))];
+  const recentMessages=[...visibleMessages,...pendingMessages.filter(p=>p.channelId===channelId&&!visibleMessages.some(m=>m.clientId===p.clientId))];
+  const searchResults=filteredForKey===currentMessageKey?filteredMessages:[];
+  const renderedMessages=searchActive?searchResults:recentMessages;
+  const dayGroups=groupChannelMessages(renderedMessages);
+  useEffect(()=>{setHistoryPeriod('all');setChannelSearch('');setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);},[selectedId,channelId]);
+  useEffect(()=>{
+    if(!searchActive||!selectedId||!channelId||channelLocked||!activeChannel){
+      filteredRequestKey.current='';
+      setFilteredLoading(false);setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);setFilteredError(false);
+      return;
+    }
+    let live=true;
+    const key=selectedId+'/'+channelId;
+    const requestKey=key+'/'+historyPeriod+'/'+channelSearch+'/'+todayKey;
+    filteredRequestKey.current=requestKey;
+    setFilteredLoading(true);setFilteredForKey(null);setFilteredMessages([]);setFilteredError(false);setFilteredHasMore(false);
+    const timer=window.setTimeout(()=>{
+      void api<{messages:Message[];hasMore:boolean}>(
+        channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod)
+      ).then(data=>{
+        if(!live||filteredRequestKey.current!==requestKey)return;
+        setFilteredForKey(key);setFilteredMessages(data.messages);setFilteredHasMore(data.hasMore);
+        setFilteredLoading(false);
+        window.requestAnimationFrame(()=>{if(scrollRef.current)scrollRef.current.scrollTop=0;});
+      }).catch(()=>{
+        if(live&&filteredRequestKey.current===requestKey){setFilteredForKey(key);setFilteredLoading(false);setFilteredError(true);}
+      });
+    },240);
+    return ()=>{live=false;window.clearTimeout(timer);};
+  },[selectedId,channelId,channelLocked,activeChannel?.id,channelSearch,historyPeriod,todayKey,searchActive]);
+  async function loadMoreHistory(){
+    if(!searchActive||!selectedId||!channelId||filteredMoreLoading||filteredLoading||!filteredHasMore)return;
+    setFilteredMoreLoading(true);
+    const requestKey=filteredRequestKey.current;
+    try{
+      const response=await api<{messages:Message[];hasMore:boolean}>(
+        channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod,filteredMessages.length)
+      );
+      if(filteredRequestKey.current!==requestKey)return;
+      setFilteredMessages(old=>[...response.messages.filter(m=>!old.some(item=>item.id===m.id)),...old]);
+      setFilteredHasMore(response.hasMore);
+    }catch{if(filteredRequestKey.current===requestKey)setFilteredError(true);}
+    finally{if(filteredRequestKey.current===requestKey)setFilteredMoreLoading(false);}
+  }
 
   const loadList=useCallback(async()=>{
     const data=await api<{communities:Community[]}>('/api/v1/communities');
@@ -597,7 +658,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   useLayoutEffect(()=>{
     const element=scrollRef.current;
     const key=currentMessageKey;
-    if(!active||!channelHistoryVisible||!element||!key||messagesForKey!==key||messagesLoading)return;
+    if(!active||!channelHistoryVisible||!element||!key||messagesForKey!==key||messagesLoading||searchActive)return;
     const latest=messages.at(-1)?.id??null;
     if(channelScrollRef.current.open(key)){
       activeScrollKey.current=key;
@@ -624,14 +685,14 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     }
     previousLastMessage.current=latest;
     previousMessageCount.current=messages.length;
-  },[active,channelHistoryVisible,messages,selectedId,channelId,messagesForKey,messagesLoading,currentMessageKey]);
+  },[active,channelHistoryVisible,messages,selectedId,channelId,messagesForKey,messagesLoading,currentMessageKey,searchActive]);
 
   // Image previews and GIFs may expand after channel data is painted. Keep
   // the bottom anchored only while the reader has not scrolled away.
   useLayoutEffect(()=>{
     const element=scrollRef.current,content=messageContentRef.current;
     const key=currentMessageKey;
-    if(!active||!channelHistoryVisible||!element||!content||!key||messagesForKey!==key||messagesLoading)return;
+    if(!active||!channelHistoryVisible||!element||!content||!key||messagesForKey!==key||messagesLoading||searchActive)return;
     let previousHeight=element.scrollHeight;
     let frame=0;
     const pin=()=>{
@@ -658,7 +719,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
       window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(openingFrame);
     };
-  },[active,channelHistoryVisible,currentMessageKey,messagesForKey,messagesLoading,voiceTextExpanded]);
+  },[active,channelHistoryVisible,currentMessageKey,messagesForKey,messagesLoading,voiceTextExpanded,searchActive]);
   useEffect(()=>{
     if(activeChannel?.kind==='text'||!voiceTextExpanded)return;
     const frame=window.requestAnimationFrame(()=>{
@@ -672,7 +733,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   // selected by default in the community sidebar. Never mark unseen messages
   // in background tabs; the cursor is tied to a message present in our response.
   useEffect(()=>{
-    if(!active||!channelOpen||!selectedId||!channelId||!activeChannel||
+    if(searchActive||!active||!channelOpen||!selectedId||!channelId||!activeChannel||
        messagesForKey!==currentMessageKey||
        (activeChannel.kind!=='text'&&!voiceTextExpanded)||
        document.visibilityState!=='visible'||messagesLoading)return;
@@ -692,7 +753,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
       }).catch(()=>{/* Leave badge intact and retry after next successful load. */});
     },250);
     return ()=>{cancelled=true;window.clearTimeout(timer);};
-  },[active,channelOpen,selectedId,channelId,activeChannel?.kind,voiceTextExpanded,messages,messagesLoading,messagesForKey,currentMessageKey]);
+  },[active,channelOpen,selectedId,channelId,activeChannel?.kind,voiceTextExpanded,messages,messagesLoading,messagesForKey,currentMessageKey,searchActive]);
 
   async function refresh(id=selectedId){
     await loadList();
@@ -1175,7 +1236,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
               </p>
               <p className={cn('whitespace-pre-wrap wrap-break-word text-xs leading-5 text-foreground/90',
                 !descriptionExpanded&&descriptionNeedsMore&&'line-clamp-3',
-                descriptionExpanded&&'max-h-[35dvh] overflow-y-auto overscroll-contain')}>{channelDescription}</p>
+                descriptionExpanded&&'max-h-[35dvh] overflow-y-auto overscroll-contain')}><MessageText text={channelDescription}/></p>
             </div>
             {descriptionNeedsMore&&<Button type="button" variant="ghost" size="sm"
               aria-expanded={descriptionExpanded}
@@ -1223,6 +1284,30 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
         </button>}
         {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind!=='text'?'uorqui-voice-text-panel':undefined}
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 bg-card/70 px-3 py-2 sm:px-5" role="search" aria-label={pt?'Pesquisar e filtrar mensagens do canal':'Search and filter channel messages'}>
+            <Search className="size-4 shrink-0 text-muted-foreground"/>
+            <input ref={searchInputRef} type="search" maxLength={120} value={channelSearch}
+              onChange={event=>setChannelSearch(event.target.value)}
+              placeholder={pt?'Pesquisar neste canal…':'Search this channel…'}
+              aria-label={pt?'Pesquisar neste canal':'Search this channel'}
+              className="h-9 min-w-24 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40"/>
+            <select value={historyPeriod} onChange={event=>setHistoryPeriod(event.target.value as ChannelHistoryPeriod)}
+              aria-label={pt?'Filtrar por período':'Filter by period'}
+              className="h-9 max-w-[160px] shrink-0 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40">
+              <option value="all">{pt?'Todas as datas':'All dates'}</option>
+              <option value="today">{pt?'Hoje':'Today'}</option>
+              <option value="yesterday">{pt?'Ontem':'Yesterday'}</option>
+              <option value="last-seven">{pt?'Últimos 7 dias':'Last 7 days'}</option>
+              <option value="this-week">{pt?'Esta semana':'This week'}</option>
+              <option value="last-week">{pt?'Semana passada':'Last week'}</option>
+              <option value="this-month">{pt?'Este mês':'This month'}</option>
+              <option value="older">{pt?'Mais antigas':'Older'}</option>
+            </select>
+            {searchActive&&<button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-secondary"
+              aria-label={pt?'Limpar filtros e pesquisa':'Clear search and filters'}
+              onClick={()=>{setHistoryPeriod('all');setChannelSearch('');setFilteredMessages([]);setFilteredForKey(null);}}>
+              <X className="size-4"/></button>}
+          </div>
           <div key={currentMessageKey} data-uorqui-room-history ref={scrollRef}
             onWheel={event=>{if(event.deltaY<0&&currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);}}
             onTouchStart={()=>{if(currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);}}
@@ -1239,16 +1324,31 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
               if(atBottom)setNewBelow(old=>old?0:old);
             }}
             className="uorqui-kit-content-enter min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-background px-3 py-3 sm:px-5">
-            {!messagesLoading&&!visibleMessages.length&&!pendingMessages.some(p=>p.channelId===channelId)&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
+            {!searchActive&&!messagesLoading&&!visibleMessages.length&&!pendingMessages.some(p=>p.channelId===channelId)&&<div className="mx-auto my-12 max-w-md text-center"><Hash className="mx-auto size-9 text-primary"/>
               <h3 className="mt-3 font-semibold">{pt?'Comece a conversa em #':'Start the conversation in #'}{activeChannel.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{pt?'Compartilhe textos, fotos e links com os membros da sala.':'Share text, photos and links with room members.'}</p>
             </div>}
-            {messagesLoading&&!visibleMessages.length&&<WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'} rows={4} className="mb-5"/>}
-            {messagesLoadFailed&&!messagesLoading&&<div role="status" className="mb-4 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+            {(searchActive?filteredLoading:messagesLoading)&&!renderedMessages.length&&<WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'} rows={4} className="mb-5"/>}
+            {searchActive&&!filteredLoading&&!filteredError&&!renderedMessages.length&&
+              <p className="mx-auto my-12 max-w-md text-center text-sm text-muted-foreground">
+                {pt?'Nenhuma mensagem encontrada neste período ou pesquisa.':'No messages found for this search or period.'}
+              </p>}
+            {filteredError&&searchActive&&<p role="alert" className="mb-4 text-center text-sm text-destructive">
+              {pt?'Não foi possível pesquisar. Verifique a conexão e tente novamente.':'Could not search. Check your connection and try again.'}
+            </p>}
+            {!searchActive&&messagesLoadFailed&&!messagesLoading&&<div role="status" className="mb-4 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
               {pt?'As mensagens estão temporariamente indisponíveis. O canal tentará reconectar automaticamente.':
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
             </div>}
-            <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{renderedMessages.map(message=><div id={'community-msg-'+message.id} key={message.clientId}
+            <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{dayGroups.map(group=><Fragment key={group.dayKey}>
+              <div role="separator" aria-label={channelHistoryDayLabel(group.dayKey,todayKey,locale)}
+                className="sticky top-0 z-10 flex items-center gap-3 py-3">
+                <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
+                <time dateTime={group.dayKey} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
+                  {channelHistoryDayLabel(group.dayKey,todayKey,locale)}</time>
+                <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
+              </div>
+              {group.messages.map(message=><div id={'community-msg-'+message.id} key={message.clientId}
               className="flex min-w-0 gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-accent/20">
               <UserAvatar name={compactUserName(message.authorName)} image={message.authorAvatar} size="sm"/>
               <div className="min-w-0 flex-1">
@@ -1279,7 +1379,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                     <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" decoding="async" referrerPolicy="no-referrer"
                       className="mt-2 block h-auto max-h-64 max-w-full rounded-xl object-contain"/>:
                     <div className="mt-1 min-w-0">
-                      <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''} mentions/></p>
+                      <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''} mentions allowedHandles={allowedMentionHandles}/></p>
                       {!!message.body&&<LinkPreview text={message.body} locale={locale}/>}
                     </div>}
                 {message.attachment&&!message.deletedAt&&selectedId&&channelId&&
@@ -1315,9 +1415,20 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                     {pt?'Voltar':'Back'}</button>}
                 </div>}
               </div>
-            </div>)}</div>
+            </div>)}</Fragment>)}
+              {searchActive&&filteredHasMore&&<div className="flex justify-center py-4">
+                <Button type="button" size="sm" variant="outline" loading={filteredMoreLoading}
+                  disabled={filteredMoreLoading} onClick={()=>void loadMoreHistory()}>
+                  {pt?'Carregar mensagens anteriores':'Load earlier messages'}
+                </Button>
+              </div>}
+              {!searchActive&&visibleMessages.length>=100&&<p className="py-3 text-center text-[11px] text-muted-foreground">
+                {pt?'Exibindo as 100 mensagens mais recentes. Use a pesquisa ou filtro para consultar o histórico.':
+                  'Showing the 100 latest messages. Use search or date filters to browse history.'}
+              </p>}
+            </div>
           </div>
-          {newBelow>0&&<div className="pointer-events-none relative z-10 h-0 shrink-0">
+          {!searchActive&&newBelow>0&&<div className="pointer-events-none relative z-10 h-0 shrink-0">
             <button type="button" className="pointer-events-auto absolute bottom-3 right-4 rounded-full border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-lg hover:bg-accent"
               onClick={()=>{scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight,behavior:'smooth'});setNewBelow(0);}}>
               {newBelow>99?'99+':newBelow} {pt?'novas mensagens ↓':'new messages ↓'}
