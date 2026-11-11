@@ -4,6 +4,10 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Inline community mentions (beta.42)
+
+Typing `@` at the start or anywhere inside a channel message after a space or punctuation opens the matching community-member picker. Choosing a member inserts the handle at the caret, without deleting following text. Moving the caret into an unfinished mention also updates suggestions. Only valid, authorized recipients receive mention inbox events; ordinary email addresses are not treated as mentions.
+
 ## Channel ordering (beta.41)
 
 Community owners and admins can use **Moderation → Channels** to reorder the text, voice and meeting channel lists. Drag and drop is available on supported desktop browsers; up/down controls work with touch and keyboard navigation. Select **Save order** to apply the change to every community member. Only channels of the same kind can be reordered relative to each other because the navigation groups them by type. The API validates the full list and stores the shared order in PostgreSQL; new channels appear last. Apply migration `0047_community_channel_order` before deploying the corresponding API.
