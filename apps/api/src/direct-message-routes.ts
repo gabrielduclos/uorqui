@@ -211,14 +211,26 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
     }catch(e){request.log.error({err:e},'Remove DM for self');return reply.code(503).send({error:'Unavailable'});}
   });
   app.get('/api/v1/dm/conversations/:id/messages',{
-    schema:{params:pathParams,querystring:{type:'object',additionalProperties:false,properties:{around:uuidParam}}}
+    schema:{params:pathParams,querystring:{type:'object',additionalProperties:false,properties:{
+      around:uuidParam,
+      from:{type:'string',pattern:'^[0-9]{1,13}$'},
+      to:{type:'string',pattern:'^[0-9]{1,13}$'},
+      offset:{type:'integer',minimum:0,maximum:10000}
+    }}}
   },async(request,reply)=>{
     try{
       const me=await identity(request,getSession);
       if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id}=request.params as {id:string};
       if(!await belongs(id,me))return reply.code(404).send({error:'Not found'});
-      const {around}=request.query as {around?:string};
+      const {around,from,to,offset=0}=request.query as {around?:string;from?:string;to?:string;offset?:number};
+      const fromMs=from===undefined?null:Number(from),toMs=to===undefined?null:Number(to);
+      const filtered=from!==undefined||to!==undefined||offset>0;
+      if((fromMs!==null&&!Number.isSafeInteger(fromMs))||
+         (toMs!==null&&!Number.isSafeInteger(toMs))||
+         (fromMs!==null&&toMs!==null&&fromMs>=toMs)||
+         (filtered&&around))
+        return reply.code(400).send({error:'INVALID_HISTORY_RANGE'});
       let anchor: {created_at: string; id: string} | undefined;
       if(around){
         const source=await getPool().query('SELECT created_at,id FROM direct_messages WHERE id=$1 AND conversation_id=$2 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$2 AND user_id=$3),\'-infinity\'::timestamptz)',[around,id,me]);
@@ -232,11 +244,21 @@ export function registerDirectMessageRoutes(app:FastifyInstance, getSession: Ses
         ', (SELECT json_build_object(\'id\',original.id,\'body\',CASE WHEN original.deleted_at IS NULL THEN COALESCE(NULLIF(original.body,\'\'),CASE WHEN original.attachment_type LIKE \'image/%\' THEN \'📷 Foto\' WHEN original.attachment_type LIKE \'video/%\' THEN \'🎬 Vídeo\' WHEN original.attachment_type LIKE \'audio/%\' THEN \'🎤 Áudio\' WHEN original.attachment_type IS NOT NULL THEN \'📎 Arquivo\' END) ELSE \'\' END,'+
         '\'authorId\',original.author_id,\'deleted\',original.deleted_at IS NOT NULL) FROM direct_messages original'+
         ' WHERE original.id=dm.reply_to_id AND original.conversation_id=dm.conversation_id AND original.created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz)) AS "replyTo"'+
-        (anchor
+        (filtered
+          ? ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 '+
+            "AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),'-infinity'::timestamptz) "+
+            'AND ($3::double precision IS NULL OR created_at >= to_timestamp($3::double precision/1000.0)) '+
+            'AND ($4::double precision IS NULL OR created_at < to_timestamp($4::double precision/1000.0)) '+
+            'ORDER BY created_at DESC,id DESC LIMIT 101 OFFSET $5) dm ORDER BY created_at ASC,id ASC'
+          : anchor
           ? ' FROM (SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz) AND (created_at,id) <= ($3::timestamptz,$4::uuid) ORDER BY created_at DESC,id DESC LIMIT 50) older UNION ALL SELECT * FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz) AND (created_at,id) > ($3::timestamptz,$4::uuid) ORDER BY created_at ASC,id ASC LIMIT 50) newer) dm ORDER BY created_at ASC,id ASC'
           : ' FROM (SELECT * FROM direct_messages WHERE conversation_id=$1 AND created_at > COALESCE((SELECT cleared_at FROM direct_conversation_user_states WHERE conversation_id=$1 AND user_id=$2),\'-infinity\'::timestamptz) ORDER BY created_at DESC,id DESC LIMIT 100) dm ORDER BY created_at ASC,id ASC');
-      const r=await getPool().query(query,anchor?[id,me,anchor.created_at,anchor.id]:[id,me]);
-      return reply.header('Cache-Control',noCache).send({messages:r.rows});
+      const params=filtered?[id,me,fromMs,toMs,offset]:anchor?[id,me,anchor.created_at,anchor.id]:[id,me];
+      const r=await getPool().query(query,params);
+      return reply.header('Cache-Control',noCache).send({
+        messages:filtered&&r.rows.length>100?r.rows.slice(1):r.rows,
+        hasMore:filtered&&r.rows.length>100
+      });
     }catch(e){request.log.error({err:e},'DM messages');return reply.code(503).send({error:'Unavailable'});}
   });
   // The gallery must query all authorized history, not only the most recent
