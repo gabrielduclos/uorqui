@@ -1,11 +1,30 @@
 import {localDayKey} from './messageTimestamp';
 
-export type ChannelHistoryPeriod='all'|'today'|'yesterday'|'this-week'|'last-week'|'last-seven'|'this-month'|'older';
+export type ChannelHistoryPeriod='all'|'today'|'yesterday'|'this-week'|'last-week'|'last-seven'|'this-month'|'custom';
+export type CustomChannelDateRange={from:string;to:string};
 export type HistoryBounds={from?:number;to?:number};
+
+/** Reject invalid or rollover dates. Inputs must have calendar dates in the
+ * YYYY-MM-DD form returned by a native date input. */
+export function parseLocalCalendarDay(value:string):Date|null{
+  const match=/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
+  if(!match)return null;
+  const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]);
+  if(year<1970||year>2100||month<1||month>12||day<1||day>31)return null;
+  const date=new Date(year,month-1,day);
+  if(date.getFullYear()!==year||date.getMonth()!==month-1||date.getDate()!==day)return null;
+  return date;
+}
+export function isValidCustomChannelRange(range:CustomChannelDateRange):boolean{
+  const from=parseLocalCalendarDay(range.from),to=parseLocalCalendarDay(range.to);
+  return Boolean(from&&to&&from.getTime()<=to.getTime());
+}
 
 /** Use browser-local calendar boundaries so a "today" filter includes the
  * viewer's local midnight even when the API/server is in another timezone. */
-export function channelHistoryBounds(period:ChannelHistoryPeriod,now=new Date()):HistoryBounds{
+export function channelHistoryBounds(
+  period:ChannelHistoryPeriod,now=new Date(),customRange?:CustomChannelDateRange
+):HistoryBounds{
   const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
   const yesterday=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);
@@ -21,7 +40,13 @@ export function channelHistoryBounds(period:ChannelHistoryPeriod,now=new Date())
     case 'last-week':return {from:lastMonday.getTime(),to:monday.getTime()};
     case 'last-seven':return {from:new Date(now.getFullYear(),now.getMonth(),now.getDate()-6).getTime(),to:tomorrow.getTime()};
     case 'this-month':return {from:thisMonth.getTime(),to:nextMonth.getTime()};
-    case 'older':return {to:lastMonday.getTime()};
+    case 'custom':{
+      if(!customRange||!isValidCustomChannelRange(customRange))return {};
+      const from=parseLocalCalendarDay(customRange.from)!;
+      const end=parseLocalCalendarDay(customRange.to)!;
+      const nextDay=new Date(end.getFullYear(),end.getMonth(),end.getDate()+1);
+      return {from:from.getTime(),to:nextDay.getTime()};
+    }
     default:return {};
   }
 }
@@ -29,10 +54,12 @@ export function channelHistoryBounds(period:ChannelHistoryPeriod,now=new Date())
 /** Build the search URL using exact-match terms; the API remains the authority
  * over membership, channel password access and restricted channel grants. */
 export function channelHistorySearchPath(communityId:string,channelId:string,
-  query:string,period:ChannelHistoryPeriod,offset=0,now=new Date()):string{
+  query:string,period:ChannelHistoryPeriod,offset=0,now=new Date(),
+  customRange?:CustomChannelDateRange
+):string{
   const params=new URLSearchParams();
   if(query.trim())params.set('q',query.trim().slice(0,120));
-  const bounds=channelHistoryBounds(period,now);
+  const bounds=channelHistoryBounds(period,now,customRange);
   if(bounds.from!==undefined)params.set('from',String(bounds.from));
   if(bounds.to!==undefined)params.set('to',String(bounds.to));
   if(offset>0)params.set('offset',String(offset));
