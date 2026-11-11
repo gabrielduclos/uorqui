@@ -227,6 +227,18 @@ test('persistent communities: discover, create, join, channels and real messages
   assert.equal((await member(eventPath,'DELETE')).status,404,'another user cannot delete a mention');
   assert.equal((await owner(eventPath,'DELETE')).status,200);
   assert.equal((await owner(mentionsPath)).data.events.some(event=>event.id===mentions[0].id),false);
+  const searchPath=path+'?q='+encodeURIComponent('New message')+'&offset=0';
+  const matching=await owner(searchPath);
+  assert.equal(matching.status,200,JSON.stringify(matching.data));
+  assert.equal(matching.data.messages.length,1,'search matches body text');
+  assert.equal(matching.data.messages[0].body,'New message after read');
+  const impossibleRange=await owner(path+'?from=9999999999999&to=9999999999999');
+  assert.equal(impossibleRange.status,400);
+  const filteredRange=await owner(path+'?from=1&to=1000000000000');
+  assert.equal(filteredRange.status,200);
+  assert.equal(filteredRange.data.messages.length,0,'date range filters server-side');
+  assert.equal((await outsider(path+'?q=message')).status,403,'channel search is access-controlled');
+  assert.equal((await anonymous(path+'?q=message')).status,401);
   assert.equal((await outsider(path,'POST',{clientId:crypto.randomUUID(),body:'outsider'})).status,403);
   assert.equal((await member(path,'POST',{clientId:crypto.randomUUID(),body:' '})).status,400);
   assert.equal((await owner('/api/v1/communities/'+id+'/membership','DELETE')).status,409);
@@ -620,6 +632,14 @@ test('restricted channels: hidden by default, per-member grants and revocation b
   assert.equal(closed.status,201,JSON.stringify(closed.data));
   const channelId=closed.data.channel.id,channel=root+'/channels/'+channelId;
   assert.equal(closed.data.channel.accessMode,'restricted');
+  const mentions=channel+'/mentionable-members';
+  assert.equal((await anonymous(mentions)).status,401);
+  assert.equal((await member(mentions)).status,403,'unauthorized members cannot enumerate channel users');
+  assert.equal((await outsider(mentions)).status,403);
+  const closedOwnerMentions=await owner(mentions);
+  assert.equal(closedOwnerMentions.status,200,JSON.stringify(closedOwnerMentions.data));
+  assert.ok(!closedOwnerMentions.data.members.some(x=>x.handle==='comm_member'));
+  assert.ok(!closedOwnerMentions.data.members.some(x=>x.handle==='comm_outsider'));
   const sender=await owner(channel+'/messages','POST',{clientId:crypto.randomUUID(),body:'Secret channel activity'});
   assert.equal(sender.status,201,JSON.stringify(sender.data));
   assert.equal((await owner(root)).data.channels.find(x=>x.id===channelId).accessMode,'restricted');
@@ -646,19 +666,32 @@ test('restricted channels: hidden by default, per-member grants and revocation b
   assert.ok((await member(root)).data.channels.some(x=>x.id===channelId));
   assert.equal((await member(channel+'/notification-access')).status,200,'grant permits notification');
   assert.equal((await member(channel+'/messages')).status,200);
+  assert.ok((await owner(mentions)).data.members.some(x=>x.handle==='comm_member'),'granted user can be mentioned');
+  assert.ok(!(await owner(mentions)).data.members.some(x=>x.handle==='comm_outsider'));
+  const memberMentions=await member(mentions);
+  assert.equal(memberMentions.status,200);
+  assert.ok(memberMentions.data.members.some(x=>x.handle==='comm_owner'),'channel member can mention owner');
+  assert.ok(!memberMentions.data.members.some(x=>x.handle==='comm_outsider'));
   assert.ok((await member('/api/v1/communities/discover/activity')).data.recent.some(x=>x.channelId===channelId));
   assert.equal((await outsider(channel+'/messages')).status,403);
 
   // Password and explicit member grants are independent checks.
   assert.equal((await owner(channel+'/password','PUT',{password:'secret-password-123'})).status,200);
   assert.equal((await member(channel+'/notification-access')).status,403,'protected push requires current password grant');
+  assert.ok(!(await owner(mentions)).data.members.some(x=>x.handle==='comm_member'),
+    'restricted user without password grant is not mentionable');
+  assert.equal((await member(mentions)).status,403,'locked reader cannot list mention candidates');
   assert.equal((await member(channel+'/messages')).data.error,'CHANNEL_PASSWORD_REQUIRED');
   assert.equal((await outsider(channel+'/unlock','POST',{password:'secret-password-123'})).data.error,'CHANNEL_PERMISSION_REQUIRED');
   assert.equal((await member(channel+'/unlock','POST',{password:'secret-password-123'})).status,200);
   assert.equal((await member(channel+'/notification-access')).status,200);
+  assert.ok((await owner(mentions)).data.members.some(x=>x.handle==='comm_member'),
+    'unlock restores mention eligibility');
   assert.equal((await member(channel+'/messages')).status,200);
   assert.equal((await owner(grantPath,'PUT',{allowed:false})).status,200);
   assert.equal((await member(channel+'/notification-access')).status,403,'revoking access suppresses delayed push');
+  assert.ok(!(await owner(mentions)).data.members.some(x=>x.handle==='comm_member'),
+    'revocation immediately removes member from mention suggestions');
   assert.ok(!(await member(root)).data.channels.some(x=>x.id===channelId));
   assert.equal((await member(channel+'/messages')).data.error,'CHANNEL_PERMISSION_REQUIRED',
     'previous password unlock must not bypass revoked membership grant');
@@ -666,6 +699,9 @@ test('restricted channels: hidden by default, per-member grants and revocation b
   assert.equal((await owner(channel+'/access','PUT',{accessMode:'open'})).status,200);
   assert.equal((await owner(channel+'/password','PUT',{password:null})).status,200);
   assert.ok((await outsider(root)).data.channels.some(x=>x.id===channelId),'opening reveals channel to members');
+  assert.ok((await owner(mentions)).data.members.some(x=>x.handle==='comm_member'));
+  assert.ok((await owner(mentions)).data.members.some(x=>x.handle==='comm_outsider'),
+    'open channel permits mentioning all other authorized community members');
   assert.equal((await outsider(channel+'/messages')).status,200);
   assert.equal((await owner(channel+'/access','PUT',{accessMode:'restricted'})).status,200);
   assert.equal((await outsider(channel+'/messages')).status,403);

@@ -31,6 +31,12 @@ const attachmentSchema={type:'object',additionalProperties:false,required:['id',
 const messageBody={type:'object',required:['clientId','body'],additionalProperties:false,properties:{
   clientId:uuid,body:{type:'string',maxLength:4000},replyToId:uuid,attachment:attachmentSchema
 }};
+const historyQuerySchema={type:'object',additionalProperties:false,properties:{
+  q:{type:'string',maxLength:120},
+  from:{type:'string',pattern:'^[0-9]{1,13}$'},
+  to:{type:'string',pattern:'^[0-9]{1,13}$'},
+  offset:{type:'integer',minimum:0,maximum:10000}
+}};
 const mediaParams={type:'object',required:['id','channelId','attachmentId'],additionalProperties:false,properties:{id:uuid,channelId:uuid,attachmentId:uuid}};
 const communityAttachmentTypes=new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
 function verifiedCommunityUpload(request:FastifyRequest,id:string,channelId:string,clientId:string,a:{id:string;name:string;type:string;size:number}){
@@ -423,6 +429,42 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }catch(error){request.log.error({err:error},'Channel invite member list');return reply.code(503).send({error:'Unavailable'});}
   });
 
+  /** Suggestions must reflect the effective permissions of the CURRENT channel.
+   * This list does not grant access: the same ACL is independently checked when
+   * storing mention notifications, sending push, and reading messages. */
+  app.get('/api/v1/communities/:id/channels/:channelId/mentionable-members',{
+    schema:{params:channelParams}
+  },async(request,reply)=>{
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id,channelId}=request.params as {id:string;channelId:string};
+      const gate=await channelGate(id,channelId,me);
+      if(gate!=='allowed')return reply.code(channelGateStatus(gate)).send({error:channelGateError(gate)});
+      const banned=await getPool().query(
+        'SELECT 1 FROM community_bans WHERE community_id=$1 AND user_id=$2',[id,me]);
+      if(banned.rowCount)return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const result=await getPool().query(
+        'SELECT u.handle,'+
+        "CASE WHEN p.is_public=true OR friend.status='accepted' THEN COALESCE(p.display_name,u.handle) ELSE u.handle END AS \"displayName\","+
+        "CASE WHEN p.is_public=true OR friend.status='accepted' THEN p.avatar_url ELSE NULL END AS \"avatarUrl\" "+
+        'FROM community_channels ch JOIN community_members cm ON cm.community_id=ch.community_id '+
+        'JOIN users u ON u.id=cm.user_id LEFT JOIN profiles p ON p.user_id=u.id '+
+        'LEFT JOIN user_friendships friend ON friend.user_a_id=LEAST(cm.user_id,$3::uuid) '+
+        "AND friend.user_b_id=GREATEST(cm.user_id,$3::uuid) AND friend.status='accepted' "+
+        'LEFT JOIN community_channel_password_access pass ON pass.channel_id=ch.id AND pass.user_id=cm.user_id '+
+        'LEFT JOIN community_channel_member_access allowed ON allowed.channel_id=ch.id AND allowed.user_id=cm.user_id '+
+        'WHERE ch.id=$1 AND ch.community_id=$2 AND cm.user_id<>$3 '+
+        "AND (ch.access_mode='open' OR cm.role IN ('owner','admin') OR allowed.user_id IS NOT NULL) "+
+        "AND (ch.password_hash IS NULL OR cm.role IN ('owner','admin') OR pass.user_id IS NOT NULL) "+
+        'AND NOT EXISTS (SELECT 1 FROM community_bans b WHERE b.community_id=$2 AND b.user_id=cm.user_id) '+
+        'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id=$3 AND b.blocked_id=cm.user_id) '+
+        'OR (b.blocked_id=$3 AND b.blocker_id=cm.user_id)) '+
+        "ORDER BY lower(CASE WHEN p.is_public=true OR friend.status='accepted' THEN COALESCE(p.display_name,u.handle) ELSE u.handle END),u.handle LIMIT 600",
+        [channelId,id,me]);
+      return reply.header('Cache-Control',noCache).send({members:result.rows});
+    }catch(error){request.log.error({err:error},'List authorized channel mentions');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   app.post('/api/v1/communities/:id/join',{schema:{params:groupParams}},async(request,reply)=>{
     if(!originValid(request))return reply.code(403).send({error:'Invalid origin'});
     try{
@@ -652,10 +694,15 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }catch(error){request.log.error({err:error},'Unlock community channel');return reply.code(503).send({error:'Unavailable'});}
   });
 
-  app.get('/api/v1/communities/:id/channels/:channelId/messages',{schema:{params:channelParams}},async(request,reply)=>{
+  app.get('/api/v1/communities/:id/channels/:channelId/messages',{schema:{params:channelParams,querystring:historyQuerySchema}},async(request,reply)=>{
     try{
       const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
       const {id,channelId}=request.params as {id:string;channelId:string};
+      const {q='',from,to,offset=0}=request.query as {q?:string;from?:string;to?:string;offset?:number};
+      const fromMs=from===undefined?null:Number(from),toMs=to===undefined?null:Number(to);
+      if((fromMs!==null&&!Number.isSafeInteger(fromMs))||(toMs!==null&&!Number.isSafeInteger(toMs))||
+         (fromMs!==null&&toMs!==null&&fromMs>=toMs))
+        return reply.code(400).send({error:'INVALID_HISTORY_RANGE'});
       const readerRole=await membership(id,me);
       if(!readerRole)return reply.code(403).send({error:'MEMBERS_ONLY'});
       const gate=await channelGate(id,channelId,me);
@@ -691,9 +738,14 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
          'LEFT JOIN community_messages original ON original.id=m.reply_to_id AND original.channel_id=m.channel_id '+
          'LEFT JOIN users ou ON ou.id=original.author_id '+
         'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
-        'WHERE m.channel_id=$1 ORDER BY m.created_at DESC,m.id DESC LIMIT 100',[channelId,me]);
+        'WHERE m.channel_id=$1 '+
+        "AND ($3::text='' OR strpos(lower(COALESCE(m.body,'')),lower($3::text))>0) "+
+        'AND ($4::double precision IS NULL OR m.created_at>=to_timestamp($4::double precision/1000.0)) '+
+        'AND ($5::double precision IS NULL OR m.created_at<to_timestamp($5::double precision/1000.0)) '+
+        'ORDER BY m.created_at DESC,m.id DESC LIMIT 101 OFFSET $6',[channelId,me,q.trim(),fromMs,toMs,offset]);
       return reply.header('Cache-Control',noCache).send({
-        messages:result.rows.reverse().map(({authorId,...row})=>({
+        hasMore:result.rows.length>100,
+        messages:result.rows.slice(0,100).reverse().map(({authorId,...row})=>({
           ...row,canReact:Boolean(ready.rows[0]?.enabled)&&authorId!==me&&!row.deletedAt,canEdit:authorId===me&&!row.deletedAt,
           canDelete:(!row.deletedAt)&&(authorId===me||['owner','admin','moderator'].includes(readerRole)),
         }))
