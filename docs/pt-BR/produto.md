@@ -4,6 +4,10 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Navegação no histórico dos canais (beta.44)
+
+As divisões de data acompanham a rolagem e ficam imediatamente antes da primeira mensagem daquele dia, sem fixação no topo. O próprio rótulo da divisão (Hoje, Ontem, Semana passada etc.) abre um menu acessível de filtros de período; **Todas as datas** retorna à visualização recente. A barra permanente de pesquisa/filtro foi substituída pela lupa no cabeçalho do canal, que abre um campo logo abaixo do cabeçalho e o fecha ao ser tocada novamente. Fechar a pesquisa limpa o texto, mas mantém um filtro de data escolhido separadamente. Resultados vazios oferecem controles para limpar filtros. As regras de autorização e busca no servidor permanecem inalteradas.
+
 ## Histórico dos canais, menções autorizadas e links (beta.43)
 
 Os canais exibem divisões por dia no calendário local e uma pesquisa com seletor de período: Hoje, Ontem, Últimos 7 dias, Esta semana, Semana passada, Este mês e Mais antigas. A busca consulta o histórico no PostgreSQL, com as mesmas permissões de acesso à leitura e resultados paginados em lotes de até 100; não depende apenas do cache. Enquanto há um filtro, as mensagens não são marcadas como lidas automaticamente. URLs HTTP/HTTPS da descrição fixa ficam clicáveis, reutilizando a navegação segura já existente.

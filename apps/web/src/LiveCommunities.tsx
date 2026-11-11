@@ -31,6 +31,7 @@ import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, r
 import { ChannelScrollBehavior } from './channelScrollBehavior';
 import { activeCommunityMention, replaceCommunityMention } from './communityMentions';
 import { channelHistorySearchPath, channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod } from './channelHistory';
+import { ChannelDateFilter } from './ChannelDateFilter';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 import { buildMeetingLink } from './meetingLink';
 
@@ -160,6 +161,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [mentionMembers,setMentionMembers]=useState<{handle:string;displayName:string;avatarUrl:string|null}[]>([]);
   const [mentionMembersForKey,setMentionMembersForKey]=useState<string|null>(null);
   const [historyPeriod,setHistoryPeriod]=useState<ChannelHistoryPeriod>('all');
+  const [searchOpen,setSearchOpen]=useState(false);
   const [channelSearch,setChannelSearch]=useState('');
   const [filteredMessages,setFilteredMessages]=useState<Message[]>([]);
   const [filteredForKey,setFilteredForKey]=useState<string|null>(null);
@@ -268,7 +270,19 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const searchResults=filteredForKey===currentMessageKey?filteredMessages:[];
   const renderedMessages=searchActive?searchResults:recentMessages;
   const dayGroups=groupChannelMessages(renderedMessages);
-  useEffect(()=>{setHistoryPeriod('all');setChannelSearch('');setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);},[selectedId,channelId]);
+  useEffect(()=>{
+    setSearchOpen(false);setHistoryPeriod('all');setChannelSearch('');
+    setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);
+  },[selectedId,channelId]);
+  useEffect(()=>{
+    if(!searchOpen||channelLocked)return;
+    const frame=window.requestAnimationFrame(()=>searchInputRef.current?.focus());
+    return ()=>window.cancelAnimationFrame(frame);
+  },[searchOpen,selectedId,channelId,channelLocked]);
+  function toggleChannelSearch(){
+    if(searchOpen){setSearchOpen(false);setChannelSearch('');}
+    else setSearchOpen(true);
+  }
   useEffect(()=>{
     if(!searchActive||!selectedId||!channelId||channelLocked||!activeChannel){
       filteredRequestKey.current='';
@@ -1216,6 +1230,14 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             <span className="truncate">{activeChannel.name}</span>
             {(activeChannel.hasPassword||activeChannel.accessMode==='restricted')&&<LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label={pt?(activeChannel.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(activeChannel.accessMode==='restricted'?'Closed channel':'Password-protected channel')}/>} 
           </h2><p className="truncate text-xs text-muted-foreground">{community.name}</p></div>
+          {!channelLocked&&(activeChannel.kind==='text'||voiceTextExpanded)&&<Button type="button"
+            size="icon" variant="ghost" className={cn('size-10 shrink-0',searchOpen&&'bg-secondary text-primary')}
+            aria-controls="uorqui-channel-search" aria-expanded={searchOpen}
+            aria-label={searchOpen?(pt?'Fechar pesquisa do canal':'Close channel search'):(pt?'Pesquisar neste canal':'Search this channel')}
+            title={searchOpen?(pt?'Fechar pesquisa':'Close search'):(pt?'Pesquisar neste canal':'Search this channel')}
+            onClick={toggleChannelSearch}>
+            <Search className="size-4.5"/>
+          </Button>}
           {['owner','admin'].includes(community.myRole??'')&&<Button type="button" size="sm" variant="ghost"
             className="shrink-0 gap-1 px-2 sm:px-3" aria-label={pt?'Editar canal':'Edit channel'}
             title={pt?'Editar canal':'Edit channel'} onClick={()=>setEditChannelId(activeChannel.id)}>
@@ -1227,6 +1249,21 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             <UserPlus className="size-4"/><span className="hidden sm:inline">{pt?'Convidar':'Invite'}</span>
           </Button>}
         </header>
+        {!channelLocked&&(activeChannel.kind==='text'||voiceTextExpanded)&&searchOpen&&
+          <div id="uorqui-channel-search" role="search" aria-label={pt?'Pesquisar mensagens do canal':'Search channel messages'}
+            className="flex shrink-0 items-center gap-2 border-b border-border bg-card/90 px-3 py-2 sm:px-5">
+            <Search className="size-4 shrink-0 text-muted-foreground"/>
+            <input ref={searchInputRef} type="search" maxLength={120} value={channelSearch}
+              onChange={event=>setChannelSearch(event.target.value)}
+              onKeyDown={event=>{if(event.key==='Escape'){setSearchOpen(false);setChannelSearch('');}}}
+              placeholder={pt?'Pesquisar neste canal…':'Search this channel…'}
+              aria-label={pt?'Pesquisar neste canal':'Search this channel'}
+              className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40"/>
+            <Button type="button" size="icon" variant="ghost" className="size-9 shrink-0"
+              aria-label={pt?'Fechar pesquisa':'Close search'} onClick={toggleChannelSearch}>
+              <X className="size-4"/>
+            </Button>
+          </div>}
         {!channelLocked&&channelDescription&&<section aria-label={pt?'Descrição fixa do canal':'Pinned channel description'}
           className="z-10 shrink-0 border-b border-border bg-card/80 px-4 py-2 sm:px-5">
           <div className="flex min-w-0 items-start gap-2">
@@ -1272,7 +1309,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
           className="h-[2px] w-full shrink-0 bg-foreground/35 lg:h-full lg:w-[2px]"/>}
         <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden',
           activeChannel.kind!=='text'&&!voiceTextExpanded?'shrink-0':'flex-1')}>
-        {activeChannel.kind!=='text'&&<button type="button" onClick={()=>{setVoiceTextExpanded(v=>!v);setMediaPicker(null);}}
+        {activeChannel.kind!=='text'&&<button type="button" onClick={()=>{setVoiceTextExpanded(v=>!v);setMediaPicker(null);setSearchOpen(false);setChannelSearch('');}}
           aria-expanded={voiceTextExpanded} aria-controls={voiceTextExpanded?'uorqui-voice-text-panel':undefined}
           className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 text-sm font-medium hover:bg-secondary"
           title={voiceTextExpanded?(pt?'Recolher conversa de texto':'Collapse text chat'):(pt?'Expandir conversa de texto':'Expand text chat')}>
@@ -1284,30 +1321,6 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
         </button>}
         {(activeChannel.kind==='text'||voiceTextExpanded)&&<div id={activeChannel.kind!=='text'?'uorqui-voice-text-panel':undefined}
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 bg-card/70 px-3 py-2 sm:px-5" role="search" aria-label={pt?'Pesquisar e filtrar mensagens do canal':'Search and filter channel messages'}>
-            <Search className="size-4 shrink-0 text-muted-foreground"/>
-            <input ref={searchInputRef} type="search" maxLength={120} value={channelSearch}
-              onChange={event=>setChannelSearch(event.target.value)}
-              placeholder={pt?'Pesquisar neste canal…':'Search this channel…'}
-              aria-label={pt?'Pesquisar neste canal':'Search this channel'}
-              className="h-9 min-w-24 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40"/>
-            <select value={historyPeriod} onChange={event=>setHistoryPeriod(event.target.value as ChannelHistoryPeriod)}
-              aria-label={pt?'Filtrar por período':'Filter by period'}
-              className="h-9 max-w-[160px] shrink-0 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40">
-              <option value="all">{pt?'Todas as datas':'All dates'}</option>
-              <option value="today">{pt?'Hoje':'Today'}</option>
-              <option value="yesterday">{pt?'Ontem':'Yesterday'}</option>
-              <option value="last-seven">{pt?'Últimos 7 dias':'Last 7 days'}</option>
-              <option value="this-week">{pt?'Esta semana':'This week'}</option>
-              <option value="last-week">{pt?'Semana passada':'Last week'}</option>
-              <option value="this-month">{pt?'Este mês':'This month'}</option>
-              <option value="older">{pt?'Mais antigas':'Older'}</option>
-            </select>
-            {searchActive&&<button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-secondary"
-              aria-label={pt?'Limpar filtros e pesquisa':'Clear search and filters'}
-              onClick={()=>{setHistoryPeriod('all');setChannelSearch('');setFilteredMessages([]);setFilteredForKey(null);}}>
-              <X className="size-4"/></button>}
-          </div>
           <div key={currentMessageKey} data-uorqui-room-history ref={scrollRef}
             onWheel={event=>{if(event.deltaY<0&&currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);}}
             onTouchStart={()=>{if(currentMessageKey)channelScrollRef.current.interrupt(currentMessageKey);}}
@@ -1330,9 +1343,16 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             </div>}
             {(searchActive?filteredLoading:messagesLoading)&&!renderedMessages.length&&<WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'} rows={4} className="mb-5"/>}
             {searchActive&&!filteredLoading&&!filteredError&&!renderedMessages.length&&
-              <p className="mx-auto my-12 max-w-md text-center text-sm text-muted-foreground">
-                {pt?'Nenhuma mensagem encontrada neste período ou pesquisa.':'No messages found for this search or period.'}
-              </p>}
+              <div className="mx-auto my-12 max-w-md space-y-3 text-center text-sm text-muted-foreground">
+                <p>{pt?'Nenhuma mensagem encontrada neste período ou pesquisa.':'No messages found for this search or period.'}</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {historyPeriod!=='all'&&<button type="button" className="font-medium text-primary underline underline-offset-2"
+                    onClick={()=>setHistoryPeriod('all')}>{pt?'Ver todas as datas':'Show all dates'}</button>}
+                  {!!channelSearch.trim()&&<button type="button" className="font-medium text-primary underline underline-offset-2"
+                    onClick={()=>{setChannelSearch('');setSearchOpen(true);}}>
+                    {pt?'Limpar pesquisa':'Clear search'}</button>}
+                </div>
+              </div>}
             {filteredError&&searchActive&&<p role="alert" className="mb-4 text-center text-sm text-destructive">
               {pt?'Não foi possível pesquisar. Verifique a conexão e tente novamente.':'Could not search. Check your connection and try again.'}
             </p>}
@@ -1341,11 +1361,12 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                 'Messages are temporarily unavailable. The channel will reconnect automatically.'}
             </div>}
             <div ref={messageContentRef} className="min-w-0 max-w-full space-y-1.5">{dayGroups.map(group=><Fragment key={group.dayKey}>
-              <div role="separator" aria-label={channelHistoryDayLabel(group.dayKey,todayKey,locale)}
-                className="sticky top-0 z-10 flex items-center gap-3 py-3">
+              <div data-uorqui-channel-date-separator role="group"
+                aria-label={channelHistoryDayLabel(group.dayKey,todayKey,locale)}
+                className="flex items-center gap-3 py-3">
                 <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
-                <time dateTime={group.dayKey} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
-                  {channelHistoryDayLabel(group.dayKey,todayKey,locale)}</time>
+                <ChannelDateFilter dayKey={group.dayKey} todayKey={todayKey} locale={locale}
+                  period={historyPeriod} onPeriodChange={setHistoryPeriod}/>
                 <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
               </div>
               {group.messages.map(message=><div id={'community-msg-'+message.id} key={message.clientId}
