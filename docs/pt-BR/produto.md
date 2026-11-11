@@ -4,6 +4,10 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Lista de membros da comunidade (beta.48)
+
+Qualquer participante autenticado e aceito na comunidade pode **tocar no contador de membros abaixo do nome da comunidade** para abrir um modal de consulta, sem navegar para outra tela. A lista exibe nomes permitidos, @username, cargo e avatar, com pesquisa local e links para os perfis. Visitantes e ex-membros não podem consultar a lista; privacidade, banimentos e bloqueios são respeitados pelo servidor. A aba Moderação continua exclusiva dos cargos autorizados para alterar permissões, cargos, banir ou remover membros. Não é necessária migração.
+
 ## Ações no email aberto e período personalizado dos canais (beta.47)
 
 Na leitura de um e-mail, o cabeçalho oferece Novo, Responder, Marcar como spam e Excluir (ícones compactos no mobile). Excluir move a mensagem para a Lixeira do provedor; Spam move para a pasta correspondente. A ação usa a API vinculada à conta correta, fecha o leitor somente após sucesso, apresenta erros no próprio leitor e atualiza a lista e os indicadores de não lidos.

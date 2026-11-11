@@ -4,6 +4,10 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Community member directory (beta.48)
+
+Any logged-in, accepted community participant can **tap the member count under the community title** to open a read-only directory dialog in place. The dialog lists member display names, handles, roles and permitted avatars, supports local searching, and links to member profiles. Nonmembers and former members cannot query the member list. Account privacy, bans and mutual blocks are applied server-side. The original Moderation panel remains exclusively for owner/admin/moderator actions: role changes, bans, removals and restricted channel access grants. No migration is required.
+
 ## Opened email actions and manual channel date filtering (beta.47)
 
 The opened-email reader has New, Reply, Mark as spam and Delete actions in its header (compact icon buttons on narrow screens). Delete moves the message into the provider Trash folder and Spam moves it to the provider Spam folder, using the existing account-scoped move endpoint. The reader closes only on confirmation; it handles provider errors inline and refreshes the inbox and unread indicators.

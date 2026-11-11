@@ -16,6 +16,7 @@ import { useCachedProfileImage } from './profileImageCache';
 import { useUorquiPreferences } from './UorquiPreferences';
 import CommunityVoiceRoom, { type CommunityVoiceParticipant, type VoiceRoomTarget, type VoicePhase } from './CommunityVoiceRoom';
 import CommunityModerationPanel from './CommunityModerationPanel';
+import CommunityMembersDialog from './CommunityMembersDialog';
 import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
 import CommunityMessageReactions, { type CommunityReaction } from './CommunityMessageReactions';
 import { LiveMessageComposer } from './LiveMessageComposer';
@@ -78,6 +79,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [directory, setDirectory] = useState(false);
   const [communitySearch, setCommunitySearch] = useState('');
   const [detail,setDetail]=useState<Detail|null>(null);
+  const [membersDialogOpen,setMembersDialogOpen]=useState(false);
+  useEffect(()=>setMembersDialogOpen(false),[selectedId]);
   const [channelId,setChannelId]=useState<string|null>(null);
   const requestedChannel=useRef<{communityId:string;channelId:string}|null>(null);
   const requestedMeeting=useRef<{communityId:string;channelId:string}|null>(null);
@@ -1107,7 +1110,14 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
           </div>}
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{community?.description|| (community?visibilityLabel(community.visibility):'…')}</p>
           <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <Users className="size-3.5"/>{community?.memberCount??'…'} {pt?'membros':'members'}
+            {community?.myRole?<button type="button" onClick={()=>setMembersDialogOpen(true)}
+              aria-label={pt?'Ver membros da comunidade':'View community members'}
+              aria-haspopup="dialog"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-1 text-xs font-medium text-primary underline-offset-4 hover:bg-secondary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+              <Users className="size-3.5"/><span>{community.memberCount} {pt?'membros':'members'}</span>
+            </button>:<span className="inline-flex min-h-9 items-center gap-1.5">
+              <Users className="size-3.5"/>{community?.memberCount??'…'} {pt?'membros':'members'}
+            </span>}
             {community?.visibility==='private'&&<LockKeyhole className="size-3.5"/>}
           </div>
         </div>
@@ -1674,6 +1684,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
         </div>
       </Dialog.Content></Dialog.Portal>
     </Dialog.Root>
+    <CommunityMembersDialog id={community?.myRole?community.id:null} name={community?.name??''}
+      open={membersDialogOpen} onOpenChange={setMembersDialogOpen}/>
     <ContentReportDialog target={reportMessageId?{targetKind:'community_message',targetId:reportMessageId}:null}
       locale={locale} onClose={()=>setReportMessageId(null)}/>
     {(error||notice)&&<div role={error?'alert':'status'}

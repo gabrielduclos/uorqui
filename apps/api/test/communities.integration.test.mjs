@@ -66,6 +66,18 @@ test('persistent communities: discover, create, join, channels and real messages
   assert.equal((await member('/api/v1/communities/'+id+'/join','POST')).status,200);
   const joined=await member('/api/v1/communities/'+id);
   assert.equal(joined.data.community.myRole,'member');
+  const directory='/api/v1/communities/'+id+'/members';
+  assert.equal((await anonymous(directory)).status,401,'member list requires authentication');
+  assert.equal((await outsider(directory)).status,403,'nonmembers cannot browse membership');
+  const memberDirectory=await member(directory);
+  assert.equal(memberDirectory.status,200,JSON.stringify(memberDirectory.data));
+  assert.deepEqual(memberDirectory.data.members.map(p=>p.handle).sort(),['comm_member','comm_owner']);
+  assert.equal(memberDirectory.data.members.find(p=>p.handle==='comm_owner').role,'owner');
+  assert.equal(memberDirectory.data.members.find(p=>p.handle==='comm_member').role,'member');
+  assert.ok(memberDirectory.data.members.every(p=>!('restrictedChannelIds' in p)&&!('passwordHash' in p)&&!('userId' in p)),
+    'public directory must not disclose channel grants or internal IDs');
+  assert.ok((await owner(directory)).data.members.some(p=>p.handle==='comm_member'),
+    'owner can browse the same read-only member list');
   const inviteList='/api/v1/communities/'+id+'/invitable-members';
   assert.equal((await outsider(inviteList)).status,403,'nonmembers cannot browse member invite options');
   const availableToOwner=await owner(inviteList);
@@ -243,6 +255,7 @@ test('persistent communities: discover, create, join, channels and real messages
   assert.equal((await member(path,'POST',{clientId:crypto.randomUUID(),body:' '})).status,400);
   assert.equal((await owner('/api/v1/communities/'+id+'/membership','DELETE')).status,409);
   assert.equal((await member('/api/v1/communities/'+id+'/membership','DELETE')).status,204);
+  assert.equal((await member(directory)).status,403,'former members lose directory access');
   assert.equal((await member(path)).status,403);
 });
 

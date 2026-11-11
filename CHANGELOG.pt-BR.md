@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.48] — 11/11/2026
+
+- **Membros visíveis para todos os participantes:** o contador de membros abaixo do nome da comunidade agora é um link que abre um modal de consulta, inclusive para membros comuns. A lista mostra nome, @username, cargo e foto autorizada, permite pesquisar e abrir perfis sem sair da comunidade, no desktop ou celular.
+- **API protegida por participação:** GET /api/v1/communities/:id/members exige usuário autenticado que ainda pertença à comunidade. Exclui contas bloqueadas/banidas, preserva a privacidade de perfis e não mostra concessões de canais restritos nem identificadores internos.
+- **Gerenciamento continua restrito:** alterar cargos, permissões, remover ou banir permanece exclusivo da Moderação.
+- **Testes:** autenticação e participação, visitante e ex-membro, estrutura da resposta e abertura do modal pelo contador.
+- **Migração:** nenhuma.
+
 ## [0.1.0-beta.47] — 11/11/2026
 
 - **Ações na leitura de e-mails:** o cabeçalho da mensagem aberta agora oferece **Excluir** (mover para Lixeira) e **Marcar como spam** ao lado de Novo e Responder. Em telas menores, os quatro comandos ficam como ícones acessíveis. As ações usam a API autenticada já existente, específica para a conta e a mensagem; a leitura só fecha após sucesso, e a lista/sino são atualizados. Falhas são exibidas no próprio leitor.
