@@ -4,7 +4,7 @@
 
 [Português (Brasil)](README.pt-BR.md) · [English](README.md)
 
-**Beta técnico `0.1.0-beta.46`** · [Abrir Uorqui](https://uorqui.app) · [Documentação do produto](docs/pt-BR/README.md) · [Estudo de caso técnico](docs/pt-BR/portfolio.md)
+**Beta técnico `0.1.0-beta.47`** · [Abrir Uorqui](https://uorqui.app) · [Documentação do produto](docs/pt-BR/README.md) · [Estudo de caso técnico](docs/pt-BR/portfolio.md)
 
 > **Beta, não uma versão estável.** Os recursos abaixo estão implementados no projeto, mas testes em dispositivos reais, integrações com provedores e carga ainda estão em andamento. Consulte o [roadmap](docs/pt-BR/roadmap.md) antes de depender da plataforma em operações críticas.
 
