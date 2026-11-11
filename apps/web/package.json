@@ -13,6 +13,7 @@
     "test:channel-unread-card": "node --test test/channel-unread-card.test.mjs",
     "test:channel-theme": "node --test test/channel-nav-theme.test.mjs",
     "test:channel-order": "node --import tsx --test test/channel-order.test.mjs",
+    "test:community-mentions": "node --import tsx --test test/community-mentions.test.mjs",
     "test:message-time": "node --import tsx --test test/message-timestamp.test.mjs",
     "test:image": "node --import tsx --test test/image-compression.test.mjs",
     "test:notifications": "node --test test/notification-channel-regression.test.mjs",

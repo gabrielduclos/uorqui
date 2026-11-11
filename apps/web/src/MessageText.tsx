@@ -90,7 +90,7 @@ export function openInternalChatLink(event:MouseEvent<HTMLAnchorElement>,href:st
 }
 
 function MentionText({text}:{text:string}){
-  const mentions=/(^|[^a-zA-Z0-9_])@([a-z][a-z0-9_]{2,31})(?![a-zA-Z0-9_])/g;
+  const mentions=/(^|[^a-zA-Z0-9_])@([a-z][a-z0-9_]{2,31})(?![a-zA-Z0-9_])/gi;
   const parts:ReactNode[]=[];
   let offset=0;
   for(const match of text.matchAll(mentions)){
