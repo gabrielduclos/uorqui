@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {channelHistoryBounds,channelHistorySearchPath,channelHistoryDayLabel,groupChannelMessages} from '../src/channelHistory.ts';
+import {channelHistoryBounds,channelHistorySearchPath,channelHistoryDayLabel,groupChannelMessages,parseLocalCalendarDay,isValidCustomChannelRange} from '../src/channelHistory.ts';
 import {localDayKey} from '../src/messageTimestamp.ts';
 
 const now=new Date(2026,10,11,10,30); // Wednesday
@@ -11,7 +11,9 @@ test('period filters use local midnight and ISO weeks, not UTC days',()=>{
   assert.deepEqual(channelHistoryBounds('yesterday',now),{from:yesterday,to:today});
   assert.deepEqual(channelHistoryBounds('last-week',now),{from:new Date(2026,10,2).getTime(),to:new Date(2026,10,9).getTime()});
   assert.deepEqual(channelHistoryBounds('this-week',now),{from:new Date(2026,10,9).getTime(),to:new Date(2026,10,16).getTime()});
-  assert.deepEqual(channelHistoryBounds('older',now),{to:new Date(2026,10,2).getTime()});
+  assert.deepEqual(channelHistoryBounds('custom',now,{from:'2026-10-19',to:'2026-11-11'}),{
+    from:new Date(2026,9,19).getTime(),to:new Date(2026,10,12).getTime()
+  });
   assert.deepEqual(channelHistoryBounds('all',now),{});
 });
 
@@ -67,4 +69,45 @@ test('header search icon toggles a collapsible search field without a persistent
   assert.match(channelUi,/onClick={toggleChannelSearch}/);
   assert.doesNotMatch(channelUi,/<select value={historyPeriod}/,
     'date filtering should no longer consume a permanent toolbar');
+});
+
+
+test('manual date range includes the entire selected end day and accepts one day',()=>{
+  const day={from:'2026-11-11',to:'2026-11-11'};
+  assert.equal(isValidCustomChannelRange(day),true);
+  assert.deepEqual(channelHistoryBounds('custom',now,day),{
+    from:new Date(2026,10,11).getTime(),
+    to:new Date(2026,10,12).getTime()
+  });
+  const path=channelHistorySearchPath('community','channel','inspeção','custom',0,now,
+    {from:'2026-10-01',to:'2026-10-31'});
+  const url=new URL(path,'https://uorqui.app');
+  assert.equal(url.searchParams.get('from'),String(new Date(2026,9,1).getTime()));
+  assert.equal(url.searchParams.get('to'),String(new Date(2026,10,1).getTime()));
+  assert.equal(url.searchParams.get('q'),'inspeção');
+});
+
+test('invalid custom dates are rejected, including rollover and reversed dates',()=>{
+  for(const range of [
+    {from:'',to:'2026-11-11'},
+    {from:'2026-02-30',to:'2026-03-01'},
+    {from:'2026-11-12',to:'2026-11-11'},
+    {from:'1969-12-31',to:'2026-11-11'},
+    {from:'2026-11-11',to:'2101-01-01'}
+  ]) assert.equal(isValidCustomChannelRange(range),false,JSON.stringify(range));
+  assert.equal(parseLocalCalendarDay('2024-02-29')?.getDate(),29);
+  assert.equal(parseLocalCalendarDay('2025-02-29'),null);
+  assert.deepEqual(channelHistoryBounds('custom',now,{from:'',to:''}),{});
+});
+
+test('date separator opens a manual date range dialog rather than older-than option',()=>{
+  assert.ok(dividerUi.includes('Período personalizado'));
+  assert.ok(dividerUi.includes('Data inicial')&&dividerUi.includes('Data final'));
+  assert.doesNotMatch(dividerUi,/Mais antigas|value:'older'/);
+  assert.match(dividerUi,/onCustomRangeChange\(range\)/);
+  assert.match(dividerUi,/onPeriodChange\('custom'\)/);
+  assert.match(dividerUi,/type="date"/);
+  assert.match(channelUi,/customHistoryRange\.from/);
+  assert.match(channelUi,/customRange={customHistoryRange}/);
+  assert.match(channelUi,/new Date\(\),customHistoryRange/);
 });

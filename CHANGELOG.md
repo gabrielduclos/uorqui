@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.47] — 2026-11-11
+
+- **Open-email actions:** the message reader header now offers **Delete** (moves to Trash) and **Mark as spam** beside New and Reply. On smaller screens, the same four actions appear as accessible, labeled icons to fit the header. Actions use the existing provider-aware, authenticated single-message move endpoint; the reader closes only after a confirmed successful move, updates the inbox/unread badges and provides an inline error on failure.
+- **Custom channel date ranges:** replaced the **Older** option in the date-divider filter with **Custom date range…**. Choose Start date and End date in an accessible dialog; both endpoints are validated, inclusive of the whole final local-calendar day (including daylight-saving transitions). The existing server-side message search and channel permissions still apply.
+- **Tests:** source regression for reader actions and server endpoint, manual date validation (including invalid/leap dates), inclusive local bounds and API query parameters.
+- **Migration:** none; UI and existing provider/API endpoints only.
+
 ## [0.1.0-beta.46] — 2026-11-11
 
 - **Name-only mentions:** confirming an @mention removes the @ typing trigger from the displayed name in both the composer and published channel messages; the name remains a clickable link to the correct user profile.

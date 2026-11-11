@@ -1,6 +1,6 @@
 {
   "name": "@uorqui/web",
-  "version": "0.1.0-beta.46",
+  "version": "0.1.0-beta.47",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "test:channel-order": "node --import tsx --test test/channel-order.test.mjs",
     "test:community-mentions": "node --import tsx --test test/community-mentions.test.mjs",
     "test:channel-history": "node --import tsx --test test/channel-history.test.mjs",
+    "test:mail-reader-actions": "node --test test/mail-reader-actions.test.mjs",
     "test:message-time": "node --import tsx --test test/message-timestamp.test.mjs",
     "test:image": "node --import tsx --test test/image-compression.test.mjs",
     "test:notifications": "node --test test/notification-channel-regression.test.mjs",

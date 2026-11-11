@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.47] — 11/11/2026
+
+- **Ações na leitura de e-mails:** o cabeçalho da mensagem aberta agora oferece **Excluir** (mover para Lixeira) e **Marcar como spam** ao lado de Novo e Responder. Em telas menores, os quatro comandos ficam como ícones acessíveis. As ações usam a API autenticada já existente, específica para a conta e a mensagem; a leitura só fecha após sucesso, e a lista/sino são atualizados. Falhas são exibidas no próprio leitor.
+- **Período personalizado nos canais:** a opção **Mais antigas** foi substituída por **Período personalizado…**, acessível tocando na data entre as linhas divisórias. A pessoa escolhe Data inicial e Data final; ambas são validadas, incluindo todas as mensagens do último dia no fuso local. A pesquisa continua no servidor e respeita as permissões do canal.
+- **Testes:** ações do leitor, datas inválidas/bissextas, limites inclusivos e parâmetros da consulta.
+- **Migração:** nenhuma; interfaces e endpoints existentes.
+
 ## [0.1.0-beta.46] — 11/11/2026
 
 - **Menções sem @ no nome:** ao confirmar uma pessoa, o símbolo @ deixa de aparecer no texto do editor e na mensagem publicada. O nome continua clicável e abre o perfil correto.

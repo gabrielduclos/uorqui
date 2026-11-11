@@ -155,6 +155,8 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [moving, setMoving] = useState(false);
+  const [detailMoving, setDetailMoving] = useState<'trash' | 'spam' | null>(null);
+  const [detailMoveError, setDetailMoveError] = useState('');
   const [sending, setSending] = useState(false);
   const [replySending, setReplySending] = useState(false);
   const [draft, setDraft] = useState({ to: '', subject: '', body: '' });
@@ -242,7 +244,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     // Cursors are read only when page changes, so a cursor update must not retrigger fetching.
   }, [accountId, accounts, folder, filter, page, refresh, explainError, pt]);
 
-  function closeDetail() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setLoadingBody(false); }
+  function closeDetail() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setDetailMoveError(''); setLoadingBody(false); }
   function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
   function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setUnifiedCursors({}); setNextPage(null); setQuery(''); }
   async function connect(provider: 'gmail'|'outlook') {
@@ -294,7 +296,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     setExpandedImage(null);
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
-    setCompose(false); setReplying(false); setReplyBody('');
+    setCompose(false); setReplying(false); setReplyBody('');setDetailMoveError('');
     setSelected(message); setLoadingBody(true); setError('');
     try {
       const data = await requestMail<Message>('accounts/' + chosenAccount + '/message-detail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }), signal: controller.signal });
@@ -416,6 +418,36 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
        }
     } catch (error) { setError(explainError(error)); }
     finally { setMoving(false); }
+  }
+  async function moveOpenedMessage(destination: 'trash' | 'spam') {
+    // Use the same provider API as the inbox bulk actions, but scope the
+    // request to the exact message/account currently open in the reader.
+    const message=selected;
+    if(!message||detailMoving||moving||sending||replySending)return;
+    setDetailMoving(destination);setDetailMoveError('');
+    try{
+      const result=await requestMail<{moved:string[];failed:string[]}>(
+        'accounts/'+encodeURIComponent(message.accountId)+'/messages/move',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ids:[message.id],destination})
+        });
+      if(!result.moved?.includes(message.id))throw Error('MAIL_MOVE_FAILED');
+      setMessages(previous=>previous.filter(row=>
+        !(row.accountId===message.accountId&&row.id===message.id)));
+      clearReadPush({kind:'mail',accountId:message.accountId,messageId:message.id});
+      if(folder==='inbox'&&message.unread)
+        window.dispatchEvent(new CustomEvent('uorqui:mail-unread-delta',{detail:{amount:1}}));
+      closeDetail();
+      setNotice(destination==='trash'?'movedTrash':'movedSpam');
+      setPage('');setUnifiedCursors({});setNextPage(null);
+      setRefresh(value=>value+1);
+      window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));
+    }catch(error){
+      setDetailMoveError(error instanceof Error&&error.message==='MAIL_MOVE_FAILED'
+        ? (pt?'Não foi possível mover esta mensagem. Tente novamente.':
+          'Could not move this message. Please try again.')
+        : explainError(error));
+    }finally{setDetailMoving(null);}
   }
   async function markSelectedRead() {
     if (!selectedIds.length || moving) return;
@@ -673,13 +705,41 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         <footer className="flex justify-end border-t border-border p-4"><Button disabled={sending} className="min-h-11 gap-2" type="submit">{sending ? <Spinner className="size-4" /> : <Send className="size-4" />}{pt ? 'Enviar email' : 'Send email'}</Button></footer>
       </form> : selected ? <>
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
-          <span className="truncate text-xs text-muted-foreground">{readingAccount?.email}</span>
-          <div className="flex shrink-0 gap-1">
-            <Button size="sm" variant="ghost" onClick={() => { setReplying(true); setReplyError(''); }} className="gap-2" disabled={loadingBody || replySending}>
-              <Reply className="size-4" />{pt ? 'Responder' : 'Reply'}
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{readingAccount?.email}</span>
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1" role="group"
+            aria-label={pt?'Ações do email aberto':'Open email actions'}>
+            <Button type="button" size="sm" variant="ghost"
+              aria-label={pt?'Responder':'Reply'} title={pt?'Responder':'Reply'}
+              onClick={() => { setReplying(true); setReplyError(''); }} className="gap-1.5 px-2 sm:px-3"
+              disabled={loadingBody || replySending || !!detailMoving}>
+              <Reply className="size-4" /><span className="hidden lg:inline">{pt?'Responder':'Reply'}</span>
             </Button>
-            <Button size="sm" variant="ghost" onClick={startCompose} className="gap-2"><Plus className="size-4" />{pt ? 'Novo' : 'New'}</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={startCompose}
+              aria-label={pt?'Novo email':'New email'} title={pt?'Novo email':'New email'}
+              className="gap-1.5 px-2 sm:px-3" disabled={!!detailMoving}>
+              <Plus className="size-4" /><span className="hidden lg:inline">{pt?'Novo':'New'}</span>
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="gap-1.5 px-2 sm:px-3"
+              aria-label={pt?'Marcar como spam':'Mark as spam'} title={pt?'Marcar como spam':'Mark as spam'}
+              onClick={()=>void moveOpenedMessage('spam')}
+              disabled={!!detailMoving || moving || loadingBody || folder==='spam' || folder==='trash'}>
+              {detailMoving==='spam'?<Spinner className="size-4"/>:<ShieldAlert className="size-4"/>}
+              <span className="hidden lg:inline">Spam</span>
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="gap-1.5 px-2 text-destructive hover:text-destructive sm:px-3"
+              aria-label={pt?'Excluir email (mover para lixeira)':'Delete email (move to trash)'}
+              title={pt?'Excluir email (mover para lixeira)':'Delete email (move to trash)'}
+              onClick={()=>void moveOpenedMessage('trash')}
+              disabled={!!detailMoving || moving || loadingBody || folder==='trash'}>
+              {detailMoving==='trash'?<Spinner className="size-4"/>:<Trash2 className="size-4"/>}
+              <span className="hidden lg:inline">{pt?'Excluir':'Delete'}</span>
+            </Button>
           </div></header>
+        {detailMoveError&&<div role="alert" className="flex shrink-0 items-center gap-2 border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-xs text-destructive">
+          <span className="flex-1">{detailMoveError}</span>
+          <button type="button" onClick={()=>setDetailMoveError('')}
+            aria-label={pt?'Fechar erro':'Dismiss error'}><X className="size-4"/></button>
+        </div>}
         <article key={selected.id} className="uorqui-kit-content-enter min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8"><h2 className="break-words text-xl font-semibold tracking-tight">{selected.subject || (pt ? '(Sem assunto)' : '(No subject)')}</h2>
           <div className="my-6 space-y-2 border-b border-border pb-6 text-xs text-muted-foreground"><p className="break-words font-medium text-foreground">{selected.from}</p><p className="break-words">{pt ? 'Para: ' : 'To: '}{selected.to}</p><p>{date(selected.date)}</p></div>
           {loadingBody ? <WorkspaceContentLoading label={pt?'Carregando mensagem':'Loading message'} rows={3} /> : framedHtml ? <>

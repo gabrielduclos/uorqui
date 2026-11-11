@@ -4,6 +4,12 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Ações no email aberto e período personalizado dos canais (beta.47)
+
+Na leitura de um e-mail, o cabeçalho oferece Novo, Responder, Marcar como spam e Excluir (ícones compactos no mobile). Excluir move a mensagem para a Lixeira do provedor; Spam move para a pasta correspondente. A ação usa a API vinculada à conta correta, fecha o leitor somente após sucesso, apresenta erros no próprio leitor e atualiza a lista e os indicadores de não lidos.
+
+Nos canais, o menu aberto ao tocar a data separadora oferece **Período personalizado…** no lugar de Mais antigas. Um diálogo permite definir a data inicial e a final, validando o intervalo e incluindo todo o dia final no fuso local. O filtro pode ser combinado com a pesquisa; o servidor continua verificando as permissões de acesso.
+
 ## Menções sem @ no nome (beta.46)
 
 O símbolo `@` apenas inicia a pesquisa. Ao selecionar a pessoa, o campo mostra **somente seu nome** (por exemplo, `Jessica Pigari`). Após o envio, o nome vira um hiperlink para o perfil; o `@username` continua no título do link e no rótulo acessível. No envio, a identidade selecionada ainda é convertida para o username reconhecido pela API, preservando notificações e permissões do canal.
