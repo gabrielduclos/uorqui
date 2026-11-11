@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.45] — 2026-11-11
+
+- **Mentions by display name:** picking a channel member now inserts their first and last name into the message composer (e.g. `@Jessica Pigari`) instead of their username. The editor tracks the selected member's exact handle independently from the visible text.
+- **Clickable sent mentions:** channel messages render the display name as a profile link. Hover/title and the accessible label preserve the underlying `@username`, while opening the profile provides its identity. Unauthorized users are not transformed into mention links, and private profile names remain protected by the existing channel roster.
+- **Stable notification identity:** text and file/location captions are serialized back into the canonical `@handle` before posting, keeping the current backend mention notifications and permission checks unchanged. Typing around a selected mention keeps the binding; editing inside its name invalidates the binding rather than silently notifying the wrong account.
+- **Tests:** name insertion, mid-sentence text, multi-mention cases with duplicate names, editing, media captions and actual rendered HTML links.
+- **Migration:** none; the API continues storing ordinary `@handle` references.
+
 ## [0.1.0-beta.44] — 2026-11-11
 
 - **Channel date separators as filters:** the date divider stays directly before the first message of that local calendar day and scrolls with its messages instead of sticking to the top. Its date pill (e.g. Today / Yesterday / Last week) is the clickable trigger for the existing period filters, keeping the entire control inside the divider.
