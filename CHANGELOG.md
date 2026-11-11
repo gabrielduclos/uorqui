@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.48] — 2026-11-11
+
+- **Community members for everyone:** accepted community members, including regular members, can tap the member count under the community name to open a read-only directory modal. It lists names, @handles, roles and allowed profile pictures, includes in-modal search and clickable profile links, and works on mobile and desktop without leaving the community.
+- **Member-only API:** GET /api/v1/communities/:id/members requires an authenticated, current community membership. It excludes blocked/banned accounts, masks private profile information according to visibility and friendship, and does not expose moderation permissions, private channel grants or internal IDs.
+- **Management remains restricted:** moderation actions such as changing roles, channel grants, removing or banning users stay in the existing Moderation panel.
+- **Tests:** directory membership checks (anonymous, outsider, member, owner, former member), response shape and UI counter/modal wiring.
+- **Migration:** none.
+
 ## [0.1.0-beta.47] — 2026-11-11
 
 - **Open-email actions:** the message reader header now offers **Delete** (moves to Trash) and **Mark as spam** beside New and Reply. On smaller screens, the same four actions appear as accessible, labeled icons to fit the header. Actions use the existing provider-aware, authenticated single-message move endpoint; the reader closes only after a confirmed successful move, updates the inbox/unread badges and provides an inline error on failure.
