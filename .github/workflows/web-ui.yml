@@ -44,6 +44,10 @@ jobs:
         run: npm run test:mail-reader-actions -w @uorqui/web
       - name: Test read-only community member directory
         run: npm run test:community-members -w @uorqui/web
+      - name: Test private-message date filters and Android back
+        run: npm run test:dm-history-back -w @uorqui/web
+      - name: Test Office file support in communities
+        run: npm run test:community-office -w @uorqui/web
       - name: Test message timestamps across local midnight
         run: npm run test:message-time -w @uorqui/web
       - name: Type-check and build React application
