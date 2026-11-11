@@ -30,7 +30,7 @@ import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 import { ChannelScrollBehavior } from './channelScrollBehavior';
 import { activeCommunityMention, insertNamedCommunityMention, reconcileSelectedMentions, serializeCommunityMentions, type SelectedCommunityMention } from './communityMentions';
-import { channelHistorySearchPath, channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod } from './channelHistory';
+import { channelHistorySearchPath, channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod, type CustomChannelDateRange } from './channelHistory';
 import { ChannelDateFilter } from './ChannelDateFilter';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 import { buildMeetingLink } from './meetingLink';
@@ -161,6 +161,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [mentionMembers,setMentionMembers]=useState<{handle:string;displayName:string;avatarUrl:string|null}[]>([]);
   const [mentionMembersForKey,setMentionMembersForKey]=useState<string|null>(null);
   const [historyPeriod,setHistoryPeriod]=useState<ChannelHistoryPeriod>('all');
+  const [customHistoryRange,setCustomHistoryRange]=useState<CustomChannelDateRange>({from:'',to:''});
   const [searchOpen,setSearchOpen]=useState(false);
   const [channelSearch,setChannelSearch]=useState('');
   const [filteredMessages,setFilteredMessages]=useState<Message[]>([]);
@@ -290,7 +291,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     const previous=draftMentions.current;
     draftMentions.current=[];
     if(previous.length)setDraft(current=>serializeCommunityMentions(current,previous));
-    setSearchOpen(false);setHistoryPeriod('all');setChannelSearch('');
+    setSearchOpen(false);setHistoryPeriod('all');setCustomHistoryRange({from:'',to:''});setChannelSearch('');
     setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);
   },[selectedId,channelId]);
   useEffect(()=>{
@@ -310,12 +311,12 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     }
     let live=true;
     const key=selectedId+'/'+channelId;
-    const requestKey=key+'/'+historyPeriod+'/'+channelSearch+'/'+todayKey;
+    const requestKey=key+'/'+historyPeriod+'/'+customHistoryRange.from+'/'+customHistoryRange.to+'/'+channelSearch+'/'+todayKey;
     filteredRequestKey.current=requestKey;
     setFilteredLoading(true);setFilteredForKey(null);setFilteredMessages([]);setFilteredError(false);setFilteredHasMore(false);
     const timer=window.setTimeout(()=>{
       void api<{messages:Message[];hasMore:boolean}>(
-        channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod)
+        channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod,0,new Date(),customHistoryRange)
       ).then(data=>{
         if(!live||filteredRequestKey.current!==requestKey)return;
         setFilteredForKey(key);setFilteredMessages(data.messages);setFilteredHasMore(data.hasMore);
@@ -326,14 +327,14 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
       });
     },240);
     return ()=>{live=false;window.clearTimeout(timer);};
-  },[selectedId,channelId,channelLocked,activeChannel?.id,channelSearch,historyPeriod,todayKey,searchActive]);
+  },[selectedId,channelId,channelLocked,activeChannel?.id,channelSearch,historyPeriod,customHistoryRange.from,customHistoryRange.to,todayKey,searchActive]);
   async function loadMoreHistory(){
     if(!searchActive||!selectedId||!channelId||filteredMoreLoading||filteredLoading||!filteredHasMore)return;
     setFilteredMoreLoading(true);
     const requestKey=filteredRequestKey.current;
     try{
       const response=await api<{messages:Message[];hasMore:boolean}>(
-        channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod,filteredMessages.length)
+        channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod,filteredMessages.length,new Date(),customHistoryRange)
       );
       if(filteredRequestKey.current!==requestKey)return;
       setFilteredMessages(old=>[...response.messages.filter(m=>!old.some(item=>item.id===m.id)),...old]);
@@ -1388,7 +1389,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                 className="flex items-center gap-3 py-3">
                 <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
                 <ChannelDateFilter dayKey={group.dayKey} todayKey={todayKey} locale={locale}
-                  period={historyPeriod} onPeriodChange={setHistoryPeriod}/>
+                  period={historyPeriod} customRange={customHistoryRange}
+                  onPeriodChange={setHistoryPeriod} onCustomRangeChange={setCustomHistoryRange}/>
                 <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
               </div>
               {group.messages.map(message=><div id={'community-msg-'+message.id} key={message.clientId}
