@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.41] — 11/11/2026
+
+- **Reorganização de canais:** responsáveis e administradores podem arrastar os canais ou usar botões acessíveis de subir/descer na aba Moderação → Canais. A edição separa canais de texto, voz e reunião e inclui Salvar ordem.
+- **Ordem compartilhada e persistente:** nova rota PUT autenticada exige a lista completa, permite alterações somente a responsáveis/administradores e salva as posições em uma transação. A API entrega a ordem salva a todos os membros e avisa os clientes conectados por SSE. Canais novos entram no final.
+- **Migração:** aplicar `0047_community_channel_order` antes de publicar a API. A ordem anterior por criação é preservada para os canais existentes. Para reverter, voltar o código da API antes de remover a coluna adicionada.
+- **Testes:** integração cobre permissões, dados duplicados/desatualizados, persistência, visualização por membros e inclusão de novos canais; teste da interface cobre movimentação dentro da categoria. Validar arrastar/soltar em dispositivos reais e a migração no deploy.
+
 ## [0.1.0-beta.40] — 10/11/2026
 
 - **Lista de canais mais limpa:** removidos os dois cards redundantes “Mensagens não lidas” da navegação de comunidades e canais, inclusive o painel destacado acima da lista de canais.
