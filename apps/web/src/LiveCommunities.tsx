@@ -29,6 +29,7 @@ import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 import { ChannelScrollBehavior } from './channelScrollBehavior';
+import { activeCommunityMention, replaceCommunityMention } from './communityMentions';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 import { buildMeetingLink } from './meetingLink';
 
@@ -207,19 +208,19 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const channelLocked=Boolean(activeChannel?.hasPassword&&!activeChannel?.unlocked);
   const mentionOptions=mentionAt?mentionMembers.filter(member=>
     (member.handle+' '+member.displayName).toLowerCase().includes(mentionAt.query.toLowerCase())).slice(0,7):[];
+  function updateMention(value:string,caret:number,selectionEnd=caret){
+    setMentionAt(caret===selectionEnd?activeCommunityMention(value,caret):null);
+    setMentionIndex(0);
+  }
   function mentionChanged(value:string){
     setDraft(value);
-    const caret=composerRef.current?.selectionStart??value.length;
-    const preceding=value.slice(0,caret);
-    const found=/(?:^|[\\s(])@([a-zA-Z0-9_]{0,31})$/.exec(preceding);
-    setMentionAt(found?{start:caret-found[1].length-1,end:caret,query:found[1]}:null);
-    setMentionIndex(0);
+    updateMention(value,composerRef.current?.selectionStart??value.length,
+      composerRef.current?.selectionEnd??value.length);
   }
   function insertMention(handle:string){
     if(!mentionAt)return;
-    const next=draft.slice(0,mentionAt.start)+'@'+handle+' '+draft.slice(mentionAt.end);
-    const caret=mentionAt.start+handle.length+2;
-    setDraft(next);setMentionAt(null);setMentionIndex(0);
+    const {text,caret}=replaceCommunityMention(draft,mentionAt,handle);
+    setDraft(text);setMentionAt(null);setMentionIndex(0);
     requestAnimationFrame(()=>{
       composerRef.current?.focus();
       composerRef.current?.setSelectionRange(caret,caret);
@@ -1351,6 +1352,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
               if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setMentionAt(null);}
             }}>
             <LiveMessageComposer key={selectedId+'/'+channelId} value={draft} onChange={mentionChanged}
+              onSelectionChange={(text,start,end)=>updateMention(text,start,end)}
               onSubmit={send} onAttach={sendAttachment}
               onShareLocation={(latitude,longitude,caption)=>{
                 enqueueMessage((caption?caption+'\n':'')+'https://www.google.com/maps?q='+latitude+','+longitude);

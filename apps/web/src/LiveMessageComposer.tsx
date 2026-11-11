@@ -21,8 +21,10 @@ const ATTACHMENTS = [
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
 
-export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false, onGif, gifOpen = false }: {
-  value: string; onChange: (text: string) => void; onSubmit: () => void;
+export function LiveMessageComposer({ value, onChange, onSelectionChange, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false, onGif, gifOpen = false }: {
+  value: string; onChange: (text: string) => void;
+  onSelectionChange?: (text:string,start:number,end:number)=>void;
+  onSubmit: () => void;
   onAttach: (file: File, caption: string) => void;
   onShareLocation: (latitude:number,longitude:number,caption:string) => void;
   sending: boolean; locale: string; textareaRef: RefObject<HTMLTextAreaElement | null>; editing?: boolean;
@@ -478,7 +480,10 @@ export function LiveMessageComposer({ value, onChange, onSubmit, onAttach, onSha
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <textarea ref={textareaRef} rows={1} value={value} disabled={recording!=='idle'}
       onPaste={e=>{const file=Array.from(e.clipboardData.items).find(item=>item.kind==='file' && item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();stagePhotos([file]);}}}
-      onChange={event => onChange(event.target.value)} onKeyDown={keyDown} maxLength={4000}
+      onChange={event => onChange(event.target.value)}
+      onSelect={event => onSelectionChange?.(event.currentTarget.value,
+        event.currentTarget.selectionStart,event.currentTarget.selectionEnd)}
+      onKeyDown={keyDown} maxLength={4000}
       aria-label={pt ? 'Escrever mensagem' : 'Write a message'}
       data-message-composer placeholder={editing ? (pt ? 'Editar mensagem…' : 'Edit message…') : (pt ? 'Mensagem…' : 'Message…')}
       className="min-h-12 max-h-52 min-w-0 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-3 text-base leading-6 text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40"

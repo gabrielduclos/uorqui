@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.42] — 11/11/2026
+
+- **Menções no meio de frases:** corrigido o autocompletar de @usuário nos canais depois de espaços ou pontuação, inclusive em trechos já escritos (ex.: `Bom dia @ana`).
+- **Cursor e texto preservados:** selecionar um membro substitui apenas a menção ativa sem apagar o restante da frase, preserva o cursor e usa espaço separador quando necessário. A lista também acompanha a mudança de posição do cursor; endereços de e-mail não ativam menções.
+- **Exibição e notificações:** links de menções em mensagens passam a reconhecer também letras maiúsculas. As regras existentes de destinatário, permissão e notificação no servidor não foram alteradas.
+- **Testes:** cenários de espaços, pontuação, endereços de e-mail, edição no meio do @ e espaçamento. Ainda é importante validar a digitação em aparelhos reais.
+- **Migração:** não há; correção somente de interface.
+
 ## [0.1.0-beta.41] — 11/11/2026
 
 - **Reorganização de canais:** responsáveis e administradores podem arrastar os canais ou usar botões acessíveis de subir/descer na aba Moderação → Canais. A edição separa canais de texto, voz e reunião e inclui Salvar ordem.

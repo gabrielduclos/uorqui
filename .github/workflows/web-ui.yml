@@ -36,6 +36,8 @@ jobs:
         run: npm run test:channel-theme -w @uorqui/web
       - name: Test community channel ordering controls
         run: npm run test:channel-order -w @uorqui/web
+      - name: Test inline community mentions
+        run: npm run test:community-mentions -w @uorqui/web
       - name: Test message timestamps across local midnight
         run: npm run test:message-time -w @uorqui/web
       - name: Type-check and build React application
