@@ -658,7 +658,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   useLayoutEffect(()=>{
     const element=scrollRef.current;
     const key=currentMessageKey;
-    if(searchActive||!active||!channelHistoryVisible||!element||!key||messagesForKey!==key||messagesLoading)return;
+    if(!active||!channelHistoryVisible||!element||!key||messagesForKey!==key||messagesLoading||searchActive)return;
     const latest=messages.at(-1)?.id??null;
     if(channelScrollRef.current.open(key)){
       activeScrollKey.current=key;
@@ -692,7 +692,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   useLayoutEffect(()=>{
     const element=scrollRef.current,content=messageContentRef.current;
     const key=currentMessageKey;
-    if(searchActive||!active||!channelHistoryVisible||!element||!content||!key||messagesForKey!==key||messagesLoading)return;
+    if(!active||!channelHistoryVisible||!element||!content||!key||messagesForKey!==key||messagesLoading||searchActive)return;
     let previousHeight=element.scrollHeight;
     let frame=0;
     const pin=()=>{

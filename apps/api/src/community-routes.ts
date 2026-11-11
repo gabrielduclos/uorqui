@@ -739,7 +739,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
          'LEFT JOIN users ou ON ou.id=original.author_id '+
         'LEFT JOIN user_friendships friends ON friends.user_a_id=LEAST(m.author_id,$2::uuid) AND friends.user_b_id=GREATEST(m.author_id,$2::uuid) '+
         'WHERE m.channel_id=$1 '+
-        "AND ($3::text='' OR strpos(lower(COALESCE(m.body,'')),lower($3::text))>0) "+
+        "AND ($3::text='' OR (m.deleted_at IS NULL AND strpos(lower(COALESCE(m.body,'')),lower($3::text))>0)) "+
         'AND ($4::double precision IS NULL OR m.created_at>=to_timestamp($4::double precision/1000.0)) '+
         'AND ($5::double precision IS NULL OR m.created_at<to_timestamp($5::double precision/1000.0)) '+
         'ORDER BY m.created_at DESC,m.id DESC LIMIT 101 OFFSET $6',[channelId,me,q.trim(),fromMs,toMs,offset]);
