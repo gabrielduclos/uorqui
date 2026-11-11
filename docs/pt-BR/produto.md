@@ -4,6 +4,12 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Office nas mensagens privadas e Voltar do Android em telas maiores (beta.50)
+
+As conversas privadas agora aceitam arquivos Word, Excel e PowerPoint (.doc, .docx, .xls, .xlsx, .ppt, .pptx), até 50 MB. O Worker Cloudflare autenticado verifica MIME e assinatura ZIP/OpenXML ou OLE, guarda o arquivo no R2 privado e a API confirma a prova criptográfica do envio. Somente participantes da conversa podem baixar, sempre como anexo com cabeçalhos de proteção. Os mesmos formatos continuam disponíveis nos canais.
+
+O botão Voltar do Android também funciona em larguras maiores, como celular na horizontal, tablet e PWA instalado, além das telas estreitas.
+
 ## Filtro no chat privado, Voltar no Android e arquivos Office (beta.49)
 
 Conversas privadas reutilizam o separador por dia com menu de períodos, inclusive escolha manual de Data inicial e Data final. A consulta busca mensagens antigas diretamente no servidor com autenticação e paginação, além das 100 mensagens recentes. Durante a pesquisa, o aplicativo não rola automaticamente ao fim nem confirma leitura.

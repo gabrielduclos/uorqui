@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.50] — 2026-11-11
+
+- **Office documents in private chats:** private conversations now accept Word (.doc/.docx), Excel (.xls/.xlsx) and PowerPoint (.ppt/.pptx) up to 50 MB, just like community channels. The attachment picker, composer, Fastify API and Cloudflare Worker upload allowlists are synchronized. Office ZIP/OpenXML and OLE signatures are checked for both direct and community messages. Downloads remain private to conversation participants and Office files are served as downloads, not inline executable content.
+- **Android Back in landscape and tablets:** preserve native app history even when an Android viewport is wider than 767 px; installed standalone PWAs remain navigable at larger widths.
+- **Regression tests:** six Office MIME types with signed DM message creation, unauthorized/unsigned rejection, shared file signature validation and Android wide-screen navigation.
+- **Migration:** none.
+
 ## [0.1.0-beta.49] — 2026-11-11
 
 - **Direct-message date filters:** private conversations now display the same calendar-day separators and clickable period selector as community channels: Today, Yesterday, Last 7 days, This week, Last week, This month and Custom date range. Filtering queries the full authenticated message history with 100-message pagination rather than the local recent-message cache; browsing filtered history does not trigger automatic scroll or read acknowledgments.

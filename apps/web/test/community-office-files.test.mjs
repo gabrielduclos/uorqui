@@ -28,9 +28,35 @@ test('Worker validates Office magic signatures, 50 MB max, and attachment downlo
     assert.ok(api.includes("'"+type+"'"),'API MIME: '+type);
     assert.ok(community.includes("'"+type+"'"),'Web MIME: '+type);
   }
-  assert.match(worker,/communityId && COMMUNITY_OFFICE_TYPES.has\(type\)/);
+  assert.match(worker,/!DM_TYPES\.has\(type\) && !COMMUNITY_OFFICE_TYPES\.has\(type\)/);
   assert.match(worker,/OFFICE_OPENXML_TYPES.has\(type\)/);
   assert.match(worker,/OFFICE_LEGACY_TYPES.has\(type\)/);
   assert.match(worker,/MAX_DM_BYTES = 50 \* 1024 \* 1024/);
   assert.match(worker,/content-disposition/);
+});
+
+test('private messages accept the same six Office formats and preserve restricted downloads',()=>{
+  const dm=readFileSync(new URL('../src/LiveDirectChat.tsx',import.meta.url),'utf8');
+  const dmApi=readFileSync(new URL('../../api/src/direct-message-routes.ts',import.meta.url),'utf8');
+  const outbox=readFileSync(new URL('../src/dmOutbox.ts',import.meta.url),'utf8');
+  assert.match(dm,/onGif=\{\(\)=>setGifPickerOpen\(old=>!old\)\} gifOpen=\{gifPickerOpen\} allowOffice/);
+  assert.match(dm,/function sendAttachment\(file: File, caption: string\)/);
+  assert.match(outbox, /'Content-Type': pending.attachment.type/);
+  for(const type of [
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  ]){
+    assert.ok(dm.includes("'"+type+"'"),'DM UI must accept '+type);
+    assert.ok(dmApi.includes("'"+type+"'"),'DM API must accept '+type);
+  }
+  assert.match(worker,/!DM_TYPES\.has\(type\) && !COMMUNITY_OFFICE_TYPES\.has\(type\)/);
+  assert.match(worker,/\(OFFICE_OPENXML_TYPES\.has\(type\) && !\(signature\[0\]===0x50/);
+  assert.match(worker,/\(OFFICE_LEGACY_TYPES\.has\(type\) && !\[0xd0,0xcf,0x11,0xe0/);
+  assert.match(worker,/\/api\/v1\/dm\/conversations\/'.*\/attachments\/allowed/);
+  assert.match(worker,/\/api\/v1\/dm\/conversations\/'.*\/attachments\/'.*\/access/);
+  assert.match(worker,/const inline = access\.type\.startsWith\('image\/'\)/);
 });

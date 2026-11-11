@@ -4,6 +4,12 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Office files in private messages and Android Back on wide screens (beta.50)
+
+Private conversations now accept Word, Excel and PowerPoint (.doc, .docx, .xls, .xlsx, .ppt, .pptx) attachments up to 50 MB. The authenticated Cloudflare Worker checks MIME and OpenXML ZIP/OLE file signatures and stores files in private R2. Fastify validates the authorized upload HMAC proof. Downloads require conversation participation and are always served as attachments with nosniff and no-store headers. The same Office formats remain available in community channels.
+
+Android's system Back also works on wider viewports such as landscape phones and tablets, and in installed standalone PWAs, not only small portrait layouts.
+
 ## Direct-message filters, Android history and community Office files (beta.49)
 
 Private conversations use the shared local-calendar date dividers and period-picker control, including manual Start/End dates. A server-authorized, paginated DM history query covers messages beyond the 100 newest in cache. Filtered exploration suspends automatic scroll-to-bottom and read receipts.

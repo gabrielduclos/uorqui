@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.50] — 11/11/2026
+
+- **Arquivos Office nas mensagens privadas:** conversas individuais agora aceitam Word (.doc/.docx), Excel (.xls/.xlsx) e PowerPoint (.ppt/.pptx), até 50 MB, assim como os canais. Seletor de arquivos, compositor, API e Worker validam os formatos e suas assinaturas ZIP/OpenXML/OLE. O download segue restrito aos participantes e é oferecido como anexo, sem execução no navegador.
+- **Voltar do Android na horizontal e em tablets:** o histórico de navegação permanece ativo mesmo em larguras superiores a 767 px e no PWA instalado.
+- **Testes:** seis tipos Office, prova do envio, bloqueio de acesso não autorizado, assinatura do arquivo e navegação em telas grandes.
+- **Migração:** nenhuma.
+
 ## [0.1.0-beta.49] — 11/11/2026
 
 - **Divisão e filtro nas mensagens privadas:** as conversas individuais exibem os separadores de data com filtro pelo próprio rótulo, como nos canais: Hoje, Ontem, Últimos 7 dias, Esta semana, Semana passada, Este mês e Período personalizado. A consulta abrange o histórico autorizado no servidor, em lotes de até 100, sem depender apenas das mensagens recentes em cache e sem confirmar leitura ao pesquisar.
