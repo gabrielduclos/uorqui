@@ -4,6 +4,10 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Channel ordering (beta.41)
+
+Community owners and admins can use **Moderation → Channels** to reorder the text, voice and meeting channel lists. Drag and drop is available on supported desktop browsers; up/down controls work with touch and keyboard navigation. Select **Save order** to apply the change to every community member. Only channels of the same kind can be reordered relative to each other because the navigation groups them by type. The API validates the full list and stores the shared order in PostgreSQL; new channels appear last. Apply migration `0047_community_channel_order` before deploying the corresponding API.
+
 ## Product decision
 
 Uorqui is **community-first**, without a public/global post feed or infinite immersive video mode. The home destination is **Discover**, featuring recommended communities and activities **from communities the person has joined**. Text, photos, video, audio, files and links remain available inside messages and channels.

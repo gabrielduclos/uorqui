@@ -4,6 +4,10 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Organização de canais (beta.41)
+
+Responsáveis e administradores podem usar **Moderação → Canais** para reorganizar as listas de canais de texto, salas de voz e reuniões. É possível arrastar nos navegadores desktop compatíveis ou usar as setas de subir/descer no celular e pelo teclado. Clique em **Salvar ordem** para aplicar a organização a todos os membros. A troca ocorre dentro da mesma categoria, já que a navegação agrupa os canais por tipo. A API valida a lista completa e salva a ordem compartilhada no PostgreSQL; canais novos entram por último. Aplicar a migração `0047_community_channel_order` antes de publicar a API correspondente.
+
 ## Decisão de produto
 
 O Uorqui é **centrado em comunidades**, sem feed global de publicações nem modo imersivo infinito de vídeos. A tela inicial é **Descobrir**, dedicada a recomendações de comunidades e atividades **das comunidades em que a pessoa já participa**. Texto, fotos, vídeos, áudio, arquivos e links continuam disponíveis em conversas e canais.
