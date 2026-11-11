@@ -4,6 +4,12 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Opened email actions and manual channel date filtering (beta.47)
+
+The opened-email reader has New, Reply, Mark as spam and Delete actions in its header (compact icon buttons on narrow screens). Delete moves the message into the provider Trash folder and Spam moves it to the provider Spam folder, using the existing account-scoped move endpoint. The reader closes only on confirmation; it handles provider errors inline and refreshes the inbox and unread indicators.
+
+Channel date-divider menus now include **Custom date range…** instead of Older. A native start/end date dialog validates dates and includes the full end day in the viewer's local timezone. Period and text search are independent, and authorization continues to be enforced by the server.
+
 ## Channel mentions without a visible @ (beta.46)
 
 The @ trigger is only used to find a member. Selecting a result replaces it with their **name only** in the composer (for example, `Jessica Pigari`). A published message displays the same name as a clickable profile link, with the canonical `@username` in the link title and accessible label. The editor still serializes the selected mention to the server-compatible `@username` when sending, so notifications and channel authorization are unchanged.
