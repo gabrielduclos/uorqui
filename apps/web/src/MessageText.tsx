@@ -89,7 +89,7 @@ export function openInternalChatLink(event:MouseEvent<HTMLAnchorElement>,href:st
   return true;
 }
 
-function MentionText({text,allowedHandles}:{text:string;allowedHandles?:ReadOnlySet<string>}){
+function MentionText({text,allowedHandles}:{text:string;allowedHandles?:ReadonlySet<string>}){
   const mentions=/(^|[^a-zA-Z0-9_])@([a-z][a-z0-9_]{2,31})(?![a-zA-Z0-9_])/gi;
   const parts:ReactNode[]=[];
   let offset=0;
@@ -116,7 +116,7 @@ function MentionText({text,allowedHandles}:{text:string;allowedHandles?:ReadOnly
   return <>{parts.length?parts:text}</>;
 }
 
-export function MessageText({text,mentions=false,allowedHandles}:{text:string;mentions?:boolean;allowedHandles?:ReadOnlySet<string>}){
+export function MessageText({text,mentions=false,allowedHandles}:{text:string;mentions?:boolean;allowedHandles?:ReadonlySet<string>}){
   return <>{splitMessageLinks(text).map((part,index)=>
     <Fragment key={index}>{part.href?
       <a href={part.href} target={internalChatLink(part.href)?undefined:'_blank'} rel="noopener noreferrer nofollow ugc"
