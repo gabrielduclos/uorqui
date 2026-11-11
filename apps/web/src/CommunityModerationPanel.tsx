@@ -2,13 +2,14 @@ import { compactUserName } from './userDisplayName';
 import { apiRequest as api } from './lib/apiClient';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Dialog, Tabs } from 'radix-ui';
-import { Ban, Camera, Check, Hash, LockKeyhole, Settings, Shield, Trash2, UserMinus, Users, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Ban, Camera, Check, GripVertical, Hash, LockKeyhole, Settings, Shield, Trash2, UserMinus, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { navigateToPublicProfile } from './publicProfileNavigation';
+import { moveChannelWithinKind } from './channelOrder';
 
 type Role='owner'|'admin'|'moderator'|'member';
 type Visibility='public'|'approval'|'private';
@@ -41,12 +42,18 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
   const [photo,setPhoto]=useState(avatarUrl);
   const [confirmDeleteText,setConfirmDeleteText]=useState('');
   const [channelDrafts,setChannelDrafts]=useState<Record<string,{name:string;description:string;accessMode:'open'|'restricted';password:string}>>({});
+  const [orderedChannelIds,setOrderedChannelIds]=useState<string[]>(()=>channels.map(ch=>ch.id));
+  const [draggedChannelId,setDraggedChannelId]=useState<string|null>(null);
   useEffect(()=>{setGroupName(name);setGroupDescription(description??'');setGroupVisibility(visibility);setPhoto(avatarUrl);},[name,description,visibility,avatarUrl]);
   useEffect(()=>{
     setChannelDrafts(Object.fromEntries(channels.map(channel=>[channel.id,{
       name:channel.name,description:channel.description??'',accessMode:channel.accessMode??'open',password:''
     }])));
   },[channels]);
+  useEffect(()=>{setOrderedChannelIds(channels.map(ch=>ch.id));setDraggedChannelId(null);},[channels]);
+  const orderedChannels=orderedChannelIds.length===channels.length&&channels.every(ch=>orderedChannelIds.includes(ch.id))
+    ?orderedChannelIds.map(channelId=>channels.find(ch=>ch.id===channelId)!):channels;
+  const channelOrderChanged=orderedChannels.some((ch,index)=>ch.id!==channels[index]?.id);
   const base='/api/v1/communities/'+id;
   const canAdmin=weight[role]>=3;
   useEffect(()=>{
@@ -104,6 +111,10 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
       password:old[channelId]?.password??'',
       ...change
     }}));
+  }
+
+  function moveChannel(fromId:string,toId:string){
+    setOrderedChannelIds(previous=>moveChannelWithinKind(channels,previous,fromId,toId));
   }
 
   return <Dialog.Root open={open} onOpenChange={next=>{
@@ -326,7 +337,67 @@ export default function CommunityModerationPanel({id,role,channels,name,descript
           <p className="text-xs text-muted-foreground">{pt?
             'Nome, descrição, acesso e senha são editados aqui por administradores.':
             'Admins can edit channel names, descriptions, access and passwords here.'}</p>
-          {channels.map(ch=>{
+          <section aria-label={pt?'Reorganizar canais':'Reorder channels'}
+            className="space-y-3 rounded-lg border border-border/70 bg-card/40 p-3">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold">{pt?'Ordem dos canais':'Channel order'}</p>
+              <p className="text-[11px] text-muted-foreground">{pt?
+                'Arraste ou use as setas para reorganizar cada categoria. A ordem salva vale para todos os membros.':
+                'Drag or use the arrows to reorder each category. The saved order is shared with all members.'}</p>
+            </div>
+            {(['text','voice','meeting'] as const).map(kind=>{
+              const category=orderedChannels.filter(ch=>ch.kind===kind);
+              if(!category.length)return null;
+              return <div key={kind} className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {kind==='text'?(pt?'Texto':'Text'):kind==='voice'?(pt?'Voz':'Voice'):(pt?'Reuniões':'Meetings')}
+                </p>
+                {category.map((ch,index)=><div key={ch.id} draggable={!busy}
+                  onDragStart={event=>{
+                    if(busy){event.preventDefault();return;}
+                    event.dataTransfer.effectAllowed='move';
+                    event.dataTransfer.setData('text/plain',ch.id);
+                    setDraggedChannelId(ch.id);
+                  }}
+                  onDragOver={event=>{
+                    if(!busy&&draggedChannelId&&draggedChannelId!==ch.id&&
+                      channels.find(item=>item.id===draggedChannelId)?.kind===ch.kind){
+                      event.preventDefault();event.dataTransfer.dropEffect='move';
+                    }
+                  }}
+                  onDrop={event=>{event.preventDefault();if(!busy&&draggedChannelId)moveChannel(draggedChannelId,ch.id);setDraggedChannelId(null);}}
+                  onDragEnd={()=>setDraggedChannelId(null)}
+                  className="flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background px-2 py-1.5">
+                  <GripVertical aria-hidden="true" className="size-4 shrink-0 cursor-grab text-muted-foreground"/>
+                  <span className="min-w-0 flex-1 truncate text-xs">
+                    {kind==='text'?'#':kind==='voice'?'◉':'▣'} {ch.name}
+                  </span>
+                  <button type="button" disabled={busy||index===0}
+                    aria-label={(pt?'Mover canal para cima: ':'Move channel up: ')+ch.name}
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border text-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-35"
+                    onClick={()=>moveChannel(ch.id,category[index-1].id)}>
+                    <ArrowUp className="size-4"/>
+                  </button>
+                  <button type="button" disabled={busy||index===category.length-1}
+                    aria-label={(pt?'Mover canal para baixo: ':'Move channel down: ')+ch.name}
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border text-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-35"
+                    onClick={()=>moveChannel(ch.id,category[index+1].id)}>
+                    <ArrowDown className="size-4"/>
+                  </button>
+                </div>)}
+              </div>;
+            })}
+            <div className="flex justify-end border-t border-border/70 pt-3">
+              <Button type="button" size="sm" className="h-9"
+                disabled={busy||!channelOrderChanged} loading={busyKey==='channel:order'}
+                onClick={()=>void action('channel:order',
+                  ()=>api(base+'/channels/order',bodyFor('PUT',{channelIds:orderedChannels.map(ch=>ch.id)})),
+                  pt?'Ordem dos canais salva.':'Channel order saved.')}>
+                <Check className="size-3.5"/>{pt?'Salvar ordem':'Save order'}
+              </Button>
+            </div>
+          </section>
+          {orderedChannels.map(ch=>{
             const draft=channelDrafts[ch.id]??{name:ch.name,description:ch.description??'',accessMode:ch.accessMode??'open',password:''};
             const endpoint=base+'/channels/'+ch.id;
             const changedName=draft.name.trim();
