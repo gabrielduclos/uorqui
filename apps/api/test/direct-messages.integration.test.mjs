@@ -234,6 +234,42 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   }
 });
 
+test('Office attachments in private chats require valid server proof and conversation permissions',async()=>{
+  const one=visitor(),two=visitor(),outsider=visitor();
+  await createUser(one,'Office Sender','dm_office_sender');
+  await createUser(two,'Office Receiver','dm_office_receiver');
+  await createUser(outsider,'Office Outsider','dm_office_outsider');
+  const opened=await one('/api/v1/dm/conversations','POST',{handle:'dm_office_receiver'});
+  assert.equal(opened.status,200);
+  const path='/api/v1/dm/conversations/'+opened.data.id;
+  const officeTypes=[
+    ['word.doc','application/msword'],
+    ['word.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['sheet.xls','application/vnd.ms-excel'],
+    ['sheet.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ['slides.ppt','application/vnd.ms-powerpoint'],
+    ['slides.pptx','application/vnd.openxmlformats-officedocument.presentationml.presentation']
+  ];
+  for(const [name,type] of officeTypes){
+    const clientId=crypto.randomUUID();
+    const attachment={id:crypto.randomUUID(),name,type,size:128};
+    const request={body:'Arquivo Office',clientId,attachment};
+    assert.equal((await outsider(path+'/messages','POST',request,true,
+      {'x-uorqui-attachment-proof':proof(opened.data.id,clientId,attachment)})).status,404);
+    assert.equal((await one(path+'/messages','POST',request)).status,403,
+      'Office attachment metadata cannot be forged without the Worker HMAC');
+    const sent=await one(path+'/messages','POST',request,true,
+      {'x-uorqui-attachment-proof':proof(opened.data.id,clientId,attachment)});
+    assert.equal(sent.status,201,JSON.stringify(sent.data));
+    assert.equal(sent.data.message.attachment.type,type);
+    assert.equal(sent.data.message.attachment.name,name);
+  }
+  const received=await two(path+'/messages');
+  assert.equal(received.status,200);
+  assert.equal(received.data.messages.filter(message=>message.attachment).length,6);
+  assert.equal((await outsider(path+'/messages')).status,404);
+});
+
 test('private message history filters use authorized time ranges and do not read messages',async()=>{
   const one=visitor(),two=visitor(),stranger=visitor();
   await createUser(one,'History One','dm_history_one');
