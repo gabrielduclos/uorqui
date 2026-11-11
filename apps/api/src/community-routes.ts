@@ -387,7 +387,7 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
           "(password_hash IS NULL OR $2::boolean OR EXISTS (SELECT 1 FROM community_channel_password_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) AS \"unlocked\" "+
           "FROM community_channels WHERE community_id=$1 AND (access_mode='open' OR $2::boolean OR EXISTS "+
           '(SELECT 1 FROM community_channel_member_access gr WHERE gr.channel_id=community_channels.id AND gr.user_id=$3)) '+
-          'ORDER BY created_at,id',[id,manager(data.myRole),me]);
+          'ORDER BY sort_order,created_at,id',[id,manager(data.myRole),me]);
         channels=result.rows;
         if(manager(data.myRole)){
           const waiting=await getPool().query(
@@ -575,7 +575,9 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
       const c=await getPool().query('SELECT COUNT(*)::int AS n FROM community_channels WHERE community_id=$1',[id]);
       if(Number(c.rows[0].n)>=50)return reply.code(409).send({error:'CHANNEL_LIMIT'});
       const result=await getPool().query(
-        'INSERT INTO community_channels(community_id,name,kind,access_mode,description) VALUES($1,$2,$3,$4,$5) RETURNING id,name,kind,description,access_mode AS "accessMode"',
+        'INSERT INTO community_channels(community_id,name,kind,access_mode,description,sort_order) '+
+        'VALUES($1,$2,$3,$4,$5,COALESCE((SELECT MAX(sort_order)+1 FROM community_channels WHERE community_id=$1),0)) '+
+        'RETURNING id,name,kind,description,access_mode AS "accessMode"',
         [id,normalized,kind,accessMode,description?.trim()||null]);
       void publishCommunityEvent(id,result.rows[0].id,'channel').catch(()=>{});
       return reply.code(201).header('Cache-Control',noCache).send({channel:result.rows[0]});

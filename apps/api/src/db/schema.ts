@@ -219,6 +219,7 @@ export const communityChannels = pgTable('community_channels', {
   name: varchar('name', { length: 64 }).notNull(),
   description: text('description'),
   kind: varchar('kind', { length: 8 }).notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
   meetingJoinPolicy: varchar('meeting_join_policy', { length: 12 }).notNull().default('open'),
   // Shared one-hour deadline for the current meeting session (not per user).
   meetingExpiresAt: timestamp('meeting_expires_at', { withTimezone: true }),
@@ -228,6 +229,7 @@ export const communityChannels = pgTable('community_channels', {
 }, table => [
   uniqueIndex('community_channels_unique_kind_name').on(table.communityId, table.kind, table.name),
   index('community_channels_community_idx').on(table.communityId),
+  index('community_channels_order_idx').on(table.communityId,table.sortOrder),
   check('community_channels_kind', sql`${table.kind} IN ('text', 'voice', 'meeting')`),
   check('community_meeting_policy',sql`${table.meetingJoinPolicy} IN ('open','approval')`),
   check('community_channel_access_mode',sql`${table.accessMode} IN ('open','restricted')`),

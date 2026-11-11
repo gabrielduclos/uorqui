@@ -358,6 +358,28 @@ test('community moderation: hierarchical roles, persistent bans, channels and me
   const extra=await member(root+'/channels','POST',{name:'temporary-text',kind:'text',description:'Pinned channel rules'});
   assert.equal(extra.status,201);
   assert.equal(extra.data.channel.description,'Pinned channel rules');
+  const orderEndpoint=root+'/channels/order';
+  const beforeReorder=(await owner(root)).data.channels;
+  const reversed=beforeReorder.map(ch=>ch.id).reverse();
+  assert.equal((await outsider(orderEndpoint,'PUT',{channelIds:reversed})).status,403,
+    'moderators cannot rearrange channels');
+  assert.equal((await member(orderEndpoint,'PUT',{channelIds:reversed},false)).status,403,
+    'reordering requires a valid same-origin request');
+  assert.equal((await member(orderEndpoint,'PUT',{channelIds:[...reversed,reversed[0]]})).status,400,
+    'duplicate channel identifiers are rejected');
+  assert.equal((await member(orderEndpoint,'PUT',{channelIds:reversed.slice(1)})).status,409,
+    'a stale, incomplete channel list must not overwrite the order');
+  const reordered=await member(orderEndpoint,'PUT',{channelIds:reversed});
+  assert.equal(reordered.status,200,JSON.stringify(reordered.data));
+  assert.deepEqual((await owner(root)).data.channels.map(ch=>ch.id),reversed,
+    'channel ordering persists in the database');
+  assert.deepEqual((await outsider(root)).data.channels.map(ch=>ch.id),reversed,
+    'members receive the same order as the admin');
+  const afterReorder=await member(root+'/channels','POST',{name:'new-room-after-reorder',kind:'voice'});
+  assert.equal(afterReorder.status,201);
+  assert.equal((await owner(root)).data.channels.at(-1).id,afterReorder.data.channel.id,
+    'new channels append after the administrator-defined order');
+  assert.equal((await member(root+'/channels/'+afterReorder.data.channel.id,'DELETE')).status,204);
   assert.equal((await member(root+'/channels/'+extra.data.channel.id,'DELETE')).status,204);
 
   const edit=await member(msgPath+'/'+messageId,'PATCH',{body:'Updated text'});
