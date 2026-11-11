@@ -35,6 +35,9 @@ const DM_TYPES = new Set(['image/webp','image/jpeg','image/png','image/gif','ima
   'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
 const MEDIA_PATH = /^\/media\/profile\/([0-9a-f-]{36})\/(avatar|cover)\/([0-9a-f-]{36})\.(webp|jpg|png)$/;
 const UPLOAD_PATH = /^\/api\/media\/profile\/(avatar|cover)$/;
+const COMMUNITY_OFFICE_TYPES = new Set(['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation']);
+const OFFICE_OPENXML_TYPES=new Set(['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation']);
+const OFFICE_LEGACY_TYPES=new Set(['application/msword','application/vnd.ms-excel','application/vnd.ms-powerpoint']);
 const TYPE_EXTENSION: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
 
 function jsonError(status: number, error: string): Response {
@@ -209,7 +212,7 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
   try { name = decodeURIComponent(rawName); } catch { return jsonError(400, 'Invalid filename'); }
   if (!name || name.length > 180 || name !== name.trim() || /[\\/\r\n\u0000-\u001f]/.test(name)) return jsonError(400, 'Invalid filename');
   const type = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-  if (!DM_TYPES.has(type)) return jsonError(415, 'Unsupported attachment type');
+  if (!DM_TYPES.has(type) && !(communityId && COMMUNITY_OFFICE_TYPES.has(type))) return jsonError(415, 'Unsupported attachment type');
   const rawCaption=request.headers.get('x-uorqui-caption')??'';
   let caption='';
   try{caption=decodeURIComponent(rawCaption);}catch{return jsonError(400,'Invalid message caption');}
@@ -236,6 +239,10 @@ async function handleDmUpload(request: Request, env: Env, current: URL, origin: 
       (type === 'image/gif' && !magic.startsWith('GIF8')) ||
       (type === 'application/pdf' && !magic.startsWith('%PDF-')) ||
       (type === 'application/zip' && !magic.startsWith('PK')) ||
+      (communityId && OFFICE_OPENXML_TYPES.has(type) && !(signature[0]===0x50 && signature[1]===0x4b &&
+        (signature[2]===0x03||signature[2]===0x05||signature[2]===0x07))) ||
+      (communityId && OFFICE_LEGACY_TYPES.has(type) && ![0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1]
+        .every((value,index)=>signature[index]===value)) ||
       ((type === 'video/webm' || type === 'audio/webm') && !(signature[0] === 0x1a && signature[1] === 0x45 && signature[2] === 0xdf && signature[3] === 0xa3)) ||
       (type === 'audio/ogg' && !magic.startsWith('OggS')) ||
       (type === 'audio/wav' && !(magic.startsWith('RIFF') && magic.slice(8,12)==='WAVE')) ||

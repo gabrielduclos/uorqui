@@ -38,7 +38,7 @@ const historyQuerySchema={type:'object',additionalProperties:false,properties:{
   offset:{type:'integer',minimum:0,maximum:10000}
 }};
 const mediaParams={type:'object',required:['id','channelId','attachmentId'],additionalProperties:false,properties:{id:uuid,channelId:uuid,attachmentId:uuid}};
-const communityAttachmentTypes=new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
+const communityAttachmentTypes=new Set(['image/webp','image/jpeg','image/png','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation']);
 function verifiedCommunityUpload(request:FastifyRequest,id:string,channelId:string,clientId:string,a:{id:string;name:string;type:string;size:number}){
   const secret=process.env.DM_ATTACHMENT_PROOF_SECRET;
   const proof=request.headers['x-uorqui-attachment-proof'];

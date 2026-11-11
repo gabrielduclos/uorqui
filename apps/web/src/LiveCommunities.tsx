@@ -936,7 +936,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     const mime=file.type||'application/octet-stream';
     const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif',
       'video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip',
-      'application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
+      'application/octet-stream','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac',
+      'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation']);
     if(!file.size||file.size>50*1024*1024||!allowed.has(mime)){
       setError(pt?'Arquivo inválido ou maior que 50 MB.':'Invalid file or larger than 50 MB.');return;
     }
@@ -1525,7 +1526,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                 enqueueMessage((caption?caption+'\n':'')+'https://www.google.com/maps?q='+latitude+','+longitude);
               }}
               sending={false} locale={locale} textareaRef={composerRef} serializeValue={serializeDraft}
-              onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'}/>
+              onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'} allowOffice/>
             </div>
           </div>
         </div>}
