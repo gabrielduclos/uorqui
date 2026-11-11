@@ -89,7 +89,9 @@ export function openInternalChatLink(event:MouseEvent<HTMLAnchorElement>,href:st
   return true;
 }
 
-function MentionText({text,allowedHandles}:{text:string;allowedHandles?:ReadonlySet<string>}){
+function MentionText({text,allowedHandles,mentionDisplayNames}:{
+  text:string;allowedHandles?:ReadonlySet<string>;mentionDisplayNames?:ReadonlyMap<string,string>;
+}){
   const mentions=/(^|[^a-zA-Z0-9_])@([a-z][a-z0-9_]{2,31})(?![a-zA-Z0-9_])/gi;
   const parts:ReactNode[]=[];
   let offset=0;
@@ -102,25 +104,30 @@ function MentionText({text,allowedHandles}:{text:string;allowedHandles?:Readonly
       offset=start+match[2].length+1;
       continue;
     }
-    parts.push(<a key={start} href={'/@'+handle}
+    const displayName=mentionDisplayNames?.get(handle)?.trim();
+    const label=displayName?'@'+displayName:'@'+handle;
+    parts.push(<a key={start} href={'/@'+handle} title={'@'+handle}
+      aria-label={displayName?displayName+' (@'+handle+')':'@'+handle}
       className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
       onClick={event=>{
         if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||event.button!==0)return;
         event.preventDefault();
         window.history.pushState({uorquiInternalProfile:true},'','/@'+handle);
         window.dispatchEvent(new PopStateEvent('popstate'));
-      }}>@{handle}</a>);
+      }}>{label}</a>);
     offset=start+match[2].length+1;
   }
   if(offset<text.length)parts.push(text.slice(offset));
   return <>{parts.length?parts:text}</>;
 }
 
-export function MessageText({text,mentions=false,allowedHandles}:{text:string;mentions?:boolean;allowedHandles?:ReadonlySet<string>}){
+export function MessageText({text,mentions=false,allowedHandles,mentionDisplayNames}:{
+  text:string;mentions?:boolean;allowedHandles?:ReadonlySet<string>;mentionDisplayNames?:ReadonlyMap<string,string>;
+}){
   return <>{splitMessageLinks(text).map((part,index)=>
     <Fragment key={index}>{part.href?
       <a href={part.href} target={internalChatLink(part.href)?undefined:'_blank'} rel="noopener noreferrer nofollow ugc"
         className="break-all underline decoration-current underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
-        onClick={event=>{if(!openInternalChatLink(event,part.href!))event.stopPropagation();}}>{part.text}</a>:mentions?<MentionText text={part.text} allowedHandles={allowedHandles}/>:part.text}</Fragment>
+        onClick={event=>{if(!openInternalChatLink(event,part.href!))event.stopPropagation();}}>{part.text}</a>:mentions?<MentionText text={part.text} allowedHandles={allowedHandles} mentionDisplayNames={mentionDisplayNames}/>:part.text}</Fragment>
   )}</>;
 }

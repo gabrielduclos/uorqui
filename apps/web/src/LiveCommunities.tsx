@@ -29,7 +29,7 @@ import { ContentReportDialog } from './ContentReportDialog';
 import { navigateToPublicProfile } from './publicProfileNavigation';
 import { forgetCommunityMessages, peekCommunityMessages, putCommunityMessages, reconcileCommunityMessages } from './communityMessageCache';
 import { ChannelScrollBehavior } from './channelScrollBehavior';
-import { activeCommunityMention, replaceCommunityMention } from './communityMentions';
+import { activeCommunityMention, insertNamedCommunityMention, reconcileSelectedMentions, serializeCommunityMentions, type SelectedCommunityMention } from './communityMentions';
 import { channelHistorySearchPath, channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod } from './channelHistory';
 import { ChannelDateFilter } from './ChannelDateFilter';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
@@ -172,6 +172,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [filteredError,setFilteredError]=useState(false);
   const searchInputRef=useRef<HTMLInputElement>(null);
   const [mentionAt,setMentionAt]=useState<{start:number;end:number;query:string}|null>(null);
+  const draftMentions=useRef<SelectedCommunityMention[]>([]);
   const [mentionIndex,setMentionIndex]=useState(0);
   const [mediaPicker,setMediaPicker]=useState<'emoji'|'gif'|null>(null);
   const [reactionPickerId,setReactionPickerId]=useState<string|null>(null);
@@ -223,24 +224,37 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const mentionsKey=selectedId&&channelId?selectedId+'/'+channelId:null;
   const authorizedMentionMembers=mentionMembersForKey===mentionsKey?mentionMembers:[];
   const allowedMentionHandles=new Set([...authorizedMentionMembers.map(member=>member.handle.toLowerCase()),myHandle.toLowerCase()]);
+  const mentionDisplayNames=new Map([
+    ...authorizedMentionMembers.map(member=>[member.handle.toLowerCase(),compactUserName(member.displayName)] as const),
+    [myHandle.toLowerCase(),compactUserName(myName)] as const
+  ]);
   const mentionOptions=mentionAt?authorizedMentionMembers.filter(member=>
     (member.handle+' '+member.displayName).toLowerCase().includes(mentionAt.query.toLowerCase())).slice(0,7):[];
   function updateMention(value:string,caret:number,selectionEnd=caret){
-    setMentionAt(caret===selectionEnd?activeCommunityMention(value,caret):null);
+    const withinSelectedName=draftMentions.current.some(mention=>
+      caret>mention.start&&caret<mention.end);
+    setMentionAt(caret===selectionEnd&&!withinSelectedName?activeCommunityMention(value,caret):null);
     setMentionIndex(0);
   }
   function mentionChanged(value:string){
+    draftMentions.current=reconcileSelectedMentions(draft,value,draftMentions.current);
     setDraft(value);
     updateMention(value,composerRef.current?.selectionStart??value.length,
       composerRef.current?.selectionEnd??value.length);
   }
   function insertMention(handle:string){
     if(!mentionAt)return;
-    const {text,caret}=replaceCommunityMention(draft,mentionAt,handle);
-    setDraft(text);setMentionAt(null);setMentionIndex(0);
+    const member=authorizedMentionMembers.find(item=>item.handle.toLowerCase()===handle.toLowerCase());
+    if(!member)return;
+    const chosen=insertNamedCommunityMention(draft,mentionAt,draftMentions.current,{
+      handle:member.handle,displayName:compactUserName(member.displayName)
+    });
+    if(!chosen)return;
+    draftMentions.current=chosen.mentions;
+    setDraft(chosen.text);setMentionAt(null);setMentionIndex(0);
     requestAnimationFrame(()=>{
       composerRef.current?.focus();
-      composerRef.current?.setSelectionRange(caret,caret);
+      composerRef.current?.setSelectionRange(chosen.caret,chosen.caret);
     });
   }
   useEffect(()=>{
@@ -271,6 +285,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const renderedMessages=searchActive?searchResults:recentMessages;
   const dayGroups=groupChannelMessages(renderedMessages);
   useEffect(()=>{
+    draftMentions.current=[];
     setSearchOpen(false);setHistoryPeriod('all');setChannelSearch('');
     setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);
   },[selectedId,channelId]);
@@ -901,10 +916,13 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   function queueText(text:string,clearDraft=false){
     if(!text.trim())return;
     enqueueMessage(text);
-    if(clearDraft)setDraft('');
+    if(clearDraft){draftMentions.current=[];setDraft('');}
+  }
+  function serializeDraft(value:string){
+    return serializeCommunityMentions(value,draftMentions.current).trim();
   }
   function send(){
-    queueText(draft.trim(),true);
+    queueText(serializeDraft(draft),true);
   }
   function sendAttachment(file:File,caption:string){
     const mime=file.type||'application/octet-stream';
@@ -1400,7 +1418,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                     <img src={message.body} alt={pt?'GIF enviado':'Sent GIF'} loading="lazy" decoding="async" referrerPolicy="no-referrer"
                       className="mt-2 block h-auto max-h-64 max-w-full rounded-xl object-contain"/>:
                     <div className="mt-1 min-w-0">
-                      <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''} mentions allowedHandles={allowedMentionHandles}/></p>
+                      <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6"><MessageText text={message.body??''} mentions allowedHandles={allowedMentionHandles}
+                        mentionDisplayNames={mentionDisplayNames}/></p>
                       {!!message.body&&<LinkPreview text={message.body} locale={locale}/>}
                     </div>}
                 {message.attachment&&!message.deletedAt&&selectedId&&channelId&&
@@ -1489,7 +1508,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
               onShareLocation={(latitude,longitude,caption)=>{
                 enqueueMessage((caption?caption+'\n':'')+'https://www.google.com/maps?q='+latitude+','+longitude);
               }}
-              sending={false} locale={locale} textareaRef={composerRef}
+              sending={false} locale={locale} textareaRef={composerRef} serializeValue={serializeDraft}
               onGif={()=>setMediaPicker(old=>old==='gif'?null:'gif')} gifOpen={mediaPicker==='gif'}/>
             </div>
           </div>
