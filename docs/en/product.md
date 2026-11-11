@@ -4,6 +4,12 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Named channel mentions (beta.45)
+
+Selecting an authorized member's `@handle` in the channel composer displays `@First Last` in the editable draft while preserving the exact selected handle separately. On submission (including media captions and location messages), the client serializes that binding back into `@handle`, preserving the existing mention notification and ACL backend. If the visible name is edited, the binding is removed rather than notifying a different person; multiple members with identical names retain separate handles.
+
+Published channel messages display the authorized, visibility-permitted member name as a clickable profile link. Its hover title and accessibility label expose the canonical username. Native multiline textareas cannot embed active hyperlinks while composing; the hyperlink is interactive in the sent message, not inside the edit field. If the author loses access to a mentioned member or the member's name is private, the display falls back to allowed identity information rather than exposing a private name.
+
 ## Channel history navigation (beta.44)
 
 Date dividers stay in chronological message flow, immediately before the first message of each day; they are **not sticky**. The date pill itself is a keyboard-accessible dropdown trigger for the existing period filters, with an All dates choice to restore the latest history. The old persistent search/filter toolbar is gone: use the search icon in the channel header to toggle a field directly under that header. Closing it also clears the text query, without resetting an independently selected date filter. Empty filtered results offer clear-filter controls. Search and filtering still require server authorization as described below.

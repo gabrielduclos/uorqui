@@ -4,6 +4,12 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Menções por nome nos canais (beta.45)
+
+Ao selecionar um `@username` autorizado na lista, o campo de escrita mostra `@Nome Sobrenome`, mantendo internamente o username da pessoa selecionada, inclusive para nomes repetidos. Ao enviar texto, legenda de mídia ou localização, o sistema converte o vínculo para `@username`, preservando as notificações e as autorizações existentes. Se o nome for alterado pelo usuário, o vínculo original é invalidado para evitar menções equivocadas.
+
+Nas mensagens publicadas, o nome aparece como hiperlink que leva ao perfil; ao passar o mouse é possível consultar o `@username`, também informado para leitores de tela. O campo de escrita continua sendo um textarea nativo, sem hiperlinks clicáveis durante a digitação. Nomes de pessoas sem acesso ou privados seguem as regras atuais de visibilidade.
+
 ## Navegação no histórico dos canais (beta.44)
 
 As divisões de data acompanham a rolagem e ficam imediatamente antes da primeira mensagem daquele dia, sem fixação no topo. O próprio rótulo da divisão (Hoje, Ontem, Semana passada etc.) abre um menu acessível de filtros de período; **Todas as datas** retorna à visualização recente. A barra permanente de pesquisa/filtro foi substituída pela lupa no cabeçalho do canal, que abre um campo logo abaixo do cabeçalho e o fecha ao ser tocada novamente. Fechar a pesquisa limpa o texto, mas mantém um filtro de data escolhido separadamente. Resultados vazios oferecem controles para limpar filtros. As regras de autorização e busca no servidor permanecem inalteradas.
