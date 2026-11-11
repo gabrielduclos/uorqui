@@ -56,7 +56,7 @@ test('selected mention displays a member name but sends the canonical handle',()
   assert.ok(selected);
   assert.equal(selected.text,'Bom dia, @JESSICA PIGARI, tudo bem?');
   assert.deepEqual(selected.mentions,[{
-    start:9,end:23,label:'@JESSICA PIGARI',handle:'jessica_pigari'
+    start:9,end:24,label:'@JESSICA PIGARI',handle:'jessica_pigari'
   }]);
   assert.equal(serializeCommunityMentions(selected.text,selected.mentions),
     'Bom dia, @jessica_pigari, tudo bem?');
@@ -64,7 +64,7 @@ test('selected mention displays a member name but sends the canonical handle',()
 
 test('typing before or after a named mention keeps its stable username',()=>{
   const initial='Olá @jess, tudo bem?';
-  const chosen=insertNamedCommunityMention(initial,activeCommunityMention(initial,10),[],{
+  const chosen=insertNamedCommunityMention(initial,activeCommunityMention(initial,9),[],{
     handle:'jessica_pigari',displayName:'Jessica Pigari'
   });
   assert.ok(chosen);

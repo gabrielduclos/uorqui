@@ -285,7 +285,11 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const renderedMessages=searchActive?searchResults:recentMessages;
   const dayGroups=groupChannelMessages(renderedMessages);
   useEffect(()=>{
+    // A draft can outlive a channel switch; discard old channel-specific
+    // bindings only after restoring their canonical handles in its text.
+    const previous=draftMentions.current;
     draftMentions.current=[];
+    if(previous.length)setDraft(current=>serializeCommunityMentions(current,previous));
     setSearchOpen(false);setHistoryPeriod('all');setChannelSearch('');
     setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);
   },[selectedId,channelId]);
