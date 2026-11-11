@@ -907,7 +907,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     if(!conversationId || busy) return;
     const allowed=new Set(['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/webm','video/quicktime',
       'application/pdf','text/plain','application/zip','application/octet-stream',
-      'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
+      'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac',
+      'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation']);
     const mime=file.type || 'application/octet-stream';
     if(!file.size || file.size>50*1024*1024) {
       setChatError(pt ? 'O anexo deve ter até 50 MB.' : 'Attachment must be 50 MB or less.'); return;
@@ -1320,7 +1321,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
             onGif={url=>{setGifPickerOpen(false);void send(url);}}/>}
           {active.canMessage ? <LiveMessageComposer value={draft} onChange={onDraftChange} onSubmit={() => void send()}
             onAttach={sendAttachment} onShareLocation={sendLocation} sending={busy} locale={locale} textareaRef={textareaRef} editing={!!editing}
-             onGif={()=>setGifPickerOpen(old=>!old)} gifOpen={gifPickerOpen}/> :
+             onGif={()=>setGifPickerOpen(old=>!old)} gifOpen={gifPickerOpen} allowOffice/> :
             <div role="status" className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-center text-sm text-muted-foreground">
               {pt ? 'Mensagens indisponíveis: perfil privado sem contato aceito ou conta bloqueada.' : 'Messaging unavailable: private profile without an accepted contact or blocked account.'}
               <div className="mt-2"><button type="button" className="text-primary underline" onClick={() => { closeThread(); onOpenContacts?.(); }}>
