@@ -15,7 +15,7 @@ export function activeCommunityMention(text:string,caret:number):ActiveCommunity
 
 export function replaceCommunityMention(text:string,mention:ActiveCommunityMention,handle:string){
   const suffix=text.slice(mention.end);
-  const space=suffix.length&&!/^\s|^[,.;!?)}\]]/.test(suffix)?' ':'';
+  const space=!suffix || !/^[\s,.;!?)}\]]/.test(suffix)?' ':'';
   const value=text.slice(0,mention.start)+'@'+handle+space+suffix;
   return {text:value,caret:mention.start+handle.length+1+space.length};
 }

@@ -41,4 +41,6 @@ test('mention is followed by a separating space before the rest of a sentence',(
   assert.equal(replaceCommunityMention(text,mention,'ana').text,'Oi @ana tudo bem');
   assert.equal(replaceCommunityMention('Oi @an, tudo bem',activeCommunityMention('Oi @an, tudo bem',6),'ana').text,
     'Oi @ana, tudo bem');
+  assert.deepEqual(replaceCommunityMention('Oi @an',activeCommunityMention('Oi @an',6),'ana'),
+    {text:'Oi @ana ',caret:8});
 });
