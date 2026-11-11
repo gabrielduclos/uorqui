@@ -28,7 +28,7 @@ test('Worker validates Office magic signatures, 50 MB max, and attachment downlo
     assert.ok(api.includes("'"+type+"'"),'API MIME: '+type);
     assert.ok(community.includes("'"+type+"'"),'Web MIME: '+type);
   }
-  assert.match(worker,/communityId && COMMUNITY_OFFICE_TYPES.has\(type\)/);
+  assert.match(worker,/!DM_TYPES\.has\(type\) && !COMMUNITY_OFFICE_TYPES\.has\(type\)/);
   assert.match(worker,/OFFICE_OPENXML_TYPES.has\(type\)/);
   assert.match(worker,/OFFICE_LEGACY_TYPES.has\(type\)/);
   assert.match(worker,/MAX_DM_BYTES = 50 \* 1024 \* 1024/);
