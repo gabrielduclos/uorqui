@@ -291,6 +291,39 @@ test('Cloudflare Worker reverse proxy preserves authentication cookies and rejec
     assert.equal(deletedAttachment.response.status,204);
     assert.equal((await fetch(browserOrigin+attachmentUrl,{headers:{cookie}})).status,404);
 
+    // Office documents are allowed in community channels, stored privately in
+    // R2, and never served to unauthenticated visitors.
+    const officeTypes=[
+      {name:'resumo.docx',type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        bytes:Buffer.concat([Buffer.from([0x50,0x4b,0x03,0x04]),Buffer.alloc(96)])},
+      {name:'planilha.xls',type:'application/vnd.ms-excel',
+        bytes:Buffer.concat([Buffer.from([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1]),Buffer.alloc(96)])}
+    ];
+    for(const file of officeTypes){
+      const clientId=crypto.randomUUID();
+      const upload=await request('/api/media/community-attachment/'+communityId+'/'+textChannel.id,{
+        method:'POST',rawBody:file.bytes,contentType:file.type,
+        headers:{'x-uorqui-client-id':clientId,'x-uorqui-filename':encodeURIComponent(file.name)}
+      });
+      assert.equal(upload.response.status,201,JSON.stringify(upload.body));
+      const list=await request('/api/v1/communities/'+communityId+'/channels/'+textChannel.id+'/messages');
+      const item=list.body.messages.find(m=>m.clientId===clientId);
+      assert.equal(item.attachment.name,file.name);
+      assert.equal(item.attachment.type,file.type);
+      const url='/media/community-attachment/'+communityId+'/'+textChannel.id+'/'+item.attachment.id;
+      const downloaded=await fetch(browserOrigin+url,{headers:{cookie}});
+      assert.equal(downloaded.status,200);
+      assert.match(downloaded.headers.get('content-disposition')??'',/^attachment;/);
+      assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()),file.bytes);
+      assert.equal((await fetch(browserOrigin+url)).status,404,'Office files require community authorization');
+    }
+    const invalidOffice=await request('/api/media/community-attachment/'+communityId+'/'+textChannel.id,{
+      method:'POST',rawBody:png,
+      contentType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      headers:{'x-uorqui-client-id':crypto.randomUUID(),'x-uorqui-filename':'spoof.docx'}
+    });
+    assert.equal(invalidOffice.response.status,415,'Office MIME must match the file signature');
+
     const logout = await request('/api/auth/sign-out', { method: 'POST', body: {} });
     assert.equal(logout.response.status, 200, JSON.stringify(logout.body));
 
