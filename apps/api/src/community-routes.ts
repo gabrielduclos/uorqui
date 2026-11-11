@@ -407,6 +407,33 @@ export function registerCommunityRoutes(app:FastifyInstance, readSession:Session
     }catch(error){request.log.error({err:error},'Get community');return reply.code(503).send({error:'Unavailable'});}
   });
 
+  /** Read-only member directory visible to community members. Do not expose
+   * moderation data, channel grants, private profile details or blocked users. */
+  app.get('/api/v1/communities/:id/members',{schema:{params:groupParams}},async(request,reply)=>{
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if(!await membership(id,me))return reply.code(403).send({error:'MEMBERS_ONLY'});
+      const result=await getPool().query(
+        'SELECT u.handle,cm.role,cm.joined_at AS "joinedAt",'+
+        "CASE WHEN cm.user_id=$2 OR p.is_public=true OR f.status='accepted' THEN COALESCE(p.display_name,u.handle) ELSE u.handle END AS \"displayName\","+
+        "CASE WHEN cm.user_id=$2 OR p.is_public=true OR f.status='accepted' THEN p.avatar_url ELSE NULL END AS \"avatarUrl\" "+
+        'FROM community_members cm JOIN users u ON u.id=cm.user_id '+
+        'LEFT JOIN profiles p ON p.user_id=cm.user_id '+
+        'LEFT JOIN user_friendships f ON f.user_a_id=LEAST(cm.user_id,$2::uuid) '+
+        "AND f.user_b_id=GREATEST(cm.user_id,$2::uuid) AND f.status='accepted' "+
+        'WHERE cm.community_id=$1 '+
+        'AND NOT EXISTS (SELECT 1 FROM community_bans ban WHERE ban.community_id=$1 AND ban.user_id=cm.user_id) '+
+        'AND (cm.user_id=$2 OR NOT EXISTS (SELECT 1 FROM user_blocks block WHERE '+
+          '(block.blocker_id=$2 AND block.blocked_id=cm.user_id) OR '+
+          '(block.blocked_id=$2 AND block.blocker_id=cm.user_id))) '+
+        "ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'moderator' THEN 2 ELSE 3 END,"+
+        "lower(CASE WHEN cm.user_id=$2 OR p.is_public=true OR f.status='accepted' THEN COALESCE(p.display_name,u.handle) ELSE u.handle END),u.handle LIMIT 600",
+        [id,me]);
+      return reply.header('Cache-Control',noCache).send({members:result.rows});
+    }catch(error){request.log.error({err:error},'Community member directory');return reply.code(503).send({error:'Unavailable'});}
+  });
+
   // Channel invitations are relevant only to people already in the community.
   // A member can see handles, but profile details still respect account privacy.
   app.get('/api/v1/communities/:id/invitable-members',{schema:{params:groupParams}},async(request,reply)=>{
