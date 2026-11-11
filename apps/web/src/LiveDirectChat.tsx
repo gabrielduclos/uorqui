@@ -2,11 +2,14 @@ import { compactUserName } from './userDisplayName';
 import { directApiRequest as api } from './lib/apiClient';
 import { Spinner } from '@/components/ui/spinner';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ContactRound, Images, MessageCircle, MoreHorizontal, Pin, PinOff, Search, ShieldBan, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react';
 import { UserAvatar } from './UserProfiles';
 import { DirectMessageBubble, type DirectChatMessage } from './DirectMessageBubble';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
+import { channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod, type CustomChannelDateRange } from './channelHistory';
+import { ChannelDateFilter } from './ChannelDateFilter';
+import { directMessageHistoryPath } from './directMessageHistory';
 import { ReplyComposerPreview } from './ReplyReference';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
@@ -103,6 +106,15 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const [filter, setFilter] = useState<'all' | 'unread' | 'archived'>('all');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpened, setMobileOpened] = useState(false);
+  const [historyPeriod,setHistoryPeriod]=useState<ChannelHistoryPeriod>('all');
+  const [customHistoryRange,setCustomHistoryRange]=useState<CustomChannelDateRange>({from:'',to:''});
+  const [filteredHistory,setFilteredHistory]=useState<Message[]>([]);
+  const [historyLoading,setHistoryLoading]=useState(false);
+  const [historyMoreLoading,setHistoryMoreLoading]=useState(false);
+  const [historyHasMore,setHistoryHasMore]=useState(false);
+  const [historyError,setHistoryError]=useState('');
+  const historyRequestKey=useRef('');
+  const historyFiltered=historyPeriod!=='all';
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -286,6 +298,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const openThread = useCallback((id: string) => {
     setConversationMenuOpen(false);setConversationConfirm(null);
     setGalleryOpen(false);setPinnedMessage(null);
+    setHistoryPeriod('all');setCustomHistoryRange({from:'',to:''});
+    setFilteredHistory([]);setHistoryHasMore(false);setHistoryError('');
     setActiveId(id);
     setMobileOpened(true);
     const cached = peekDmRoom(myId, id);
@@ -313,6 +327,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   const closeThread = useCallback(() => {
     setConversationMenuOpen(false);setConversationConfirm(null);
     setGalleryOpen(false);setPinnedMessage(null);
+    setHistoryPeriod('all');setCustomHistoryRange({from:'',to:''});
+    setFilteredHistory([]);setHistoryHasMore(false);setHistoryError('');
     setActiveId(null);
     activeIdRef.current = null;
     setMobileOpened(false);
@@ -544,6 +560,42 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       .map(message => Object.prototype.hasOwnProperty.call(reactionOverrides, message.id)
         ? optimisticReaction(message, reactionOverrides[message.id]) : message),
   [messages, pendingMessages, activeId, reactionOverrides]);
+  useEffect(()=>{
+    if(!activeId||!historyFiltered){historyRequestKey.current='';setFilteredHistory([]);setHistoryLoading(false);return;}
+    const key=activeId+'/'+historyPeriod+'/'+customHistoryRange.from+'/'+customHistoryRange.to;
+    historyRequestKey.current=key;
+    let alive=true;
+    setFilteredHistory([]);setHistoryLoading(true);setHistoryHasMore(false);setHistoryError('');
+    void api<{messages:Message[];hasMore:boolean}>(
+      directMessageHistoryPath(activeId,historyPeriod,customHistoryRange)
+    ).then(result=>{
+      if(!alive||historyRequestKey.current!==key)return;
+      setFilteredHistory(result.messages);setHistoryHasMore(result.hasMore);
+      requestAnimationFrame(()=>{if(scrollBox.current)scrollBox.current.scrollTop=0;});
+    }).catch(()=>{
+      if(alive&&historyRequestKey.current===key)setHistoryError(pt?'Não foi possível filtrar as mensagens.':'Could not filter messages.');
+    }).finally(()=>{if(alive&&historyRequestKey.current===key)setHistoryLoading(false);});
+    return()=>{alive=false;};
+  },[activeId,historyFiltered,historyPeriod,customHistoryRange.from,customHistoryRange.to,pt]);
+  async function loadMoreFilteredHistory(){
+    if(!activeId||!historyFiltered||historyLoading||historyMoreLoading||!historyHasMore)return;
+    const key=historyRequestKey.current;
+    setHistoryMoreLoading(true);setHistoryError('');
+    try{
+      const result=await api<{messages:Message[];hasMore:boolean}>(
+        directMessageHistoryPath(activeId,historyPeriod,customHistoryRange,filteredHistory.length)
+      );
+      if(key!==historyRequestKey.current)return;
+      setFilteredHistory(old=>{
+        const ids=new Set(old.map(m=>m.id));
+        return [...result.messages.filter(m=>!ids.has(m.id)),...old];
+      });
+      setHistoryHasMore(result.hasMore);
+    }catch{if(key===historyRequestKey.current)setHistoryError(pt?'Não foi possível carregar mensagens antigas.':'Could not load older messages.');}
+    finally{if(key===historyRequestKey.current)setHistoryMoreLoading(false);}
+  }
+  const shownMessages=historyFiltered?filteredHistory:renderedMessages;
+  const dayGroups=groupChannelMessages(shownMessages);
   const blockReceipts = useMemo(() => {
     const receipts = new Map<string, BlockReceipt>();
     let outgoingBlock: Message[] = [];
@@ -570,7 +622,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   ), [renderedMessages]);
   const lastId = renderedMessages.at(-1)?.id ?? '';
   useLayoutEffect(() => {
-    if (!activeId || messagesLoading || !scrollBox.current ||
+    if (historyFiltered || !activeId || messagesLoading || !scrollBox.current ||
         messages.some(message => message.conversationId !== activeId)) return;
     const last = renderedMessages.at(-1);
     if (!positionedRef.current) {
@@ -583,7 +635,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     previousLastRef.current = last.id;
     if (atBottomRef.current || last.authorId === myId) jumpToLast('instant');
     else if (last.authorId !== myId) setNewBelow(n => n + 1);
-  }, [activeId, messages, pendingMessages, messagesLoading, lastId, myId, jumpToLast]);
+  }, [activeId, messages, pendingMessages, messagesLoading, lastId, myId, jumpToLast, historyFiltered]);
 
   // Images, attachment previews and fonts can change the height of the history
   // after the first "jump to latest". Follow that growth only while the user
@@ -591,7 +643,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
   useLayoutEffect(() => {
     const scroller=scrollBox.current;
     const content=messageContentRef.current;
-    if (!activeId || messagesLoading || !positionedRef.current || !scroller || !content) return;
+    if (historyFiltered || !activeId || messagesLoading || !positionedRef.current || !scroller || !content) return;
     let priorHeight=scroller.scrollHeight;
     let frame=0;
     const followGrowth=()=>{
@@ -619,7 +671,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(openingFrame);
     };
-  }, [activeId, messagesLoading]);
+  }, [activeId, messagesLoading, historyFiltered]);
 
   // Read only when actual message content has been rendered AND the recipient
   // is viewing the bottom of that conversation; merely listing/selecting is
@@ -633,7 +685,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     return () => { document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check); window.removeEventListener('blur', check); };
   }, []);
   useEffect(() => {
-    if (!activeId || messagesLoading || !positionedRef.current || !atBottom ||
+    if (historyFiltered || !activeId || messagesLoading || !positionedRef.current || !atBottom ||
         reading.current || Date.now() - lastReadFailure.current < 5000 ||
         !isConversationVisible(activeId)) return;
     if (!messages.some(m => m.authorId !== myId && !currentRevisionAcknowledged(m.readAt, m.editedAt)) &&
@@ -645,7 +697,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
         await Promise.all([loadMessages(activeId), loadThreads()]);
       }).catch(() => { lastReadFailure.current = Date.now(); })
       .finally(() => { reading.current = null; });
-  }, [activeId, messages, threads, messagesLoading, atBottom, mobileOpened, visibilityTick, isConversationVisible, myId, loadMessages, loadThreads]);
+  }, [activeId, messages, threads, messagesLoading, atBottom, mobileOpened, visibilityTick, isConversationVisible, myId, loadMessages, loadThreads, historyFiltered]);
 
   useEffect(() => {
     const onReady = () => {
@@ -1165,11 +1217,29 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
           <div ref={scrollBox} onScroll={onMessagesScroll}
             data-testid="messages-scroll" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:px-6">
             <div ref={messageContentRef} key={activeId} className="uorqui-kit-content-enter flex w-full min-w-0 flex-col gap-2.5">
-              {messagesLoading && <WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'}
+              {(historyFiltered?historyLoading:messagesLoading) && <WorkspaceContentLoading label={pt?'Carregando mensagens':'Loading messages'}
                 rows={4} className="w-full py-4"/>}
-              {!messagesLoading && !renderedMessages.length && <p className="my-12 text-center text-sm text-muted-foreground">{pt ? 'Envie a primeira mensagem.' : 'Send the first message.'}</p>}
-              {renderedMessages.map(message => {
-                const status = blockReceipts.get(message.id);
+              {!historyFiltered&&!messagesLoading&&!renderedMessages.length&&
+                <p className="my-12 text-center text-sm text-muted-foreground">{pt?'Envie a primeira mensagem.':'Send the first message.'}</p>}
+              {historyFiltered&&!historyLoading&&!filteredHistory.length&&!historyError&&
+                <div className="my-12 space-y-3 text-center">
+                  <p className="text-sm text-muted-foreground">{pt?'Nenhuma mensagem neste período.':'No messages in this period.'}</p>
+                  <Button size="sm" variant="outline" onClick={()=>setHistoryPeriod('all')}>
+                    {pt?'Ver todas as mensagens':'Show all messages'}
+                  </Button>
+                </div>}
+              {historyError&&<p role="alert" className="py-3 text-center text-xs text-destructive">{historyError}</p>}
+              {dayGroups.map(group=><Fragment key={group.dayKey}>
+                <div role="group" data-uorqui-dm-date-divider aria-label={channelHistoryDayLabel(group.dayKey,todayKey,locale)}
+                  className="flex items-center gap-3 py-2">
+                  <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
+                  <ChannelDateFilter dayKey={group.dayKey} todayKey={todayKey} locale={locale}
+                    period={historyPeriod} customRange={customHistoryRange}
+                    onPeriodChange={setHistoryPeriod} onCustomRangeChange={setCustomHistoryRange}/>
+                  <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-border"/>
+                </div>
+                {group.messages.map(message => {
+                const status = !historyFiltered?blockReceipts.get(message.id):null;
                 return <div key={message.id} className="flex min-w-0 flex-col gap-1.5">
                   <DirectMessageBubble message={message} todayKey={todayKey}
                     onOpenMedia={setMediaViewerId}
@@ -1191,10 +1261,16 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
                     </time>
                   </div>}
                 </div>;
-              })}
+              })}</Fragment>)}
+              {historyFiltered&&historyHasMore&&<div className="flex justify-center py-3">
+                <Button variant="outline" size="sm" disabled={historyMoreLoading}
+                  onClick={()=>void loadMoreFilteredHistory()}>
+                  {historyMoreLoading?(pt?'Carregando…':'Loading…'):(pt?'Carregar mensagens anteriores':'Load earlier messages')}
+                </Button>
+              </div>}
             </div>
           </div>
-          {!atBottom && <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
+          {!historyFiltered&&!atBottom && <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
             {newBelow > 0 && <span className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium shadow-sm">
               {pt ? (newBelow === 1 ? 'Nova mensagem' : newBelow + ' novas mensagens') : (newBelow === 1 ? 'New message' : newBelow + ' new messages')}
             </span>}
