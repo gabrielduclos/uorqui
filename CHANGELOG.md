@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.43] — 2026-11-11
+
+- **Authorized channel mentions:** the @member picker uses a channel-specific, server-gated roster rather than every community member. Closed channels require explicit grant; password-protected channels require an unlock (owner/admin bypass). Blocks and bans are excluded. Suggestions refresh on channel changes, and unauthorized @handles in messages remain plain text rather than profile links. Server-side mention alerts already enforce channel access rules.
+- **Channel history search and date filters:** sticky day separators such as Today, Yesterday and Last week. A compact search field and period selector find older messages through a permission-gated API, not only the latest 100 cached messages; load earlier results as needed. Filters use the viewer's local calendar.
+- **Clickable channel description links:** valid HTTP/HTTPS URLs in the pinned description use the existing safe message-link renderer and app-aware invitation routing.
+- **Tests:** channel rosters across grants/unlocks/revocation, permission-gated message search, local date ranges, grouping and URL encoding.
+- **Migration:** none; existing ACL and timestamp columns are reused.
+
 ## [0.1.0-beta.42] — 2026-11-11
 
 - **Community mentions inside sentences:** fixed the inline @mention autocomplete so it recognizes triggers after whitespace or punctuation (for example, `Bom dia @ana`), including when editing in the middle of an existing sentence.
