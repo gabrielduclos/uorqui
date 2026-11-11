@@ -57,9 +57,9 @@ test('selected mention displays a member name but sends the canonical handle',()
     handle:'jessica_pigari',displayName:'JESSICA PIGARI'
   });
   assert.ok(selected);
-  assert.equal(selected.text,'Bom dia, @JESSICA PIGARI, tudo bem?');
+  assert.equal(selected.text,'Bom dia, JESSICA PIGARI, tudo bem?');
   assert.deepEqual(selected.mentions,[{
-    start:9,end:24,label:'@JESSICA PIGARI',handle:'jessica_pigari'
+    start:9,end:23,label:'JESSICA PIGARI',handle:'jessica_pigari'
   }]);
   assert.equal(serializeCommunityMentions(selected.text,selected.mentions),
     'Bom dia, @jessica_pigari, tudo bem?');
@@ -129,7 +129,8 @@ test('rendered message shows linked name and exposes @username on hover and acce
   assert.match(html,/href="\/@jessica_pigari"/);
   assert.match(html,/title="@jessica_pigari"/);
   assert.match(html,/aria-label="Jessica Pigari \(@jessica_pigari\)"/);
-  assert.match(html,/>@Jessica Pigari<\/a>/);
+  assert.match(html,/>Jessica Pigari<\/a>/);
+  assert.doesNotMatch(html,/>@Jessica Pigari<\/a>/);
   assert.doesNotMatch(html,/>@jessica_pigari<\/a>/);
 });
 
@@ -142,4 +143,28 @@ test('unauthorized mentions stay plain text without leaking display names',()=>{
   assert.doesNotMatch(html,/href="\/@jessica_pigari"/);
   assert.doesNotMatch(html,/Jessica Pigari/);
   assert.match(html,/@jessica_pigari/);
+});
+
+
+// A confirmed mention is visually just the name, including in the draft.
+// Serializing it must still preserve both the @ handle and the rest of a sentence.
+test('confirmed name has no visible @ but still notifies the selected username',()=>{
+  const raw='Bom dia, @jess!';
+  const chosen=insertNamedCommunityMention(raw,activeCommunityMention(raw,raw.indexOf('!')),[],{
+    handle:'jessica_pigari',displayName:'Jessica Pigari'
+  });
+  assert.ok(chosen);
+  assert.equal(chosen.text,'Bom dia, Jessica Pigari!');
+  assert.equal(chosen.mentions[0].label,'Jessica Pigari');
+  assert.equal(serializeCommunityMentions(chosen.text,chosen.mentions),'Bom dia, @jessica_pigari!');
+});
+
+test('name-only mention at the start preserves spaces and cursor position',()=>{
+  const chosen=insertNamedCommunityMention('@jess',activeCommunityMention('@jess',5),[],{
+    handle:'jessica_pigari',displayName:'Jessica Pigari'
+  });
+  assert.ok(chosen);
+  assert.deepEqual({text:chosen.text,caret:chosen.caret},
+    {text:'Jessica Pigari ',caret:'Jessica Pigari '.length});
+  assert.equal(serializeCommunityMentions(chosen.text,chosen.mentions),'@jessica_pigari ');
 });
