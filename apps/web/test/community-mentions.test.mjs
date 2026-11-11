@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {activeCommunityMention,replaceCommunityMention,insertNamedCommunityMention,reconcileSelectedMentions,serializeCommunityMentions} from '../src/communityMentions.ts';
 import {readFileSync} from 'node:fs';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {MessageText} from '../src/MessageText.tsx';
 
 test('autocomplete works at the beginning, after words, punctuation and newlines',()=>{
   for(const message of ['@ana','Bom dia @ana','Oi! @ana','( @ana','Linha 1\n@ana','Vamos: @ana']){
@@ -115,4 +118,28 @@ test('channel UI serializes text and attachment captions but keeps mentions disp
   assert.match(channels,/mentionDisplayNames={mentionDisplayNames}/);
   assert.match(composer,/serializeValue\?\.\(value\)\?\?value/);
   assert.match(renderer,/title={'@'\+handle}/);
+});
+
+test('rendered message shows linked name and exposes @username on hover and accessibility',()=>{
+  const html=renderToStaticMarkup(createElement(MessageText,{
+    text:'Bom dia, @jessica_pigari!',mentions:true,
+    allowedHandles:new Set(['jessica_pigari']),
+    mentionDisplayNames:new Map([['jessica_pigari','Jessica Pigari']])
+  }));
+  assert.match(html,/href="\/@jessica_pigari"/);
+  assert.match(html,/title="@jessica_pigari"/);
+  assert.match(html,/aria-label="Jessica Pigari \(@jessica_pigari\)"/);
+  assert.match(html,/>@Jessica Pigari<\/a>/);
+  assert.doesNotMatch(html,/>@jessica_pigari<\/a>/);
+});
+
+test('unauthorized mentions stay plain text without leaking display names',()=>{
+  const html=renderToStaticMarkup(createElement(MessageText,{
+    text:'Olá @jessica_pigari',mentions:true,
+    allowedHandles:new Set(['other_member']),
+    mentionDisplayNames:new Map([['jessica_pigari','Jessica Pigari']])
+  }));
+  assert.doesNotMatch(html,/href="\/@jessica_pigari"/);
+  assert.doesNotMatch(html,/Jessica Pigari/);
+  assert.match(html,/@jessica_pigari/);
 });
