@@ -13,7 +13,9 @@ export type AppHistoryEntry={
 const marker='uorquiAppHistory';
 function canTrack():boolean{
   return typeof window!=='undefined'&&window.location.pathname==='/'&&
-    window.matchMedia('(max-width: 767px)').matches;
+    (window.matchMedia('(max-width: 767px)').matches||
+     /\bAndroid\b/i.test(window.navigator?.userAgent??'')||
+     window.matchMedia('(display-mode: standalone)').matches);
 }
 export function currentAppEntry():AppHistoryEntry|null{
   if(typeof window==='undefined')return null;

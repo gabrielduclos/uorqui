@@ -71,6 +71,24 @@ test('Android history records nested screens and only navigates back when a matc
   }
 });
 
+test('Android system Back stays active in landscape and on large-screen Android devices',()=>{
+  const previous=globalThis.window;
+  let pushed=0;
+  globalThis.window={
+    location:{pathname:'/',href:'https://uorqui.app/'},
+    navigator:{userAgent:'Mozilla/5.0 (Linux; Android 14; Tablet) AppleWebKit/537.36'},
+    matchMedia:()=>({matches:false}),
+    history:{state:null,pushState(){pushed++;}}
+  };
+  try{
+    pushAppHistory({area:'email'});
+    assert.equal(pushed,1,'Android history should not depend on portrait viewport width');
+  }finally{
+    if(previous===undefined)delete globalThis.window;
+    else globalThis.window=previous;
+  }
+});
+
 test('module and detail components connect Android system Back to app history',()=>{
   assert.match(shell,/prepareAppHistory\(currentArea.current\)/);
   assert.match(shell,/window.addEventListener\('popstate',restore\)/);
