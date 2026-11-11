@@ -21,7 +21,7 @@ const ATTACHMENTS = [
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
 
-export function LiveMessageComposer({ value, onChange, onSelectionChange, serializeValue, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false, onGif, gifOpen = false }: {
+export function LiveMessageComposer({ value, onChange, onSelectionChange, serializeValue, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false, onGif, gifOpen = false, allowOffice = false }: {
   value: string; onChange: (text: string) => void;
   onSelectionChange?: (text:string,start:number,end:number)=>void;
   /** Channel mentions show names in textarea but send canonical @handles. */
@@ -30,7 +30,7 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, serial
   onAttach: (file: File, caption: string) => void;
   onShareLocation: (latitude:number,longitude:number,caption:string) => void;
   sending: boolean; locale: string; textareaRef: RefObject<HTMLTextAreaElement | null>; editing?: boolean;
-  onGif?:()=>void;gifOpen?:boolean;
+  onGif?:()=>void;gifOpen?:boolean;allowOffice?:boolean;
 }) {
   const pt = locale === 'pt-BR';
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
@@ -163,6 +163,7 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, serial
       'video/mp4','video/webm','video/quicktime','application/pdf','text/plain','application/zip','application/octet-stream',
       'audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-m4a','audio/aac']);
     if(!file.size || file.size>50*1024*1024){setError(pt?'O arquivo deve ter até 50 MB.':'Maximum file size is 50 MB.');return;}
+    if(allowOffice)['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation'].forEach(type=>allowed.add(type));
     if(!allowed.has(mime)){setError(pt?'Formato de arquivo não suportado.':'Unsupported file format.');return;}
     if(!file.name || file.name.length>180 || /[\\/\r\n\u0000-\u001f]/.test(file.name)){setError(pt?'Nome do arquivo inválido.':'Invalid filename.');return;}
     clearPending();
@@ -478,7 +479,7 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, serial
       onChange={e => { const files=Array.from(e.target.files??[]); e.target.value=''; selectGallery(files); }} />
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; if(file?.type.startsWith('image/'))stagePhotos([file]);else chosenFile(file); }} />
-    <input ref={fileRef} type="file" accept=".pdf,.txt,.zip,.mp3,.m4a,.ogg,.webm,.wav,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream" className="sr-only"
+    <input ref={fileRef} type="file" accept={'.pdf,.txt,.zip,.mp3,.m4a,.ogg,.webm,.wav,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/octet-stream'+(allowOffice?',.doc,.docx,.xls,.xlsx,.ppt,.pptx':'')} className="sr-only"
       onChange={e => { const file=e.target.files?.[0]; e.target.value=''; chosenFile(file); }} />
     <textarea ref={textareaRef} rows={1} value={value} disabled={recording!=='idle'}
       onPaste={e=>{const file=Array.from(e.clipboardData.items).find(item=>item.kind==='file' && item.type.startsWith('image/'))?.getAsFile();if(file){e.preventDefault();stagePhotos([file]);}}}

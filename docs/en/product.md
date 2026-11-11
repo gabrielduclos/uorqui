@@ -4,6 +4,14 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Direct-message filters, Android history and community Office files (beta.49)
+
+Private conversations use the shared local-calendar date dividers and period-picker control, including manual Start/End dates. A server-authorized, paginated DM history query covers messages beyond the 100 newest in cache. Filtered exploration suspends automatic scroll-to-bottom and read receipts.
+
+On Android phones, the PWA records module and opened-message/channel transitions in same-tab browser history. System Back returns through the history of screens and modules, rather than immediately exiting on a normal navigation. In-app Back buttons share those transitions; normal profile URLs, deep links and notifications retain their existing routing.
+
+Community-channel attachments now accept .doc, .docx, .xls, .xlsx, .ppt and .pptx up to 50 MB. Upload validation is enforced at the composer, Cloudflare Worker and authenticated community API. The Worker verifies expected ZIP/OpenXML or OLE container signatures, and files download using attachment disposition and existing channel ACLs. Direct-chat Office support remains unchanged.
+
 ## Community member directory (beta.48)
 
 Any logged-in, accepted community participant can **tap the member count under the community title** to open a read-only directory dialog in place. The dialog lists member display names, handles, roles and permitted avatars, supports local searching, and links to member profiles. Nonmembers and former members cannot query the member list. Account privacy, bans and mutual blocks are applied server-side. The original Moderation panel remains exclusively for owner/admin/moderator actions: role changes, bans, removals and restricted channel access grants. No migration is required.

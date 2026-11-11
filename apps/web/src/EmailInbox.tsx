@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { useUorquiPreferences } from './UorquiPreferences';
 import { WorkspaceContentLoading } from './ui-kit/WorkspaceContentLoading';
 import { clearReadPush } from './readPushNotifications';
+import { backFromAppScreen,currentAppEntry,pushAppHistory,replaceAppScreenWithArea } from './mobileAppHistory';
 
 type Provider = 'gmail' | 'outlook' | 'manual';
 type MailAccount = { id: string; provider: Provider; email: string };
@@ -244,7 +245,19 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     // Cursors are read only when page changes, so a cursor update must not retrigger fetching.
   }, [accountId, accounts, folder, filter, page, refresh, explainError, pt]);
 
-  function closeDetail() { mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setDetailMoveError(''); setLoadingBody(false); }
+  function closeDetail() { if(selected)replaceAppScreenWithArea('email','mail',selected.id);mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);setExpandedImage(null);detailAbort.current?.abort(); setSelected(null); setCompose(false); setReplying(false); setReplyBody(''); setReplyError(''); setDetailMoveError(''); setLoadingBody(false); }
+  function backToMailList(){
+    if(selected&&backFromAppScreen('mail',selected.id))return;
+    closeDetail();
+  }
+  useEffect(()=>{
+    const restore=()=>{
+      const entry=currentAppEntry();
+      if(entry?.area==='email'&&entry.screen!=='mail'&&(selected||compose))closeDetail();
+    };
+    window.addEventListener('popstate',restore);
+    return()=>window.removeEventListener('popstate',restore);
+  });
   function clearSelection() { setSelectionMode(false); setSelectedIds([]); }
   function resetList() { closeDetail(); clearSelection(); setMessages([]); setPage(''); setUnifiedCursors({}); setNextPage(null); setQuery(''); }
   async function connect(provider: 'gmail'|'outlook') {
@@ -297,6 +310,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     detailAbort.current?.abort();
     const controller = new AbortController(); detailAbort.current = controller;
     setCompose(false); setReplying(false); setReplyBody('');setDetailMoveError('');
+    pushAppHistory({area:'email',screen:'mail',id:message.id,accountId:chosenAccount});
     setSelected(message); setLoadingBody(true); setError('');
     try {
       const data = await requestMail<Message>('accounts/' + chosenAccount + '/message-detail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: message.id }), signal: controller.signal });
@@ -486,7 +500,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
     } catch (error) { setError(explainError(error)); }
     finally { setMoving(false); }
   }
-  function startCompose() { setComposeAccountId(account?.id ?? composeAccountId ?? accounts[0]?.id ?? ''); mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
+  function startCompose() { if(selected)replaceAppScreenWithArea('email','mail',selected.id);setComposeAccountId(account?.id ?? composeAccountId ?? accounts[0]?.id ?? ''); mailFrameCleanup.current?.();mailFrameCleanup.current=null;setReadyFrame(null);detailAbort.current?.abort(); setSelected(null); setReplying(false); setCompose(true); setSendError(''); }
   const framedHtml = selected?.html ? [
     '<!doctype html><html><head><meta charset="utf-8">',
     '<meta name="referrer" content="no-referrer">',
@@ -704,7 +718,7 @@ export default function EmailInbox({ onMobileOpenChange, requestedMessage }: {
         </div>
         <footer className="flex justify-end border-t border-border p-4"><Button disabled={sending} className="min-h-11 gap-2" type="submit">{sending ? <Spinner className="size-4" /> : <Send className="size-4" />}{pt ? 'Enviar email' : 'Send email'}</Button></footer>
       </form> : selected ? <>
-        <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={closeDetail} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3"><Button variant="ghost" size="icon" onClick={backToMailList} aria-label={pt ? 'Voltar para emails' : 'Back to email'}><ArrowLeft className="size-4" /></Button>
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{readingAccount?.email}</span>
           <div className="flex shrink-0 items-center gap-0.5 sm:gap-1" role="group"
             aria-label={pt?'Ações do email aberto':'Open email actions'}>

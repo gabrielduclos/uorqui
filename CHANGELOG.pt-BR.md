@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.49] — 11/11/2026
+
+- **Divisão e filtro nas mensagens privadas:** as conversas individuais exibem os separadores de data com filtro pelo próprio rótulo, como nos canais: Hoje, Ontem, Últimos 7 dias, Esta semana, Semana passada, Este mês e Período personalizado. A consulta abrange o histórico autorizado no servidor, em lotes de até 100, sem depender apenas das mensagens recentes em cache e sem confirmar leitura ao pesquisar.
+- **Botão Voltar do Android:** os módulos, chats privados, canais e e-mails abertos passam a integrar o histórico de navegação do PWA. O botão físico/gestual Voltar recupera a tela anterior em vez de sair imediatamente, e as setas de retorno usam a mesma navegação. Os links de perfil e de notificação continuam funcionando.
+- **Arquivos Office nas comunidades:** canais aceitam Word (.doc/.docx), Excel (.xls/.xlsx) e PowerPoint (.ppt/.pptx), até 50 MB. Seleção, validação no compositor, verificação de assinatura ZIP/OLE no Worker e API seguem alinhadas; o download permanece privado e respeita as permissões de acesso. Arquivos Office em conversas privadas não foram alterados.
+- **Testes:** filtros e permissões do histórico privado, comportamento de voltar no Android, envio/download privado de arquivos Office, validação da assinatura e bloqueio de acesso anônimo.
+- **Migração:** nenhuma.
+
 ## [0.1.0-beta.48] — 11/11/2026
 
 - **Membros visíveis para todos os participantes:** o contador de membros abaixo do nome da comunidade agora é um link que abre um modal de consulta, inclusive para membros comuns. A lista mostra nome, @username, cargo e foto autorizada, permite pesquisar e abrir perfis sem sair da comunidade, no desktop ou celular.

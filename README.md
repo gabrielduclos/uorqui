@@ -4,7 +4,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-**Technical beta `0.1.0-beta.48`** · [Open Uorqui](https://uorqui.app) · [Product documentation](docs/en/README.md) · [Engineering case study](docs/en/portfolio.md)
+**Technical beta `0.1.0-beta.49`** · [Open Uorqui](https://uorqui.app) · [Product documentation](docs/en/README.md) · [Engineering case study](docs/en/portfolio.md)
 
 > **Beta, not a stable release.** Features listed below are implemented in the project; real-device, provider-integration and load validation are still in progress. Check the [roadmap](docs/en/roadmap.md) before depending on the service for critical work.
 

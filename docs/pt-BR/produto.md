@@ -4,6 +4,14 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Filtro no chat privado, Voltar no Android e arquivos Office (beta.49)
+
+Conversas privadas reutilizam o separador por dia com menu de períodos, inclusive escolha manual de Data inicial e Data final. A consulta busca mensagens antigas diretamente no servidor com autenticação e paginação, além das 100 mensagens recentes. Durante a pesquisa, o aplicativo não rola automaticamente ao fim nem confirma leitura.
+
+No PWA Android, mudanças de módulos e aberturas de conversas, canais e e-mails entram no histórico da guia. O botão Voltar recupera as telas anteriores, sem sair diretamente após uma navegação. As setas internas acompanham esse comportamento e links de perfil/notificação continuam funcionando.
+
+Os anexos das comunidades passam a aceitar .doc, .docx, .xls, .xlsx, .ppt e .pptx, até 50 MB. A validação ocorre no compositor, no Worker Cloudflare (assinaturas ZIP/OpenXML e OLE) e na API autorizada. O download continua protegido pelas permissões de canal e tratado como anexo. Os arquivos Office nas mensagens privadas não foram alterados.
+
 ## Lista de membros da comunidade (beta.48)
 
 Qualquer participante autenticado e aceito na comunidade pode **tocar no contador de membros abaixo do nome da comunidade** para abrir um modal de consulta, sem navegar para outra tela. A lista exibe nomes permitidos, @username, cargo e avatar, com pesquisa local e links para os perfis. Visitantes e ex-membros não podem consultar a lista; privacidade, banimentos e bloqueios são respeitados pelo servidor. A aba Moderação continua exclusiva dos cargos autorizados para alterar permissões, cargos, banir ou remover membros. Não é necessária migração.

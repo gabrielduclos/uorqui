@@ -1,6 +1,6 @@
 {
   "name": "@uorqui/web",
-  "version": "0.1.0-beta.48",
+  "version": "0.1.0-beta.49",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,8 @@
     "test:channel-history": "node --import tsx --test test/channel-history.test.mjs",
     "test:mail-reader-actions": "node --test test/mail-reader-actions.test.mjs",
     "test:community-members": "node --test test/community-members-directory.test.mjs",
+    "test:dm-history-back": "node --import tsx --test test/dm-date-and-mobile-back.test.mjs",
+    "test:community-office": "node --test test/community-office-files.test.mjs",
     "test:message-time": "node --import tsx --test test/message-timestamp.test.mjs",
     "test:image": "node --import tsx --test test/image-compression.test.mjs",
     "test:notifications": "node --test test/notification-channel-regression.test.mjs",
