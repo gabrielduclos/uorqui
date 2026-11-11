@@ -33,6 +33,7 @@ import { ChannelScrollBehavior } from './channelScrollBehavior';
 import { activeCommunityMention, insertNamedCommunityMention, reconcileSelectedMentions, serializeCommunityMentions, type SelectedCommunityMention } from './communityMentions';
 import { channelHistorySearchPath, channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod, type CustomChannelDateRange } from './channelHistory';
 import { ChannelDateFilter } from './ChannelDateFilter';
+import { backFromAppScreen,pushAppHistory } from './mobileAppHistory';
 import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 import { buildMeetingLink } from './meetingLink';
 
@@ -429,6 +430,8 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
       setSelectedId(target.communityId);
       setCreateOpen(false);setError('');setNotice('');
       setChannelOpen(Boolean(selectedChannel));
+      if(selectedChannel)pushAppHistory({area:'communities',screen:'channel',id:selectedChannel,communityId:target.communityId});
+      else pushAppHistory({area:'communities',communityId:target.communityId});
       if(selectedChannel){
         setChannelId(selectedChannel);
         setVoiceMinimized(true);
@@ -620,6 +623,17 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
     }finally{setChannelInviteSending(false);}
   }
   const closeChannel=()=>{setReplySource(null);setInspectReaction(null);setMentionAt(null);setChannelInviteOpen(false);if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setChannelOpen(false);setReactionPickerId(null);setMediaPicker(null);setDraft('');setVoiceParticipants([]);setEditingId(null);setDeletingId(null);};
+  function backToChannels(){
+    if(channelId&&backFromAppScreen('channel',channelId))return;
+    closeChannel();
+  }
+  // A browser/Android history entry representing the community overview should
+  // restore the channel list instead of leaving a stale open message pane.
+  useEffect(()=>{
+    const back=()=>closeChannel();
+    window.addEventListener('uorqui:android-back-to-channel-list',back);
+    return()=>window.removeEventListener('uorqui:android-back-to-channel-list',back);
+  });
 
   useEffect(()=>{
     if(!selectedId||!channelId||!activeChannel||!community?.myRole||
@@ -813,6 +827,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   }
 
   function selectCommunity(id:string){
+    pushAppHistory({area:'communities',communityId:id});
     requestedChannel.current=null;
     closeChannel();setSelectedId(id);setCreateOpen(false);
     setError('');setNotice('');
@@ -1138,7 +1153,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
             <section><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pt?'Canais de texto':'Text channels'}</p>
               {detail?.channels.filter(ch=>ch.kind==='text').map(ch=><button type="button" key={ch.id}
                 aria-label={ch.name+(unreadChannels[ch.id]?' · '+unreadChannels[ch.id]+(pt?' não lidas':' unread'):'')}
-                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');setUnlockPassword('');setUnlockError('');}}
+                onClick={()=>{if(voicePhase==='idle')setActiveVoiceRoom(null);setVoiceMinimized(true);setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);pushAppHistory({area:'communities',screen:'channel',id:ch.id,communityId:selectedId!});setError('');setUnlockPassword('');setUnlockError('');}}
                 className={cn('mb-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
                 <Hash className="size-4 shrink-0 text-muted-foreground"/><span className="min-w-0 flex-1 truncate">{ch.name}</span>{(ch.hasPassword||ch.accessMode==='restricted')&&<LockKeyhole aria-label={pt?(ch.accessMode==='restricted'?'Canal fechado':'Canal com senha'):(ch.accessMode==='restricted'?'Closed channel':'Password-protected channel')} className="size-3.5 shrink-0 text-primary"/>}
                 {!!unreadChannels[ch.id]&&<span aria-hidden="true"
@@ -1151,7 +1166,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
                   ?voiceParticipants:(voiceRooms[ch.id]??[]);
                 return <div key={ch.id} className="mb-1">
                   <button type="button" onClick={()=>{
-                      setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);setError('');setUnlockPassword('');setUnlockError('');
+                      setMediaPicker(null);setChannelId(ch.id);setChannelOpen(true);pushAppHistory({area:'communities',screen:'channel',id:ch.id,communityId:selectedId!});setError('');setUnlockPassword('');setUnlockError('');
                       if(!ch.hasPassword||ch.unlocked)openVoiceRoom({communityId:selectedId!,channelId:ch.id,communityName:community.name,channelName:ch.name,kind:ch.kind as 'voice'|'meeting'});
                     }}
                     className={cn('flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-secondary',channelId===ch.id&&channelOpen&&'bg-secondary font-semibold')}>
@@ -1257,7 +1272,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
         <header data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-3 backdrop-blur sm:px-4">
           <Button type="button" size="icon" variant="ghost"
             className={activeChannel.kind!=='text'?'shrink-0':'shrink-0 md:hidden'}
-            aria-label={pt?'Voltar aos canais':'Back to channels'} onClick={closeChannel}>
+            aria-label={pt?'Voltar aos canais':'Back to channels'} onClick={backToChannels}>
             <ArrowLeft className="size-5"/></Button>
           {activeChannel.kind==='meeting'?<Video className="size-5 text-muted-foreground"/>:activeChannel.kind==='voice'?<Volume2 className="size-5 text-muted-foreground"/>:<Hash className="size-5 text-muted-foreground"/>}
           <div className="min-w-0 flex-1"><h2 className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold">
