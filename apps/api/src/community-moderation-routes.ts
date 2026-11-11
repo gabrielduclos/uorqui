@@ -15,6 +15,7 @@ const roleBody={type:'object',required:['role'],additionalProperties:false,prope
 const banBody={type:'object',required:['handle'],additionalProperties:false,properties:{handle,reason:{type:'string',maxLength:300}}};
 const channelBody={type:'object',minProperties:1,additionalProperties:false,properties:{name:{type:'string',minLength:2,maxLength:64},description:{type:'string',maxLength:4000}}};
 const accessModeBody={type:'object',required:['accessMode'],additionalProperties:false,properties:{accessMode:{type:'string',enum:['open','restricted']}}};
+const channelOrderBody={type:'object',required:['channelIds'],additionalProperties:false,properties:{channelIds:{type:'array',minItems:1,maxItems:50,uniqueItems:true,items:uuid}}};
 const memberAccessParams={type:'object',required:['id','handle','channelId'],additionalProperties:false,properties:{id:uuid,handle,channelId:uuid}};
 const memberAccessBody={type:'object',required:['allowed'],additionalProperties:false,properties:{allowed:{type:'boolean'}}};
 const editBody={type:'object',required:['body'],additionalProperties:false,properties:{body:{type:'string',minLength:1,maxLength:4000}}};
@@ -228,6 +229,39 @@ export function registerCommunityModerationRoutes(app:FastifyInstance,reader:Ses
         'AND community_bans.user_id=u.id AND u.handle=$2',[id,h]);
       return reply.header('Cache-Control',noCache).code(204).send();
     }catch(error){request.log.error({err:error},'Unban community member');return reply.code(503).send({error:'Unavailable'});}
+  });
+
+
+  /** Community-wide order. All IDs must belong to this community; never accept
+   * a partial list, which could hide or unexpectedly shuffle closed channels. */
+  app.put('/api/v1/communities/:id/channels/order',{schema:{params:idParams,body:channelOrderBody}},async(request,reply)=>{
+    if(!origin(request))return reply.code(403).send({error:'Invalid origin'});
+    try{
+      const me=await self(request);if(!me)return reply.code(401).send({error:'Unauthorized'});
+      const {id}=request.params as {id:string};
+      if((ranks[(await role(id,me))??'']??0)<3)return reply.code(403).send({error:'ADMIN_REQUIRED'});
+      const {channelIds}=request.body as {channelIds:string[]};
+      const client=await getPool().connect();
+      try{
+        await client.query('BEGIN');
+        // Serialize concurrent reorder requests for the same community.
+        const community=await client.query('SELECT id FROM communities WHERE id=$1 FOR UPDATE',[id]);
+        if(!community.rowCount){await client.query('ROLLBACK');return reply.code(404).send({error:'Community not found'});}
+        const rows=await client.query('SELECT id FROM community_channels WHERE community_id=$1 FOR UPDATE',[id]);
+        const valid=new Set(rows.rows.map((row:{id:string})=>row.id));
+        if(channelIds.length!==valid.size||channelIds.some(channelId=>!valid.has(channelId))){
+          await client.query('ROLLBACK');
+          return reply.code(409).send({error:'CHANNEL_ORDER_STALE'});
+        }
+        await client.query(
+          'UPDATE community_channels AS ch SET sort_order=ordered.position::int-1 '+
+          'FROM unnest($2::uuid[]) WITH ORDINALITY AS ordered(id,position) '+
+          'WHERE ch.community_id=$1 AND ch.id=ordered.id',[id,channelIds]);
+        await client.query('COMMIT');
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+      void publishCommunityEvent(id,null,'channel').catch(()=>{});
+      return reply.header('Cache-Control',noCache).send({channelIds});
+    }catch(error){request.log.error({err:error},'Reorder community channels');return reply.code(503).send({error:'Unavailable'});}
   });
 
   app.patch('/api/v1/communities/:id/channels/:channelId',{schema:{params:channelParams,body:channelBody}},async(request,reply)=>{

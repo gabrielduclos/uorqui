@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.41] — 2026-11-11
+
+- **Reorder community channels:** owners and admins can drag channel rows or use accessible up/down buttons in Moderation → Channels. The editor groups text, voice and meeting channels, with an explicit Save order action.
+- **Persistent shared order:** a new authenticated PUT endpoint validates the full list, limits changes to owners/admins and writes positions transactionally. The community API returns channels in saved order and notifies active members through SSE; new channels are appended.
+- **Migration:** run Drizzle `0047_community_channel_order` before deploying the API. Existing channels keep their prior creation order through a one-time backfill. Roll back the API before reverting this additive column.
+- **Preview build configuration:** adds an empty `previews` block to Wrangler so branch preview deployments can be built without inheriting production credentials or R2 bindings. Preview API/media functionality requires separate staging resources.
+- **Tests:** integration checks cover authorization, stale/duplicate payload rejection, persistence, visibility to other members and append behavior; a focused Web UI test covers within-category moves. Real-device drag/drop and database migration still require deployment validation.
+
 ## [0.1.0-beta.40] — 2026-11-10
 
 - **Community navigation cleanup:** removed both redundant “Unread messages” summary cards from the community list and channel sidebar, including the prominent panel above channel entries.
