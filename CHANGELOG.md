@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.49] — 2026-11-11
+
+- **Direct-message date filters:** private conversations now display the same calendar-day separators and clickable period selector as community channels: Today, Yesterday, Last 7 days, This week, Last week, This month and Custom date range. Filtering queries the full authenticated message history with 100-message pagination rather than the local recent-message cache; browsing filtered history does not trigger automatic scroll or read acknowledgments.
+- **Android PWA system Back:** the main modules, private conversations, community/channel views and opened email messages now contribute to same-tab navigation history. Android's Back button restores the preceding view instead of immediately leaving the PWA; in-app back buttons for chat, channels and email use that same navigation flow. Normal URL-based profile and notification deep links remain intact.
+- **Office files in communities:** channel attachments accept Word (.doc/.docx), Excel (.xls/.xlsx) and PowerPoint (.ppt/.pptx) up to 50 MB. Frontend picker, composer validation, Worker upload checks and authenticated community API allowlists are synchronized. The Worker checks ZIP/OLE magic signatures and serves Office files as attachments, subject to existing channel permissions. Private-message Office uploads are unchanged.
+- **Regression tests:** direct-message history date authorization, range validation, no automatic read; Android history behavior and UI hooks; authenticated Office upload/download, file signature validation and anonymous denial.
+- **Migration:** none.
+
 ## [0.1.0-beta.48] — 2026-11-11
 
 - **Community members for everyone:** accepted community members, including regular members, can tap the member count under the community name to open a read-only directory modal. It lists names, @handles, roles and allowed profile pictures, includes in-modal search and clickable profile links, and works on mobile and desktop without leaving the community.
