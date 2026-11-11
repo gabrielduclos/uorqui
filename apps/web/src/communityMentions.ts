@@ -20,7 +20,7 @@ export function replaceCommunityMention(text:string,mention:ActiveCommunityMenti
   return {text:value,caret:mention.start+handle.length+1+space.length};
 }
 
-/** Draft text displays @Full Name, but the API continues receiving @handle.
+/** Draft text displays the full name without @, but the API receives @handle.
  * These ranges keep identity separate from the editable visible label, so the
  * existing authorization and mention notification rules remain unchanged. */
 export type SelectedCommunityMention={
@@ -60,8 +60,14 @@ export function insertNamedCommunityMention(
   const handle=member.handle.trim().toLowerCase();
   if(!/^[a-z][a-z0-9_]{2,31}$/.test(handle))return null;
   const displayName=member.displayName.trim().replace(/\s+/g,' ').slice(0,90)||handle;
-  const replacement=replaceCommunityMention(text,active,displayName);
-  const label='@'+displayName;
+  // The @ is only a typing trigger. Once confirmed, keep just the name
+  // visible while the selected range retains the canonical account handle.
+  const inserted=replaceCommunityMention(text,active,displayName);
+  const replacement={
+    text:inserted.text.slice(0,active.start)+inserted.text.slice(active.start+1),
+    caret:inserted.caret-1
+  };
+  const label=displayName;
   const mention:SelectedCommunityMention={
     start:active.start,end:active.start+label.length,label,handle
   };

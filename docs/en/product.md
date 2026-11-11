@@ -4,6 +4,10 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Channel mentions without a visible @ (beta.46)
+
+The @ trigger is only used to find a member. Selecting a result replaces it with their **name only** in the composer (for example, `Jessica Pigari`). A published message displays the same name as a clickable profile link, with the canonical `@username` in the link title and accessible label. The editor still serializes the selected mention to the server-compatible `@username` when sending, so notifications and channel authorization are unchanged.
+
 ## Named channel mentions (beta.45)
 
 Selecting an authorized member's `@handle` in the channel composer displays `@First Last` in the editable draft while preserving the exact selected handle separately. On submission (including media captions and location messages), the client serializes that binding back into `@handle`, preserving the existing mention notification and ACL backend. If the visible name is edited, the binding is removed rather than notifying a different person; multiple members with identical names retain separate handles.

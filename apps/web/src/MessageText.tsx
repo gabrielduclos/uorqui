@@ -105,7 +105,8 @@ function MentionText({text,allowedHandles,mentionDisplayNames}:{
       continue;
     }
     const displayName=mentionDisplayNames?.get(handle)?.trim();
-    const label=displayName?'@'+displayName:'@'+handle;
+    // Keep @ in the underlying URL/username, not in the visible linked name.
+    const label=displayName||handle;
     parts.push(<a key={start} href={'/@'+handle} title={'@'+handle}
       aria-label={displayName?displayName+' (@'+handle+')':'@'+handle}
       className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"

@@ -6,6 +6,13 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.46] — 11/11/2026
+
+- **Menções sem @ no nome:** ao confirmar uma pessoa, o símbolo @ deixa de aparecer no texto do editor e na mensagem publicada. O nome continua clicável e abre o perfil correto.
+- **Identidade preservada:** antes do envio, a aplicação converte o nome selecionado para o @username verdadeiro. A dica do link e o texto acessível continuam mostrando o username; notificações e permissões existentes não mudam.
+- **Testes:** inserção sem @, preservação da frase, cursor, serialização para o username e link renderizado.
+- **Migração:** nenhuma; ajuste exclusivo de interface.
+
 ## [0.1.0-beta.45] — 11/11/2026
 
 - **Menções pelo nome:** ao selecionar alguém na lista do canal, o editor passa a exibir o primeiro e o último nome (por exemplo, `@Jessica Pigari`) em vez do username. A associação com o `@username` correto continua preservada internamente, mesmo que existam nomes iguais.
