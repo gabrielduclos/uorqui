@@ -234,6 +234,41 @@ test('direct chat: two users, private membership, idempotence, read receipt and 
   }
 });
 
+test('private message history filters use authorized time ranges and do not read messages',async()=>{
+  const one=visitor(),two=visitor(),stranger=visitor();
+  await createUser(one,'History One','dm_history_one');
+  await createUser(two,'History Two','dm_history_two');
+  await createUser(stranger,'History Stranger','dm_history_stranger');
+  const opened=await one('/api/v1/dm/conversations','POST',{handle:'dm_history_two'});
+  assert.equal(opened.status,200);
+  const path='/api/v1/dm/conversations/'+opened.data.id+'/messages';
+  const from=Date.now()-60_000,to=Date.now()+60_000;
+  const sent=await one(path,'POST',{body:'Histórico por data',clientId:crypto.randomUUID()});
+  assert.equal(sent.status,201);
+  const query='?from='+from+'&to='+to;
+  assert.equal((await stranger(path+query)).status,404,'DM history must remain participant-only');
+  assert.equal((await anon(path+query)).status,401);
+  const history=await two(path+query);
+  assert.equal(history.status,200,JSON.stringify(history.data));
+  assert.ok(history.data.messages.some(m=>m.id===sent.data.message.id));
+  assert.equal(history.data.hasMore,false);
+  assert.equal(history.data.messages.find(m=>m.id===sent.data.message.id).readAt,null,
+    'filtering old history must not mark messages as read');
+  const before=await two(path+'?to='+from);
+  assert.equal(before.status,200);
+  assert.equal(before.data.messages.length,0,'the upper bound is exclusive');
+  const later=await two(path+'?from='+to);
+  assert.equal(later.status,200);
+  assert.equal(later.data.messages.length,0);
+  assert.equal((await two(path+'?from='+to+'&to='+from)).status,400);
+  assert.equal((await two(path+'?around='+sent.data.message.id+'&from='+from)).status,400);
+  assert.equal((await two(path+'?from=not-a-timestamp')).status,400);
+  assert.equal((await two(path+'?from='+from+'&offset=10001')).status,400);
+  const paged=await two(path+query+'&offset=1');
+  assert.equal(paged.status,200);
+  assert.equal(paged.data.messages.length,0);
+});
+
 test('conversation actions are per-user: archive, unarchive, clear and revival',async()=>{
   const sender=visitor(),recipient=visitor(),outsider=visitor();
   await createUser(sender,'Archive Sender','dm_archive_sender');
