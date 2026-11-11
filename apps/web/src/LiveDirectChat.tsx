@@ -10,6 +10,7 @@ import { formatMessageTimestamp, useLocalDayKey } from './messageTimestamp';
 import { channelHistoryDayLabel, groupChannelMessages, type ChannelHistoryPeriod, type CustomChannelDateRange } from './channelHistory';
 import { ChannelDateFilter } from './ChannelDateFilter';
 import { directMessageHistoryPath } from './directMessageHistory';
+import { backFromAppScreen,currentAppEntry,pushAppHistory,replaceAppScreenWithArea } from './mobileAppHistory';
 import { ReplyComposerPreview } from './ReplyReference';
 import { LiveMessageComposer } from './LiveMessageComposer';
 import CommunityMediaPicker, { isCommunityGifUrl } from './CommunityMediaPicker';
@@ -301,6 +302,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     setHistoryPeriod('all');setCustomHistoryRange({from:'',to:''});
     setFilteredHistory([]);setHistoryHasMore(false);setHistoryError('');
     setActiveId(id);
+    pushAppHistory({area:'conversations',screen:'dm',id});
     setMobileOpened(true);
     const cached = peekDmRoom(myId, id);
     setMessages(cached);
@@ -325,6 +327,8 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
     if(initialConversationId&&/^[0-9a-f-]{36}$/i.test(initialConversationId))openThread(initialConversationId);
   },[initialConversationId,requestedOpenNonce,openThread]);
   const closeThread = useCallback(() => {
+    const oldId=activeIdRef.current;
+    if(oldId)replaceAppScreenWithArea('conversations','dm',oldId);
     setConversationMenuOpen(false);setConversationConfirm(null);
     setGalleryOpen(false);setPinnedMessage(null);
     setHistoryPeriod('all');setCustomHistoryRange({from:'',to:''});
@@ -347,6 +351,21 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
 
   }, []);
 
+  useEffect(()=>{
+    const back=()=>{
+      const entry=currentAppEntry();
+      if(entry?.area!=='conversations')return;
+      if(entry.screen==='dm'&&entry.id){
+        if(entry.id!==activeIdRef.current)openThread(entry.id);
+      }else if(activeIdRef.current)closeThread();
+    };
+    window.addEventListener('popstate',back);
+    return()=>window.removeEventListener('popstate',back);
+  },[openThread,closeThread]);
+  function backFromConversation(){
+    if(activeIdRef.current&&backFromAppScreen('dm',activeIdRef.current))return;
+    closeThread();
+  }
   const startPerson = useCallback(async (handle: string) => {
     setBusy(true); setError('');
     try {
@@ -1151,7 +1170,7 @@ export default function LiveDirectChat({ myId, initialHandle, initialConversatio
       data-chat-conversation className={cn('h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden', mobileOpened ? 'flex' : 'hidden md:flex')}>
       {active ? <>
         <header data-uorqui-context-header className="relative z-20 flex h-16 min-h-16 shrink-0 items-center gap-2 border-b border-border bg-card/95 px-3 backdrop-blur sm:gap-3 sm:px-4">
-          <button type="button" onClick={closeThread} aria-label={pt ? 'Voltar às conversas' : 'Back to conversations'}
+          <button type="button" onClick={backFromConversation} aria-label={pt ? 'Voltar às conversas' : 'Back to conversations'}
             className="grid size-10 shrink-0 place-items-center rounded-lg text-foreground hover:bg-accent">
             <ArrowLeft className="size-[21px]"/>
           </button>
