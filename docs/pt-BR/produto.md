@@ -4,6 +4,10 @@
 
 **Status (03/11/2026):** Descobrir, mensageiro 1:1, comunidades, salas de voz e reuniões em vídeo estão implementados na `main`. O feed global foi aposentado em 02/11. As seções de feed abaixo são **históricas**, não recursos disponíveis. Testes em dispositivos e confirmação do deploy atual são tarefas separadas.
 
+## Menções sem @ no nome (beta.46)
+
+O símbolo `@` apenas inicia a pesquisa. Ao selecionar a pessoa, o campo mostra **somente seu nome** (por exemplo, `Jessica Pigari`). Após o envio, o nome vira um hiperlink para o perfil; o `@username` continua no título do link e no rótulo acessível. No envio, a identidade selecionada ainda é convertida para o username reconhecido pela API, preservando notificações e permissões do canal.
+
 ## Menções por nome nos canais (beta.45)
 
 Ao selecionar um `@username` autorizado na lista, o campo de escrita mostra `@Nome Sobrenome`, mantendo internamente o username da pessoa selecionada, inclusive para nomes repetidos. Ao enviar texto, legenda de mídia ou localização, o sistema converte o vínculo para `@username`, preservando as notificações e as autorizações existentes. Se o nome for alterado pelo usuário, o vínculo original é invalidado para evitar menções equivocadas.
