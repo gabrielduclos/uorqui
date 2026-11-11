@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.42] — 2026-11-11
+
+- **Community mentions inside sentences:** fixed the inline @mention autocomplete so it recognizes triggers after whitespace or punctuation (for example, `Bom dia @ana`), including when editing in the middle of an existing sentence.
+- **Caret and text preservation:** selecting a suggestion replaces exactly the current @handle without discarding surrounding words, keeps cursor position and inserts a separator when needed. Selecting a different cursor position recalculates the active mention; email addresses do not trigger suggestions.
+- **Display and notifications:** message mention links now recognize uppercase handles as well. The existing backend recipient authorization and notification checks remain unchanged.
+- **Regression tests:** added coverage for inline triggers, punctuation, email false positives, editing mid-handle and insertion spacing. Test in desktop and mobile browsers before relying on mention suggestions during IME input.
+- **Migration:** none; frontend-only fix.
+
 ## [0.1.0-beta.41] — 2026-11-11
 
 - **Reorder community channels:** owners and admins can drag channel rows or use accessible up/down buttons in Moderation → Channels. The editor groups text, voice and meeting channels, with an explicit Save order action.
