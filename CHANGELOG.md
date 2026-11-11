@@ -6,6 +6,14 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.44] — 2026-11-11
+
+- **Channel date separators as filters:** the date divider stays directly before the first message of that local calendar day and scrolls with its messages instead of sticking to the top. Its date pill (e.g. Today / Yesterday / Last week) is the clickable trigger for the existing period filters, keeping the entire control inside the divider.
+- **Search from the channel header:** a magnifying-glass icon beside the channel title opens the search field immediately below the header. Tap the same icon again or the close control to hide it and clear its query. The old permanent search/filter toolbar is removed.
+- **Filter recovery:** an empty filtered result includes actions to clear the date filter or search phrase. Channel changes close search and reset its scope; existing server-side channel permissions and historical search remain unchanged.
+- **Regression coverage:** UI structure tests protect the inline date picker, natural scrolling and header search toggle.
+- **Migration:** none; UI-only refinement.
+
 ## [0.1.0-beta.43] — 2026-11-11
 
 - **Authorized channel mentions:** the @member picker uses a channel-specific, server-gated roster rather than every community member. Closed channels require explicit grant; password-protected channels require an unlock (owner/admin bypass). Blocks and bans are excluded. Suggestions refresh on channel changes, and unauthorized @handles in messages remain plain text rather than profile links. Server-side mention alerts already enforce channel access rules.

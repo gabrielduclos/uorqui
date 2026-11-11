@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.44] — 11/11/2026
+
+- **Filtro direto na divisão de datas:** a linha com Hoje, Ontem ou Semana passada fica imediatamente antes da primeira mensagem daquele dia e acompanha a rolagem, sem grudar no topo. Tocar no rótulo abre as opções de período no próprio separador.
+- **Pesquisa pelo cabeçalho:** a lupa junto ao nome do canal abre a barra de busca logo abaixo do cabeçalho. Tocar novamente na lupa ou no botão de fechar oculta a barra e limpa o texto. A faixa permanente de pesquisa e filtros foi removida.
+- **Saída dos filtros:** quando a pesquisa não encontra mensagens, é possível limpar o filtro de período ou o texto pesquisado. Mudar de canal fecha a busca e reinicia seus controles; as permissões existentes do servidor permanecem inalteradas.
+- **Testes:** validação estrutural do separador na posição correta e da pesquisa acionada pela lupa.
+- **Migração:** nenhuma; refinamento somente da interface.
+
 ## [0.1.0-beta.43] — 11/11/2026
 
 - **Menções autorizadas por canal:** o autocompletar de @usuário mostra só quem pode acessar o canal atual. Canais restritos exigem concessão; canais com senha, desbloqueio (exceto proprietário/admin). Usuários bloqueados ou banidos ficam de fora. A lista atualiza quando as permissões mudam, e menções sem autorização não viram links de perfil. O servidor continua verificando o acesso antes de notificar.
