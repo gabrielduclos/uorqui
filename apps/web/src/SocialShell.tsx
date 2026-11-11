@@ -38,6 +38,7 @@ import {ActivityNotifications} from './ActivityNotifications';
 import {useActivityNotifications,type ActivityNotification} from './useActivityNotifications';
 import type {ReadPushTarget} from './readPushNotifications';
 import {subscribeDmStream} from './dmEventStream';
+import { currentAppEntry,prepareAppHistory,pushAppHistory } from './mobileAppHistory';
 
 export type SignedInAccount = {
   user: { id: string; name: string; email: string };
@@ -260,6 +261,7 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
       const handle = (event as CustomEvent<string>).detail;
       if (typeof handle !== 'string') return;
       setRequestedChatHandle(handle);
+      pushAppHistory({area:'conversations'});
       setArea('conversations');
     };
     window.addEventListener('uorqui:open-dm', listener);
@@ -267,17 +269,50 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
   }, []);
 
   const move=useCallback((next: Area) => {
+    if(next!==currentArea.current)pushAppHistory({area:next});
     const order:Area[]=['communities','contacts','email','conversations','notifications','profile','moderation'];
     if(next==='notifications'&&previousArea.current!=='notifications')
       notificationReturnArea.current=previousArea.current;
     setNavDirection(order.indexOf(next)>=order.indexOf(previousArea.current)?1:-1);
     previousArea.current=next;
+    currentArea.current=next;
     setArea(next);
     setConversationOpened(false);
     setEmailOpened(false);
     setMobileMenuOpen(false);
     // Communities remain mounted to preserve any ongoing WebRTC voice call.
   }, []);
+  // Android PWA history navigation: system Back first restores the preceding
+  // workspace or open conversation/channel/mail, instead of exiting the app.
+  useEffect(()=>{
+    prepareAppHistory(currentArea.current);
+    const restore=()=>{
+      const state=currentAppEntry();
+      if(!state||window.location.pathname!=='/')return;
+      const next=state.area as Area;
+      currentArea.current=next;
+      previousArea.current=next;
+      setArea(next);
+      setMobileMenuOpen(false);
+      setCommandOpen(false);
+      if(state.screen==='dm'&&state.id){
+        setRequestedConversation({id:state.id,nonce:++navigationNonce.current});
+      }else setRequestedConversation(null);
+      if(state.screen==='channel'&&state.id&&state.communityId){
+        setRequestedCommunity({communityId:state.communityId,channelId:state.id,
+          meeting:false,nonce:++navigationNonce.current});
+      }else {
+        setRequestedCommunity(null);
+        if(state.area==='communities')window.dispatchEvent(new Event('uorqui:android-back-to-channel-list'));
+      }
+      if(state.screen==='mail'&&state.id&&state.accountId){
+        setMailDeepLink({accountId:state.accountId,messageId:state.id,nonce:++navigationNonce.current});
+      }else setMailDeepLink(null);
+    };
+    window.addEventListener('popstate',restore);
+    return()=>window.removeEventListener('popstate',restore);
+  },[account.user.id]);
+
   const tourNavigate=useCallback((tab:'email'|'conversations'|'communities')=>{
     move(tab);
     if(window.matchMedia('(max-width: 767px)').matches)setMobileMenuOpen(true);
@@ -533,9 +568,9 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
   }
 
   const openDiscoveryCommunity=useCallback((communityId:string,channelId?:string)=>{
-    setArea('communities');setConversationOpened(false);
+    move('communities');setConversationOpened(false);
     window.dispatchEvent(new CustomEvent('uorqui:open-community',{detail:{communityId,channelId}}));
-  },[]);
+  },[move]);
 
   const createCommunity=useCallback(()=>{
     move('communities');
