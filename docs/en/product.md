@@ -4,6 +4,10 @@
 
 **Status (November 3, 2026):** Discover, 1:1 messaging, communities, voice and video meetings are implemented on `main`. The global feed was retired November 2. The older feed sections below are **historical only**, not supported features. Real-device tests and verification of current deployment remain separate tasks.
 
+## Channel history navigation (beta.44)
+
+Date dividers stay in chronological message flow, immediately before the first message of each day; they are **not sticky**. The date pill itself is a keyboard-accessible dropdown trigger for the existing period filters, with an All dates choice to restore the latest history. The old persistent search/filter toolbar is gone: use the search icon in the channel header to toggle a field directly under that header. Closing it also clears the text query, without resetting an independently selected date filter. Empty filtered results offer clear-filter controls. Search and filtering still require server authorization as described below.
+
 ## Channel history, scoped mentions and description links (beta.43)
 
 Channel messages show local-calendar day separators and a text search / period filter (Today, Yesterday, Last 7 days, This week, Last week, This month, Older). Search runs against PostgreSQL with the same channel gates as message reads; it fetches 100 matches per page with a Load earlier control instead of relying on the latest 100 cached messages. Search avoids automatically marking filtered messages as read. Safe HTTP(S) URLs in the pinned description use the established internal invitation routing.
