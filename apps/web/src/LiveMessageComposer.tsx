@@ -21,9 +21,11 @@ const ATTACHMENTS = [
   { icon: MapPin, pt: 'Localização', en: 'Location' },
 ] as const;
 
-export function LiveMessageComposer({ value, onChange, onSelectionChange, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false, onGif, gifOpen = false }: {
+export function LiveMessageComposer({ value, onChange, onSelectionChange, serializeValue, onSubmit, onAttach, onShareLocation, sending, locale, textareaRef, editing = false, onGif, gifOpen = false }: {
   value: string; onChange: (text: string) => void;
   onSelectionChange?: (text:string,start:number,end:number)=>void;
+  /** Channel mentions show names in textarea but send canonical @handles. */
+  serializeValue?: (text:string)=>string;
   onSubmit: () => void;
   onAttach: (file: File, caption: string) => void;
   onShareLocation: (latitude:number,longitude:number,caption:string) => void;
@@ -261,7 +263,7 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, onSubm
   }
   async function sendOptimizedPhotos() {
     if (optimizingRef.current || !pendingPhotos.length) return;
-    const files = [...pendingPhotos], caption = value.trim();
+    const files = [...pendingPhotos], caption = (serializeValue?.(value)??value).trim();
     const controller = new AbortController();
     optimizationController.current = controller;
     optimizingRef.current = true;
@@ -293,8 +295,8 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, onSubm
   function sendSelected(){
     if(!canSend)return;
     if(pendingPhotos.length){void sendOptimizedPhotos();}
-    else if(pending){const file=pending;const caption=value.trim();clearPending();onChange('');onAttach(file,caption);}
-    else if(pendingLocation){const {latitude,longitude}=pendingLocation;setPendingLocation(null);const caption=value.trim();onChange('');onShareLocation(latitude,longitude,caption);}
+    else if(pending){const file=pending;const caption=(serializeValue?.(value)??value).trim();clearPending();onChange('');onAttach(file,caption);}
+    else if(pendingLocation){const {latitude,longitude}=pendingLocation;setPendingLocation(null);const caption=(serializeValue?.(value)??value).trim();onChange('');onShareLocation(latitude,longitude,caption);}
     else onSubmit();
   }
   function chooseLocation(){

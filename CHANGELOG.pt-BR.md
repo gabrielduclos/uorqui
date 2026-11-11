@@ -6,6 +6,14 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.45] — 11/11/2026
+
+- **Menções pelo nome:** ao selecionar alguém na lista do canal, o editor passa a exibir o primeiro e o último nome (por exemplo, `@Jessica Pigari`) em vez do username. A associação com o `@username` correto continua preservada internamente, mesmo que existam nomes iguais.
+- **Link no nome após o envio:** na mensagem publicada, o nome fica clicável e abre o perfil. O `@username` aparece na dica ao passar o mouse e na descrição acessível do link. Pessoas sem autorização no canal não são transformadas em links, e nomes privados seguem as regras atuais.
+- **Notificações preservadas:** texto, legendas de fotos/arquivos e localização são enviados com o `@username` canônico para manter as notificações e permissões atuais. É possível editar o restante da frase; alterações dentro do nome removem o vínculo para impedir notificação indevida.
+- **Testes:** nome na escrita, várias menções com nomes repetidos, alterações no texto, legendas e links renderizados.
+- **Migração:** nenhuma; formato de armazenamento e API mantidos.
+
 ## [0.1.0-beta.44] — 11/11/2026
 
 - **Filtro direto na divisão de datas:** a linha com Hoje, Ontem ou Semana passada fica imediatamente antes da primeira mensagem daquele dia e acompanha a rolagem, sem grudar no topo. Tocar no rótulo abre as opções de período no próprio separador.
