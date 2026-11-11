@@ -163,6 +163,7 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   const [channelSearch,setChannelSearch]=useState('');
   const [filteredMessages,setFilteredMessages]=useState<Message[]>([]);
   const [filteredForKey,setFilteredForKey]=useState<string|null>(null);
+  const filteredRequestKey=useRef('');
   const [filteredHasMore,setFilteredHasMore]=useState(false);
   const [filteredLoading,setFilteredLoading]=useState(false);
   const [filteredMoreLoading,setFilteredMoreLoading]=useState(false);
@@ -270,22 +271,25 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   useEffect(()=>{setHistoryPeriod('all');setChannelSearch('');setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);},[selectedId,channelId]);
   useEffect(()=>{
     if(!searchActive||!selectedId||!channelId||channelLocked||!activeChannel){
+      filteredRequestKey.current='';
       setFilteredLoading(false);setFilteredMessages([]);setFilteredForKey(null);setFilteredHasMore(false);setFilteredError(false);
       return;
     }
     let live=true;
-    setFilteredLoading(true);setFilteredForKey(null);setFilteredMessages([]);setFilteredError(false);setFilteredHasMore(false);
     const key=selectedId+'/'+channelId;
+    const requestKey=key+'/'+historyPeriod+'/'+channelSearch+'/'+todayKey;
+    filteredRequestKey.current=requestKey;
+    setFilteredLoading(true);setFilteredForKey(null);setFilteredMessages([]);setFilteredError(false);setFilteredHasMore(false);
     const timer=window.setTimeout(()=>{
       void api<{messages:Message[];hasMore:boolean}>(
         channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod)
       ).then(data=>{
-        if(!live)return;
+        if(!live||filteredRequestKey.current!==requestKey)return;
         setFilteredForKey(key);setFilteredMessages(data.messages);setFilteredHasMore(data.hasMore);
         setFilteredLoading(false);
         window.requestAnimationFrame(()=>{if(scrollRef.current)scrollRef.current.scrollTop=0;});
       }).catch(()=>{
-        if(live){setFilteredForKey(key);setFilteredLoading(false);setFilteredError(true);}
+        if(live&&filteredRequestKey.current===requestKey){setFilteredForKey(key);setFilteredLoading(false);setFilteredError(true);}
       });
     },240);
     return ()=>{live=false;window.clearTimeout(timer);};
@@ -293,15 +297,16 @@ export default function LiveCommunities({myId,myName,myHandle,myAvatar,onMobileO
   async function loadMoreHistory(){
     if(!searchActive||!selectedId||!channelId||filteredMoreLoading||filteredLoading||!filteredHasMore)return;
     setFilteredMoreLoading(true);
+    const requestKey=filteredRequestKey.current;
     try{
       const response=await api<{messages:Message[];hasMore:boolean}>(
         channelHistorySearchPath(selectedId,channelId,channelSearch,historyPeriod,filteredMessages.length)
       );
-      if(selectedId+'/'+channelId!==currentMessageKey)return;
+      if(filteredRequestKey.current!==requestKey)return;
       setFilteredMessages(old=>[...response.messages.filter(m=>!old.some(item=>item.id===m.id)),...old]);
       setFilteredHasMore(response.hasMore);
-    }catch{setFilteredError(true);}
-    finally{setFilteredMoreLoading(false);}
+    }catch{if(filteredRequestKey.current===requestKey)setFilteredError(true);}
+    finally{if(filteredRequestKey.current===requestKey)setFilteredMoreLoading(false);}
   }
 
   const loadList=useCallback(async()=>{
