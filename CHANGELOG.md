@@ -6,6 +6,13 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.46] — 2026-11-11
+
+- **Name-only mentions:** confirming an @mention removes the @ typing trigger from the displayed name in both the composer and published channel messages; the name remains a clickable link to the correct user profile.
+- **Identity preserved:** before posting, the app serializes the selected name to its canonical @username. Hover/title and screen-reader labels expose that username, while existing permission and notification rules remain unchanged.
+- **Tests:** name-only insertion, sentence preservation, cursor placement, stable handle serialization and rendered links.
+- **Migration:** none; frontend-only adjustment.
+
 ## [0.1.0-beta.45] — 2026-11-11
 
 - **Mentions by display name:** picking a channel member now inserts their first and last name into the message composer (e.g. `@Jessica Pigari`) instead of their username. The editor tracks the selected member's exact handle independently from the visible text.
