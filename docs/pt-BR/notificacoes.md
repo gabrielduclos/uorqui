@@ -55,7 +55,7 @@ O push de e-mails usa o mesmo service worker e inscrições VAPID. Gmail e IMAP 
 
 ## Abertura de notificações e avisos dentro do app
 
-Ao tocar um push do sistema, o service worker navega a janela do PWA para o link persistente da conversa, canal, e-mail ou atividade; isso corrige eventos de abertura perdidos ao retomar o iOS. Links de comunidade usam os identificadores reais de comunidade/canal, sem ingressar automaticamente em salas de voz; um convite abre a central de notificações. Uma atividade abre o pedido ou perfil vinculado assim que os dados autenticados chegam.
+Ao tocar um push do sistema, o service worker traz o app aberto para frente e abre a conversa, canal, e-mail ou atividade por navegação interna, inclusive em segundo plano no celular, PWA instalado e desktop. O app confirma o recebimento por MessageChannel, preservando o documento em execução. Se não responder em três segundos (por exemplo, iOS suspenso ou versão antiga), o worker usa o link persistente como alternativa. Sem janela aberta, abre esse link diretamente. Links de comunidade usam os identificadores reais de comunidade/canal, sem ingressar automaticamente em salas de voz; um convite abre a central de notificações. Uma atividade abre o pedido ou perfil vinculado assim que os dados autenticados chegam.
 
 Com o app **visível**, novas mensagens privadas (SSE), canais com mensagens novas, convites e atividades geram um aviso interno clicável somente quando o módulo correspondente não está ativo. Push recebido com o PWA visível é encaminhado ao aviso interno, evitando dois alertas simultâneos; em segundo plano, mantém o aviso do sistema. Os avisos são temporários, dispensáveis e limitados a três na tela, sem alterar os contadores de não lidos.
 

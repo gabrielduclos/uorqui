@@ -6,6 +6,12 @@ O novo Uorqui utiliza [versionamento semântico](https://semver.org/lang/pt-BR/)
 
 Mudanças posteriores ao marco exigem aumento de versão nos três manifestos npm e atualização dos changelogs. Ver [política de versões](docs/pt-BR/versoes.md).
 
+## [0.1.0-beta.51] — 13/11/2026
+
+- **Navegação de notificações:** o clique no aviso do sistema traz o app aberto para frente e abre o destino internamente, inclusive em segundo plano no celular, PWA instalado e desktop. O app confirma o recebimento por MessageChannel; se estiver suspenso/sem resposta por três segundos, usa navegação por URL. Com o app fechado, abre pelo link de destino.
+- **Testes:** navegação visível/em segundo plano para conversa, canal, convite, atividade e e-mail; confirmação, tempo limite, janela encerrada, seleção de janela, abertura com app fechado e bloqueio de origem externa.
+- **Migração:** nenhuma. O comportamento de suspensão de cada plataforma ainda exige validação em aparelhos reais.
+
 ## [0.1.0-beta.50] — 11/11/2026
 
 - **Arquivos Office nas mensagens privadas:** conversas individuais agora aceitam Word (.doc/.docx), Excel (.xls/.xlsx) e PowerPoint (.ppt/.pptx), até 50 MB, assim como os canais. Seletor de arquivos, compositor, API e Worker validam os formatos e suas assinaturas ZIP/OpenXML/OLE. O download segue restrito aos participantes e é oferecido como anexo, sem execução no navegador.
