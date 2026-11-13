@@ -6,6 +6,12 @@ The Uorqui social platform uses [Semantic Versioning](https://semver.org/) for i
 
 All subsequent changes must increase the version in all three npm manifests and update both changelogs. See [release policy](docs/en/versions.md).
 
+## [0.1.0-beta.51] — 2026-11-13
+
+- **Notification navigation:** system notification clicks focus the existing app and open their destination internally, including background mobile, installed PWA and desktop windows. The app acknowledges receipt through a MessageChannel; an unresponsive/suspended client falls back to URL navigation after three seconds, and a closed app opens from its deep link.
+- **Tests:** visible/background navigation for DM, channel, invitation, activity and email; acknowledgement, timeout, stale client, window selection, cold start and external-origin rejection.
+- **Migration:** none. Physical-device verification remains necessary for platform-specific suspension behavior.
+
 ## [0.1.0-beta.50] — 2026-11-11
 
 - **Office documents in private chats:** private conversations now accept Word (.doc/.docx), Excel (.xls/.xlsx) and PowerPoint (.ppt/.pptx) up to 50 MB, just like community channels. The attachment picker, composer, Fastify API and Cloudflare Worker upload allowlists are synchronized. Office ZIP/OpenXML and OLE signatures are checked for both direct and community messages. Downloads remain private to conversation participants and Office files are served as downloads, not inline executable content.

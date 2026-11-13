@@ -209,6 +209,25 @@ self.addEventListener('push',event=>{event.waitUntil((async()=>{
     }
   }catch{/* Unsupported browser notifications cannot claim delivery. */}
 })());});
+// A resumed app confirms that React received the destination. Visibility alone
+// cannot distinguish a live background tab from a suspended or discarded PWA.
+function openInApp(client,url){
+  return new Promise(resolve=>{
+    const channel=new MessageChannel();
+    const finish=handled=>{
+      clearTimeout(timer);
+      channel.port1.close();
+      channel.port2.close();
+      resolve(handled);
+    };
+    const timer=setTimeout(()=>finish(false),3000);
+    channel.port1.onmessage=event=>{
+      if(event.data?.type==='uorqui:push-opened')finish(true);
+    };
+    try{client.postMessage({type:'uorqui:push-open',url},[channel.port2]);}
+    catch{finish(false);}
+  });
+}
 self.addEventListener('notificationclick',event=>{
   event.notification.close();
   event.waitUntil((async()=>{
@@ -219,21 +238,15 @@ self.addEventListener('notificationclick',event=>{
     const pages=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     const client=pages.find(page=>page.focused)||pages.find(page=>page.visibilityState==='visible')||pages[0];
     if(client){
-      // The open React app needs an explicit navigation event: navigating an
-      // existing client may reuse its document and does not fire popstate.
-      // For a truly background/frozen PWA retain the durable URL navigation.
-      if(client.visibilityState==='visible'){
-        try{
-          await client.focus();
-          client.postMessage({type:'uorqui:push-open',url});
-          return;
-        }catch{/* Fallback to URL navigation below. */}
-      }
+      // Focus also resumes background mobile/PWA clients. Keep their document
+      // and active app state whenever the navigation listener responds.
+      try{await client.focus();}catch{/* Still try messaging the live app. */}
+      if(await openInApp(client,url))return;
+      // Closed, discarded, old-version or unresponsive apps need a durable URL.
       try{
         const navigated=await client.navigate(url);
         if(navigated){
           await navigated.focus();
-          navigated.postMessage({type:'uorqui:push-open',url});
           return;
         }
       }catch{/* Some browsers reject navigate() for stale clients. */}

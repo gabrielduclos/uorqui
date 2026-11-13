@@ -423,7 +423,10 @@ export default function SocialShell({ account, onLogout, onAccountDeleted, onAcc
     const onMessage=(event:MessageEvent)=>{
       const data=event.data as {type?:string;recipientId?:string;kind?:string;title?:string;body?:string;url?:string;
         messageId?:string;channelId?:string;notificationId?:string}|null;
-      if(data?.type==='uorqui:push-open'&&typeof data.url==='string')openPushDestination(data.url);
+      if(data?.type==='uorqui:push-open'&&typeof data.url==='string'){
+        openPushDestination(data.url);
+        event.ports?.[0]?.postMessage({type:'uorqui:push-opened'});
+      }
       if(data?.type==='uorqui:activity-update')window.dispatchEvent(new Event('uorqui:activity-update'));
       if(data?.type==='uorqui:community-push-update')window.dispatchEvent(new Event('uorqui:community-push-update'));
       if(data?.type==='uorqui:mail-push-update')window.dispatchEvent(new Event('uorqui:mail-unread-refresh'));

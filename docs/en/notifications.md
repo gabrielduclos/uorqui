@@ -55,7 +55,7 @@ New Gmail and manual IMAP messages use the same account-bound VAPID push subscri
 
 ## Deep links and in-app alerts
 
-Tapping an operating-system push navigates the PWA directly to the persistent link for its conversation, channel, message, or activity; unlike a post-focus message, URL navigation survives suspended iOS apps. Community links retain the actual channel ID and never auto-join voice rooms; invitations open Notifications. Activity links open the associated request or profile after authenticated data loads.
+Tapping an operating-system push focuses the existing app and opens its conversation, channel, message, or activity through internal navigation, including background mobile, installed PWA and desktop windows. The app acknowledges receipt through a MessageChannel so a responsive app keeps its running document. If no acknowledgement arrives within three seconds (for example, a suspended iOS app or an older app version), the worker falls back to the persistent destination URL. With no open window, it opens that URL directly. Community links retain the actual channel ID and never auto-join voice rooms; invitations open Notifications. Activity links open the associated request or profile after authenticated data loads.
 
 While the app is **visible**, DM SSE updates, newly unread community channels, invitations, and activity items create temporary clickable in-app alerts only when their module is not currently active. A foreground Web Push is forwarded into this in-app UI instead of displaying a duplicate operating-system alert. Background/system push remains unchanged. Alerts are dismissible and capped at three; unread counters are unaffected.
 
