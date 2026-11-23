@@ -202,7 +202,11 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 @media (max-width: 590px) { .skeleton-team { width: 42px; height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
-.skeleton-progress { width: 14px; height: 14px; background: currentColor; opacity: .4; }
 
 .content > .room { flex: 1; }
 .compose-box > .skeleton-composer { flex: 1; min-width: 0; }
+
+
+.action-spinner { flex: none; animation: action-spin .8s linear infinite; }
+@keyframes action-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .action-spinner { animation-duration: 2s; } }

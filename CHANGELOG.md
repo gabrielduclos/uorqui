@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.6]
+
+- Shows a shared spinner on backend action buttons, preserves labels, prevents duplicate clicks and clears the pending state after success or error.
+
 ## [0.2.0-beta.5]
 
 - Reuses tab-local data and coalesces duplicate requests, with bounded caches and invalidation on writes and authentication changes.

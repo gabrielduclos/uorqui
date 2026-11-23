@@ -36,3 +36,5 @@ Use a 4 px spacing scale and the shared 10 px radius token. The rail scrolls ind
 Both themes and languages apply to dialogs, account forms, empty states and channel navigation. Enter sends a message and Shift+Enter adds a line.
 
 Keep static interface structure visible while data loads. Skeletons reserve space for teams, channel names, messages and composer content. Background refresh retains existing data. Loading regions have accessible labels and reduced-motion support. Pending forms retain their submit labels.
+
+Backend action buttons use the shared loading spinner with aria-busy and disabled interaction. Labels stay visible. Form submissions, message sending, pagination, retries and sign-out restore the ready state on success or error. Async click handlers automatically receive this feedback.

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.6]
+
+- Mostra spinner compartilhado nos botões que aguardam o backend, preserva os rótulos, bloqueia cliques repetidos e encerra o estado pendente no sucesso ou erro.
+
 ## [0.2.0-beta.5]
 
 - Reaproveita dados na aba e agrupa requisições repetidas, com caches limitados e invalidação após alterações e mudanças de autenticação.

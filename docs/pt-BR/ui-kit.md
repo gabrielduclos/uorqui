@@ -36,3 +36,5 @@ Use uma escala de espaçamento de 4 px e o token compartilhado de raio de 10 px.
 Os dois temas e idiomas cobrem diálogos, formulários de conta, estados vazios e navegação de canais. Enter envia uma mensagem e Shift+Enter insere uma linha.
 
 Manter a estrutura estática visível enquanto os dados carregam. Skeletons reservam espaço para equipes, nomes de canais, mensagens e conteúdo do campo de composição. Atualizações em segundo plano preservam os dados existentes. Regiões de carregamento têm rótulos acessíveis e suporte a movimento reduzido. Formulários pendentes preservam os rótulos de envio.
+
+Botões de ação usam o spinner compartilhado enquanto aguardam o backend, com aria-busy e interação bloqueada. Os rótulos permanecem visíveis. Envios de formulários, mensagens, paginação, novas tentativas e saída restauram o estado disponível após sucesso ou erro. Ações de clique assíncronas recebem esse feedback automaticamente.

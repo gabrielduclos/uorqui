@@ -43,6 +43,7 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
   const [loadError, setLoadError] = useState<unknown>()
   const [sendError, setSendError] = useState<unknown>()
   const [busy, setBusy] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [paging, setPaging] = useState(false)
   const [draft, setDraft] = useState('')
   const [refresh, setRefresh] = useState(0)
@@ -74,6 +75,7 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
         if (!controller.signal.aborted) setLoadError(error)
       } finally {
         loading = false
+        if (!controller.signal.aborted) setRetrying(false)
         if (!controller.signal.aborted) timeout = window.setTimeout(load, 10000)
       }
     }
@@ -145,8 +147,8 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
       setAtBottom(follow.current)
     }}>
       {thread && <div className="thread-root"><MessageItem message={thread} copy={copy} locale={locale} /></div>}
-      {hasMore && <div className="load-more"><Button variant="outline" onClick={loadOlder} disabled={paging}>
-        {paging ? copy.loading : copy.older}
+      {hasMore && <div className="load-more"><Button variant="outline" onClick={loadOlder} loading={paging}>
+        {copy.older}
       </Button></div>}
       {!first && loadError === undefined && <MessageSkeleton copy={copy} />}
       {first && !records.length && <p className="empty-messages">{thread ? copy.emptyThread : copy.emptyChannel}</p>}
@@ -162,7 +164,7 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
     </div>
     {loadError !== undefined && <div className="notice error">
       <span role="alert">{errorText(copy, loadError)}</span>
-      <Button variant="ghost" onClick={() => setRefresh((current) => current + 1)}>{copy.retry}</Button>
+      <Button variant="ghost" loading={retrying} onClick={() => { setRetrying(true); setRefresh((current) => current + 1) }}>{copy.retry}</Button>
     </div>}
     <form className="composer" onSubmit={send}>
       {!atBottom && <Button variant="outline" className="latest" onClick={() => {
@@ -177,7 +179,7 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
               event.currentTarget.form?.requestSubmit()
             }
           }} />
-        <Button type="submit" disabled={!draft.trim() || busy} aria-label={copy.send}><Send size={17} /></Button>
+        <Button type="submit" disabled={!draft.trim()} loading={busy} aria-label={copy.send}><Send size={17} /></Button>
       </div>
       {sendError !== undefined && <p role="alert" className="error">{errorText(copy, sendError)}</p>}
     </form>

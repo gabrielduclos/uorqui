@@ -14,6 +14,7 @@ function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy:
   const [mobileOpen, setMobileOpen] = useState(!preferredChannel)
   const [error, setError] = useState<unknown>()
   const [refresh, setRefresh] = useState(0)
+  const [retrying, setRetrying] = useState(false)
   const channel = channels?.find((item) => item.id === selected) ?? channels?.[0]
   const owner = team?.role === 'owner'
 
@@ -38,6 +39,7 @@ function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy:
         if (!controller.signal.aborted) setError(failure)
       } finally {
         loading = false
+        if (!controller.signal.aborted) setRetrying(false)
         if (!controller.signal.aborted) timeout = window.setTimeout(load, 60000)
       }
     }
@@ -86,7 +88,7 @@ function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy:
       })}
       {error !== undefined && <div className="sidebar-notice">
         <p className="error" role="alert">{errorText(copy, error)}</p>
-        <Button variant="ghost" onClick={() => setRefresh((current) => current + 1)}>{copy.retry}</Button>
+        <Button variant="ghost" loading={retrying} onClick={() => { setRetrying(true); setRefresh((current) => current + 1) }}>{copy.retry}</Button>
       </div>}
     </aside>
     <main className="content">
@@ -128,6 +130,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<unknown>()
   const [attempt, setAttempt] = useState(0)
+  const [retrying, setRetrying] = useState(false)
   const team = teams?.find((item) => item.id === selection?.teamId) ?? teams?.[0]
 
   useEffect(() => {
@@ -139,7 +142,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
         if (!controller.signal.aborted) { setTeams(result); setError(undefined) }
       }).catch((failure) => {
         if (!controller.signal.aborted) setError(failure)
-      })
+      }).finally(() => { if (!controller.signal.aborted) setRetrying(false) })
     }
     document.addEventListener('visibilitychange', load)
     window.addEventListener('focus', load)
@@ -174,7 +177,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
       : <main className="center-state">
         {error !== undefined ? <>
           <p className="error" role="alert">{errorText(copy, error)}</p>
-          <Button variant="outline" onClick={() => { setError(undefined); setAttempt((current) => current + 1) }}>{copy.retry}</Button>
+          <Button variant="outline" loading={retrying} onClick={() => { setRetrying(true); setAttempt((current) => current + 1) }}>{copy.retry}</Button>
         </> : teams ? <>
           <div className="empty-icon"><Layers size={27} /></div>
           <h1>{copy.emptyTeams}</h1>
@@ -279,7 +282,9 @@ export function App() {
     </header>
     {error !== undefined && <div className="notice error">
       <span role="alert">{errorText(copy, error)}</span>
-      <Button variant="ghost" onClick={() => { setError(undefined); loadSession().catch(setError) }}>{copy.retry}</Button>
+      <Button variant="ghost" onClick={async () => {
+        try { await loadSession(); setError(undefined) } catch (failure) { setError(failure) }
+      }}>{copy.retry}</Button>
     </div>}
     {user === null ? <SignIn key={token ?? ''} copy={copy} token={token} onSuccess={() => loadSession()} />
       : <Workspace key={user?.id ?? 'session-loading'} user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} />}
