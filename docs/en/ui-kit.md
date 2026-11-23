@@ -2,14 +2,35 @@
 
 [Português (Brasil)](../pt-BR/ui-kit.md) · [README](../../README.md)
 
-The editable light and dark shadcn/ui tokens are in [styles.css](../../apps/web/src/styles.css). Import the token definitions into tweakcn when changing the palette, then apply the exported token values to the same file. The workspace, dialogs and forms share these tokens.
+The shared UI kit uses black, white and neutral grays in light and dark themes. React components use Tailwind and shadcn/ui conventions with Radix dialogs. The global tokens in [styles.css](../../apps/web/src/styles.css) are the source of truth and can be imported into tweakcn.
 
 | Token | Light | Dark |
 | --- | --- | --- |
-| Background | `#f5f7f6` | `#111b18` |
-| Foreground | `#172b25` | `#e8f4ef` |
-| Card | `#ffffff` | `#172420` |
-| Primary | `#176450` | `#99e1c8` |
-| Accent | `#dbece5` | `#23463a` |
+| Background / sidebar | `#f5f5f5` | `#0a0a0a` |
+| Foreground | `#171717` | `#fafafa` |
+| Card / popover | `#ffffff` | `#141414` |
+| Primary | `#171717` | `#fafafa` |
+| Primary foreground | `#ffffff` | `#0a0a0a` |
+| Muted | `#ededed` | `#262626` |
+| Muted foreground | `#5c5c5c` | `#a3a3a3` |
+| Accent | `#e5e5e5` | `#303030` |
+| Border / input | `#d9d9d9` | `#333333` |
+| Ring | `#737373` | `#fafafa` |
 
-The channel list uses a compact sidebar on desktop and a dedicated view on mobile. Threads sit alongside the conversation where space allows. The composer supports Enter to send and Shift+Enter to add a line. Dialogs support keyboard focus and Escape.
+Secondary, popover and sidebar tokens reference the shared semantic palette. Error feedback uses a labeled message, weight and neutral contrast. Readable text communicates the state.
+
+## Components and layout
+
+| Component | Rules |
+| --- | --- |
+| Buttons | Primary, outline and ghost variants. Disabled state reduces opacity and blocks input. |
+| Dialogs | Radix focus management, visible title, close label and Escape support. |
+| Forms | Persistent labels, 16 px input text, visible focus and translated validation. |
+| Team navigation | 68 px vertical rail, 46 px initials buttons, team name on hover and accessible label. Active team uses inverse contrast and a side marker. Add-team action follows the list. |
+| Channel navigation | Compact sidebar beside the team rail. Private channels show a lock. |
+| Mobile | 58 px team rail, 42 × 44 px buttons. Channels and conversation occupy alternating views. |
+| Messages | Author, time, body and thread action use shared tokens. Threads appear alongside the conversation where space allows. |
+
+Use a 4 px spacing scale and the shared 10 px radius token. The rail scrolls independently for long team lists. Team navigation supports Tab, Shift+Tab and Enter or Space. Focus uses a visible 2 px ring. Reduced-motion preferences disable transitions.
+
+Both themes and languages apply to dialogs, account forms, empty states and channel navigation. Enter sends a message and Shift+Enter adds a line.

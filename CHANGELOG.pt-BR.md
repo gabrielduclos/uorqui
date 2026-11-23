@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.3]
+
+- Aplica o UI kit monocromático nos dois temas e adiciona barra vertical de equipes com iniciais, nomes, seleção e criação de equipe.
+- Posiciona os canais ao lado da barra de equipes no desktop e adapta a navegação ao mobile.
+- Documenta tokens, componentes, espaçamentos e estados acessíveis nos dois idiomas.
+
 ## [0.2.0-beta.2]
 
 - Libera a criação de contas na tela de entrada em português e inglês.

@@ -2,34 +2,53 @@
 
 :root {
   color-scheme: light;
-  --background: #f5f7f6;
-  --foreground: #172b25;
+  --background: #f5f5f5;
+  --foreground: #171717;
   --card: #ffffff;
-  --muted: #e9f0ed;
-  --muted-foreground: #52665f;
-  --border: #d8e4df;
-  --primary: #176450;
+  --muted: #ededed;
+  --muted-foreground: #5c5c5c;
+  --border: #d9d9d9;
+  --primary: #171717;
   --primary-foreground: #ffffff;
-  --accent: #dbece5;
-  --accent-foreground: #124e3d;
-  --destructive: #9d2235;
-  --ring: #26806a;
+  --accent: #e5e5e5;
+  --accent-foreground: #171717;
+  --destructive: #262626;
+  --ring: #737373;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --background: #111b18;
-  --foreground: #e8f4ef;
-  --card: #172420;
-  --muted: #243730;
-  --muted-foreground: #a9c3b8;
-  --border: #30453d;
-  --primary: #99e1c8;
-  --primary-foreground: #0b2d22;
-  --accent: #23463a;
-  --accent-foreground: #c4f5e4;
-  --destructive: #ff9caa;
-  --ring: #99e1c8;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --border: #333333;
+  --primary: #fafafa;
+  --primary-foreground: #0a0a0a;
+  --accent: #303030;
+  --accent-foreground: #fafafa;
+  --destructive: #e5e5e5;
+  --ring: #fafafa;
+}
+
+:root {
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --input: var(--border);
+  --destructive-foreground: var(--card);
+  --radius: .625rem;
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 @theme inline {
@@ -41,6 +60,16 @@
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card-foreground: var(--card-foreground);
 }
 
 body { margin: 0; background: var(--background); color: var(--foreground); font: 15px/1.5 Inter, system-ui, sans-serif; }
@@ -48,9 +77,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); font:
 button:not(:disabled), select { cursor: pointer; }
 input, textarea, select { min-width: 0; font-size: 16px; }
 .app { height: 100vh; height: 100dvh; min-height: 0; display: flex; flex-direction: column; }
-.topbar, .workspace-bar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .95rem; min-height: 55px; border-bottom: 1px solid var(--border); background: var(--card); }
-.workspace-bar { min-height: 46px; background: var(--background); }
-.workspace-bar select { max-width: min(65vw, 280px); padding: .3rem .5rem; border-radius: .35rem; border: 1px solid var(--border); background: var(--card); font-size: .875rem; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .95rem; min-height: 55px; border-bottom: 1px solid var(--border); background: var(--card); }
 .brand, .top-actions, .language { display: flex; align-items: center; gap: .55rem; }
 .brand strong { font-size: 1.18rem; letter-spacing: -.04em; }
 .brand > span { color: var(--muted-foreground); font-size: .8rem; border-left: 1px solid var(--border); margin-left: .25rem; padding-left: .75rem; }
@@ -127,7 +154,7 @@ input, textarea, select { min-width: 0; font-size: 16px; }
   .thread { border-left: 0; }
 }
 @media (max-width: 590px) {
-  .topbar, .workspace-bar { padding-inline: .6rem; }
+  .topbar { padding-inline: .6rem; }
   .brand > span { display: none; }
   .top-actions { gap: .2rem; }
   .top-actions button { padding-inline: .5rem; }
@@ -136,6 +163,26 @@ input, textarea, select { min-width: 0; font-size: 16px; }
   .sidebar { border-right: 0; }
   .mobile-back { display: inline-flex; padding: .4rem; }
   .channel-header { padding-inline: .5rem; }
-  .workspace-bar select { font-size: 16px; }
   .channel-link { min-height: 44px; }
+}
+
+.workspace-shell { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.workspace-shell > .center-state { min-width: 0; }
+.team-rail { width: 68px; flex: none; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding-block: .75rem; }
+.team-list { display: flex; flex-direction: column; align-items: center; gap: .65rem; height: 100%; overflow-y: auto; padding: .15rem .5rem; scrollbar-width: thin; }
+.team-button { position: relative; display: grid; place-items: center; width: 46px; min-height: 46px; flex: none; border: 1px solid var(--border); border-radius: 1rem; background: var(--card); color: var(--muted-foreground); font-size: .8rem; font-weight: 700; transition: background .15s, color .15s, border-radius .15s; }
+.team-button:hover { border-radius: .65rem; background: var(--accent); color: var(--foreground); }
+.team-button[aria-current='true'] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); border-radius: .65rem; }
+.team-button[aria-current='true']::before { content: ''; position: absolute; left: -9px; width: 3px; height: 22px; border-radius: 0 3px 3px 0; background: var(--foreground); }
+.team-add { margin-top: .15rem; border-style: dashed; }
+.error { font-weight: 600; }
+@media (max-width: 590px) {
+  .team-rail { width: 58px; }
+  .team-list { padding-inline: .4rem; }
+  .team-button { width: 42px; min-height: 44px; }
+  .team-button[aria-current='true']::before { left: -7px; }
+  .workspace-shell > .center-state h1 { font-size: 1.15rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }

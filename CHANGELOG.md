@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.3]
+
+- Applies a monochrome shared UI kit in both themes and adds a vertical team rail with initials, names, active state and team creation.
+- Keeps channels alongside the team rail on desktop and adapts navigation for mobile.
+- Documents tokens, components, spacing and accessible states in both languages.
+
 ## [0.2.0-beta.2]
 
 - Enables public account creation from the sign-in screen in English and Brazilian Portuguese.

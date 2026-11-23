@@ -1,6 +1,6 @@
 # Uorqui Workplace
 
-[English](README.md) · 0.2.0-beta.2
+[English](README.md) · 0.2.0-beta.3
 
 Um espaço compacto para equipes conversarem em canais internos e colaborarem com clientes em canais privados. Responsáveis pelas equipes criam canais e geram links vinculados ao e-mail de cada convidado. Quem tem acesso ao canal pode enviar mensagens e organizar as respostas em tópicos.
 

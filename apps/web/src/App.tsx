@@ -117,12 +117,19 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
   }, [attempt])
 
   return <>
-    <div className="workspace-bar">
-      {teams?.length ? <select aria-label={copy.teams} value={team?.id} onChange={(event) => setSelection({ teamId: event.target.value })}>
-        {teams.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select> : <span />}
-      <Button variant="ghost" onClick={() => setCreating(true)}><Plus size={17} />{copy.newTeam}</Button>
-    </div>
+    <div className="workspace-shell">
+    <nav className="team-rail" aria-label={copy.teams}>
+      <div className="team-list">
+        {teams?.map((item) => <button
+          key={item.id} className="team-button" title={item.name} aria-label={item.name}
+          aria-current={team?.id === item.id ? 'true' : undefined}
+          onClick={() => setSelection({ teamId: item.id })}>
+          <span aria-hidden="true">{initials(item.name)}</span>
+        </button>)}
+        <button className="team-button team-add" title={copy.newTeam} aria-label={copy.newTeam}
+          onClick={() => setCreating(true)}><Plus size={22} aria-hidden="true" /></button>
+      </div>
+    </nav>
     {team ? <TeamView key={`${team.id}:${selection?.channelId ?? ''}`} team={team} copy={copy} locale={locale} preferredChannel={selection?.channelId} />
       : <main className="center-state">
         {error !== undefined ? <>
@@ -135,6 +142,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
           <Button onClick={() => setCreating(true)}><CirclePlus size={17} />{copy.newTeam}</Button>
         </> : <p role="status">{copy.loading}</p>}
       </main>}
+    </div>
     {creating && <TeamForm copy={copy} close={() => setCreating(false)} created={(created) => {
       setTeams((current) => [...(current ?? []), created])
       setSelection({ teamId: created.id })
