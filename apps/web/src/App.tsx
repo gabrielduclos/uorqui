@@ -153,6 +153,8 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
   </>
 }
 
+const invitationFromUrl = () => new URLSearchParams(location.hash.slice(1)).get('invite')
+
 export function App() {
   const [locale, setLocale] = useState<Locale>(() => localStorage.getItem('uorqui-workplace-locale') === 'en' ? 'en' : 'pt-BR')
   const [dark, setDark] = useState(() => {
@@ -161,7 +163,7 @@ export function App() {
   })
   const [user, setUser] = useState<User | null>()
   const [error, setError] = useState<unknown>()
-  const [token, setToken] = useState(() => new URLSearchParams(location.hash.slice(1)).get('invite'))
+  const [token, setToken] = useState(invitationFromUrl)
   const copy = translations[locale]
 
   useEffect(() => {
@@ -184,9 +186,15 @@ export function App() {
   useEffect(() => {
     const controller = new AbortController()
     const onExpiry = () => setUser(null)
+    const onHashChange = () => setToken(invitationFromUrl())
     window.addEventListener('session-expired', onExpiry)
+    window.addEventListener('hashchange', onHashChange)
     loadSession(controller.signal).catch(setError)
-    return () => { controller.abort(); window.removeEventListener('session-expired', onExpiry) }
+    return () => {
+      controller.abort()
+      window.removeEventListener('session-expired', onExpiry)
+      window.removeEventListener('hashchange', onHashChange)
+    }
   }, [])
 
   function clearInvite() {
@@ -226,6 +234,6 @@ export function App() {
     </div>}
     {user === undefined ? <main className="center-state">{error === undefined && <p role="status">{copy.loading}</p>}</main>
       : user ? <Workspace key={user.id} user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} />
-        : <SignIn copy={copy} token={token} onSuccess={() => loadSession()} />}
+        : <SignIn key={token ?? ''} copy={copy} token={token} onSuccess={() => loadSession()} />}
   </div>
 }

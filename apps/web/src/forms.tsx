@@ -90,7 +90,7 @@ export function ChannelForm({ copy, teamId, close, created }: {
     }}>
       <label>{copy.channelName}
         <input name="name" autoCapitalize="none" spellCheck={false} aria-describedby="channel-name-hint"
-          required pattern="[a-zA-Z0-9][a-zA-Z0-9\\-]{1,39}" maxLength={40} />
+          required pattern="[a-zA-Z0-9][a-zA-Z0-9\-]{1,39}" maxLength={40} />
         <small id="channel-name-hint">{copy.nameHint}</small>
       </label>
       <label>{copy.details}<input name="description" maxLength={180} /></label>
