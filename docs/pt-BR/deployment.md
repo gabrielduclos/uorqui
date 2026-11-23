@@ -25,7 +25,7 @@ O preview fica em https://feat-enterprise-channels-main.uorqui1.workers.dev/. Pr
 
 ## Escopo do beta
 
-As contas podem ser criadas na tela de entrada com nome, @username único, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de equipes vazia e podem criar uma equipe ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Envio automático de e-mail, verificação da caixa postal, recuperação de senha ficam fora deste beta. Conversas abertas de equipes e mensagens diretas recebem invalidações por SSE em tempo real.
+As contas podem ser criadas na tela de entrada com nome, @username único, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de equipes vazia e podem criar uma equipe ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Confirmação de e-mail e troca de senha estão disponíveis no perfil. Recuperação sem a senha atual e envio automático de convites ficam fora deste beta. Conversas abertas de equipes e mensagens diretas recebem invalidações por SSE em tempo real.
 
 
 ## Cache
@@ -65,3 +65,16 @@ O envio primeiro reserva metadados na API. O Worker autoriza a requisição, tra
 Operações de arquivos exigem o Worker e seu vínculo R2; o proxy padrão de desenvolvimento do Vite direto para a API não fornece armazenamento de arquivos. A validação completa de mídia usou Worker/R2 locais e PostgreSQL 17, incluindo notificações entre duas instâncias da API, além dos testes de regressão via PGlite.
 
 Referências: [pool de conexões do Neon](https://neon.com/docs/connect/connection-pooling), [configuração do preview](https://developers.cloudflare.com/workers/previews/configuration/) e [API R2 para Workers](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).
+
+
+## Segurança da conta e mensagens não lidas
+
+Aplique a migração 0004 antes desta versão. Ela adiciona um cursor de leitura por usuário/canal e um índice por canal/cursor nas mensagens. `/health/ready` verifica essa tabela e informa `emailConfigured`, sem expor credenciais.
+
+Configure `RESEND_API_KEY` e `AUTH_EMAIL_FROM` no serviço da API. O remetente/domínio precisa estar verificado no Resend. Com a configuração ativa, o cadastro envia um link de confirmação válido por uma hora; contas existentes podem solicitar outro no perfil. O servidor fixa a origem de retorno e mostra o resultado de confirmação ou link inválido/expirado. Falhas não são exibidas como sucesso. A ausência da configuração não bloqueia contas existentes nem a troca de senha. O aceite do Resend não garante entrega na caixa de entrada. A confirmação registra o estado do e-mail, sem impedir o login de contas ainda não confirmadas.
+
+A troca exige a senha atual e uma nova senha de 8–128 caracteres, confirmada no formulário. O servidor renova o cookie da sessão atual e encerra todas as sessões anteriores, sem devolver o token ao JavaScript da aplicação. Os campos são limpos após sucesso. Recuperação sem a senha atual ainda não está implementada.
+
+A contagem inclui mensagens não canceladas de outros autores, inclusive respostas em tópicos, apenas em canais acessíveis. O cursor avança sem regredir até a fotografia de dados retornada com a página de mensagens. Abrir as mensagens recentes reconhece a atividade do canal, incluindo seus tópicos. A conversa precisa estar visível, em foco e no fim da rolagem. Conversas ocultas no mobile e abas em segundo plano não marcam leitura. Mensagens recebidas depois daquela consulta permanecem não lidas.
+
+Um SSE autenticado de caixa de entrada invalida as contagens e a lista de conversas diretas nos canais permitidos, inclusive os fechados. Ele pausa quando a aba fica oculta, atualiza ao reconectar, verifica a sessão nos eventos e a cada minuto e usa consulta a cada trinta segundos durante desconexão. As consultas compartilham o cache de oito segundos e o isolamento entre contas. O reconhecimento de leitura publica uma invalidação para outros dispositivos. O SSE de caixa de entrada não transmite corpos de mensagens nem identificadores de canais privados.

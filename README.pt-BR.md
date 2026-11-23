@@ -1,8 +1,10 @@
 # Uorqui Workplace
 
-[English](README.md) · 0.2.0-beta.10
+[English](README.md) · 0.2.0-beta.11
 
 Um espaço compacto para equipes conversarem em canais internos e colaborarem com clientes em canais privados. Responsáveis pelas equipes criam canais e geram links vinculados ao e-mail de cada convidado. Quem tem acesso ao canal pode enviar mensagens e organizar as respostas em tópicos. Conversas de equipes e diretas atualizam por SSE e oferecem anexos privados de mídia e arquivos.
+
+Badges de não lidas atualizam equipes e conversas diretas por um SSE autenticado de caixa de entrada. O perfil inclui confirmação de e-mail e troca de senha; configure `RESEND_API_KEY` e `AUTH_EMAIL_FROM` na API para ativar o envio da confirmação.
 
 Responsáveis também podem gerenciar membros e excluir equipes. Mensagens diretas conectam duas pessoas independentemente das equipes. Edite nome, identificação pública e biografia pelo botão de perfil e compartilhe o link do seu perfil público.
 

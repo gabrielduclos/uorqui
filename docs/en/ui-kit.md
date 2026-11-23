@@ -48,3 +48,6 @@ Signup reserves an @ prefix beside the username input and normalizes typed handl
 ## Typography
 
 Use the global system stack `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`, shared with Tailwind’s sans token. Body text and messages use `1rem` (16 px at the default root size). Navigation items use `0.875rem` (14 px), weight 400 normally and 500 when selected. Form controls retain a minimum of 16 px. Both themes share these tokens; browser zoom and user font preferences remain available.
+
+
+Audio messages show the player without the stored filename. Stop recording uses inverse primary foreground/background tokens in both themes. Numeric unread badges use shared monochrome tokens and accessible count labels on teams, channels and direct messages. Profile security provides verification status/resend and current/new/confirm password fields, with individual show/hide controls and shared pending/error feedback.

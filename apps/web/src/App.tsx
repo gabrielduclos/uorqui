@@ -7,6 +7,7 @@ import { Conversation, initials } from './Conversation'
 import { translations, type Copy, type Locale } from './copy'
 import { DirectView, ProfileSettings, PublicProfileView, TeamSettings } from './workplace-views'
 import { ActionForm, ChannelForm, InviteForm, SignIn, TeamForm } from './forms'
+import { UnreadProvider, UnreadBadge, useUnread } from './unread'
 
 function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team; user?: User; copy: Copy; locale: Locale; preferredChannel?: string | null }) {
   const [channels, setChannels] = useState<Channel[] | undefined>(() => team ? cachedQuery<Channel[]>(`/teams/${team.id}/channels`) : undefined)
@@ -17,6 +18,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
   const [refresh, setRefresh] = useState(0)
   const [retrying, setRetrying] = useState(false)
   const channel = channels?.find((item) => item.id === selected) ?? channels?.[0]
+  const unread = useUnread()
   const owner = team?.role === 'owner'
 
   useEffect(() => {
@@ -83,7 +85,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
             const Icon = item.visibility === 'private' ? LockKeyhole : Hash
             return <button key={item.id} className="channel-link" aria-current={channel?.id === item.id ? 'true' : undefined}
               onClick={() => { setSelected(item.id); setMobileOpen(false) }}>
-              <Icon size={17} aria-hidden="true" /><span>{item.name}</span>
+              <Icon size={17} aria-hidden="true" /><span>{item.name}</span><UnreadBadge copy={copy} count={unread.find((entry) => entry.channelId === item.id)?.count ?? 0} />
             </button>
           })}
         </section>
@@ -128,6 +130,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
 function Workspace({ user, copy, locale, token, clearInvite }: {
   user?: User; copy: Copy; locale: Locale; token: string | null; clearInvite: () => void
 }) {
+  const unread = useUnread()
   const [teams, setTeams] = useState<Team[] | undefined>(() => user ? cachedQuery<Team[]>('/teams') : undefined)
   const [selection, setSelection] = useState<{ teamId: string; channelId?: string | null }>()
   const [creating, setCreating] = useState(false)
@@ -175,7 +178,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
     <nav className="team-rail" aria-label={copy.teams}>
       <div className="team-list">
         <button className="team-button" aria-label={copy.direct} title={copy.direct} aria-current={direct ? 'true' : undefined}
-          onClick={() => { setRequestedDirect(undefined); setDirect(true) }}><MessageSquare size={22} /></button>
+          onClick={() => { setRequestedDirect(undefined); setDirect(true) }}><MessageSquare size={22} /><UnreadBadge copy={copy} count={unread.filter((entry) => entry.teamId === null).reduce((total, entry) => total + entry.count, 0)} /></button>
         {!teams && error === undefined && <div role="status" aria-label={copy.loading} aria-busy="true">
           {[0, 1, 2].map((item) => <Skeleton key={item} className="skeleton-team" />)}
         </div>}
@@ -183,7 +186,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
           key={item.id} className="team-button" title={item.name} aria-label={item.name}
           aria-current={!direct && team?.id === item.id ? 'true' : undefined}
           onClick={() => { setDirect(false); setSelection({ teamId: item.id }) }}>
-          <span aria-hidden="true">{initials(item.name)}</span>
+          <span aria-hidden="true">{initials(item.name)}</span><UnreadBadge copy={copy} count={unread.filter((entry) => entry.teamId === item.id).reduce((total, entry) => total + entry.count, 0)} />
         </button>)}
         <button className="team-button team-add" title={copy.newTeam} aria-label={copy.newTeam}
           onClick={() => setCreating(true)}><Plus size={22} aria-hidden="true" /></button>
@@ -308,6 +311,7 @@ export function App() {
         </>}
       </div>
     </header>
+    {new URLSearchParams(location.hash.slice(1)).get('email') && <div className="notice" role="status">{new URLSearchParams(location.hash.slice(1)).get('email') === 'verified' ? copy.emailConfirmed : copy.emailInvalid}</div>}
     {error !== undefined && <div className="notice error">
       <span role="alert">{errorText(copy, error)}</span>
       <Button variant="ghost" onClick={async () => {
@@ -315,7 +319,7 @@ export function App() {
       }}>{copy.retry}</Button>
     </div>}
     {user === null ? <SignIn key={token ?? ''} copy={copy} token={token} onSuccess={() => loadSession()} />
-      : <Workspace key={user?.id ?? 'session-loading'} user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} />}
+      : user ? <UnreadProvider key={user.id}><Workspace key={user.id} user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} /></UnreadProvider> : <Workspace key="session-loading" user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} />}
     {editingProfile && user && <ProfileSettings key={`profile-settings-${user.id}`} copy={copy} user={user} close={() => setEditingProfile(false)} saved={() => loadSession()} />}
     {(profileHandle || (person && user)) && <PublicProfileView key={`public-profile-${profileHandle ?? person}`} handle={profileHandle ?? undefined}
       userId={person} copy={copy} user={user} close={() => {

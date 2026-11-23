@@ -106,7 +106,14 @@ export const messages = workplace.table('message', {
   unique('unique_message_channel').on(table.id, table.channelId),
   foreignKey({ columns: [table.parentId, table.channelId], foreignColumns: [table.id, table.channelId] }).onDelete('cascade'),
   index('message_channel_thread_idx').on(table.channelId, table.parentId, table.id),
+  index('message_channel_cursor_idx').on(table.channelId, table.id),
 ])
+
+export const channelReads = workplace.table('channel_read', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  channelId: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  lastMessageId: bigint('last_message_id', { mode: 'number' }).notNull().default(0),
+}, (table) => [primaryKey({ columns: [table.userId, table.channelId] })])
 
 export const invitations = workplace.table('invitation', {
   tokenHash: text('token_hash').primaryKey(),

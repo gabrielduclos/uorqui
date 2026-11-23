@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.11]
+
+- Oculta nomes de arquivos em mensagens de áudio e melhora o contraste do botão de finalizar gravação nos dois temas.
+- Adiciona leitura persistida por usuário, badges em equipes/canais/conversas diretas e SSE de caixa de entrada para conversas fechadas.
+- Marca como lida apenas a conversa visível nas mensagens recentes. Conversas ocultas no mobile preservam os avisos; mensagens próprias e canceladas não entram na contagem.
+- Adiciona confirmação e reenvio de e-mail e troca de senha no perfil, validando a senha atual e encerrando as outras sessões.
+- Inclui migração 0004, índice para não lidas e verificações de segurança, SSE e interface PT/EN no desktop e mobile.
+- O envio depende de RESEND_API_KEY e AUTH_EMAIL_FROM na API; sem configuração, apresenta erro traduzido de entrega.
+
 ## [0.2.0-beta.10]
 
 - Aplica fonte global do sistema, referência de 16 px em textos e mensagens, navegação de 14 px com pesos normal/médio e campos acessíveis nos dois temas.

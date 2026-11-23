@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.11]
+
+- Hides filenames on audio messages and improves the stop-recording button contrast in both themes.
+- Adds persisted per-user unread cursors, badges on teams/channels/direct messages and an authenticated inbox SSE stream for inactive conversations.
+- Marks a visible conversation read only at its latest messages; hidden mobile conversations retain their unread state. Own and unsent messages do not count.
+- Adds email verification, resend feedback and password changes in profile settings. Password changes verify the current password and revoke other sessions.
+- Adds migration 0004, an unread-query index, account security regression tests and browser checks for PT/EN, mobile/desktop and SSE.
+- Email delivery requires RESEND_API_KEY and AUTH_EMAIL_FROM on the API; missing configuration returns a translated delivery error.
+
 ## [0.2.0-beta.10]
 
 - Applies the global system font, 16 px body/message reference, 14 px navigation with regular/medium states and accessible form sizing in both themes.

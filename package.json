@@ -1,6 +1,6 @@
 {
   "name": "uorqui-workplace",
-  "version": "0.2.0-beta.10",
+  "version": "0.2.0-beta.11",
   "private": true,
   "workspaces": ["apps/api", "apps/web"],
   "engines": { "node": ">=22" },

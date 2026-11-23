@@ -142,7 +142,7 @@ test('public account registration, team and private-channel conversations', asyn
   const thread = (await sync(`${path(clientId)}?thread=${root}`, undefined, guestCookie)).json().messages
   assert.equal(thread[0].body, 'Owner reply')
   assert.equal((await sync(path(clientId), { body: 'No nested replies', thread: thread[0].id }, ownerCookie)).statusCode, 404)
-  assert.deepEqual((await sync(`${path(clientId)}?before=${root}`, undefined, guestCookie)).json(), { messages: [], more: false })
+  assert.deepEqual((await sync(`${path(clientId)}?before=${root}`, undefined, guestCookie)).json(), { readCursor: 0, messages: [], more: false })
 
   for (let index = 0; index < 55; index++) {
     assert.equal((await sync(path(clientId), { body: `Message ${index + 1}` }, ownerCookie)).statusCode, 201)

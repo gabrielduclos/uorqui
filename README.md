@@ -1,8 +1,10 @@
 # Uorqui Workplace
 
-[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.10
+[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.11
 
 A compact workspace for teams to talk in internal channels and collaborate with customers in private channels. Team owners create channels and generate links tied to a recipient’s email. Anyone with access to a channel can send messages and keep follow-up conversations in threads. Team and direct conversations update through SSE and support private media and file attachments.
+
+Unread badges update across teams and direct conversations through an authenticated inbox stream. Profile settings include email verification and password changes; configure `RESEND_API_KEY` and `AUTH_EMAIL_FROM` on the API to enable verification email delivery.
 
 Owners can also manage team membership and delete teams. Direct messages connect two people independently of teams. Edit your name, public handle and biography from the profile button and share your public profile link.
 

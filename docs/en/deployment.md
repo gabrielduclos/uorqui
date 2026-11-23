@@ -25,7 +25,7 @@ The preview is available at https://feat-enterprise-channels-main.uorqui1.worker
 
 ## Beta scope
 
-Accounts can be created from the sign-in screen with a name, unique @username, email and password of 8–128 characters. New accounts start with an empty team list and can create a team or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Automatic email delivery, mailbox verification, password recovery are outside this beta. Open team and direct conversations receive SSE invalidations in real time.
+Accounts can be created from the sign-in screen with a name, unique @username, email and password of 8–128 characters. New accounts start with an empty team list and can create a team or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Email verification and password changes are available in profile settings. Forgotten-password recovery and automatic invitation emails remain outside this beta. Open team and direct conversations receive SSE invalidations in real time.
 
 
 ## Caching
@@ -65,3 +65,16 @@ Uploads first reserve metadata through the API. The Worker authorizes the reques
 File operations require the Worker and its R2 binding; the default Vite-to-API development proxy alone does not provide file storage. The end-to-end media check used a local Worker/R2 runtime and PostgreSQL 17, including notifications between two API instances, alongside the PGlite regression suite.
 
 References: [Neon connection pooling](https://neon.com/docs/connect/connection-pooling), [Preview configuration](https://developers.cloudflare.com/workers/previews/configuration/) and [R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).
+
+
+## Account security and unread messages
+
+Apply migration 0004 before this version. It adds a per-user/channel read cursor and a message channel/cursor index. `/health/ready` checks the table and reports `emailConfigured` without revealing credentials.
+
+Set `RESEND_API_KEY` and `AUTH_EMAIL_FROM` in the API service environment. Use a sender/domain verified with Resend. Signup sends a one-hour verification link when configured; existing users can request another in profile settings. The server fixes the verification return origin and displays success or an expired/invalid link result. Delivery errors are shown without claiming success. Missing email configuration does not block existing accounts or password changes. An accepted Resend request does not guarantee inbox delivery. Verification currently records the verified state; it does not gate signing in.
+
+Password changes require the current password and 8–128 characters for the new password. The server rotates the current session cookie, revokes all previous sessions and never returns the session token to application JavaScript. The form confirms the new password and clears password fields after success. Recovery without the current password is not implemented.
+
+Unread counts include uncancelled messages from other authors, including thread replies, only in channels the user can currently access. Read cursors advance monotonically to the snapshot returned with a rendered message page. Viewing the latest messages acknowledges channel activity, including its threads. A conversation must be visible, focused and at the bottom to acknowledge that snapshot. Hidden mobile conversations and background tabs do not acknowledge messages. Explicit snapshot cursors prevent concurrent arrivals from being marked read accidentally.
+
+A separate authenticated inbox SSE stream invalidates unread counts and direct-conversation lists for accessible channels, including closed conversations. It closes while hidden, catches up on reconnect, checks session validity on events and once per minute, and falls back to thirty-second polling while disconnected. Unread queries share the tab cache with an eight-second freshness window and the existing authentication isolation. Acknowledgements publish an invalidation for other devices. No message body or private channel identifiers are sent on the inbox stream.

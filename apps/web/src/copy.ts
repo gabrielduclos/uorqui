@@ -1,5 +1,8 @@
 export const translations = {
   'pt-BR': {
+    unreadCount: (count: number) => `${count} mensagens não lidas`,
+    security: 'Segurança da conta', emailConfirmed: 'E-mail confirmado.', emailPending: 'E-mail ainda não confirmado.', emailInvalid: 'Link de confirmação inválido ou expirado. Solicite outro no seu perfil.', resendVerification: 'Enviar confirmação de e-mail', verificationSent: 'Confirmação enviada. Confira sua caixa de entrada e spam.', changePassword: 'Trocar senha', currentPassword: 'Senha atual', newPassword: 'Nova senha', repeatPassword: 'Confirme a nova senha', passwordChanged: 'Senha alterada. As outras sessões foram encerradas.',
+
     username: 'Usuário', download: 'Baixar arquivo', location: 'Localização',
     manageTeam: 'Gerenciar equipe', members: 'Membros', owner: 'Responsável', member: 'Membro', guest: 'Convidado', removeMember: 'Remover membro', removeHelp: 'O acesso aos canais desta equipe será removido.', deleteTeam: 'Apagar equipe', deleteHelp: 'A equipe e seus canais deixarão de estar disponíveis para todos os participantes. Digite o nome da equipe para confirmar.', confirmTeamName: 'Confirme o nome da equipe', direct: 'Mensagens diretas', newDirect: 'Nova mensagem direta', directHint: 'Digite a identificação pública da pessoa.', emptyDirect: 'Comece uma conversa privada.', myProfile: 'Meu perfil', publicProfile: 'Perfil público', handle: 'Identificação pública', handleHint: 'De 3 a 24 letras minúsculas, números ou sublinhado.', bio: 'Biografia', publicHint: 'Ao salvar, seu nome, identificação e biografia ficarão disponíveis no link público do perfil.', viewPublic: 'Ver perfil público', messagePerson: 'Enviar mensagem', profileLink: 'Link do perfil', profileSaved: 'Perfil salvo', unpublishedProfile: 'Identificação pública ainda não definida.',
     editMessage: 'Editar mensagem', cancelMessage: 'Cancelar envio', cancelledMessage: 'Mensagem cancelada', edited: 'editada', sending: 'Enviando…', failedMessage: 'Falha no envio', save: 'Salvar', editText: 'Texto da mensagem',
@@ -27,6 +30,9 @@ export const translations = {
     generate: 'Gerar link', accept: 'Aceitar convite', gotInvite: 'Você recebeu um convite',
     acceptHelp: 'Confirme para acessar com a conta conectada.', moveLatest: 'Ir para as mensagens recentes',
     errors: {
+      EMAIL_UNAVAILABLE: 'O envio de e-mail está indisponível. Tente novamente mais tarde.',
+      CURRENT_PASSWORD_INVALID: 'A senha atual está incorreta.',
+      PASSWORD_MISMATCH: 'As novas senhas não coincidem.',
       INVALID_FILE: 'Selecione um arquivo válido de até 50 MB.',
       FILE_NOT_FOUND: 'Arquivo indisponível.',
       FILES_UNAVAILABLE: 'Não foi possível acessar os anexos. Tente novamente.',
@@ -53,6 +59,9 @@ export const translations = {
     },
   },
   en: {
+    unreadCount: (count: number) => `${count} unread messages`,
+    security: 'Account security', emailConfirmed: 'Email verified.', emailPending: 'Email has not been verified yet.', emailInvalid: 'Invalid or expired verification link. Request another in your profile.', resendVerification: 'Send verification email', verificationSent: 'Verification sent. Check your inbox and spam folder.', changePassword: 'Change password', currentPassword: 'Current password', newPassword: 'New password', repeatPassword: 'Confirm new password', passwordChanged: 'Password changed. Other sessions have been signed out.',
+
     username: 'Username', download: 'Download file', location: 'Location',
     manageTeam: 'Manage team', members: 'Members', owner: 'Owner', member: 'Member', guest: 'Guest', removeMember: 'Remove member', removeHelp: 'Access to this team’s channels will be removed.', deleteTeam: 'Delete team', deleteHelp: 'This team and its channels will become unavailable to all participants. Type the team name to confirm.', confirmTeamName: 'Confirm team name', direct: 'Direct messages', newDirect: 'New direct message', directHint: 'Enter the person’s public handle.', emptyDirect: 'Start a private conversation.', myProfile: 'My profile', publicProfile: 'Public profile', handle: 'Public handle', handleHint: '3–24 lowercase letters, digits, or underscores.', bio: 'Bio', publicHint: 'Saving makes your name, handle and bio available at your public profile link.', viewPublic: 'View public profile', messagePerson: 'Send message', profileLink: 'Profile link', profileSaved: 'Profile saved', unpublishedProfile: 'Public handle has not been set yet.',
     editMessage: 'Edit message', cancelMessage: 'Unsend message', cancelledMessage: 'Message unsent', edited: 'edited', sending: 'Sending…', failedMessage: 'Could not send', save: 'Save', editText: 'Message text',
@@ -80,6 +89,9 @@ export const translations = {
     generate: 'Generate link', accept: 'Accept invitation', gotInvite: 'You’ve been invited',
     acceptHelp: 'Confirm to join with your signed-in account.', moveLatest: 'Jump to latest messages',
     errors: {
+      EMAIL_UNAVAILABLE: 'Email delivery is unavailable. Try again later.',
+      CURRENT_PASSWORD_INVALID: 'Your current password is incorrect.',
+      PASSWORD_MISMATCH: 'The new passwords do not match.',
       INVALID_FILE: 'Choose a valid file up to 50 MB.',
       FILE_NOT_FOUND: 'File unavailable.',
       FILES_UNAVAILABLE: 'Could not access attachments. Try again.',

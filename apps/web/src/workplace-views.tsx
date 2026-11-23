@@ -7,6 +7,8 @@ import { Conversation, initials } from './Conversation'
 import type { Copy, Locale } from './copy'
 import { ActionForm } from './forms'
 import { useResource } from './use-resource'
+import { UnreadBadge, useUnread } from './unread'
+import { AccountSecurity } from './account-security'
 
 export function showPerson(userId: string) {
   window.dispatchEvent(new CustomEvent('show-person', { detail: userId }))
@@ -85,6 +87,7 @@ export function ProfileSettings({ copy, user, close, saved }: { copy: Copy; user
       <label>{copy.bio}<textarea name="bio" rows={3} maxLength={500} defaultValue={resource.data.bio ?? ''} /></label>
       {success && <p role="status">{copy.profileSaved}</p>}
     </ActionForm>}
+    <AccountSecurity user={user} copy={copy} saved={saved} />
     {resource.data?.handle && <a className="profile-link" href={`#profile=${encodeURIComponent(resource.data.handle)}`} onClick={close}>{copy.viewPublic}</a>}
   </Modal>
 }
@@ -117,6 +120,7 @@ export function PublicProfileView({ handle, userId, copy, user, close }: {
 }
 
 export function DirectView({ copy, locale, user, requested }: { copy: Copy; locale: Locale; user: User; requested?: DirectChannel }) {
+  const unread = useUnread()
   const resource = useResource<DirectChannel[]>('/direct')
   const [selected, setSelected] = useState<DirectChannel | undefined>(requested)
   const [creating, setCreating] = useState(false)
@@ -127,7 +131,7 @@ export function DirectView({ copy, locale, user, requested }: { copy: Copy; loca
       <div className="group-heading"><h2>{copy.direct}</h2><Button variant="ghost" aria-label={copy.newDirect} onClick={() => setCreating(true)}><Plus size={18} /></Button></div>
       <ResourceFeedback copy={copy} resource={resource} />
       {resource.data?.map((item) => <button key={item.id} className="channel-link" aria-current={channel?.id === item.id ? 'true' : undefined}
-        onClick={() => { setSelected(item); setListOpen(false) }}><span className="avatar">{initials(item.name)}</span><span>{item.name}</span></button>)}
+        onClick={() => { setSelected(item); setListOpen(false) }}><span className="avatar">{initials(item.name)}</span><span>{item.name}</span><UnreadBadge copy={copy} count={unread.find((entry) => entry.channelId === item.id)?.count ?? 0} /></button>)}
       {resource.data?.length === 0 && <p className="muted">{copy.emptyDirect}</p>}
     </aside>
     <main className="content">

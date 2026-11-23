@@ -2,11 +2,12 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify, { LogController } from 'fastify'
 import type { Config } from './config.js'
 import { connect } from './database.js'
+import type { VerificationEmail } from './email.js'
 import { registerRoutes, RequestError } from './routes.js'
 
-export async function createApp(config: Config, logger = true) {
+export async function createApp(config: Config, logger = true, deliverEmail?: (email: VerificationEmail) => Promise<void>) {
   const app = Fastify({ logger, logController: new LogController({ disableRequestLogging: true }), bodyLimit: 32 * 1024 })
-  const services = connect(config)
+  const services = connect(config, deliverEmail)
 
   app.addHook('onClose', async () => { await services.realtimePool.end(); await services.pool.end() })
   app.addHook('onRequest', async (request, reply) => {

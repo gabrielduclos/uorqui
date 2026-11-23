@@ -9,7 +9,9 @@ import { registerWorkplaceRoutes } from './workplace-routes.js'
 import { registerAttachmentRoutes } from './attachment-routes.js'
 import { createRealtime } from './realtime.js'
 import { ReadCache } from './read-cache.js'
-import { attachments, channelMembers, channels, directConversations, invitations, memberships, messages, profiles, sessions, teams, users } from './schema.js'
+import { registerAccountRoutes } from './account-routes.js'
+import { registerUnreadRoutes } from './unread-routes.js'
+import { attachments, channelMembers, channelReads, channels, directConversations, invitations, memberships, messages, profiles, sessions, teams, users } from './schema.js'
 
 export class RequestError extends Error {
   constructor(readonly statusCode: number, readonly code: string) {
@@ -34,7 +36,8 @@ const activeInvitation = (token: string) => and(
   isNull(invitations.acceptedAt),
 )
 
-export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimePool }: Services, config: Config) {
+export function registerRoutes(app: FastifyInstance, services: Services, config: Config) {
+  const { auth, db, pool, realtimePool } = services
   const messageCache = new ReadCache()
   const realtime = createRealtime(pool, (channelId) => messageCache.clear(`${channelId}:`), realtimePool)
   const streams = new Set<() => void>()
@@ -78,6 +81,8 @@ export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimeP
 
   registerWorkplaceRoutes(app, { db }, { requireUser, requireOwner })
   registerAttachmentRoutes(app, { db }, config, { requireUser, requireChannel })
+  registerAccountRoutes(app, services, config, requireUser)
+  registerUnreadRoutes(app, services, realtime, streams, { requireUser, requireChannel, channelAccess })
 
   app.get('/health/ready', async () => {
     await db.select({ id: users.id }).from(users).limit(1)
@@ -86,7 +91,8 @@ export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimeP
     await db.select({ handle: users.handle }).from(users).limit(1)
     await db.select({ id: attachments.id }).from(attachments).limit(1)
     await db.select({ id: directConversations.channelId }).from(directConversations).limit(1)
-    return { ready: true }
+    await db.select({ id: channelReads.channelId }).from(channelReads).limit(1)
+    return { ready: true, emailConfigured: services.emailAvailable }
   })
 
   const authPaths = ['/api/auth/sign-in/email', '/api/auth/sign-up/email', '/api/auth/sign-out']
@@ -111,7 +117,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimeP
         requestedHandle = input.handle
         const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.handle, input.handle))
         if (taken) throw new RequestError(409, 'HANDLE_TAKEN')
-        body = { name: input.name, handle: input.handle, email: input.email, password: input.password }
+        body = { name: input.name, handle: input.handle, email: input.email, password: input.password, callbackURL: `${config.WEB_ORIGIN}/#email=verified` }
       }
       const headers = fromNodeHeaders(request.headers)
       headers.delete('content-length')
@@ -137,7 +143,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimeP
 
   app.get('/api/session', async (request) => {
     const user = await requireUser(request)
-    const [fresh] = await db.select({ id: users.id, name: users.name, email: users.email, handle: users.handle, bio: profiles.bio })
+    const [fresh] = await db.select({ id: users.id, name: users.name, email: users.email, emailVerified: users.emailVerified, handle: users.handle, bio: profiles.bio })
       .from(users).leftJoin(profiles, eq(users.id, profiles.userId)).where(eq(users.id, user.id))
     return fresh
   })
@@ -303,6 +309,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimeP
       const rows = await db.select({
         id: roots.id, body: roots.body, location: roots.location, createdAt: roots.createdAt, author: roots.author,
         authorId: roots.authorId, clientId: roots.clientId, editedAt: roots.editedAt, cancelledAt: roots.cancelledAt,
+        readCursor: sql<number>`cast((select coalesce(max(id), 0) from ${messages} where channel_id = ${channelId}) as bigint)`.mapWith(Number),
         replies: thread ? sql<number>`0` : sql<number>`cast((
           select count(*) from ${messages} as reply
           where reply.channel_id = ${channelId} and reply.parent_id = "page"."id"
@@ -313,7 +320,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimeP
       const files = page.length ? await db.select({ id: attachments.id, name: attachments.name, mime: attachments.mime,
         size: attachments.size, messageId: attachments.messageId }).from(attachments)
         .where(inArray(attachments.messageId, page.filter((row) => !row.cancelledAt).map((row) => row.id))) : []
-      return { messages: page.map((row) => ({ ...row, attachments: files.filter((file) => file.messageId === row.id)
+      return { readCursor: rows[0]?.readCursor ?? 0, messages: page.map(({ readCursor: _, ...row }) => ({ ...row, attachments: files.filter((file) => file.messageId === row.id)
         .map(({ messageId: _, ...file }) => file) })), more: rows.length > 50 }
     })
   })

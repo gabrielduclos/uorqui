@@ -9,6 +9,7 @@ import { useOutbox } from './outbox'
 import { ActionForm } from './forms'
 import { Button, Modal } from './components/ui/controls'
 import type { Copy, Locale } from './copy'
+import { useUnread } from './unread'
 
 export function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0]?.toUpperCase()).join('')
@@ -40,7 +41,7 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
             {file.mime.startsWith('image/') ? <a href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={file.name} loading="lazy" /></a>
               : file.mime.startsWith('video/') ? <video controls playsInline preload="metadata" src={src} aria-label={file.name} />
               : file.mime.startsWith('audio/') ? <ChatAudioPlayer src={src} locale={locale} /> : null}
-            <a className="file-link" href={file.url ?? `/api/files/${file.id}?download=1`} download={file.name}>{file.name} · {file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(0)} KB`} · {copy.download}</a>
+            {!file.mime.startsWith('audio/') && <a className="file-link" href={file.url ?? `/api/files/${file.id}?download=1`} download={file.name}>{file.name} · {file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(0)} KB`} · {copy.download}</a>}
           </div>
         })}
         {message.location && <a className="file-link" target="_blank" rel="noopener noreferrer" href={`https://www.openstreetmap.org/?mlat=${message.location.latitude}&mlon=${message.location.longitude}#map=16/${message.location.latitude}/${message.location.longitude}`}>{copy.location} · {message.location.latitude.toFixed(5)}, {message.location.longitude.toFixed(5)}</a>}
@@ -102,6 +103,10 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
   const follow = useRef(true)
   const prepend = useRef<{ height: number; top: number } | null>(null)
   const [atBottom, setAtBottom] = useState(true)
+  const unread = useUnread().find((item) => item.channelId === channel.id)
+  const reading = useRef(false)
+  const acknowledged = useRef(0)
+  const [readAttempt, setReadAttempt] = useState(0)
   const pendingCount = useRef(0)
   const transmitting = useRef(new Set<string>())
   const historyCursors = useRef<number[]>([])
@@ -129,7 +134,7 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
         const page = await api<MessagePage>(`${endpoint}?${threadQuery}`, { signal: controller.signal })
         if (controller.signal.aborted) return
         setFirst((current) => current
-          ? { messages: mergeMessages(current.messages, page.messages), more: current.more }
+          ? { ...page, messages: mergeMessages(current.messages, page.messages), more: current.more }
           : page)
         for (const message of page.messages) onUpdated?.(message)
         if (historyCursors.current.length) {
@@ -178,6 +183,26 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
       list.scrollTop = list.scrollHeight
     }
   }, [records.length, first !== undefined])
+
+  useEffect(() => {
+    let retryRead: number | undefined
+    const mark = () => {
+      const cursor = first?.readCursor ?? 0
+      if (thread || !unread?.count || cursor < unread.latestId || cursor <= acknowledged.current || reading.current
+        || !follow.current || document.hidden || !document.hasFocus() || !scroll.current?.getClientRects().length) return
+      reading.current = true
+      void api(`/channels/${channel.id}/read`, { data: { lastMessageId: cursor } })
+        .then(() => { acknowledged.current = cursor; setReadAttempt((value) => value + 1) })
+        .catch(() => { retryRead = window.setTimeout(() => setReadAttempt((value) => value + 1), 5000) })
+        .finally(() => { reading.current = false })
+    }
+    mark()
+    window.addEventListener('focus', mark)
+    document.addEventListener('visibilitychange', mark)
+    const observer = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) mark() })
+    if (scroll.current) observer.observe(scroll.current)
+    return () => { clearTimeout(retryRead); observer.disconnect(); window.removeEventListener('focus', mark); document.removeEventListener('visibilitychange', mark) }
+  }, [channel.id, first?.readCursor, unread?.latestId, unread?.count, atBottom, thread, readAttempt])
 
   async function loadOlder() {
     const oldest = records[0]

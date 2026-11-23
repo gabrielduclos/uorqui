@@ -11,7 +11,7 @@ export function createRealtime(pool: Pool, invalidate: (channelId: string) => vo
   let retry: ReturnType<typeof setTimeout> | undefined
   let stopped = false
   let connecting = false
-  const deliver = (channelId: string) => { invalidate(channelId); emitter.emit(channelId) }
+  const deliver = (channelId: string) => { invalidate(channelId); emitter.emit(channelId); emitter.emit('*', channelId) }
   async function start() {
     if (stopped || connecting || listener) return
     connecting = true
@@ -34,7 +34,8 @@ export function createRealtime(pool: Pool, invalidate: (channelId: string) => vo
         if (!stopped && emitter.eventNames().length) retry = setTimeout(() => void start(), 3000)
       })
       await client.query('LISTEN uorqui_workplace_messages')
-      for (const channelId of emitter.eventNames()) if (typeof channelId === 'string') deliver(channelId)
+      for (const channelId of emitter.eventNames()) if (typeof channelId === 'string' && channelId !== '*') deliver(channelId)
+      emitter.emit('*', undefined)
     } catch {
       if (listener === client) { listener = undefined; client?.release(true) }
       if (!stopped && emitter.eventNames().length) retry = setTimeout(() => void start(), 3000)
@@ -42,7 +43,7 @@ export function createRealtime(pool: Pool, invalidate: (channelId: string) => vo
   }
   return {
     start,
-    subscribe(channelId: string, callback: () => void) {
+    subscribe(channelId: string, callback: (channelId?: string) => void) {
       emitter.on(channelId, callback)
       void start()
       return () => {

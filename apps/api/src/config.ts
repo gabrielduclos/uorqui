@@ -6,6 +6,8 @@ const settings = z.object({
   AUTH_SECRET: z.string().min(32),
   REALTIME_DATABASE_URL: z.string().url().optional(),
   FILES_SECRET: z.string().min(32).optional(),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  AUTH_EMAIL_FROM: z.string().min(1).optional(),
   WEB_ORIGIN: z.url().transform((value) => new URL(value).origin),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
 })

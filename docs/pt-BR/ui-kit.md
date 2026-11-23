@@ -48,3 +48,6 @@ O cadastro reserva o prefixo @ ao lado do campo de usuário e normaliza a identi
 ## Tipografia
 
 Usar a pilha global do sistema `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`, compartilhada com o token sans do Tailwind. Texto principal e mensagens usam `1rem` (16 px na configuração raiz padrão). Itens de navegação usam `0.875rem` (14 px), peso 400 normalmente e 500 quando selecionados. Campos de formulário mantêm mínimo de 16 px. Os dois temas compartilham os tokens; o zoom e as preferências de fonte do usuário permanecem disponíveis.
+
+
+Mensagens de áudio exibem o player sem o nome do arquivo. Finalizar a gravação usa contraste inverso dos tokens de cor primária nos dois temas. Badges numéricos de não lidas usam tokens monocromáticos globais e rótulos acessíveis nas equipes, canais e mensagens diretas. A segurança do perfil oferece estado/reenvio de confirmação e campos de senha atual, nova e confirmação, com controles individuais de mostrar/ocultar e feedback compartilhado de espera/erro.

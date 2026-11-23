@@ -22,14 +22,18 @@ test('realtime relays database notifications, isolates channels and avoids dupli
   const first = createRealtime(pool, (id) => invalidated.push(`first:${id}`))
   const second = createRealtime(pool, (id) => invalidated.push(`second:${id}`))
   let a = 0, b = 0, hidden = 0
+  const inbox: Array<string | undefined> = []
+  second.subscribe('*', (channelId) => inbox.push(channelId))
   const unsubscribe = first.subscribe('visible', () => a++)
   second.subscribe('visible', () => b++)
   second.subscribe('private', () => hidden++)
   await Promise.all([first.start(), second.start()])
   await new Promise<void>((resolve) => setImmediate(resolve))
   a = b = hidden = 0; invalidated.length = 0
+  inbox.length = 0
   await first.publish('visible')
   assert.deepEqual({ a, b, hidden }, { a: 1, b: 1, hidden: 0 })
+  assert.deepEqual(inbox, ['visible'])
   assert.deepEqual(invalidated, ['first:visible', 'second:visible'])
   unsubscribe()
   await second.publish('visible')
