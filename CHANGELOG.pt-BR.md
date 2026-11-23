@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.8]
+
+- Adiciona gestão pelo responsável para renomear equipes, listar membros e convidados, remover acessos e confirmar a exclusão pelo nome. Equipes e canais excluídos ficam inacessíveis, mantendo os dados armazenados.
+- Adiciona conversas privadas entre duas pessoas, únicas por dupla, com envio otimista, tópicos, edição e cancelamento de mensagens.
+- Adiciona edição de nome, identificação pública única e biografia, perfil público compartilhável e acesso pelo nome do autor das mensagens. O e-mail permanece privado.
+- Adiciona a migração 0002 para perfis, conversas diretas e exclusão lógica de equipes, com testes de autorização e concorrência.
+
 ## [0.2.0-beta.7]
 
 - Adiciona campo de uma linha que cresce com o texto e mensagens otimistas imediatas, incluindo tópicos.

@@ -5,8 +5,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Config } from './config.js'
 import type { Services } from './database.js'
+import { registerWorkplaceRoutes } from './workplace-routes.js'
 import { ReadCache } from './read-cache.js'
-import { channelMembers, channels, invitations, memberships, messages, teams, users } from './schema.js'
+import { channelMembers, channels, directConversations, invitations, memberships, messages, profiles, teams, users } from './schema.js'
 
 export class RequestError extends Error {
   constructor(readonly statusCode: number, readonly code: string) {
@@ -51,14 +52,16 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
 
   async function requireChannel(channelId: string, userId: string) {
     const [channel] = await db.select().from(channels)
-      .where(and(eq(channels.id, channelId), channelAccess(userId)))
+      .where(and(eq(channels.id, channelId), channelAccess(userId),
+        or(isNull(channels.teamId), exists(db.select({ id: teams.id }).from(teams)
+          .where(and(eq(teams.id, channels.teamId), isNull(teams.deletedAt)))))))
     if (!channel) throw new RequestError(404, 'CHANNEL_NOT_FOUND')
     return channel
   }
 
   async function requireOwner(teamId: string, userId: string) {
     const [owner] = await db.select({ id: memberships.userId }).from(memberships)
-      .where(and(eq(memberships.teamId, teamId), eq(memberships.userId, userId), eq(memberships.role, 'owner')))
+      .where(and(eq(memberships.teamId, teamId), eq(memberships.userId, userId), eq(memberships.role, 'owner'), exists(db.select({ id: teams.id }).from(teams).where(and(eq(teams.id, teamId), isNull(teams.deletedAt))))))
     if (!owner) throw new RequestError(403, 'FORBIDDEN')
   }
 
@@ -68,10 +71,14 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     if (!thread) throw new RequestError(404, 'THREAD_NOT_FOUND')
   }
 
+  registerWorkplaceRoutes(app, { db }, { requireUser, requireOwner })
+
   app.get('/health/ready', async () => {
     await db.select({ id: users.id }).from(users).limit(1)
     await db.select({ token: invitations.tokenHash }).from(invitations).limit(1)
     await db.select({ id: messages.id, clientId: messages.clientId, editedAt: messages.editedAt, cancelledAt: messages.cancelledAt }).from(messages).limit(1)
+    await db.select({ handle: profiles.handle }).from(profiles).limit(1)
+    await db.select({ id: directConversations.channelId }).from(directConversations).limit(1)
     return { ready: true }
   })
 
@@ -88,7 +95,8 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
         }), body)
         if (input.token) {
           const [invite] = await db.select({ email: invitations.email }).from(invitations)
-            .where(and(activeInvitation(input.token), eq(invitations.email, input.email)))
+            .where(and(activeInvitation(input.token), eq(invitations.email, input.email),
+              exists(db.select({ id: teams.id }).from(teams).where(and(eq(teams.id, invitations.teamId), isNull(teams.deletedAt))))))
           if (!invite) throw new RequestError(400, 'INVITE_INVALID')
         }
         body = { name: input.name, email: input.email, password: input.password }
@@ -113,7 +121,9 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
 
   app.get('/api/session', async (request) => {
     const user = await requireUser(request)
-    return { id: user.id, name: user.name, email: user.email }
+    const [fresh] = await db.select({ id: users.id, name: users.name, email: users.email, handle: profiles.handle, bio: profiles.bio })
+      .from(users).leftJoin(profiles, eq(users.id, profiles.userId)).where(eq(users.id, user.id))
+    return fresh
   })
 
   app.get('/api/teams', async (request) => {
@@ -123,7 +133,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     return db.select({ id: teams.id, name: teams.name, role: memberships.role })
       .from(teams)
       .leftJoin(memberships, and(eq(teams.id, memberships.teamId), eq(memberships.userId, userId)))
-      .where(or(teamAccess(userId), hasChannel))
+      .where(and(isNull(teams.deletedAt), or(teamAccess(userId), hasChannel)))
       .orderBy(asc(teams.name), asc(teams.id))
   })
 
@@ -144,7 +154,8 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     const { id: userId } = await requireUser(request)
     const { teamId } = validate(z.object({ teamId: id }), request.params)
     return db.select({ id: channels.id, name: channels.name, description: channels.description, visibility: channels.visibility })
-      .from(channels).where(and(eq(channels.teamId, teamId), channelAccess(userId)))
+      .from(channels).where(and(eq(channels.teamId, teamId), channelAccess(userId),
+        exists(db.select({ id: teams.id }).from(teams).where(and(eq(teams.id, teamId), isNull(teams.deletedAt))))))
       .orderBy(asc(channels.createdAt), asc(channels.id))
   })
 
@@ -193,6 +204,8 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
       const [invite] = await tx.select().from(invitations)
         .where(eq(invitations.tokenHash, digest(token))).for('update')
       if (!invite || invite.email !== user.email) throw new RequestError(400, 'INVITE_INVALID')
+      const [activeTeam] = await tx.select({ id: teams.id }).from(teams).where(and(eq(teams.id, invite.teamId), isNull(teams.deletedAt)))
+      if (!activeTeam) throw new RequestError(400, 'INVITE_INVALID')
       if (invite.acceptedAt) return { teamId: invite.teamId, channelId: invite.channelId }
       if (invite.expiresAt <= new Date()) throw new RequestError(400, 'INVITE_INVALID')
       if (invite.channelId) {

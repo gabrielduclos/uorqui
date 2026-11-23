@@ -1,16 +1,17 @@
-import { ChevronLeft, CirclePlus, Globe, Hash, Layers, LockKeyhole, LogOut, Moon, Plus, Send, Sun, UserPlus } from 'lucide-react'
+import { ChevronLeft, CirclePlus, Globe, Hash, Layers, LockKeyhole, LogOut, MessageSquare, Moon, Settings, Plus, Send, Sun, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { ApiError, api, cachedQuery, errorText, type Channel, type Team, type User } from './api'
+import { ApiError, api, cachedQuery, errorText, type Channel, type DirectChannel, type Team, type User } from './api'
 import { Button, Modal } from './components/ui/controls'
 import { Skeleton, MessageSkeleton } from './components/ui/skeleton'
 import { Conversation, initials } from './Conversation'
 import { translations, type Copy, type Locale } from './copy'
+import { DirectView, ProfileSettings, PublicProfileView, TeamSettings } from './workplace-views'
 import { ActionForm, ChannelForm, InviteForm, SignIn, TeamForm } from './forms'
 
 function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team; user?: User; copy: Copy; locale: Locale; preferredChannel?: string | null }) {
   const [channels, setChannels] = useState<Channel[] | undefined>(() => team ? cachedQuery<Channel[]>(`/teams/${team.id}/channels`) : undefined)
   const [selected, setSelected] = useState(preferredChannel)
-  const [dialog, setDialog] = useState<'create' | 'invite' | 'guest'>()
+  const [dialog, setDialog] = useState<'create' | 'invite' | 'guest' | 'manage'>()
   const [mobileOpen, setMobileOpen] = useState(!preferredChannel)
   const [error, setError] = useState<unknown>()
   const [refresh, setRefresh] = useState(0)
@@ -62,6 +63,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
       <div className="sidebar-heading">
         <div className="team-mark"><Layers size={18} /></div>
         <h2>{team ? team.name : <Skeleton className="skeleton-name" />}</h2>
+        {owner && <Button variant="ghost" aria-label={copy.manageTeam} title={copy.manageTeam} onClick={() => setDialog('manage')}><Settings size={17} /></Button>}
         {owner && <Button variant="ghost" aria-label={copy.inviteTitle} title={copy.inviteTitle} onClick={() => setDialog('invite')}><UserPlus size={17} /></Button>}
       </div>
       {!channels && <div className="channel-placeholder" role="status" aria-label={copy.loading} aria-busy="true">
@@ -110,6 +112,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
           <div className="composer"><div className="compose-box"><Skeleton className="skeleton-composer" /><Button disabled aria-label={copy.send}><Send size={17} /></Button></div></div>
         </div> : <div className="center-state"><p>{copy.chooseChannel}</p></div>}
     </main>
+    {dialog === 'manage' && team && user && <TeamSettings team={team} user={user} copy={copy} close={() => setDialog(undefined)} />}
     {dialog === 'create' && team && <ChannelForm copy={copy} teamId={team.id} close={() => setDialog(undefined)} created={(created) => {
       setChannels((current) => [...(current ?? []).filter((item) => item.id !== created.id), created])
       setSelected(created.id)
@@ -128,6 +131,8 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
   const [teams, setTeams] = useState<Team[] | undefined>(() => user ? cachedQuery<Team[]>('/teams') : undefined)
   const [selection, setSelection] = useState<{ teamId: string; channelId?: string | null }>()
   const [creating, setCreating] = useState(false)
+  const [direct, setDirect] = useState(false)
+  const [requestedDirect, setRequestedDirect] = useState<DirectChannel>()
   const [error, setError] = useState<unknown>()
   const [attempt, setAttempt] = useState(0)
   const [retrying, setRetrying] = useState(false)
@@ -156,24 +161,36 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
     }
   }, [attempt, user?.id])
 
+  useEffect(() => {
+    const start = (event: Event) => {
+      setRequestedDirect((event as CustomEvent<DirectChannel>).detail)
+      setDirect(true)
+    }
+    window.addEventListener('open-direct', start)
+    return () => window.removeEventListener('open-direct', start)
+  }, [])
+
   return <>
     <div className="workspace-shell">
     <nav className="team-rail" aria-label={copy.teams}>
       <div className="team-list">
+        <button className="team-button" aria-label={copy.direct} title={copy.direct} aria-current={direct ? 'true' : undefined}
+          onClick={() => { setRequestedDirect(undefined); setDirect(true) }}><MessageSquare size={22} /></button>
         {!teams && error === undefined && <div role="status" aria-label={copy.loading} aria-busy="true">
           {[0, 1, 2].map((item) => <Skeleton key={item} className="skeleton-team" />)}
         </div>}
         {teams?.map((item) => <button
           key={item.id} className="team-button" title={item.name} aria-label={item.name}
-          aria-current={team?.id === item.id ? 'true' : undefined}
-          onClick={() => setSelection({ teamId: item.id })}>
+          aria-current={!direct && team?.id === item.id ? 'true' : undefined}
+          onClick={() => { setDirect(false); setSelection({ teamId: item.id }) }}>
           <span aria-hidden="true">{initials(item.name)}</span>
         </button>)}
         <button className="team-button team-add" title={copy.newTeam} aria-label={copy.newTeam}
           onClick={() => setCreating(true)}><Plus size={22} aria-hidden="true" /></button>
       </div>
     </nav>
-    {team || (teams === undefined && error === undefined) ? <TeamView key={`${team?.id ?? 'loading'}:${selection?.channelId ?? ''}`} team={team} user={user} copy={copy} locale={locale} preferredChannel={selection?.channelId} />
+    {direct && user ? <DirectView key={requestedDirect?.id ?? 'direct'} user={user} copy={copy} locale={locale} requested={requestedDirect} />
+      : team || (teams === undefined && error === undefined) ? <TeamView key={`${team?.id ?? 'loading'}:${selection?.channelId ?? ''}`} team={team} user={user} copy={copy} locale={locale} preferredChannel={selection?.channelId} />
       : <main className="center-state">
         {error !== undefined ? <>
           <p className="error" role="alert">{errorText(copy, error)}</p>
@@ -188,6 +205,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
     </div>
     {creating && <TeamForm copy={copy} close={() => setCreating(false)} created={(created) => {
       setTeams((current) => [...(current ?? []), created])
+      setDirect(false)
       setSelection({ teamId: created.id })
       setCreating(false)
     }} />}
@@ -197,6 +215,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
         const result = await api<{ teamId: string; channelId?: string | null }>('/invitations/accept', { data: { token } })
         const updated = await api<Team[]>('/teams')
         setTeams(updated)
+        setDirect(false)
         setSelection(result)
         clearInvite()
       }} />
@@ -215,6 +234,9 @@ export function App() {
   const [user, setUser] = useState<User | null>()
   const [error, setError] = useState<unknown>()
   const [token, setToken] = useState(invitationFromUrl)
+  const [profileHandle, setProfileHandle] = useState(() => new URLSearchParams(location.hash.slice(1)).get('profile'))
+  const [person, setPerson] = useState<string>()
+  const [editingProfile, setEditingProfile] = useState(false)
   const copy = translations[locale]
 
   useEffect(() => {
@@ -237,7 +259,12 @@ export function App() {
   useEffect(() => {
     const controller = new AbortController()
     const onExpiry = () => setUser(null)
-    const onHashChange = () => setToken(invitationFromUrl())
+    const onHashChange = () => {
+      setToken(invitationFromUrl())
+      setProfileHandle(new URLSearchParams(location.hash.slice(1)).get('profile'))
+    }
+    const onPerson = (event: Event) => setPerson((event as CustomEvent<string>).detail)
+    window.addEventListener('show-person', onPerson)
     window.addEventListener('session-expired', onExpiry)
     window.addEventListener('hashchange', onHashChange)
     loadSession(controller.signal).catch(setError)
@@ -245,6 +272,7 @@ export function App() {
       controller.abort()
       window.removeEventListener('session-expired', onExpiry)
       window.removeEventListener('hashchange', onHashChange)
+      window.removeEventListener('show-person', onPerson)
     }
   }, [])
 
@@ -269,7 +297,7 @@ export function App() {
           onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={17} />}</Button>
         {user === undefined && <Skeleton className="skeleton-avatar" />}
         {user && <>
-          <span className="avatar profile" title={user.name}>{initials(user.name)}</span>
+          <Button variant="ghost" aria-label={copy.myProfile} title={copy.myProfile} onClick={() => setEditingProfile(true)}><span className="avatar profile">{initials(user.name)}</span></Button>
           <Button variant="ghost" aria-label={copy.signOut} title={copy.signOut} onClick={async () => {
             try {
               await api('/auth/sign-out', { data: {} })
@@ -288,5 +316,16 @@ export function App() {
     </div>}
     {user === null ? <SignIn key={token ?? ''} copy={copy} token={token} onSuccess={() => loadSession()} />
       : <Workspace key={user?.id ?? 'session-loading'} user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} />}
+    {editingProfile && user && <ProfileSettings key={`profile-settings-${user.id}`} copy={copy} user={user} close={() => setEditingProfile(false)} saved={() => loadSession()} />}
+    {(profileHandle || (person && user)) && <PublicProfileView key={`public-profile-${profileHandle ?? person}`} handle={profileHandle ?? undefined}
+      userId={person} copy={copy} user={user} close={() => {
+        setPerson(undefined)
+        if (profileHandle) {
+          const parameters = new URLSearchParams(location.hash.slice(1))
+          parameters.delete('profile')
+          history.replaceState(null, '', location.pathname + location.search + (parameters.size ? '#' + parameters : ''))
+          setProfileHandle(null)
+        }
+      }} />}
   </div>
 }

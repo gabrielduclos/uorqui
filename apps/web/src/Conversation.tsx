@@ -1,6 +1,6 @@
 import { ArrowDown, LoaderCircle, MessageSquare, Pencil, Send, Trash2, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
-import { api, cachedQuery, errorText, type Channel, type Message, type MessagePage, type User } from './api'
+import { ApiError, api, cachedQuery, errorText, type Channel, type Message, type MessagePage, type User } from './api'
 import { MessageSkeleton } from './components/ui/skeleton'
 import { useOutbox } from './outbox'
 import { ActionForm } from './forms'
@@ -24,7 +24,8 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
   return <article className="message" aria-busy={message.delivery === 'sending'}>
     <span className="avatar" aria-hidden="true">{initials(message.author)}</span>
     <div className="message-body">
-      <div className="message-meta"><strong>{message.author}</strong>
+      <div className="message-meta"><strong>{message.authorId ? <button className="author-link" onClick={() =>
+          window.dispatchEvent(new CustomEvent('show-person', { detail: message.authorId }))}>{message.author}</button> : message.author}</strong>
         <time dateTime={message.createdAt} title={time.toLocaleString(locale)}>{time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</time>
         {message.editedAt && !message.cancelledAt && <small>{copy.edited}</small>}
       </div>
@@ -87,7 +88,8 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
   const prepend = useRef<{ height: number; top: number } | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const received = pages.reduce((all, page) => mergeMessages(all, page.messages), first?.messages ?? [])
-  const records = [...received, ...outgoing.filter((message) =>
+  const inaccessible = loadError instanceof ApiError && ['CHANNEL_NOT_FOUND', 'FORBIDDEN'].includes(loadError.code)
+  const records = inaccessible ? [] : [...received, ...outgoing.filter((message) =>
     !received.some((saved) => saved.id === message.id || (message.clientId && saved.clientId === message.clientId)))]
   const hasMore = (pages.at(-1) ?? first)?.more
 
@@ -219,7 +221,7 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
       follow.current = list.scrollHeight - list.scrollTop - list.clientHeight < 48
       setAtBottom(follow.current)
     }}>
-      {thread && <div className="thread-root"><MessageItem message={thread} copy={copy} locale={locale} user={user} onAction={changeMessage} /></div>}
+      {thread && !inaccessible && <div className="thread-root"><MessageItem message={thread} copy={copy} locale={locale} user={user} onAction={changeMessage} /></div>}
       {hasMore && <div className="load-more"><Button variant="outline" onClick={loadOlder} loading={paging}>
         {copy.older}
       </Button></div>}
@@ -252,7 +254,7 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
               event.currentTarget.form?.requestSubmit()
             }
           }} />
-        <Button type="submit" disabled={!draft.trim()} loading={busy} aria-label={copy.send}><Send size={17} /></Button>
+        <Button type="submit" disabled={!draft.trim() || inaccessible} loading={busy} aria-label={copy.send}><Send size={17} /></Button>
       </div>
       {sendError !== undefined && <p role="alert" className="error">{errorText(copy, sendError)}</p>}
     </form>

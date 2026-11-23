@@ -54,6 +54,7 @@ export const verifications = workplace.table('verification', {
 export const teams = workplace.table('team', {
   id: uuid().defaultRandom().primaryKey(),
   name: text().notNull(),
+  deletedAt: time('deleted_at'),
   createdAt: time('created_at').defaultNow().notNull(),
 })
 
@@ -69,7 +70,7 @@ export const memberships = workplace.table('team_member', {
 
 export const channels = workplace.table('channel', {
   id: uuid().defaultRandom().primaryKey(),
-  teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
   name: text().notNull(),
   description: text().notNull().default(''),
   visibility: text({ enum: ['team', 'private'] }).notNull(),
@@ -114,4 +115,20 @@ export const invitations = workplace.table('invitation', {
   acceptedAt: time('accepted_at'),
 }, (table) => [
   foreignKey({ columns: [table.channelId, table.teamId], foreignColumns: [channels.id, channels.teamId] }).onDelete('cascade'),
+])
+
+
+export const profiles = workplace.table('profile', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  handle: text().notNull().unique(),
+  bio: text().notNull().default(''),
+})
+
+export const directConversations = workplace.table('direct_conversation', {
+  channelId: uuid('channel_id').primaryKey().references(() => channels.id, { onDelete: 'cascade' }),
+  userA: text('user_a').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userB: text('user_b').notNull().references(() => users.id, { onDelete: 'cascade' }),
+}, (table) => [
+  unique('direct_pair_unique').on(table.userA, table.userB),
+  check('direct_pair_order', sql`${table.userA} < ${table.userB}`),
 ])

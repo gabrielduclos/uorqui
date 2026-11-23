@@ -15,17 +15,17 @@ Create a separate Render web service for Workplace. Watch the Workplace branch a
 
 Use private Render environment variables for `DATABASE_URL` and `AUTH_SECRET`. Set `WEB_ORIGIN` to the exact HTTPS origin of the Workplace Worker.
 
-Validate the migration in an isolated Neon development branch on database `uorqui`. The migration uses the `uorqui_workplace` and `uorqui_workplace_migrations` schemas. Run it as a pre-deploy command or a one-off operation before starting the service. The migration role needs to be able to create the schemas. Provision the first account via the CLI after the migration.
+Validate the migration in an isolated Neon development branch on database `workplace`. The migration uses the `uorqui_workplace` and `uorqui_workplace_migrations` schemas. Run it as a pre-deploy command or a one-off operation before starting the service. The migration role needs to be able to create the schemas. Provision the first account via the CLI after the migration.
 
 ## Cloudflare Workers Builds
 
-Create a Worker from the Workplace branch with root directory `apps/web`, build command `npm run build` and deploy command `npx wrangler deploy`. Set the Worker variable `API_ORIGIN` to the HTTPS Render service origin. The Worker serves the Vite build and forwards `/api/*` from the same origin as the UI, including authentication cookies.
+Use the existing Worker `main` and its native preview for `feat/enterprise-channels`, with root directory `apps/web`, build command `npm run build` and preview command `npx wrangler preview`. Set `previews.vars.API_ORIGIN` to the HTTPS Render service origin. The Worker serves the Vite build and forwards `/api/*` from the same origin as the UI, including authentication cookies.
 
-Use a dedicated Workplace hostname. Changes to production DNS or to existing services are outside this branch’s deployment setup.
+The preview is available at https://feat-enterprise-channels-main.uorqui1.workers.dev/. Preserve the production deployment. The Render service is `uorqui-workplace-api`, retaining its original `uorqui-workplace-preview-api.onrender.com` hostname.
 
 ## Beta scope
 
-Accounts can be created from the sign-in screen with a name, email and password of 8–128 characters. New accounts start with an empty team list and can create a team or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Automatic email delivery, mailbox verification, password recovery and administrative revocation are outside this beta. Teams and customers see new messages through periodic refresh.
+Accounts can be created from the sign-in screen with a name, email and password of 8–128 characters. New accounts start with an empty team list and can create a team or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Automatic email delivery, mailbox verification, password recovery are outside this beta. Teams and customers see new messages through periodic refresh.
 
 
 ## Caching
@@ -39,3 +39,12 @@ The API has a process-local message cache with a five-second lifetime and a maxi
 Hashed JavaScript and CSS assets use a one-year immutable browser cache. Entry HTML and private API data retain their separate policies.
 
 The composer starts at one line and grows to 160 px. Sends appear immediately with pending or retry feedback. Pending and failed sends survive navigation in tab memory and are cleared at authentication changes. Authors can edit sent messages or confirm unsending. Unsent text is cleared and replaced by a translated placeholder, preserving thread replies. Retrying a send uses the same client ID to avoid duplicate messages. Apply migration 0001 before deploying this API version. Existing messages with no client ID remain compatible.
+
+
+## Teams, direct messages and profiles
+
+Apply migration 0002 before starting this version. It adds `profile`, `direct_conversation`, nullable `channel.team_id` and `team.deleted_at`. Teams still own their normal channels; direct channels have no team and are unique per ordered participant pair.
+
+Team owners can rename a team and remove members or private-channel guests. Removal also revokes their existing invitations for that team. Owners cannot remove themselves. Deletion requires the current team name, records a deletion timestamp and denies team/channel access and invitations. Stored team data is retained; this is logical deletion. Direct conversations remain independent of team membership.
+
+The profile button edits name, unique handle and biography. Handles use 3–24 lowercase letters, digits or underscores; biographies allow 500 characters. Saving a handle publishes name, handle and biography at `/#profile=handle`, readable without signing in. Email is excluded. A signed-in visitor can start a direct conversation from a profile, a message author or the direct-message list. Direct messages reuse channel authorization and message semantics.

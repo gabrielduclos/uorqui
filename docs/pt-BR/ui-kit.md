@@ -40,3 +40,5 @@ Manter a estrutura estática visível enquanto os dados carregam. Skeletons rese
 Botões de ação usam o spinner compartilhado enquanto aguardam o backend, com aria-busy e interação bloqueada. Os rótulos permanecem visíveis. Envios de formulários, mensagens, paginação, novas tentativas e saída restauram o estado disponível após sucesso ou erro. Ações de clique assíncronas recebem esse feedback automaticamente.
 
 O campo de mensagem usa uma linha e cresce conforme o conteúdo. Mensagens pendentes aparecem imediatamente. Mensagens próprias já enviadas oferecem edição e cancelamento com feedback compartilhado de espera. Textos editados recebem identificação. O cancelamento substitui o texto por uma indicação e mantém o tópico disponível.
+
+A barra de equipes começa com mensagens diretas. O cabeçalho da equipe oferece ajustes para o responsável. O avatar no topo abre o próprio perfil; nomes de autores abrem o perfil correspondente. Perfis e gestão usam os mesmos modais, skeletons e botões com spinner nos dois temas e idiomas. No mobile, mensagens diretas alternam entre lista e conversa.

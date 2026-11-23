@@ -15,6 +15,13 @@
       "when": 1795453682401,
       "tag": "0001_tranquil_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795454763235,
+      "tag": "0002_silky_deathbird",
+      "breakpoints": true
     }
   ]
 }

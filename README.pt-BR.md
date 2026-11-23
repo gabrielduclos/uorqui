@@ -1,8 +1,10 @@
 # Uorqui Workplace
 
-[English](README.md) · 0.2.0-beta.7
+[English](README.md) · 0.2.0-beta.8
 
 Um espaço compacto para equipes conversarem em canais internos e colaborarem com clientes em canais privados. Responsáveis pelas equipes criam canais e geram links vinculados ao e-mail de cada convidado. Quem tem acesso ao canal pode enviar mensagens e organizar as respostas em tópicos.
+
+Responsáveis também podem gerenciar membros e excluir equipes. Mensagens diretas conectam duas pessoas independentemente das equipes. Edite nome, identificação pública e biografia pelo botão de perfil e compartilhe o link do seu perfil público.
 
 A interface oferece português do Brasil, inglês e temas claro e escuro. O frontend React e a API Fastify rodam separadamente. O Better Auth gerencia sessões e o Drizzle armazena mensagens no PostgreSQL.
 

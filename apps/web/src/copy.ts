@@ -1,5 +1,6 @@
 export const translations = {
   'pt-BR': {
+    manageTeam: 'Gerenciar equipe', members: 'Membros', owner: 'Responsável', member: 'Membro', guest: 'Convidado', removeMember: 'Remover membro', removeHelp: 'O acesso aos canais desta equipe será removido.', deleteTeam: 'Apagar equipe', deleteHelp: 'A equipe e seus canais deixarão de estar disponíveis para todos os participantes. Digite o nome da equipe para confirmar.', confirmTeamName: 'Confirme o nome da equipe', direct: 'Mensagens diretas', newDirect: 'Nova mensagem direta', directHint: 'Digite a identificação pública da pessoa.', emptyDirect: 'Comece uma conversa privada.', myProfile: 'Meu perfil', publicProfile: 'Perfil público', handle: 'Identificação pública', handleHint: 'De 3 a 24 letras minúsculas, números ou sublinhado.', bio: 'Biografia', publicHint: 'Ao salvar, seu nome, identificação e biografia ficarão disponíveis no link público do perfil.', viewPublic: 'Ver perfil público', messagePerson: 'Enviar mensagem', profileLink: 'Link do perfil', profileSaved: 'Perfil salvo', unpublishedProfile: 'Identificação pública ainda não definida.',
     editMessage: 'Editar mensagem', cancelMessage: 'Cancelar envio', cancelledMessage: 'Mensagem cancelada', edited: 'editada', sending: 'Enviando…', failedMessage: 'Falha no envio', save: 'Salvar', editText: 'Texto da mensagem',
     product: 'Comunicação de equipe', email: 'E-mail', name: 'Nome', password: 'Senha',
     signIn: 'Entrar', signUp: 'Criar conta', signOut: 'Sair', copy: 'Copiar link', copied: 'Link copiado',
@@ -25,6 +26,12 @@ export const translations = {
     generate: 'Gerar link', accept: 'Aceitar convite', gotInvite: 'Você recebeu um convite',
     acceptHelp: 'Confirme para acessar com a conta conectada.', moveLatest: 'Ir para as mensagens recentes',
     errors: {
+      HANDLE_TAKEN: 'Essa identificação pública já está em uso.',
+      PROFILE_NOT_FOUND: 'Perfil não encontrado.',
+      TEAM_NOT_FOUND: 'Equipe indisponível.',
+      TEAM_NAME_MISMATCH: 'O nome informado não corresponde ao nome da equipe.',
+      OWNER_REQUIRED: 'O responsável deve permanecer na equipe.',
+      DIRECT_SELF: 'Escolha outra pessoa para iniciar uma conversa.',
       MESSAGE_UNAVAILABLE: 'A mensagem está indisponível para esta ação.',
       INVALID_INPUT: 'Confira os dados preenchidos e tente novamente.',
       INVITE_INVALID: 'O convite está expirado, é inválido ou foi enviado para outro e-mail.',
@@ -42,6 +49,7 @@ export const translations = {
     },
   },
   en: {
+    manageTeam: 'Manage team', members: 'Members', owner: 'Owner', member: 'Member', guest: 'Guest', removeMember: 'Remove member', removeHelp: 'Access to this team’s channels will be removed.', deleteTeam: 'Delete team', deleteHelp: 'This team and its channels will become unavailable to all participants. Type the team name to confirm.', confirmTeamName: 'Confirm team name', direct: 'Direct messages', newDirect: 'New direct message', directHint: 'Enter the person’s public handle.', emptyDirect: 'Start a private conversation.', myProfile: 'My profile', publicProfile: 'Public profile', handle: 'Public handle', handleHint: '3–24 lowercase letters, digits, or underscores.', bio: 'Bio', publicHint: 'Saving makes your name, handle and bio available at your public profile link.', viewPublic: 'View public profile', messagePerson: 'Send message', profileLink: 'Profile link', profileSaved: 'Profile saved', unpublishedProfile: 'Public handle has not been set yet.',
     editMessage: 'Edit message', cancelMessage: 'Unsend message', cancelledMessage: 'Message unsent', edited: 'edited', sending: 'Sending…', failedMessage: 'Could not send', save: 'Save', editText: 'Message text',
     product: 'Team communication', email: 'Email', name: 'Name', password: 'Password',
     signIn: 'Sign in', signUp: 'Create account', signOut: 'Sign out', copy: 'Copy link', copied: 'Link copied',
@@ -67,6 +75,12 @@ export const translations = {
     generate: 'Generate link', accept: 'Accept invitation', gotInvite: 'You’ve been invited',
     acceptHelp: 'Confirm to join with your signed-in account.', moveLatest: 'Jump to latest messages',
     errors: {
+      HANDLE_TAKEN: 'This public handle is already in use.',
+      PROFILE_NOT_FOUND: 'Profile not found.',
+      TEAM_NOT_FOUND: 'Team unavailable.',
+      TEAM_NAME_MISMATCH: 'The entered name does not match the team name.',
+      OWNER_REQUIRED: 'The owner must stay on the team.',
+      DIRECT_SELF: 'Choose another person to start a conversation.',
       MESSAGE_UNAVAILABLE: 'This message is unavailable for this action.',
       INVALID_INPUT: 'Check your entries and try again.',
       INVITE_INVALID: 'This invitation is expired, invalid, or was sent to another email address.',

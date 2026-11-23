@@ -40,3 +40,5 @@ Keep static interface structure visible while data loads. Skeletons reserve spac
 Backend action buttons use the shared loading spinner with aria-busy and disabled interaction. Labels stay visible. Form submissions, message sending, pagination, retries and sign-out restore the ready state on success or error. Async click handlers automatically receive this feedback.
 
 The message composer uses one line and grows with its contents. Pending messages display immediately. Own delivered messages expose edit and unsend actions with shared pending feedback. Edited text has an edited label. Unsent text is replaced by a placeholder and the thread remains available.
+
+The team rail starts with direct messages. The team heading exposes owner settings. The top-bar avatar opens profile settings; author names open a profile. Profiles and management use shared dialogs, skeleton fields and pending action buttons in both themes and languages. Mobile direct messages alternate between list and conversation.

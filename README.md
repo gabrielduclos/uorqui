@@ -1,8 +1,10 @@
 # Uorqui Workplace
 
-[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.7
+[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.8
 
 A compact workspace for teams to talk in internal channels and collaborate with customers in private channels. Team owners create channels and generate links tied to a recipient’s email. Anyone with access to a channel can send messages and keep follow-up conversations in threads.
+
+Owners can also manage team membership and delete teams. Direct messages connect two people independently of teams. Edit your name, public handle and biography from the profile button and share your public profile link.
 
 The interface supports English, Brazilian Portuguese, light mode and dark mode. The React frontend and Fastify API run separately. Better Auth manages sessions and Drizzle stores messages in PostgreSQL.
 

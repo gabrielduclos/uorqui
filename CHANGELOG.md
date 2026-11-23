@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.8]
+
+- Adds owner controls to rename teams, list members and guests, remove access and confirm team deletion by name. Deleted teams and channels become inaccessible while stored data is retained.
+- Adds private one-to-one conversations, unique per pair, with the existing optimistic send, threads, edit and unsend behavior.
+- Adds editable name, unique public handle and biography, shareable public profiles and profile links on message authors. Email stays private.
+- Adds migration 0002 for profiles, direct conversation pairs and logical team deletion, plus authorization and concurrency regression coverage.
+
 ## [0.2.0-beta.7]
 
 - Adds a one-line composer that grows with text and immediate optimistic messages, including threads.
