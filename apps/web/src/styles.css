@@ -210,3 +210,8 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 .action-spinner { flex: none; animation: action-spin .8s linear infinite; }
 @keyframes action-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .action-spinner { animation-duration: 2s; } }
+
+.compose-box textarea { resize: none; overflow-y: auto; min-height: 30px; }
+.message-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .2rem; }
+.message-actions > button { padding: .25rem .35rem; }
+.fields textarea { width: 100%; padding: .55rem .65rem; border: 1px solid var(--border); border-radius: .45rem; background: var(--background); font-weight: 400; }

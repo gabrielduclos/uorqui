@@ -1,10 +1,11 @@
+import { clearOutbox } from './outbox'
 import { cachedQuery, invalidateQueries, readQuery, waitForQuery } from './query-cache'
 import type { Copy } from './copy'
 
 export interface User { id: string; name: string; email: string }
 export interface Team { id: string; name: string; role: 'owner' | 'member' | null }
 export interface Channel { id: string; name: string; description: string; visibility: 'team' | 'private' }
-export interface Message { id: number; body: string; author: string; createdAt: string; replies: number }
+export interface Message { clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
 export interface MessagePage { messages: Message[]; more: boolean }
 
 export class ApiError extends Error {
@@ -35,6 +36,7 @@ async function request<T>(path: string, options: { data?: unknown; signal?: Abor
   const code = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' ? body.code : undefined
   if (response.status === 401 && code === 'SIGN_IN_REQUIRED') {
     invalidateQueries()
+    clearOutbox()
     window.dispatchEvent(new Event('session-expired'))
   }
   if (!response.ok || body === null) throw new ApiError(code ?? 'API_UNAVAILABLE')
@@ -46,15 +48,15 @@ export { cachedQuery }
 const updates = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('uorqui-workplace-cache')
 updates?.addEventListener('message', (event) => {
   invalidateQueries()
-  if (event.data === 'auth') { authGeneration++; window.dispatchEvent(new Event('session-expired')) }
+  if (event.data === 'auth') { clearOutbox(); authGeneration++; window.dispatchEvent(new Event('session-expired')) }
   else window.dispatchEvent(new Event('cache-updated'))
 })
 
 export async function api<T>(path: string, options: { data?: unknown; signal?: AbortSignal } = {}): Promise<T> {
   if (options.data !== undefined) {
     const result = await request<T>(path, options)
-    if (path.startsWith('/auth/')) { authGeneration++; invalidateQueries() }
-    else if (path.includes('/messages')) invalidateQueries(path.split('?')[0])
+    if (path.startsWith('/auth/')) { clearOutbox(); authGeneration++; invalidateQueries() }
+    else if (path.includes('/messages')) invalidateQueries(path.split('/messages')[0] + '/messages')
     else invalidateQueries('/teams')
     updates?.postMessage(path.startsWith('/auth/') ? 'auth' : 'data')
     if (!path.startsWith('/auth/')) window.dispatchEvent(new Event('cache-updated'))

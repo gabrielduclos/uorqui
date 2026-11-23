@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.7]
+
+- Adiciona campo de uma linha que cresce com o texto e mensagens otimistas imediatas, incluindo tópicos.
+- Preserva envios pendentes e falhos na navegação da sessão e usa identificador estável nas tentativas para evitar duplicações.
+- Permite ao autor editar ou cancelar mensagens já enviadas. O cancelamento mantém uma indicação e preserva respostas do tópico.
+- Adiciona migração 0001 com identificador do cliente, datas de edição e cancelamento e restrição de unicidade por autor.
+
 ## [0.2.0-beta.6]
 
 - Mostra spinner compartilhado nos botões que aguardam o backend, preserva os rótulos, bloqueia cliques repetidos e encerra o estado pendente no sucesso ou erro.

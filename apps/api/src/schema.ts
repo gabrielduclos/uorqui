@@ -94,8 +94,12 @@ export const messages = workplace.table('message', {
   authorId: text('author_id').notNull().references(() => users.id),
   parentId: bigint('parent_id', { mode: 'number' }),
   body: text().notNull(),
+  clientId: uuid('client_id'),
+  editedAt: time('edited_at'),
+  cancelledAt: time('cancelled_at'),
   createdAt: time('created_at').defaultNow().notNull(),
 }, (table) => [
+  unique('message_author_client').on(table.authorId, table.clientId),
   unique('unique_message_channel').on(table.id, table.channelId),
   foreignKey({ columns: [table.parentId, table.channelId], foreignColumns: [table.id, table.channelId] }).onDelete('cascade'),
   index('message_channel_thread_idx').on(table.channelId, table.parentId, table.id),

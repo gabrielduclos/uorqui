@@ -7,7 +7,7 @@ import { Conversation, initials } from './Conversation'
 import { translations, type Copy, type Locale } from './copy'
 import { ActionForm, ChannelForm, InviteForm, SignIn, TeamForm } from './forms'
 
-function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy: Copy; locale: Locale; preferredChannel?: string | null }) {
+function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team; user?: User; copy: Copy; locale: Locale; preferredChannel?: string | null }) {
   const [channels, setChannels] = useState<Channel[] | undefined>(() => team ? cachedQuery<Channel[]>(`/teams/${team.id}/channels`) : undefined)
   const [selected, setSelected] = useState(preferredChannel)
   const [dialog, setDialog] = useState<'create' | 'invite' | 'guest'>()
@@ -104,7 +104,7 @@ function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy:
         {owner && channel?.visibility === 'private' &&
           <Button variant="outline" onClick={() => setDialog('guest')}><UserPlus size={17} />{copy.invite}</Button>}
       </header>
-      {channel ? <Conversation key={channel.id} channel={channel} copy={copy} locale={locale} />
+      {channel ? <Conversation key={channel.id} channel={channel} user={user} copy={copy} locale={locale} />
         : !channels ? <div className="room">
           <div className="message-scroll"><MessageSkeleton copy={copy} /></div>
           <div className="composer"><div className="compose-box"><Skeleton className="skeleton-composer" /><Button disabled aria-label={copy.send}><Send size={17} /></Button></div></div>
@@ -173,7 +173,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
           onClick={() => setCreating(true)}><Plus size={22} aria-hidden="true" /></button>
       </div>
     </nav>
-    {team || (teams === undefined && error === undefined) ? <TeamView key={`${team?.id ?? 'loading'}:${selection?.channelId ?? ''}`} team={team} copy={copy} locale={locale} preferredChannel={selection?.channelId} />
+    {team || (teams === undefined && error === undefined) ? <TeamView key={`${team?.id ?? 'loading'}:${selection?.channelId ?? ''}`} team={team} user={user} copy={copy} locale={locale} preferredChannel={selection?.channelId} />
       : <main className="center-state">
         {error !== undefined ? <>
           <p className="error" role="alert">{errorText(copy, error)}</p>

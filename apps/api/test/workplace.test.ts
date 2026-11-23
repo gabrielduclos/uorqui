@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
@@ -149,6 +150,34 @@ test('public account registration, team and private-channel conversations', asyn
   assert.equal(older.messages.length, 6)
   assert.equal(older.messages[0].id, root)
   assert.equal(older.more, false)
+
+  const requestId = randomUUID()
+  const once = await sync(path(general.id), { body: 'Editable', clientId: requestId }, ownerCookie)
+  const [again, again2] = await Promise.all([
+    sync(path(general.id), { body: 'Editable', clientId: requestId }, ownerCookie),
+    sync(path(general.id), { body: 'Editable', clientId: requestId }, ownerCookie),
+  ])
+  assert.equal(once.json().id, again.json().id)
+  assert.equal(once.json().id, again2.json().id)
+  const ownId = once.json().id
+  const editUrl = `${path(general.id)}/${ownId}/edit`
+  const cancelUrl = `${path(general.id)}/${ownId}/cancel`
+  assert.equal((await sync(editUrl, { body: 'Other person' }, memberCookie)).statusCode, 404)
+  assert.equal((await sync(cancelUrl, {}, memberCookie)).statusCode, 404)
+  assert.equal((await sync(editUrl, { body: ' ' }, ownerCookie)).statusCode, 400)
+  assert.equal((await sync(editUrl, { body: 'Revised' }, ownerCookie)).statusCode, 200)
+  const edited = (await sync(path(general.id), undefined, ownerCookie)).json().messages.find((item: { id: number }) => item.id === ownId)
+  assert.equal(edited.body, 'Revised')
+  assert.ok(edited.editedAt)
+  assert.equal((await sync(path(general.id), { body: 'Keep this reply', thread: ownId }, memberCookie)).statusCode, 201)
+  assert.equal((await sync(cancelUrl, {}, ownerCookie)).statusCode, 200)
+  const cancelled = (await sync(path(general.id), undefined, ownerCookie)).json().messages.find((item: { id: number }) => item.id === ownId)
+  assert.equal(cancelled.body, '')
+  assert.ok(cancelled.cancelledAt)
+  assert.equal((await sync(editUrl, { body: 'Resurrect' }, ownerCookie)).statusCode, 404)
+  assert.equal((await sync(cancelUrl, {}, ownerCookie)).statusCode, 200)
+  assert.equal((await sync(path(general.id), { body: 'Editable', clientId: requestId }, ownerCookie)).json().id, ownId)
+  assert.equal((await sync(`${path(general.id)}?thread=${ownId}`, undefined, memberCookie)).json().messages[0].body, 'Keep this reply')
 
   const expiredEmail = 'expired@example.test'
   const expiredInvite = await invite(teamId, expiredEmail, clientId)

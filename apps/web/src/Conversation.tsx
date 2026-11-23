@@ -1,29 +1,62 @@
-import { ArrowDown, MessageSquare, Send, X } from 'lucide-react'
+import { ArrowDown, LoaderCircle, MessageSquare, Pencil, Send, Trash2, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
-import { api, cachedQuery, errorText, type Channel, type Message, type MessagePage } from './api'
+import { api, cachedQuery, errorText, type Channel, type Message, type MessagePage, type User } from './api'
 import { MessageSkeleton } from './components/ui/skeleton'
-import { Button } from './components/ui/controls'
+import { useOutbox } from './outbox'
+import { ActionForm } from './forms'
+import { Button, Modal } from './components/ui/controls'
 import type { Copy, Locale } from './copy'
 
 export function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0]?.toUpperCase()).join('')
 }
 
-function MessageItem({ message, locale, copy, onThread }: {
-  message: Message; locale: Locale; copy: Copy; onThread?: (message: Message) => void
+type MessageAction = (message: Message, action: 'edit' | 'cancel', body?: string) => Promise<void>
+
+function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry }: {
+  message: Message; locale: Locale; copy: Copy; user?: User; onThread?: (message: Message) => void
+  onAction?: MessageAction; onRetry?: (message: Message) => Promise<void>
 }) {
+  const [editing, setEditing] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const time = new Date(message.createdAt)
-  return <article className="message">
+  const own = user?.id === message.authorId
+  return <article className="message" aria-busy={message.delivery === 'sending'}>
     <span className="avatar" aria-hidden="true">{initials(message.author)}</span>
     <div className="message-body">
       <div className="message-meta"><strong>{message.author}</strong>
         <time dateTime={message.createdAt} title={time.toLocaleString(locale)}>{time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</time>
+        {message.editedAt && !message.cancelledAt && <small>{copy.edited}</small>}
       </div>
-      <p>{message.body}</p>
-      {onThread && <Button variant="ghost" className="reply-link" onClick={() => onThread(message)}>
-        <MessageSquare size={14} />{message.replies ? copy.replyCount(message.replies) : copy.reply}
-      </Button>}
+      <p className={message.cancelledAt ? 'muted' : undefined}>{message.cancelledAt ? copy.cancelledMessage : message.body}</p>
+      {message.delivery && <small role="status">
+        {message.delivery === 'sending' ? <><LoaderCircle className="action-spinner inline" size={13} /> {copy.sending}</> : copy.failedMessage}
+      </small>}
+      <div className="message-actions">
+        {message.delivery === 'failed' && onRetry && <Button variant="ghost" onClick={() => onRetry(message)}>{copy.retry}</Button>}
+        {onThread && !message.delivery && <Button variant="ghost" className="reply-link" onClick={() => onThread(message)}>
+          <MessageSquare size={14} />{message.replies ? copy.replyCount(message.replies) : copy.reply}
+        </Button>}
+        {own && !message.delivery && !message.cancelledAt && onAction && <>
+          <Button variant="ghost" aria-label={copy.editMessage} onClick={() => setEditing(true)}><Pencil size={14} /></Button>
+          <Button variant="ghost" aria-label={copy.cancelMessage} onClick={() => setConfirming(true)}><Trash2 size={14} /></Button>
+        </>}
+      </div>
     </div>
+    {editing && onAction && <Modal title={copy.editMessage} closeLabel={copy.close} onClose={() => setEditing(false)}>
+      <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
+        await onAction(message, 'edit', String(data.get('body')))
+        setEditing(false)
+      }}>
+        <label>{copy.editText}<textarea name="body" defaultValue={message.body} required maxLength={4000} rows={3} /></label>
+      </ActionForm>
+    </Modal>}
+    {confirming && onAction && <Modal title={copy.cancelMessage} closeLabel={copy.close} onClose={() => setConfirming(false)}>
+      <ActionForm copy={copy} submit={copy.cancelMessage} onSubmit={async () => {
+        await onAction(message, 'cancel')
+        setConfirming(false)
+      }} />
+    </Modal>}
   </article>
 }
 
@@ -33,11 +66,12 @@ function mergeMessages(current: Message[], incoming: Message[]) {
   return [...unique.values()].sort((left, right) => left.id - right.id)
 }
 
-function MessageList({ channel, thread, copy, locale, onThread }: {
-  channel: Channel; thread?: Message; copy: Copy; locale: Locale; onThread?: (message: Message) => void
+function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated }: {
+  channel: Channel; thread?: Message; copy: Copy; locale: Locale; user?: User; onUpdated?: (message: Message) => void; onThread?: (message: Message) => void
 }) {
   const threadQuery = thread ? `thread=${thread.id}` : ''
   const endpoint = `/channels/${channel.id}/messages`
+  const [outgoing, setOutgoing] = useOutbox(user?.id, channel.id, thread?.id)
   const [pages, setPages] = useState<MessagePage[]>([])
   const [first, setFirst] = useState<MessagePage | undefined>(() => cachedQuery<MessagePage>(`${endpoint}?${threadQuery}`))
   const [loadError, setLoadError] = useState<unknown>()
@@ -52,7 +86,9 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
   const follow = useRef(true)
   const prepend = useRef<{ height: number; top: number } | null>(null)
   const [atBottom, setAtBottom] = useState(true)
-  const records = pages.reduce((all, page) => mergeMessages(all, page.messages), first?.messages ?? [])
+  const received = pages.reduce((all, page) => mergeMessages(all, page.messages), first?.messages ?? [])
+  const records = [...received, ...outgoing.filter((message) =>
+    !received.some((saved) => saved.id === message.id || (message.clientId && saved.clientId === message.clientId)))]
   const hasMore = (pages.at(-1) ?? first)?.more
 
   useEffect(() => {
@@ -70,6 +106,9 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
         setFirst((current) => current
           ? { messages: mergeMessages(current.messages, page.messages), more: current.more }
           : page)
+        setOutgoing((current) => current.filter((item) =>
+          !page.messages.some((saved) => saved.id === item.id || (item.clientId && saved.clientId === item.clientId))))
+        for (const message of page.messages) onUpdated?.(message)
         setLoadError(undefined)
       } catch (error) {
         if (!controller.signal.aborted) setLoadError(error)
@@ -119,24 +158,58 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
     }
   }
 
-  async function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (busy || !draft.trim()) return
+  async function transmit(message: Message) {
     setBusy(true)
     setSendError(undefined)
+    setOutgoing((current) => current.map((item) => item.clientId === message.clientId ? { ...item, delivery: 'sending' } : item))
     try {
-      await api(endpoint, { data: { body: draft, ...(thread ? { thread: thread.id } : {}) } })
-      setDraft('')
-      follow.current = true
-      setAtBottom(true)
+      const result = await api<{ id: number }>(endpoint, { data: {
+        body: message.body, clientId: message.clientId, ...(thread ? { thread: thread.id } : {}),
+      } })
+      setOutgoing((current) => current.map((item) => item.clientId === message.clientId
+        ? { ...item, id: result.id, delivery: undefined } : item))
       setRefresh((current) => current + 1)
     } catch (error) {
       setSendError(error)
+      setOutgoing((current) => current.map((item) => item.clientId === message.clientId ? { ...item, delivery: 'failed' } : item))
     } finally {
       setBusy(false)
       textarea.current?.focus()
     }
   }
+
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (busy || !draft.trim()) return
+    const message: Message = {
+      id: -Date.now(), clientId: crypto.randomUUID(), body: draft.trim(), author: user?.name ?? '',
+      authorId: user?.id, createdAt: new Date().toISOString(), replies: 0, delivery: 'sending',
+    }
+    setOutgoing((current) => [...current, message])
+    setDraft('')
+    follow.current = true
+    setAtBottom(true)
+    await transmit(message)
+  }
+
+  async function changeMessage(message: Message, action: 'edit' | 'cancel', body?: string) {
+    await api(`${endpoint}/${message.id}/${action}`, { data: action === 'edit' ? { body } : {} })
+    const updated = action === 'edit'
+      ? { ...message, body: body!.trim(), editedAt: new Date().toISOString() }
+      : { ...message, body: '', cancelledAt: new Date().toISOString() }
+    const replace = (page: MessagePage) => ({ ...page, messages: page.messages.map((item) => item.id === message.id ? updated : item) })
+    setFirst((current) => current ? replace(current) : current)
+    setPages((current) => current.map(replace))
+    setOutgoing((current) => current.map((item) => item.id === message.id ? updated : item))
+    onUpdated?.(updated)
+  }
+
+  useLayoutEffect(() => {
+    const field = textarea.current
+    if (!field) return
+    field.style.height = 'auto'
+    field.style.height = `${Math.min(field.scrollHeight, 160)}px`
+  }, [draft])
 
   const placeholder = thread ? copy.replyMessage : copy.message(channel.name)
   let lastDay: string | undefined
@@ -146,11 +219,11 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
       follow.current = list.scrollHeight - list.scrollTop - list.clientHeight < 48
       setAtBottom(follow.current)
     }}>
-      {thread && <div className="thread-root"><MessageItem message={thread} copy={copy} locale={locale} /></div>}
+      {thread && <div className="thread-root"><MessageItem message={thread} copy={copy} locale={locale} user={user} onAction={changeMessage} /></div>}
       {hasMore && <div className="load-more"><Button variant="outline" onClick={loadOlder} loading={paging}>
         {copy.older}
       </Button></div>}
-      {!first && loadError === undefined && <MessageSkeleton copy={copy} />}
+      {!first && !records.length && loadError === undefined && <MessageSkeleton copy={copy} />}
       {first && !records.length && <p className="empty-messages">{thread ? copy.emptyThread : copy.emptyChannel}</p>}
       {records.map((message) => {
         const date = new Date(message.createdAt).toLocaleDateString(locale, { dateStyle: 'long' })
@@ -158,7 +231,7 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
         lastDay = date
         return <div key={message.id}>
           {showDay && <div className="date-line"><span>{date}</span></div>}
-          <MessageItem message={message} locale={locale} copy={copy} onThread={onThread} />
+          <MessageItem message={message} locale={locale} copy={copy} user={user} onThread={onThread} onAction={changeMessage} onRetry={transmit} />
         </div>
       })}
     </div>
@@ -171,8 +244,8 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
         if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight
       }}><ArrowDown size={15} />{copy.moveLatest}</Button>}
       <div className="compose-box">
-        <textarea ref={textarea} value={draft} rows={2} maxLength={4000} placeholder={placeholder} aria-label={placeholder}
-          onChange={(event) => setDraft(event.target.value)} readOnly={busy}
+        <textarea ref={textarea} value={draft} rows={1} maxLength={4000} placeholder={placeholder} aria-label={placeholder}
+          onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
@@ -186,15 +259,15 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
   </>
 }
 
-export function Conversation({ channel, copy, locale }: { channel: Channel; copy: Copy; locale: Locale }) {
+export function Conversation({ channel, copy, locale, user }: { channel: Channel; copy: Copy; locale: Locale; user?: User }) {
   const [thread, setThread] = useState<Message>()
   return <div className={thread ? 'conversation with-thread' : 'conversation'}>
     <section className="room" aria-label={copy.discussion}>
-      <MessageList channel={channel} copy={copy} locale={locale} onThread={setThread} />
+      <MessageList channel={channel} copy={copy} locale={locale} user={user} onUpdated={(message) => setThread((current) => current?.id === message.id ? message : current)} onThread={setThread} />
     </section>
     {thread && <section className="thread" aria-label={copy.thread}>
       <header><strong>{copy.thread}</strong><Button variant="ghost" aria-label={copy.close} onClick={() => setThread(undefined)}><X size={18} /></Button></header>
-      <MessageList key={thread.id} channel={channel} thread={thread} copy={copy} locale={locale} />
+      <MessageList key={thread.id} channel={channel} thread={thread} copy={copy} locale={locale} user={user} onUpdated={(message) => setThread((current) => current?.id === message.id ? message : current)} />
     </section>}
   </div>
 }

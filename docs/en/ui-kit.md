@@ -38,3 +38,5 @@ Both themes and languages apply to dialogs, account forms, empty states and chan
 Keep static interface structure visible while data loads. Skeletons reserve space for teams, channel names, messages and composer content. Background refresh retains existing data. Loading regions have accessible labels and reduced-motion support. Pending forms retain their submit labels.
 
 Backend action buttons use the shared loading spinner with aria-busy and disabled interaction. Labels stay visible. Form submissions, message sending, pagination, retries and sign-out restore the ready state on success or error. Async click handlers automatically receive this feedback.
+
+The message composer uses one line and grows with its contents. Pending messages display immediately. Own delivered messages expose edit and unsend actions with shared pending feedback. Edited text has an edited label. Unsent text is replaced by a placeholder and the thread remains available.

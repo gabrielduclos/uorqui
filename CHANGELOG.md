@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.7]
+
+- Adds a one-line composer that grows with text and immediate optimistic messages, including threads.
+- Retains pending and failed sends across navigation within the session and retries with stable client IDs to avoid duplicates.
+- Allows authors to edit or unsend delivered messages. Unsent messages retain a placeholder and thread replies.
+- Adds migration 0001 for client IDs, edit and cancellation timestamps and a per-author uniqueness constraint.
+
 ## [0.2.0-beta.6]
 
 - Shows a shared spinner on backend action buttons, preserves labels, prevents duplicate clicks and clears the pending state after success or error.

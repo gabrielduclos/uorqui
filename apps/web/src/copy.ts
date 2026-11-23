@@ -1,5 +1,6 @@
 export const translations = {
   'pt-BR': {
+    editMessage: 'Editar mensagem', cancelMessage: 'Cancelar envio', cancelledMessage: 'Mensagem cancelada', edited: 'editada', sending: 'Enviando…', failedMessage: 'Falha no envio', save: 'Salvar', editText: 'Texto da mensagem',
     product: 'Comunicação de equipe', email: 'E-mail', name: 'Nome', password: 'Senha',
     signIn: 'Entrar', signUp: 'Criar conta', signOut: 'Sair', copy: 'Copiar link', copied: 'Link copiado',
     signUpHelp: 'Crie sua conta para organizar equipes e participar de canais.',
@@ -24,6 +25,7 @@ export const translations = {
     generate: 'Gerar link', accept: 'Aceitar convite', gotInvite: 'Você recebeu um convite',
     acceptHelp: 'Confirme para acessar com a conta conectada.', moveLatest: 'Ir para as mensagens recentes',
     errors: {
+      MESSAGE_UNAVAILABLE: 'A mensagem está indisponível para esta ação.',
       INVALID_INPUT: 'Confira os dados preenchidos e tente novamente.',
       INVITE_INVALID: 'O convite está expirado, é inválido ou foi enviado para outro e-mail.',
       SIGN_IN_FAILED: 'Confira seu e-mail e senha.',
@@ -40,6 +42,7 @@ export const translations = {
     },
   },
   en: {
+    editMessage: 'Edit message', cancelMessage: 'Unsend message', cancelledMessage: 'Message unsent', edited: 'edited', sending: 'Sending…', failedMessage: 'Could not send', save: 'Save', editText: 'Message text',
     product: 'Team communication', email: 'Email', name: 'Name', password: 'Password',
     signIn: 'Sign in', signUp: 'Create account', signOut: 'Sign out', copy: 'Copy link', copied: 'Link copied',
     signUpHelp: 'Create your account to organize teams and join channels.',
@@ -64,6 +67,7 @@ export const translations = {
     generate: 'Generate link', accept: 'Accept invitation', gotInvite: 'You’ve been invited',
     acceptHelp: 'Confirm to join with your signed-in account.', moveLatest: 'Jump to latest messages',
     errors: {
+      MESSAGE_UNAVAILABLE: 'This message is unavailable for this action.',
       INVALID_INPUT: 'Check your entries and try again.',
       INVITE_INVALID: 'This invitation is expired, invalid, or was sent to another email address.',
       SIGN_IN_FAILED: 'Check your email and password.',

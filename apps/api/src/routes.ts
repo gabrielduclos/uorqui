@@ -71,6 +71,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
   app.get('/health/ready', async () => {
     await db.select({ id: users.id }).from(users).limit(1)
     await db.select({ token: invitations.tokenHash }).from(invitations).limit(1)
+    await db.select({ id: messages.id, clientId: messages.clientId, editedAt: messages.editedAt, cancelledAt: messages.cancelledAt }).from(messages).limit(1)
     return { ready: true }
   })
 
@@ -213,6 +214,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     return messageCache.read(`${channelId}:${thread ?? ''}:${before ?? ''}`, async () => {
       const roots = db.select({
         id: messages.id, body: messages.body, createdAt: messages.createdAt,
+        authorId: messages.authorId, clientId: messages.clientId, editedAt: messages.editedAt, cancelledAt: messages.cancelledAt,
         author: users.name,
       }).from(messages).innerJoin(users, eq(messages.authorId, users.id))
         .where(and(eq(messages.channelId, channelId),
@@ -222,6 +224,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
 
       const rows = await db.select({
         id: roots.id, body: roots.body, createdAt: roots.createdAt, author: roots.author,
+        authorId: roots.authorId, clientId: roots.clientId, editedAt: roots.editedAt, cancelledAt: roots.cancelledAt,
         replies: thread ? sql<number>`0` : sql<number>`cast((
           select count(*) from ${messages} as reply
           where reply.channel_id = ${channelId} and reply.parent_id = "page"."id"
@@ -235,15 +238,47 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
   app.post('/api/channels/:channelId/messages', async (request, reply) => {
     const { id: userId } = await requireUser(request)
     const { channelId } = validate(z.object({ channelId: id }), request.params)
-    const { body, thread } = validate(z.object({
+    const { body, thread, clientId } = validate(z.object({
       body: z.string().trim().min(1).max(4000),
       thread: messageId.optional(),
+      clientId: id.optional(),
     }), request.body)
     await requireChannel(channelId, userId)
     if (thread) await requireThread(channelId, thread)
-    const [message] = await db.insert(messages).values({ channelId, authorId: userId, body, parentId: thread })
+    let [message] = await db.insert(messages).values({ channelId, authorId: userId, body, parentId: thread, clientId })
+      .onConflictDoNothing({ target: [messages.authorId, messages.clientId] })
       .returning({ id: messages.id })
+    if (!message && clientId) {
+      [message] = await db.select({ id: messages.id }).from(messages)
+        .where(and(eq(messages.authorId, userId), eq(messages.clientId, clientId), eq(messages.channelId, channelId)))
+    }
+    if (!message) throw new RequestError(409, 'INVALID_INPUT')
     messageCache.clear(`${channelId}:`)
     return reply.code(201).send(message)
+  })
+
+  app.post('/api/channels/:channelId/messages/:messageId/edit', async (request) => {
+    const user = await requireUser(request)
+    const params = validate(z.object({ channelId: id, messageId }), request.params)
+    const { body } = validate(z.object({ body: z.string().trim().min(1).max(4000) }), request.body)
+    await requireChannel(params.channelId, user.id)
+    const [updated] = await db.update(messages).set({ body, editedAt: new Date() })
+      .where(and(eq(messages.id, params.messageId), eq(messages.channelId, params.channelId),
+        eq(messages.authorId, user.id), isNull(messages.cancelledAt))).returning({ id: messages.id })
+    if (!updated) throw new RequestError(404, 'MESSAGE_UNAVAILABLE')
+    messageCache.clear(`${params.channelId}:`)
+    return updated
+  })
+
+  app.post('/api/channels/:channelId/messages/:messageId/cancel', async (request) => {
+    const user = await requireUser(request)
+    const params = validate(z.object({ channelId: id, messageId }), request.params)
+    await requireChannel(params.channelId, user.id)
+    const [updated] = await db.update(messages).set({ body: '', cancelledAt: new Date() })
+      .where(and(eq(messages.id, params.messageId), eq(messages.channelId, params.channelId),
+        eq(messages.authorId, user.id))).returning({ id: messages.id })
+    if (!updated) throw new RequestError(404, 'MESSAGE_UNAVAILABLE')
+    messageCache.clear(`${params.channelId}:`)
+    return updated
   })
 }

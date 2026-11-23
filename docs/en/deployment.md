@@ -37,3 +37,5 @@ Visible conversations refresh every ten seconds and channel lists every sixty se
 The API has a process-local message cache with a five-second lifetime and a maximum of 100 pages. Every request checks its session and channel permissions before using it. Successful message writes invalidate all pages for that channel on the serving instance. Other instances expire their entries within five seconds. Restarts discard the cache.
 
 Hashed JavaScript and CSS assets use a one-year immutable browser cache. Entry HTML and private API data retain their separate policies.
+
+The composer starts at one line and grows to 160 px. Sends appear immediately with pending or retry feedback. Pending and failed sends survive navigation in tab memory and are cleared at authentication changes. Authors can edit sent messages or confirm unsending. Unsent text is cleared and replaced by a translated placeholder, preserving thread replies. Retrying a send uses the same client ID to avoid duplicate messages. Apply migration 0001 before deploying this API version. Existing messages with no client ID remain compatible.
