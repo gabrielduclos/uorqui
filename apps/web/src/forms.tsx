@@ -1,6 +1,7 @@
 import { Check, Copy as CopyIcon, Eye, EyeOff } from 'lucide-react'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, api, errorText, type Channel, type Team } from './api'
+import { Skeleton } from './components/ui/skeleton'
 import { Button, Modal } from './components/ui/controls'
 import type { Copy } from './copy'
 
@@ -31,7 +32,7 @@ export function ActionForm({ copy, submit, children, onSubmit }: {
     }}>
     {children}
     {error !== undefined && <p role="alert" className="error">{errorText(copy, error)}</p>}
-    <Button type="submit" disabled={busy}>{busy ? copy.loading : submit}</Button>
+    <Button type="submit" disabled={busy}>{submit}{busy && <Skeleton className="skeleton-progress" />}</Button>
   </form>
 }
 

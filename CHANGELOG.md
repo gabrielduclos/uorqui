@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.4]
+
+- Preserves static interface structure during loading and adds shared skeletons for data fields, with accessible states and reduced-motion support.
+
 ## [0.2.0-beta.3]
 
 - Applies a monochrome shared UI kit in both themes and adds a vertical team rail with initials, names, active state and team creation.

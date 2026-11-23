@@ -186,3 +186,23 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }
+
+.skeleton { display: block; flex: none; border-radius: .375rem; background: var(--muted); animation: skeleton-pulse 1.8s ease-in-out infinite; }
+.skeleton-avatar { width: 34px; height: 34px; }
+.skeleton-body { flex: 1; min-width: 0; display: grid; gap: .6rem; padding-block: .2rem; }
+.skeleton-name { width: 110px; max-width: 100%; height: 16px; }
+.skeleton-title { width: 150px; max-width: 100%; height: 22px; }
+.skeleton-line { width: 85%; height: 14px; }
+.skeleton-short { width: 55%; }
+.skeleton-channel { width: 90%; height: 30px; margin-top: .6rem; }
+.skeleton-team { width: 46px; height: 46px; border-radius: 1rem; margin-bottom: .65rem; }
+.skeleton-composer { width: 85%; height: 55px; margin: .25rem; }
+.channel-placeholder { padding: .3rem; color: var(--muted-foreground); font-size: .78rem; }
+@keyframes skeleton-pulse { 50% { opacity: .5; } }
+@media (max-width: 590px) { .skeleton-team { width: 42px; height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+.skeleton-progress { width: 14px; height: 14px; background: currentColor; opacity: .4; }
+
+.content > .room { flex: 1; }
+.compose-box > .skeleton-composer { flex: 1; min-width: 0; }

@@ -1,6 +1,7 @@
 import { ArrowDown, MessageSquare, Send, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { api, errorText, type Channel, type Message, type MessagePage } from './api'
+import { MessageSkeleton } from './components/ui/skeleton'
 import { Button } from './components/ui/controls'
 import type { Copy, Locale } from './copy'
 
@@ -135,7 +136,7 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
       {hasMore && <div className="load-more"><Button variant="outline" onClick={loadOlder} disabled={paging}>
         {paging ? copy.loading : copy.older}
       </Button></div>}
-      {!first && loadError === undefined && <p className="empty-messages" role="status">{copy.loading}</p>}
+      {!first && loadError === undefined && <MessageSkeleton copy={copy} />}
       {first && !records.length && <p className="empty-messages">{thread ? copy.emptyThread : copy.emptyChannel}</p>}
       {records.map((message) => {
         const date = new Date(message.createdAt).toLocaleDateString(locale, { dateStyle: 'long' })

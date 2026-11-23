@@ -34,3 +34,5 @@ Os tokens secondary, popover e sidebar referenciam a paleta semântica compartil
 Use uma escala de espaçamento de 4 px e o token compartilhado de raio de 10 px. A barra de equipes tem rolagem independente para listas longas. A navegação oferece Tab, Shift+Tab e Enter ou Espaço. O foco usa contorno visível de 2 px. A preferência por movimento reduzido desativa transições.
 
 Os dois temas e idiomas cobrem diálogos, formulários de conta, estados vazios e navegação de canais. Enter envia uma mensagem e Shift+Enter insere uma linha.
+
+Manter a estrutura estática visível enquanto os dados carregam. Skeletons reservam espaço para equipes, nomes de canais, mensagens e conteúdo do campo de composição. Atualizações em segundo plano preservam os dados existentes. Regiões de carregamento têm rótulos acessíveis e suporte a movimento reduzido. Formulários pendentes preservam os rótulos de envio.

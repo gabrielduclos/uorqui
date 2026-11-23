@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.4]
+
+- Preserva a estrutura estática durante o carregamento e adiciona skeletons compartilhados nos campos de dados, com estados acessíveis e suporte a movimento reduzido.
+
 ## [0.2.0-beta.3]
 
 - Aplica o UI kit monocromático nos dois temas e adiciona barra vertical de equipes com iniciais, nomes, seleção e criação de equipe.

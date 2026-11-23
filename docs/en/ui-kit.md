@@ -34,3 +34,5 @@ Secondary, popover and sidebar tokens reference the shared semantic palette. Err
 Use a 4 px spacing scale and the shared 10 px radius token. The rail scrolls independently for long team lists. Team navigation supports Tab, Shift+Tab and Enter or Space. Focus uses a visible 2 px ring. Reduced-motion preferences disable transitions.
 
 Both themes and languages apply to dialogs, account forms, empty states and channel navigation. Enter sends a message and Shift+Enter adds a line.
+
+Keep static interface structure visible while data loads. Skeletons reserve space for teams, channel names, messages and composer content. Background refresh retains existing data. Loading regions have accessible labels and reduced-motion support. Pending forms retain their submit labels.
