@@ -8,7 +8,8 @@ export interface DirectChannel extends Channel { peerId: string }
 export interface User { handle?: string | null; bio?: string | null; id: string; name: string; email: string }
 export interface Team { id: string; name: string; role: 'owner' | 'member' | null }
 export interface Channel { id: string; name: string; description: string; visibility: 'team' | 'private' }
-export interface Message { clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
+export interface Attachment { id: string; name: string; mime: string; size: number; url?: string }
+export interface Message { attachments?: Attachment[]; location?: { latitude: number; longitude: number } | null; pendingFile?: File; clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
 export interface MessagePage { messages: Message[]; more: boolean }
 
 export class ApiError extends Error {
@@ -53,6 +54,12 @@ async function request<T>(path: string, options: { data?: unknown; signal?: Abor
 }
 
 export { cachedQuery }
+
+export function refreshChannel(channelId: string) {
+  dataGeneration++
+  invalidateQueries(`/channels/${channelId}/messages`)
+  window.dispatchEvent(new Event('cache-updated'))
+}
 
 const updates = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('uorqui-workplace-cache')
 updates?.addEventListener('message', (event) => {

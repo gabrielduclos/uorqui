@@ -8,7 +8,7 @@ export async function createApp(config: Config, logger = true) {
   const app = Fastify({ logger, logController: new LogController({ disableRequestLogging: true }), bodyLimit: 32 * 1024 })
   const services = connect(config)
 
-  app.addHook('onClose', async () => services.pool.end())
+  app.addHook('onClose', async () => { await services.realtimePool.end(); await services.pool.end() })
   app.addHook('onRequest', async (request, reply) => {
     reply.header('cache-control', 'no-store')
     if (request.method === 'POST' && request.headers.origin !== config.WEB_ORIGIN) {

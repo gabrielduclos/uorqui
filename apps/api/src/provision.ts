@@ -6,11 +6,12 @@ import { readConfig } from './config.js'
 const input = z.object({
   email: z.email().max(254).transform((value) => value.toLowerCase()),
   name: z.string().trim().min(1).max(80),
+  handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/),
   password: z.string().min(8).max(128),
-}).safeParse({ email: process.argv[2], name: process.argv[3], password: (await text(process.stdin)).replace(/\r?\n$/, '') })
+}).safeParse({ email: process.argv[2], name: process.argv[3], handle: process.argv[4], password: (await text(process.stdin)).replace(/\r?\n$/, '') })
 
 if (!input.success) {
-  console.error('Provide an email and display name as arguments and an 8–128 character password via stdin.')
+  console.error('Provide an email, display name and public handle as arguments and an 8–128 character password via stdin.')
   process.exit(1)
 }
 

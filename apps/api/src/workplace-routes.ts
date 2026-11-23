@@ -21,7 +21,7 @@ type Access = {
 }
 
 export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Services, 'db'>, access: Access) {
-  const publicFields = { id: users.id, name: users.name, handle: profiles.handle, bio: profiles.bio }
+  const publicFields = { id: users.id, name: users.name, handle: users.handle, bio: profiles.bio }
 
   app.get('/api/profile', async (request) => {
     const user = await access.requireUser(request)
@@ -38,8 +38,8 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
       bio: z.string().trim().max(500),
     }), request.body)
     await db.transaction(async (tx) => {
-      await tx.update(users).set({ name: input.name, updatedAt: new Date() }).where(eq(users.id, user.id))
       try {
+        await tx.update(users).set({ name: input.name, handle: input.handle, updatedAt: new Date() }).where(eq(users.id, user.id))
         await tx.insert(profiles).values({ userId: user.id, handle: input.handle, bio: input.bio })
           .onConflictDoUpdate({ target: profiles.userId, set: { handle: input.handle, bio: input.bio } })
       } catch (error) {
@@ -54,7 +54,7 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
   app.get('/api/profiles/:handle', async (request) => {
     const { handle } = parse(z.object({ handle: handleInput }), request.params)
     const [profile] = await db.select(publicFields).from(users)
-      .innerJoin(profiles, eq(users.id, profiles.userId)).where(eq(profiles.handle, handle))
+      .leftJoin(profiles, eq(users.id, profiles.userId)).where(eq(users.handle, handle))
     if (!profile) throw new RequestError(404, 'PROFILE_NOT_FOUND')
     return profile
   })
@@ -124,7 +124,7 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
   app.get('/api/direct', async (request) => {
     const user = await access.requireUser(request)
     return db.select({
-      id: channels.id, name: users.name, description: sql<string>`coalesce(${profiles.handle}, '')`,
+      id: channels.id, name: users.name, description: sql<string>`coalesce(${users.handle}, '')`,
       visibility: channels.visibility, peerId: users.id,
     }).from(directConversations).innerJoin(channels, eq(channels.id, directConversations.channelId))
       .innerJoin(users, eq(users.id, sql`case when ${directConversations.userA} = ${user.id} then ${directConversations.userB} else ${directConversations.userA} end`))
@@ -136,9 +136,9 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
   app.post('/api/direct', async (request) => {
     const user = await access.requireUser(request)
     const input = parse(z.union([z.object({ userId: userIdInput }), z.object({ handle: z.string().trim().transform((value) => value.replace(/^@/, '')).pipe(handleInput) })]), request.body)
-    const [peer] = await db.select({ id: users.id, name: users.name, handle: profiles.handle })
+    const [peer] = await db.select({ id: users.id, name: users.name, handle: users.handle })
       .from(users).leftJoin(profiles, eq(profiles.userId, users.id))
-      .where('userId' in input ? eq(users.id, input.userId) : eq(profiles.handle, input.handle))
+      .where('userId' in input ? eq(users.id, input.userId) : eq(users.handle, input.handle))
     if (!peer) throw new RequestError(404, 'PROFILE_NOT_FOUND')
     if (peer.id === user.id) throw new RequestError(400, 'DIRECT_SELF')
     const [userA, userB] = [user.id, peer.id].sort() as [string, string]

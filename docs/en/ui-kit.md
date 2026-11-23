@@ -42,3 +42,5 @@ Backend action buttons use the shared loading spinner with aria-busy and disable
 The message composer uses one line and grows with its contents. Pending messages display immediately. Own delivered messages expose edit and unsend actions with shared pending feedback. Edited text has an edited label. Unsent text is replaced by a placeholder and the thread remains available.
 
 The team rail starts with direct messages. The team heading exposes owner settings. The top-bar avatar opens profile settings; author names open a profile. Profiles and management use shared dialogs, skeleton fields and pending action buttons in both themes and languages. Mobile direct messages alternate between list and conversation.
+
+Signup reserves an @ prefix beside the username input and normalizes typed handles to lowercase. The main composer’s (+) popover provides gallery, camera, files and location, with voice recording beside the textarea and local previews. One-line composition still grows with text. The shared loading state spans metadata reservation, upload and message confirmation; pending media stays optimistic and retryable.

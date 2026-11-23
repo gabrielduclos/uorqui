@@ -48,6 +48,7 @@ export function SignIn({ copy, token, onSuccess }: { copy: Copy; token: string |
         })
         await onSuccess()
       }}>
+        {registering && <label>{copy.username}<div className="username-field"><span aria-hidden="true">@</span><input name="handle" aria-label={copy.username} autoComplete="username" autoCapitalize="none" spellCheck={false} required minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" onChange={(event) => { event.target.value = event.target.value.toLowerCase().replace(/^@/, '') }} /></div><small>{copy.handleHint}</small></label>}
         {registering && <label>{copy.name}<input name="name" autoComplete="name" required maxLength={80} /></label>}
         <label>{copy.email}<input name="email" type="email" autoComplete="email" maxLength={254} required /></label>
         <div>

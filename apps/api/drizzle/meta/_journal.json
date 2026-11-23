@@ -22,6 +22,13 @@
       "when": 1795454763235,
       "tag": "0002_silky_deathbird",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795456821333,
+      "tag": "0003_sloppy_smiling_tiger",
+      "breakpoints": true
     }
   ]
 }

@@ -25,14 +25,14 @@ O preview fica em https://feat-enterprise-channels-main.uorqui1.workers.dev/. Pr
 
 ## Escopo do beta
 
-As contas podem ser criadas na tela de entrada com nome, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de equipes vazia e podem criar uma equipe ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Envio automático de e-mail, verificação da caixa postal, recuperação de senha ficam fora deste beta. Equipes e clientes recebem novas mensagens por consultas periódicas.
+As contas podem ser criadas na tela de entrada com nome, @username único, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de equipes vazia e podem criar uma equipe ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Envio automático de e-mail, verificação da caixa postal, recuperação de senha ficam fora deste beta. Conversas abertas de equipes e mensagens diretas recebem invalidações por SSE em tempo real.
 
 
 ## Cache
 
 O cache da aba mantém até 100 entradas por cinco minutos. Equipes e listas de canais recentes são reutilizadas por 60 segundos, mensagens por oito segundos e páginas antigas do histórico por cinco minutos. Leituras simultâneas iguais compartilham uma requisição. Cancelar uma tela preserva a requisição de outra tela. Mudanças de autenticação limpam o cache, e eventos entre abas invalidam dados após alterações. Respostas privadas mantêm HTTP no-store.
 
-Conversas visíveis atualizam a cada dez segundos e listas de canais a cada sessenta segundos. Telas ocultas pausam consultas periódicas. Foco e visibilidade atualizam os dados através do cache. Uma gravação bem-sucedida invalida os dados afetados imediatamente. No funcionamento periódico normal, mensagens recebidas podem levar até dez segundos para aparecer.
+Conversas abertas usam uma conexão SSE autenticada por canal, compartilhada pela conversa e seu tópico. Os eventos invalidam páginas de mensagens em cache; as leituras continuam verificando permissões. A conexão ativa suspende as consultas periódicas de mensagens. Quando o SSE está desconectado, uma consulta de contingência ocorre a cada trinta segundos. Telas ocultas fecham suas conexões e pausam consultas, atualizando ao retornar. Listas de canais e conversas diretas mantêm atualização a cada sessenta segundos. Gravações bem-sucedidas invalidam os dados afetados imediatamente.
 
 A API possui cache de mensagens em memória do processo, válido por cinco segundos e limitado a 100 páginas. Toda requisição verifica sessão e permissões do canal antes de usá-lo. Envios bem-sucedidos invalidam todas as páginas daquele canal na instância que os processou. Outras instâncias expiram suas entradas em até cinco segundos. Reinicializações descartam o cache.
 
@@ -48,3 +48,20 @@ Aplique a migração 0002 antes de iniciar esta versão. Ela adiciona `profile`,
 O responsável pode renomear a equipe e remover membros ou convidados de canais privados. A remoção também revoga seus convites existentes para a equipe. O responsável não pode remover a si mesmo. A exclusão exige o nome atual da equipe, registra a data de exclusão e bloqueia os acessos e convites da equipe e seus canais. Os dados são mantidos por exclusão lógica. Conversas diretas permanecem independentes da participação em equipes.
 
 O botão de perfil permite editar nome, identificação pública única e biografia. A identificação aceita de 3 a 24 letras minúsculas, números ou sublinhado; a biografia permite 500 caracteres. Ao salvar uma identificação, nome, identificação e biografia ficam disponíveis em `/#profile=identificacao`, sem exigir login. O e-mail permanece privado. Uma pessoa conectada pode iniciar uma conversa direta pelo perfil, pelo autor de uma mensagem ou pela lista de mensagens diretas. Essas conversas reutilizam as permissões e o comportamento das mensagens dos canais.
+
+
+## Tempo real e anexos privados
+
+Aplique a migração 0003 antes de iniciar esta versão. Ela adiciona `user.handle` único, copia identificações públicas existentes, adiciona localização estruturada às mensagens e cria a tabela de metadados dos anexos. O cadastro passa a exigir `handle`; a autenticação o salva com o novo usuário. A ferramenta de provisionamento recebe e-mail, nome e identificação como argumentos. Contas antigas sem identificação podem defini-la no perfil.
+
+Defina `REALTIME_DATABASE_URL` no Render com uma conexão direta, sem pooler, para o mesmo banco e usuário do Neon. O listener usa uma conexão dedicada enquanto houver clientes SSE e a encerra quando o último sair. Gravações de mensagens publicam invalidações no PostgreSQL para as outras instâncias da API. As conexões enviam um heartbeat a cada vinte segundos, verificam permissões do canal e validade da sessão nas atualizações e pelo menos uma vez por minuto, encerrando ao expirar ou perder acesso. Ao reconectar, todas as páginas de mensagens já abertas são atualizadas. Durante uma falha do listener do banco, a entrega local e a atualização periódica de recuperação continuam disponíveis.
+
+O preview vincula `FILES` ao bucket privado R2 `uorqui-workplace-files` em `previews.r2_buckets`. Configure o mesmo `FILES_SECRET`, gerado de forma independente, no Render e no preview existente do Worker. Para configuração manual, use `wrangler preview secret put FILES_SECRET --name feat/enterprise-channels`. Preserve os vínculos e a publicação de produção.
+
+O compositor (+) foi trazido da main, incluindo edição de imagem e compactação local de mídia. Ele oferece até dez fotos da galeria, câmera, imagens, vídeo, gravação de áudio, PDF/texto/ZIP/Office, emoji e localização atual estruturada. Cada anexo aceita até 50 MB após a compactação opcional; vídeos da galeria de até 300 MB podem ser processados localmente. Aplicam-se as permissões e os codecs disponíveis no navegador. Esta versão não integra uma galeria de GIFs de provedor; arquivos GIF podem ser anexados.
+
+O envio primeiro reserva metadados na API. O Worker autoriza a requisição, transmite os bytes com tamanho exato ao R2 e confirma o upload por um endpoint interno autenticado. Somente o autor pode enviar um arquivo reservado. A publicação da mensagem vincula os arquivos prontos em uma transação. O download exige acesso à conversa e uma mensagem entregue e não cancelada; intervalos de bytes permitem reprodução de mídia. Cancelar a mensagem bloqueia downloads posteriores dos seus anexos. Os arquivos permanecem armazenados. Bytes de uploads não publicados são mantidos, com autorização de upload pendente limitada a 24 horas; a limpeza automática de órfãos fica fora desta versão. Respostas de mídia usam private no-store e cabeçalhos seguros de download. O bucket não possui endereço público de entrega.
+
+Operações de arquivos exigem o Worker e seu vínculo R2; o proxy padrão de desenvolvimento do Vite direto para a API não fornece armazenamento de arquivos. A validação completa de mídia usou Worker/R2 locais e PostgreSQL 17, incluindo notificações entre duas instâncias da API, além dos testes de regressão via PGlite.
+
+Referências: [pool de conexões do Neon](https://neon.com/docs/connect/connection-pooling), [configuração do preview](https://developers.cloudflare.com/workers/previews/configuration/) e [API R2 para Workers](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).

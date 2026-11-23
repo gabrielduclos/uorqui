@@ -6,8 +6,13 @@ const empty: Message[] = []
 let generation = 0
 const notify = () => window.dispatchEvent(new Event('outbox-updated'))
 
+function revoke(messages: Message[]) {
+  for (const message of messages) for (const file of message.attachments ?? []) if (file.url?.startsWith('blob:')) URL.revokeObjectURL(file.url)
+}
+
 export function clearOutbox() {
   generation++
+  for (const items of entries.values()) revoke(items)
   entries.clear()
   notify()
 }
@@ -23,7 +28,10 @@ export function useOutbox(userId: string | undefined, channelId: string, threadI
   const messages = useSyncExternalStore(subscribe, snapshot)
   const update = useCallback((change: (current: Message[]) => Message[]) => {
     if (version !== generation) return
-    const next = change(entries.get(key) ?? empty)
+    const previous = entries.get(key) ?? empty
+    const next = change(previous)
+    const retained = new Set(next.flatMap((message) => (message.attachments ?? []).map((file) => file.url)))
+    revoke(previous.map((message) => ({ ...message, attachments: message.attachments?.filter((file) => !retained.has(file.url)) })))
     if (next.length) entries.set(key, next)
     else entries.delete(key)
     notify()

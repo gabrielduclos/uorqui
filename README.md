@@ -1,8 +1,8 @@
 # Uorqui Workplace
 
-[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.8
+[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.9
 
-A compact workspace for teams to talk in internal channels and collaborate with customers in private channels. Team owners create channels and generate links tied to a recipient’s email. Anyone with access to a channel can send messages and keep follow-up conversations in threads.
+A compact workspace for teams to talk in internal channels and collaborate with customers in private channels. Team owners create channels and generate links tied to a recipient’s email. Anyone with access to a channel can send messages and keep follow-up conversations in threads. Team and direct conversations update through SSE and support private media and file attachments.
 
 Owners can also manage team membership and delete teams. Direct messages connect two people independently of teams. Edit your name, public handle and biography from the profile button and share your public profile link.
 
@@ -22,12 +22,12 @@ Set `DATABASE_URL` and generate a distinct `AUTH_SECRET` with `openssl rand -hex
 ```sh
 npm run db:migrate -w @uorqui/workplace-api
 read -rs password
-printf '%s\n' "$password" | npm run account:provision -w @uorqui/workplace-api -- you@example.com "Your Name"
+printf '%s\n' "$password" | npm run account:provision -w @uorqui/workplace-api -- you@example.com "Your Name" your_username
 unset password
 npm run dev
 ```
 
-Accounts can also be created directly from the sign-in screen. Enter the first account’s password after the `read` command. Open [localhost:5173](http://localhost:5173/), sign in and create a team. Create a private channel to invite a customer. The app generates a link for you to send to the recipient.
+Accounts can also be created directly from the sign-in screen with a unique @username. Enter the first account’s password after the `read` command. Open [localhost:5173](http://localhost:5173/), sign in and create a team. Create a private channel to invite a customer. The app generates a link for you to send to the recipient.
 
 Use `npm run typecheck`, `npm run build` and `npm test` to verify the project. The integration test runs against a temporary PostgreSQL engine through PGlite.
 

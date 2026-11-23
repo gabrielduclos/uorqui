@@ -13,6 +13,12 @@
   "previews": {
     "vars": {
       "API_ORIGIN": "https://uorqui-workplace-preview-api.onrender.com"
-    }
+    },
+    "r2_buckets": [
+      {
+        "binding": "FILES",
+        "bucket_name": "uorqui-workplace-files"
+      }
+    ]
   }
 }

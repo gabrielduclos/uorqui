@@ -228,3 +228,15 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 .profile-link { display: inline-block; color: var(--foreground); text-decoration: underline; margin-top: .75rem; }
 .author-link { cursor: pointer; }
 .author-link:hover { text-decoration: underline; }
+
+.username-field { position: relative; display: flex; align-items: center; }
+.username-field > span { position: absolute; left: 12px; color: var(--muted-foreground); }
+.username-field > input { padding-left: 32px; }
+.message-attachment { max-width: min(400px, 100%); margin-top: 6px; overflow-wrap: anywhere; }
+.message-attachment img, .message-attachment video { display: block; max-width: 100%; max-height: 320px; border-radius: var(--radius); object-fit: contain; background: var(--muted); }
+.file-link { display: block; font-size: 12px; text-decoration: underline; overflow-wrap: anywhere; padding: 5px 0; }
+.audio-player { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 340px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); }
+.audio-player input[type=range] { width: 100%; min-height: 24px; padding: 0; }
+.audio-player small { font-size: 11px; }
+[data-live-message-composer] textarea { padding: 9px 12px; }
+[data-live-message-composer] input[type=file] { width: 1px; height: 1px; }

@@ -1,13 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { fromNodeHeaders } from 'better-auth/node'
-import { and, asc, desc, eq, exists, gt, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Config } from './config.js'
 import type { Services } from './database.js'
 import { registerWorkplaceRoutes } from './workplace-routes.js'
+import { registerAttachmentRoutes } from './attachment-routes.js'
+import { createRealtime } from './realtime.js'
 import { ReadCache } from './read-cache.js'
-import { channelMembers, channels, directConversations, invitations, memberships, messages, profiles, teams, users } from './schema.js'
+import { attachments, channelMembers, channels, directConversations, invitations, memberships, messages, profiles, sessions, teams, users } from './schema.js'
 
 export class RequestError extends Error {
   constructor(readonly statusCode: number, readonly code: string) {
@@ -32,8 +34,11 @@ const activeInvitation = (token: string) => and(
   isNull(invitations.acceptedAt),
 )
 
-export function registerRoutes(app: FastifyInstance, { auth, db }: Services, config: Config) {
+export function registerRoutes(app: FastifyInstance, { auth, db, pool, realtimePool }: Services, config: Config) {
   const messageCache = new ReadCache()
+  const realtime = createRealtime(pool, (channelId) => messageCache.clear(`${channelId}:`), realtimePool)
+  const streams = new Set<() => void>()
+  app.addHook('preClose', async () => { for (const close of streams) close(); await realtime.close() })
 
   async function requireUser(request: FastifyRequest) {
     const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) })
@@ -72,12 +77,14 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
   }
 
   registerWorkplaceRoutes(app, { db }, { requireUser, requireOwner })
+  registerAttachmentRoutes(app, { db }, config, { requireUser, requireChannel })
 
   app.get('/health/ready', async () => {
     await db.select({ id: users.id }).from(users).limit(1)
     await db.select({ token: invitations.tokenHash }).from(invitations).limit(1)
     await db.select({ id: messages.id, clientId: messages.clientId, editedAt: messages.editedAt, cancelledAt: messages.cancelledAt }).from(messages).limit(1)
-    await db.select({ handle: profiles.handle }).from(profiles).limit(1)
+    await db.select({ handle: users.handle }).from(users).limit(1)
+    await db.select({ id: attachments.id }).from(attachments).limit(1)
     await db.select({ id: directConversations.channelId }).from(directConversations).limit(1)
     return { ready: true }
   })
@@ -86,10 +93,12 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
   for (const path of authPaths) {
     app.post(path, { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
       let body = request.body ?? {}
+      let requestedHandle: string | undefined
       if (path === '/api/auth/sign-up/email') {
         const input = validate(z.object({
           token: inviteInput.shape.token.optional(),
           name: z.string().trim().min(1).max(80),
+          handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/),
           email,
           password: z.string().min(8).max(128),
         }), body)
@@ -99,7 +108,10 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
               exists(db.select({ id: teams.id }).from(teams).where(and(eq(teams.id, invitations.teamId), isNull(teams.deletedAt))))))
           if (!invite) throw new RequestError(400, 'INVITE_INVALID')
         }
-        body = { name: input.name, email: input.email, password: input.password }
+        requestedHandle = input.handle
+        const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.handle, input.handle))
+        if (taken) throw new RequestError(409, 'HANDLE_TAKEN')
+        body = { name: input.name, handle: input.handle, email: input.email, password: input.password }
       }
       const headers = fromNodeHeaders(request.headers)
       headers.delete('content-length')
@@ -110,6 +122,10 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
       }))
       for (const cookie of response.headers.getSetCookie()) reply.header('set-cookie', cookie)
       if (!response.ok) {
+        if (requestedHandle) {
+          const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.handle, requestedHandle))
+          if (taken) throw new RequestError(409, 'HANDLE_TAKEN')
+        }
         const code = response.status === 429 ? 'RATE_LIMITED'
           : response.status >= 500 ? 'SERVER_ERROR'
           : path.endsWith('sign-in/email') ? 'SIGN_IN_FAILED' : 'AUTH_FAILED'
@@ -121,7 +137,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
 
   app.get('/api/session', async (request) => {
     const user = await requireUser(request)
-    const [fresh] = await db.select({ id: users.id, name: users.name, email: users.email, handle: profiles.handle, bio: profiles.bio })
+    const [fresh] = await db.select({ id: users.id, name: users.name, email: users.email, handle: users.handle, bio: profiles.bio })
       .from(users).leftJoin(profiles, eq(users.id, profiles.userId)).where(eq(users.id, user.id))
     return fresh
   })
@@ -218,6 +234,55 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     })
   })
 
+  app.get('/api/channels/:channelId/events', async (request, reply) => {
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) })
+    if (!session) throw new RequestError(401, 'SIGN_IN_REQUIRED')
+    const user = session.user
+    const { channelId } = validate(z.object({ channelId: id }), request.params)
+    await requireChannel(channelId, user.id)
+    reply.hijack()
+    reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store, no-transform',
+      'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' })
+    reply.raw.flushHeaders()
+    let closed = false
+    let checking = false
+    let queued = false
+    let beats = 0
+    const close = () => {
+      if (closed) return
+      closed = true; clearInterval(heartbeat); unsubscribe(); streams.delete(close); reply.raw.end()
+    }
+    const send = (event: string, data: unknown = {}) => {
+      if (!closed && !reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)) close()
+    }
+    const refresh = async () => {
+      if (closed) return
+      if (checking) { queued = true; return }
+      checking = true
+      try {
+        const [active] = await db.select({ id: sessions.id }).from(sessions)
+          .where(and(eq(sessions.id, session.session.id), eq(sessions.userId, user.id), gt(sessions.expiresAt, new Date())))
+        if (!active) throw new RequestError(401, 'SIGN_IN_REQUIRED')
+        await requireChannel(channelId, user.id)
+        send('messages')
+      } catch (error) {
+        if (error instanceof RequestError && [401, 403, 404].includes(error.statusCode)) send('access-revoked', { code: error.code })
+        else request.log.warn({ code: (error as { code?: string }).code }, 'Realtime access check failed temporarily')
+        close()
+      }
+      finally { checking = false; if (queued) { queued = false; void refresh() } }
+    }
+    const unsubscribe = realtime.subscribe(channelId, () => void refresh())
+    const heartbeat = setInterval(() => {
+      if (++beats % 3 === 0) void refresh()
+      else if (!closed) reply.raw.write(': heartbeat\n\n')
+    }, 20_000)
+    streams.add(close)
+    reply.raw.once('close', close)
+    send('ready')
+    return reply
+  })
+
   app.get('/api/channels/:channelId/messages', async (request) => {
     const { id: userId } = await requireUser(request)
     const { channelId } = validate(z.object({ channelId: id }), request.params)
@@ -226,7 +291,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     if (thread) await requireThread(channelId, thread)
     return messageCache.read(`${channelId}:${thread ?? ''}:${before ?? ''}`, async () => {
       const roots = db.select({
-        id: messages.id, body: messages.body, createdAt: messages.createdAt,
+        id: messages.id, body: messages.body, location: messages.location, createdAt: messages.createdAt,
         authorId: messages.authorId, clientId: messages.clientId, editedAt: messages.editedAt, cancelledAt: messages.cancelledAt,
         author: users.name,
       }).from(messages).innerJoin(users, eq(messages.authorId, users.id))
@@ -236,7 +301,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
         .orderBy(desc(messages.id)).limit(51).as('page')
 
       const rows = await db.select({
-        id: roots.id, body: roots.body, createdAt: roots.createdAt, author: roots.author,
+        id: roots.id, body: roots.body, location: roots.location, createdAt: roots.createdAt, author: roots.author,
         authorId: roots.authorId, clientId: roots.clientId, editedAt: roots.editedAt, cancelledAt: roots.cancelledAt,
         replies: thread ? sql<number>`0` : sql<number>`cast((
           select count(*) from ${messages} as reply
@@ -244,29 +309,50 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
         ) as integer)`,
       }).from(roots).orderBy(desc(roots.id))
 
-      return { messages: rows.slice(0, 50).reverse(), more: rows.length > 50 }
+      const page = rows.slice(0, 50).reverse()
+      const files = page.length ? await db.select({ id: attachments.id, name: attachments.name, mime: attachments.mime,
+        size: attachments.size, messageId: attachments.messageId }).from(attachments)
+        .where(inArray(attachments.messageId, page.filter((row) => !row.cancelledAt).map((row) => row.id))) : []
+      return { messages: page.map((row) => ({ ...row, attachments: files.filter((file) => file.messageId === row.id)
+        .map(({ messageId: _, ...file }) => file) })), more: rows.length > 50 }
     })
   })
 
   app.post('/api/channels/:channelId/messages', async (request, reply) => {
     const { id: userId } = await requireUser(request)
     const { channelId } = validate(z.object({ channelId: id }), request.params)
-    const { body, thread, clientId } = validate(z.object({
-      body: z.string().trim().min(1).max(4000),
-      thread: messageId.optional(),
-      clientId: id.optional(),
-    }), request.body)
+    const input = validate(z.object({
+      body: z.string().trim().max(4000).default(''),
+      thread: messageId.optional(), clientId: id.optional(),
+      attachmentIds: z.array(id).max(10).default([]),
+      location: z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }).optional(),
+    }).refine((value) => !!value.body || value.attachmentIds.length > 0 || !!value.location), request.body)
+    const { body, thread, clientId, attachmentIds, location } = input
     await requireChannel(channelId, userId)
     if (thread) await requireThread(channelId, thread)
-    let [message] = await db.insert(messages).values({ channelId, authorId: userId, body, parentId: thread, clientId })
-      .onConflictDoNothing({ target: [messages.authorId, messages.clientId] })
-      .returning({ id: messages.id })
-    if (!message && clientId) {
-      [message] = await db.select({ id: messages.id }).from(messages)
+    const message = await db.transaction(async (tx) => {
+      if (clientId) {
+        const [existing] = await tx.select({ id: messages.id, channelId: messages.channelId }).from(messages)
+          .where(and(eq(messages.authorId, userId), eq(messages.clientId, clientId)))
+        if (existing) {
+          if (existing.channelId !== channelId) throw new RequestError(409, 'INVALID_INPUT')
+          return existing
+        }
+      }
+      if (attachmentIds.length) {
+        const files = await tx.select().from(attachments).where(inArray(attachments.id, attachmentIds)).for('update')
+        if (files.length !== new Set(attachmentIds).size || files.some((file) => file.authorId !== userId || file.channelId !== channelId || !file.ready || file.messageId !== null))
+          throw new RequestError(400, 'INVALID_FILE')
+      }
+      let [created] = await tx.insert(messages).values({ channelId, authorId: userId, body, parentId: thread, clientId, location })
+        .onConflictDoNothing({ target: [messages.authorId, messages.clientId] }).returning({ id: messages.id })
+      if (!created && clientId) [created] = await tx.select({ id: messages.id }).from(messages)
         .where(and(eq(messages.authorId, userId), eq(messages.clientId, clientId), eq(messages.channelId, channelId)))
-    }
-    if (!message) throw new RequestError(409, 'INVALID_INPUT')
-    messageCache.clear(`${channelId}:`)
+      if (!created) throw new RequestError(409, 'INVALID_INPUT')
+      if (attachmentIds.length) await tx.update(attachments).set({ messageId: created.id }).where(inArray(attachments.id, attachmentIds))
+      return created
+    })
+    await realtime.publish(channelId)
     return reply.code(201).send(message)
   })
 
@@ -279,7 +365,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
       .where(and(eq(messages.id, params.messageId), eq(messages.channelId, params.channelId),
         eq(messages.authorId, user.id), isNull(messages.cancelledAt))).returning({ id: messages.id })
     if (!updated) throw new RequestError(404, 'MESSAGE_UNAVAILABLE')
-    messageCache.clear(`${params.channelId}:`)
+    await realtime.publish(params.channelId)
     return updated
   })
 
@@ -287,11 +373,11 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     const user = await requireUser(request)
     const params = validate(z.object({ channelId: id, messageId }), request.params)
     await requireChannel(params.channelId, user.id)
-    const [updated] = await db.update(messages).set({ body: '', cancelledAt: new Date() })
+    const [updated] = await db.update(messages).set({ body: '', location: null, cancelledAt: new Date() })
       .where(and(eq(messages.id, params.messageId), eq(messages.channelId, params.channelId),
         eq(messages.authorId, user.id))).returning({ id: messages.id })
     if (!updated) throw new RequestError(404, 'MESSAGE_UNAVAILABLE')
-    messageCache.clear(`${params.channelId}:`)
+    await realtime.publish(params.channelId)
     return updated
   })
 }

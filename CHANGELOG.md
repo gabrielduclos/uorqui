@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.9]
+
+- Requires a unique lowercase @username at signup, stores it on the auth user and preserves existing public handles through migration 0003.
+- Adds authenticated SSE for direct and team conversations, PostgreSQL LISTEN/NOTIFY between API instances, reconnect catch-up and polling fallback.
+- Reuses the main branch attachment composer with gallery batches, camera, image markup, Office/documents, video, voice recording, emoji and current location.
+- Adds private R2 uploads and downloads through the existing main Worker preview, with server-side access checks, byte ranges and unsend access revocation.
+- Verifies API permissions, real HTTP SSE, revoked sessions, multi-instance delivery and desktop/mobile media flows.
+
 ## [0.2.0-beta.8]
 
 - Adds owner controls to rename teams, list members and guests, remove access and confirm team deletion by name. Deleted teams and channels become inaccessible while stored data is retained.

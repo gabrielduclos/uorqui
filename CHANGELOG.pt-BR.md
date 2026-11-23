@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.9]
+
+- Exige @username único e minúsculo no cadastro, armazena a identificação no usuário da autenticação e preserva identificações existentes pela migração 0003.
+- Adiciona SSE autenticado nas conversas diretas e de equipes, LISTEN/NOTIFY do PostgreSQL entre instâncias, recuperação ao reconectar e consultas de contingência.
+- Reutiliza o compositor de anexos da main com galeria em lote, câmera, marcação de imagens, Office/documentos, vídeo, gravação de áudio, emoji e localização atual.
+- Adiciona uploads e downloads privados no R2 pelo preview do Worker main, com verificação de acesso, intervalos de bytes e bloqueio dos anexos ao cancelar uma mensagem.
+- Valida permissões da API, SSE por HTTP, sessões revogadas, entrega entre instâncias e mídias no desktop e mobile.
+
 ## [0.2.0-beta.8]
 
 - Adiciona gestão pelo responsável para renomear equipes, listar membros e convidados, remover acessos e confirmar a exclusão pelo nome. Equipes e canais excluídos ficam inacessíveis, mantendo os dados armazenados.

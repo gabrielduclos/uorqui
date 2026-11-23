@@ -16,6 +16,7 @@ test('public account registration, team and private-channel conversations', asyn
   const config = {
     DATABASE_URL: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres`,
     AUTH_SECRET: 'test-only-secret-long-enough-for-authentication',
+    FILES_SECRET: 'test-only-file-secret-long-enough-for-storage',
     WEB_ORIGIN: 'http://localhost:5173',
     PORT: 3001,
   }
@@ -80,11 +81,15 @@ test('public account registration, team and private-channel conversations', asyn
 
   const guestToken = await invite(teamId, guestEmail, clientId)
   const memberToken = await invite(teamId, memberEmail)
-  const signUp = (email: string, token: unknown, pass = password) => sync('/api/auth/sign-up/email', { name: 'Guest', email, password: pass, token })
+  const signUp = (email: string, token: unknown, pass = password) => sync('/api/auth/sign-up/email', { name: 'Guest', handle: email.toLowerCase().split('@')[0]!.replace(/[^a-z0-9_]/g, '_'), email, password: pass, token })
   assert.equal((await signUp('invalid-email', undefined)).statusCode, 400)
   assert.equal((await signUp('short@example.test', undefined, 'short')).statusCode, 400)
   const publicAccount = await signUp('PUBLIC@example.test', undefined)
   assert.equal(publicAccount.statusCode, 200, publicAccount.body)
+  assert.equal(publicAccount.json().user.handle, 'public')
+  assert.equal((await sync('/api/auth/sign-up/email', { name: 'No handle', email: 'missing@example.test', password })).statusCode, 400)
+  assert.equal((await sync('/api/auth/sign-up/email', { name: 'Collision', email: 'collision@example.test', password, handle: 'PUBLIC' })).statusCode, 409)
+  assert.equal((await db.select().from(users).where(eq(users.email, 'collision@example.test'))).length, 0)
   const publicCookie = cookieFrom(publicAccount)
   assert.equal((await sync('/api/session', undefined, publicCookie)).json().email, 'public@example.test')
   assert.deepEqual((await sync('/api/teams', undefined, publicCookie)).json(), [])
@@ -100,7 +105,7 @@ test('public account registration, team and private-channel conversations', asyn
   const freshCookie = cookieFrom(freshLogin)
   assert.equal((await sync('/api/teams', { name: 'Independent team' }, freshCookie)).statusCode, 201)
   const duplicate = await signUp('public@example.test', undefined)
-  assert.ok([200, 400, 422].includes(duplicate.statusCode))
+  assert.ok([200, 400, 409, 422].includes(duplicate.statusCode))
   assert.equal((await db.select({ id: users.id }).from(users).where(eq(users.email, 'public@example.test'))).length, 1)
   assert.equal((await signUp(guestEmail, memberToken)).statusCode, 400)
   assert.equal((await signUp(guestEmail, guestToken, 'short')).statusCode, 400)
@@ -218,6 +223,59 @@ test('public account registration, team and private-channel conversations', asyn
   assert.equal((await sync(path(directId), undefined, memberCookie)).json().messages[0].body, 'Private message')
   assert.equal((await sync(`${path(directId)}/${directMessage.json().id}/edit`, { body: 'Wrong author' }, memberCookie)).statusCode, 404)
   assert.equal((await sync(`${path(directId)}/${directMessage.json().id}/edit`, { body: 'Revised private' }, ownerCookie)).statusCode, 200)
+
+  // Real HTTP SSE framing and authorization. PGlite does not forward notifications across connections.
+  const base = await app.listen({ host: '127.0.0.1', port: 0 })
+  const abort = new AbortController()
+  t.after(() => abort.abort())
+  const stream = await fetch(`${base}/api/channels/${directId}/events`, { headers: { cookie: memberCookie }, signal: abort.signal })
+  assert.equal(stream.status, 200)
+  assert.match(stream.headers.get('content-type')!, /text\/event-stream/)
+  const reader = stream.body!.getReader()
+  assert.match(new TextDecoder().decode((await reader.read()).value), /event: ready/)
+  const next = reader.read()
+  await sync(path(directId), { body: 'Live stream update', clientId: randomUUID() }, ownerCookie)
+  const event = await Promise.race([next, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error('SSE notification timeout')), 4000); timer.unref() })])
+  assert.match(new TextDecoder().decode(event.value), /event: messages/)
+  abort.abort()
+  assert.equal((await fetch(`${base}/api/channels/${directId}/events`, { headers: { cookie: freshCookie } })).status, 404)
+
+  const revocableCookie = cookieFrom(await sync('/api/auth/sign-in/email', { email: memberEmail, password }))
+  const revokeAbort = new AbortController()
+  t.after(() => revokeAbort.abort())
+  const revokedStream = await fetch(`${base}/api/channels/${directId}/events`, { headers: { cookie: revocableCookie }, signal: revokeAbort.signal })
+  const revokedReader = revokedStream.body!.getReader()
+  await revokedReader.read()
+  const revokedEvent = (async () => { let text = ''; while (!text.includes('event: access-revoked')) { const chunk = await revokedReader.read(); if (chunk.done) break; text += new TextDecoder().decode(chunk.value) } return text })()
+  assert.equal((await sync('/api/auth/sign-out', {}, revocableCookie)).statusCode, 200)
+  await sync(path(directId), { body: 'Revalidate revoked session', clientId: randomUUID() }, ownerCookie)
+  assert.match(await revokedEvent, /event: access-revoked/)
+  revokeAbort.abort()
+  assert.equal((await sync('/api/session', undefined, memberCookie)).statusCode, 200)
+
+  const uploadId = randomUUID()
+  const upload = await sync(`/api/channels/${directId}/uploads`, { id: uploadId, name: 'field-report.pdf', size: 9, mime: 'application/pdf' }, ownerCookie)
+  assert.equal(upload.statusCode, 200, upload.body)
+  assert.equal((await sync(`/api/channels/${directId}/uploads`, { id: randomUUID(), name: '../bad.html', size: 9, mime: 'text/html' }, ownerCookie)).statusCode, 400)
+  assert.equal((await sync(`/api/channels/${directId}/uploads`, { id: randomUUID(), name: 'huge.zip', size: 51 * 1024 * 1024, mime: 'application/zip' }, ownerCookie)).statusCode, 400)
+  assert.equal((await sync(`/api/channels/${directId}/uploads`, { id: randomUUID(), name: 'secret.pdf', size: 9, mime: 'application/pdf' }, freshCookie)).statusCode, 404)
+  assert.equal((await sync(path(directId), { attachmentIds: [uploadId], clientId: randomUUID() }, ownerCookie)).statusCode, 400)
+  const internal = async (url: string, cookie: string, data?: object) => app.inject({ method: data ? 'POST' : 'GET', url, payload: data,
+    headers: { origin, cookie, 'x-files-secret': config.FILES_SECRET } })
+  assert.equal((await sync(`/api/internal/files/${uploadId}?upload=1`, undefined, ownerCookie)).statusCode, 403)
+  assert.equal((await internal(`/api/internal/files/${uploadId}?upload=1`, memberCookie)).statusCode, 403)
+  assert.equal((await internal(`/api/internal/files/${uploadId}?upload=1`, ownerCookie)).json().key, `attachments/${uploadId}`)
+  assert.equal((await internal(`/api/internal/files/${uploadId}/complete`, ownerCookie, {})).statusCode, 200)
+  const fileMessage = await sync(path(directId), { attachmentIds: [uploadId], location: { latitude: -22.7, longitude: -47.6 }, clientId: randomUUID() }, ownerCookie)
+  assert.equal(fileMessage.statusCode, 201, fileMessage.body)
+  const fileRow = (await sync(path(directId), undefined, memberCookie)).json().messages.find((item: { id: number }) => item.id === fileMessage.json().id)
+  assert.equal(fileRow.attachments[0].name, 'field-report.pdf')
+  assert.equal(fileRow.location.latitude, -22.7)
+  assert.equal((await internal(`/api/internal/files/${uploadId}`, memberCookie)).statusCode, 200)
+  assert.equal((await internal(`/api/internal/files/${uploadId}`, freshCookie)).statusCode, 404)
+  assert.equal((await sync(path(general.id), { attachmentIds: [uploadId], clientId: randomUUID() }, ownerCookie)).statusCode, 400)
+  await sync(`${path(directId)}/${fileMessage.json().id}/cancel`, {}, ownerCookie)
+  assert.equal((await internal(`/api/internal/files/${uploadId}`, memberCookie)).statusCode, 404)
 
   assert.equal((await sync(`/api/teams/${teamId}/members`, undefined, memberCookie)).statusCode, 403)
   const managed = (await sync(`/api/teams/${teamId}/members`, undefined, ownerCookie)).json()

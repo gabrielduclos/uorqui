@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { bigint, boolean, check, foreignKey, index, pgSchema, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core'
+import { bigint, boolean, check, foreignKey, index, integer, jsonb, pgSchema, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core'
 
 export const namespace = 'uorqui_workplace'
 export const workplace = pgSchema(namespace)
@@ -8,6 +8,7 @@ const time = (name: string) => timestamp(name, { withTimezone: true, mode: 'date
 export const users = workplace.table('user', {
   id: text().primaryKey(),
   name: text().notNull(),
+  handle: text().unique(),
   email: text().notNull().unique(),
   emailVerified: boolean().notNull(),
   image: text(),
@@ -95,6 +96,7 @@ export const messages = workplace.table('message', {
   authorId: text('author_id').notNull().references(() => users.id),
   parentId: bigint('parent_id', { mode: 'number' }),
   body: text().notNull(),
+  location: jsonb().$type<{ latitude: number; longitude: number }>(),
   clientId: uuid('client_id'),
   editedAt: time('edited_at'),
   cancelledAt: time('cancelled_at'),
@@ -132,3 +134,15 @@ export const directConversations = workplace.table('direct_conversation', {
   unique('direct_pair_unique').on(table.userA, table.userB),
   check('direct_pair_order', sql`${table.userA} < ${table.userB}`),
 ])
+
+export const attachments = workplace.table('attachment', {
+  id: uuid().primaryKey(),
+  channelId: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  authorId: text('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  messageId: bigint('message_id', { mode: 'number' }).references(() => messages.id, { onDelete: 'cascade' }),
+  name: text().notNull(),
+  mime: text().notNull(),
+  size: integer().notNull(),
+  ready: boolean().notNull().default(false),
+  createdAt: time('created_at').defaultNow().notNull(),
+}, (table) => [index('attachment_message_idx').on(table.messageId)])
