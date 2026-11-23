@@ -1,11 +1,18 @@
 {
-  "name": "uorqui-workplace",
+  "name": "main",
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-23",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "previews": {
+    "vars": {
+      "API_ORIGIN": "https://uorqui-workplace-preview-api.onrender.com"
+    }
   }
 }
