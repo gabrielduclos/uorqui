@@ -1,0 +1,14 @@
+{
+  "name": "uorqui-workplace",
+  "version": "0.2.0-beta.1",
+  "private": true,
+  "workspaces": ["apps/api", "apps/web"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "concurrently -k -n api,web 'npm run dev -w @uorqui/workplace-api' 'npm run dev -w @uorqui/workplace-web'",
+    "typecheck": "npm run typecheck --workspaces",
+    "build": "npm run build --workspaces",
+    "test": "npm test -w @uorqui/workplace-api"
+  },
+  "devDependencies": { "concurrently": "^9.2.1", "typescript": "^5.9.3" }
+}

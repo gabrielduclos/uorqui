@@ -1,0 +1,33 @@
+{
+  "name": "@uorqui/workplace-api",
+  "version": "0.2.0-beta.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --import tsx src/server.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --import tsx src/migrate.ts",
+    "account:provision": "node --import tsx src/provision.ts",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@fastify/rate-limit": "^10.3.0",
+    "better-auth": "1.7.27",
+    "dotenv": "^16.6.1",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.6.2",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.17",
+    "@electric-sql/pglite-socket": "0.2.20",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.15.5",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.20.6"
+  }
+}
