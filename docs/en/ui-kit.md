@@ -44,3 +44,7 @@ The message composer uses one line and grows with its contents. Pending messages
 The team rail starts with direct messages. The team heading exposes owner settings. The top-bar avatar opens profile settings; author names open a profile. Profiles and management use shared dialogs, skeleton fields and pending action buttons in both themes and languages. Mobile direct messages alternate between list and conversation.
 
 Signup reserves an @ prefix beside the username input and normalizes typed handles to lowercase. The main composer’s (+) popover provides gallery, camera, files and location, with voice recording beside the textarea and local previews. One-line composition still grows with text. The shared loading state spans metadata reservation, upload and message confirmation; pending media stays optimistic and retryable.
+
+## Typography
+
+Use the global system stack `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`, shared with Tailwind’s sans token. Body text and messages use `1rem` (16 px at the default root size). Navigation items use `0.875rem` (14 px), weight 400 normally and 500 when selected. Form controls retain a minimum of 16 px. Both themes share these tokens; browser zoom and user font preferences remain available.

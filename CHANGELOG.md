@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.10]
+
+- Applies the global system font, 16 px body/message reference, 14 px navigation with regular/medium states and accessible form sizing in both themes.
+
 ## [0.2.0-beta.9]
 
 - Requires a unique lowercase @username at signup, stores it on the auth user and preserves existing public handles through migration 0003.

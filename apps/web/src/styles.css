@@ -2,6 +2,11 @@
 
 :root {
   color-scheme: light;
+  --font-app: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-body: 1rem;
+  --font-size-menu: .875rem;
+  --font-weight-menu: 400;
+  --font-weight-menu-active: 500;
   --background: #f5f5f5;
   --foreground: #171717;
   --card: #ffffff;
@@ -52,6 +57,7 @@
 }
 
 @theme inline {
+  --font-sans: var(--font-app);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -72,10 +78,10 @@
   --color-card-foreground: var(--card-foreground);
 }
 
-body { margin: 0; background: var(--background); color: var(--foreground); font: 15px/1.5 Inter, system-ui, sans-serif; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-app); font-size: var(--font-size-body); line-height: 1.5; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 button:not(:disabled), select { cursor: pointer; }
-input, textarea, select { min-width: 0; font-size: 16px; }
+input, textarea, select { min-width: 0; font-size: max(var(--font-size-body), 16px); }
 .app { height: 100vh; height: 100dvh; min-height: 0; display: flex; flex-direction: column; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 .95rem; min-height: 55px; border-bottom: 1px solid var(--border); background: var(--card); }
 .brand, .top-actions, .language { display: flex; align-items: center; gap: .55rem; }
@@ -93,11 +99,11 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 .channel-group + .channel-group { margin-top: 1rem; }
 .group-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 .3rem .2rem; min-height: 30px; color: var(--muted-foreground); }
 .group-heading h3 { font-size: .78rem; font-weight: 650; }
-.channel-link { display: flex; align-items: center; gap: .55rem; padding: .38rem .55rem; text-align: left; width: 100%; border-radius: .45rem; color: var(--muted-foreground); }
+.channel-link { font-size: var(--font-size-menu); font-weight: var(--font-weight-menu); display: flex; align-items: center; gap: .55rem; padding: .38rem .55rem; text-align: left; width: 100%; border-radius: .45rem; color: var(--muted-foreground); }
 .channel-link svg { flex: none; }
 .channel-link span { overflow: hidden; text-overflow: ellipsis; }
 .channel-link:hover { background: var(--muted); }
-.channel-link[aria-current='true'] { background: var(--accent); color: var(--accent-foreground); font-weight: 660; }
+.channel-link[aria-current='true'] { background: var(--accent); color: var(--accent-foreground); font-weight: var(--font-weight-menu-active); }
 .content, .room, .thread { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--card); }
 .channel-header, .thread header { display: flex; align-items: center; gap: .65rem; min-height: 62px; padding: .6rem 1rem; border-bottom: 1px solid var(--border); }
 .channel-title { flex: 1; min-width: 0; }
@@ -113,7 +119,7 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 .avatar { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: .55rem; color: var(--accent-foreground); background: var(--accent); font-size: .74rem; font-weight: 720; }
 .avatar.profile { width: 29px; height: 29px; border-radius: 50%; }
 .message-body { min-width: 0; }
-.message-body > p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-body > p { font-size: var(--font-size-body); white-space: pre-wrap; overflow-wrap: anywhere; }
 .message-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: .45rem; overflow-wrap: anywhere; }
 .message-meta time, small { color: var(--muted-foreground); font-size: .75rem; }
 .reply-link { margin-top: .15rem; padding: .2rem .35rem; font-size: .75rem; color: var(--accent-foreground); }
@@ -170,9 +176,9 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 .workspace-shell > .center-state { min-width: 0; }
 .team-rail { width: 68px; flex: none; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding-block: .75rem; }
 .team-list { display: flex; flex-direction: column; align-items: center; gap: .65rem; height: 100%; overflow-y: auto; padding: .15rem .5rem; scrollbar-width: thin; }
-.team-button { position: relative; display: grid; place-items: center; width: 46px; min-height: 46px; flex: none; border: 1px solid var(--border); border-radius: 1rem; background: var(--card); color: var(--muted-foreground); font-size: .8rem; font-weight: 700; transition: background .15s, color .15s, border-radius .15s; }
+.team-button { position: relative; display: grid; place-items: center; width: 46px; min-height: 46px; flex: none; border: 1px solid var(--border); border-radius: 1rem; background: var(--card); color: var(--muted-foreground); font-size: var(--font-size-menu); font-weight: var(--font-weight-menu); transition: background .15s, color .15s, border-radius .15s; }
 .team-button:hover { border-radius: .65rem; background: var(--accent); color: var(--foreground); }
-.team-button[aria-current='true'] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); border-radius: .65rem; }
+.team-button[aria-current='true'] { font-weight: var(--font-weight-menu-active); background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); border-radius: .65rem; }
 .team-button[aria-current='true']::before { content: ''; position: absolute; left: -9px; width: 3px; height: 22px; border-radius: 0 3px 3px 0; background: var(--foreground); }
 .team-add { margin-top: .15rem; border-style: dashed; }
 .error { font-weight: 600; }
@@ -223,7 +229,7 @@ input, textarea, select { min-width: 0; font-size: 16px; }
 .member-person { flex: 1; min-width: 0; justify-content: flex-start; overflow-wrap: anywhere; text-align: left; }
 .profile-details { display: grid; gap: .65rem; }
 .profile-details h2 { font-weight: 700; font-size: 1.2rem; overflow-wrap: anywhere; }
-.profile-details input { width: 100%; font-size: 16px; border: 1px solid var(--border); padding: .4rem; border-radius: .4rem; }
+.profile-details input { width: 100%; font-size: max(var(--font-size-body), 16px); border: 1px solid var(--border); padding: .4rem; border-radius: .4rem; }
 .profile-bio { white-space: pre-wrap; overflow-wrap: anywhere; }
 .profile-link { display: inline-block; color: var(--foreground); text-decoration: underline; margin-top: .75rem; }
 .author-link { cursor: pointer; }

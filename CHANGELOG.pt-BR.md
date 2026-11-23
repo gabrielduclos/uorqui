@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.10]
+
+- Aplica fonte global do sistema, referência de 16 px em textos e mensagens, navegação de 14 px com pesos normal/médio e campos acessíveis nos dois temas.
+
 ## [0.2.0-beta.9]
 
 - Exige @username único e minúsculo no cadastro, armazena a identificação no usuário da autenticação e preserva identificações existentes pela migração 0003.
