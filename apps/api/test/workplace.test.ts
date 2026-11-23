@@ -3,12 +3,12 @@ import { test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket'
 import { eq } from 'drizzle-orm'
-import { invitations, messages } from '../src/schema.js'
+import { invitations, messages, users } from '../src/schema.js'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { createApp } from '../src/app.js'
 import { connect } from '../src/database.js'
 
-test('invite-only team and private-channel conversations', async (t) => {
+test('public account registration, team and private-channel conversations', async (t) => {
   const postgres = await PGlite.create()
   const socket = new PGLiteSocketServer({ db: postgres, port: 0, maxConnections: 10 })
   await socket.start()
@@ -34,7 +34,15 @@ test('invite-only team and private-channel conversations', async (t) => {
   const ownerEmail = 'owner@example.test'
   const guestEmail = 'guest@example.test'
   const memberEmail = 'member@example.test'
+  const clientAddresses = new Map<string, string>()
+  const clientAddress = (data?: object) => {
+    if (!data || !('email' in data) || typeof data.email !== 'string') return '127.0.0.1'
+    const email = data.email.toLowerCase()
+    if (!clientAddresses.has(email)) clientAddresses.set(email, `192.0.2.${clientAddresses.size + 1}`)
+    return clientAddresses.get(email)
+  }
   const sync = async (url: string, data?: object, cookie?: string) => app.inject({
+    remoteAddress: clientAddress(data),
     method: data ? 'POST' : 'GET', url, payload: data, headers: { origin, ...(cookie ? { cookie } : {}) },
   })
   const path = (channel: string) => `/api/channels/${channel}/messages`
@@ -72,7 +80,27 @@ test('invite-only team and private-channel conversations', async (t) => {
   const guestToken = await invite(teamId, guestEmail, clientId)
   const memberToken = await invite(teamId, memberEmail)
   const signUp = (email: string, token: unknown, pass = password) => sync('/api/auth/sign-up/email', { name: 'Guest', email, password: pass, token })
-  assert.equal((await signUp(guestEmail, undefined)).statusCode, 400)
+  assert.equal((await signUp('invalid-email', undefined)).statusCode, 400)
+  assert.equal((await signUp('short@example.test', undefined, 'short')).statusCode, 400)
+  const publicAccount = await signUp('PUBLIC@example.test', undefined)
+  assert.equal(publicAccount.statusCode, 200, publicAccount.body)
+  const publicCookie = cookieFrom(publicAccount)
+  assert.equal((await sync('/api/session', undefined, publicCookie)).json().email, 'public@example.test')
+  assert.deepEqual((await sync('/api/teams', undefined, publicCookie)).json(), [])
+  assert.deepEqual((await sync(channelList, undefined, publicCookie)).json(), [])
+  assert.equal((await sync(path(general.id), undefined, publicCookie)).statusCode, 404)
+  assert.equal((await sync(path(clientId), undefined, publicCookie)).statusCode, 404)
+  assert.equal((await sync(channelList, { name: 'hidden', description: '', visibility: 'team' }, publicCookie)).statusCode, 403)
+  assert.equal((await sync('/api/auth/sign-out', {}, publicCookie)).statusCode, 200)
+  assert.equal((await sync('/api/auth/sign-in/email', { email: 'public@example.test', password })).statusCode, 200)
+  const publicTeam = await sync('/api/teams', { name: 'Independent team' }, publicCookie)
+  assert.equal(publicTeam.statusCode, 401)
+  const freshLogin = await sync('/api/auth/sign-in/email', { email: 'public@example.test', password })
+  const freshCookie = cookieFrom(freshLogin)
+  assert.equal((await sync('/api/teams', { name: 'Independent team' }, freshCookie)).statusCode, 201)
+  const duplicate = await signUp('public@example.test', undefined)
+  assert.ok([200, 400, 422].includes(duplicate.statusCode))
+  assert.equal((await db.select({ id: users.id }).from(users).where(eq(users.email, 'public@example.test'))).length, 1)
   assert.equal((await signUp(guestEmail, memberToken)).statusCode, 400)
   assert.equal((await signUp(guestEmail, guestToken, 'short')).statusCode, 400)
   const guest = await signUp(guestEmail, guestToken)

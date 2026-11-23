@@ -1,6 +1,6 @@
 # Uorqui Workplace
 
-[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.1
+[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.2
 
 A compact workspace for teams to talk in internal channels and collaborate with customers in private channels. Team owners create channels and generate links tied to a recipient’s email. Anyone with access to a channel can send messages and keep follow-up conversations in threads.
 
@@ -25,7 +25,7 @@ unset password
 npm run dev
 ```
 
-Enter the first account’s password after the `read` command. Open [localhost:5173](http://localhost:5173/), sign in and create a team. Create a private channel to invite a customer. The app generates a link for you to send to the recipient.
+Accounts can also be created directly from the sign-in screen. Enter the first account’s password after the `read` command. Open [localhost:5173](http://localhost:5173/), sign in and create a team. Create a private channel to invite a customer. The app generates a link for you to send to the recipient.
 
 Use `npm run typecheck`, `npm run build` and `npm test` to verify the project. The integration test runs against a temporary PostgreSQL engine through PGlite.
 

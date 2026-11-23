@@ -1,6 +1,6 @@
 # Uorqui Workplace
 
-[English](README.md) · 0.2.0-beta.1
+[English](README.md) · 0.2.0-beta.2
 
 Um espaço compacto para equipes conversarem em canais internos e colaborarem com clientes em canais privados. Responsáveis pelas equipes criam canais e geram links vinculados ao e-mail de cada convidado. Quem tem acesso ao canal pode enviar mensagens e organizar as respostas em tópicos.
 
@@ -25,7 +25,7 @@ unset password
 npm run dev
 ```
 
-Digite a senha da primeira conta após o comando `read`. Abra [localhost:5173](http://localhost:5173/), entre e crie uma equipe. Para convidar um cliente, crie um canal privado. O sistema gera um link para você enviar ao convidado.
+Também é possível criar uma conta diretamente na tela de entrada. Digite a senha da primeira conta após o comando `read`. Abra [localhost:5173](http://localhost:5173/), entre e crie uma equipe. Para convidar um cliente, crie um canal privado. O sistema gera um link para você enviar ao convidado.
 
 Use `npm run typecheck`, `npm run build` e `npm test` para verificar o projeto. O teste de integração usa um PostgreSQL temporário via PGlite.
 

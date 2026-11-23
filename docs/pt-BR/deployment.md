@@ -25,4 +25,4 @@ Use um endereço dedicado ao Workplace. Alterações no DNS de produção ou nos
 
 ## Escopo do beta
 
-As contas são provisionadas por um mantenedor ou criadas com um convite válido. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Envio automático de e-mail, verificação da caixa postal, recuperação de senha e revogação administrativa ficam fora deste beta. Equipes e clientes recebem novas mensagens por consultas periódicas.
+As contas podem ser criadas na tela de entrada com nome, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de equipes vazia e podem criar uma equipe ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Envio automático de e-mail, verificação da caixa postal, recuperação de senha e revogação administrativa ficam fora deste beta. Equipes e clientes recebem novas mensagens por consultas periódicas.

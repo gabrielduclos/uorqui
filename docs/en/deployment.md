@@ -25,4 +25,4 @@ Use a dedicated Workplace hostname. Changes to production DNS or to existing ser
 
 ## Beta scope
 
-Accounts are provisioned by a maintainer or created using a valid invite. The app generates email-bound, 48-hour links for owners to send manually. Automatic email delivery, mailbox verification, password recovery and administrative revocation are outside this beta. Teams and customers see new messages through periodic refresh.
+Accounts can be created from the sign-in screen with a name, email and password of 8–128 characters. New accounts start with an empty team list and can create a team or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Automatic email delivery, mailbox verification, password recovery and administrative revocation are outside this beta. Teams and customers see new messages through periodic refresh.

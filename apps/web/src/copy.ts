@@ -2,6 +2,7 @@ export const translations = {
   'pt-BR': {
     product: 'Comunicação de equipe', email: 'E-mail', name: 'Nome', password: 'Senha',
     signIn: 'Entrar', signUp: 'Criar conta', signOut: 'Sair', copy: 'Copiar link', copied: 'Link copiado',
+    signUpHelp: 'Crie sua conta para organizar equipes e participar de canais.',
     authTitle: 'Entre no seu espaço de trabalho', authHelp: 'Acesse os canais da sua equipe com seu e-mail e senha.',
     inviteAuth: 'Use o e-mail que recebeu o convite.', makeAccount: 'Criar conta com convite', existing: 'Já tenho conta',
     passwordHint: 'De 8 a 128 caracteres.', showPassword: 'Mostrar senha', hidePassword: 'Ocultar senha',
@@ -41,6 +42,7 @@ export const translations = {
   en: {
     product: 'Team communication', email: 'Email', name: 'Name', password: 'Password',
     signIn: 'Sign in', signUp: 'Create account', signOut: 'Sign out', copy: 'Copy link', copied: 'Link copied',
+    signUpHelp: 'Create your account to organize teams and join channels.',
     authTitle: 'Sign in to your workspace', authHelp: 'Access your team channels with your email and password.',
     inviteAuth: 'Use the email address that received the invitation.', makeAccount: 'Create an account with an invite', existing: 'I already have an account',
     passwordHint: '8 to 128 characters.', showPassword: 'Show password', hidePassword: 'Hide password',

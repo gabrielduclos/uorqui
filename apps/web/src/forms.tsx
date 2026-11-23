@@ -41,10 +41,10 @@ export function SignIn({ copy, token, onSuccess }: { copy: Copy; token: string |
   return <main className="sign-in">
     <section className="sign-in-card">
       <h1>{registering ? copy.signUp : copy.authTitle}</h1>
-      <p>{token ? copy.inviteAuth : copy.authHelp}</p>
+      <p>{token ? copy.inviteAuth : registering ? copy.signUpHelp : copy.authHelp}</p>
       <ActionForm key={String(registering)} copy={copy} submit={registering ? copy.signUp : copy.signIn} onSubmit={async (data) => {
         await api(registering ? '/auth/sign-up/email' : '/auth/sign-in/email', {
-          data: { ...Object.fromEntries(data), ...(registering ? { token } : {}) },
+          data: { ...Object.fromEntries(data), ...(registering && token ? { token } : {}) },
         })
         await onSuccess()
       }}>
@@ -64,9 +64,9 @@ export function SignIn({ copy, token, onSuccess }: { copy: Copy; token: string |
           {registering && <small id="password-hint">{copy.passwordHint}</small>}
         </div>
       </ActionForm>
-      {token && <Button variant="ghost" onClick={() => { setRegistering(!registering); setVisible(false) }}>
-        {registering ? copy.existing : copy.makeAccount}
-      </Button>}
+      <Button variant="ghost" onClick={() => { setRegistering(!registering); setVisible(false) }}>
+        {registering ? copy.existing : copy.signUp}
+      </Button>
     </section>
   </main>
 }

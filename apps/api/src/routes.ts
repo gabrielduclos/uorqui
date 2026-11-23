@@ -76,14 +76,17 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     app.post(path, { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
       let body = request.body ?? {}
       if (path === '/api/auth/sign-up/email') {
-        const input = validate(inviteInput.extend({
+        const input = validate(z.object({
+          token: inviteInput.shape.token.optional(),
           name: z.string().trim().min(1).max(80),
           email,
           password: z.string().min(8).max(128),
         }), body)
-        const [invite] = await db.select({ email: invitations.email }).from(invitations)
-          .where(and(activeInvitation(input.token), eq(invitations.email, input.email)))
-        if (!invite) throw new RequestError(400, 'INVITE_INVALID')
+        if (input.token) {
+          const [invite] = await db.select({ email: invitations.email }).from(invitations)
+            .where(and(activeInvitation(input.token), eq(invitations.email, input.email)))
+          if (!invite) throw new RequestError(400, 'INVITE_INVALID')
+        }
         body = { name: input.name, email: input.email, password: input.password }
       }
       const headers = fromNodeHeaders(request.headers)
