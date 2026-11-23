@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Config } from './config.js'
 import type { Services } from './database.js'
+import { ReadCache } from './read-cache.js'
 import { channelMembers, channels, invitations, memberships, messages, teams, users } from './schema.js'
 
 export class RequestError extends Error {
@@ -31,6 +32,8 @@ const activeInvitation = (token: string) => and(
 )
 
 export function registerRoutes(app: FastifyInstance, { auth, db }: Services, config: Config) {
+  const messageCache = new ReadCache()
+
   async function requireUser(request: FastifyRequest) {
     const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) })
     if (!session) throw new RequestError(401, 'SIGN_IN_REQUIRED')
@@ -207,24 +210,26 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     const { thread, before } = validate(z.object({ thread: messageId.optional(), before: messageId.optional() }), request.query)
     await requireChannel(channelId, userId)
     if (thread) await requireThread(channelId, thread)
-    const roots = db.select({
-      id: messages.id, body: messages.body, createdAt: messages.createdAt,
-      author: users.name,
-    }).from(messages).innerJoin(users, eq(messages.authorId, users.id))
-      .where(and(eq(messages.channelId, channelId),
-        thread ? eq(messages.parentId, thread) : isNull(messages.parentId),
-        before ? lt(messages.id, before) : undefined))
-      .orderBy(desc(messages.id)).limit(51).as('page')
+    return messageCache.read(`${channelId}:${thread ?? ''}:${before ?? ''}`, async () => {
+      const roots = db.select({
+        id: messages.id, body: messages.body, createdAt: messages.createdAt,
+        author: users.name,
+      }).from(messages).innerJoin(users, eq(messages.authorId, users.id))
+        .where(and(eq(messages.channelId, channelId),
+          thread ? eq(messages.parentId, thread) : isNull(messages.parentId),
+          before ? lt(messages.id, before) : undefined))
+        .orderBy(desc(messages.id)).limit(51).as('page')
 
-    const rows = await db.select({
-      id: roots.id, body: roots.body, createdAt: roots.createdAt, author: roots.author,
-      replies: thread ? sql<number>`0` : sql<number>`cast((
-        select count(*) from ${messages} as reply
-        where reply.channel_id = ${channelId} and reply.parent_id = "page"."id"
-      ) as integer)`,
-    }).from(roots).orderBy(desc(roots.id))
+      const rows = await db.select({
+        id: roots.id, body: roots.body, createdAt: roots.createdAt, author: roots.author,
+        replies: thread ? sql<number>`0` : sql<number>`cast((
+          select count(*) from ${messages} as reply
+          where reply.channel_id = ${channelId} and reply.parent_id = "page"."id"
+        ) as integer)`,
+      }).from(roots).orderBy(desc(roots.id))
 
-    return { messages: rows.slice(0, 50).reverse(), more: rows.length > 50 }
+      return { messages: rows.slice(0, 50).reverse(), more: rows.length > 50 }
+    })
   })
 
   app.post('/api/channels/:channelId/messages', async (request, reply) => {
@@ -238,6 +243,7 @@ export function registerRoutes(app: FastifyInstance, { auth, db }: Services, con
     if (thread) await requireThread(channelId, thread)
     const [message] = await db.insert(messages).values({ channelId, authorId: userId, body, parentId: thread })
       .returning({ id: messages.id })
+    messageCache.clear(`${channelId}:`)
     return reply.code(201).send(message)
   })
 }

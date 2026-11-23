@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket'
 import { eq } from 'drizzle-orm'
-import { invitations, messages, users } from '../src/schema.js'
+import { channelMembers, invitations, users } from '../src/schema.js'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { createApp } from '../src/app.js'
 import { connect } from '../src/database.js'
@@ -129,15 +129,18 @@ test('public account registration, team and private-channel conversations', asyn
   assert.equal((await sync(path(clientId), { body: 'Owner reply', thread: root }, ownerCookie)).statusCode, 201)
   const latest = (await sync(path(clientId), undefined, guestCookie)).json().messages
   assert.deepEqual(latest.map(({ body, replies }: { body: string; replies: number }) => [body, replies]), [['First customer message', 1]])
+  const guestId = (await sync('/api/session', undefined, guestCookie)).json().id
+  await db.delete(channelMembers).where(eq(channelMembers.userId, guestId))
+  assert.equal((await sync(path(clientId), undefined, guestCookie)).statusCode, 404)
+  await db.insert(channelMembers).values({ channelId: clientId, userId: guestId })
   const thread = (await sync(`${path(clientId)}?thread=${root}`, undefined, guestCookie)).json().messages
   assert.equal(thread[0].body, 'Owner reply')
   assert.equal((await sync(path(clientId), { body: 'No nested replies', thread: thread[0].id }, ownerCookie)).statusCode, 404)
   assert.deepEqual((await sync(`${path(clientId)}?before=${root}`, undefined, guestCookie)).json(), { messages: [], more: false })
 
-  const owner = (await sync('/api/session', undefined, ownerCookie)).json()
-  await db.insert(messages).values(Array.from({ length: 55 }, (_, index) => ({
-    channelId: clientId, authorId: owner.id, body: `Message ${index + 1}`,
-  })))
+  for (let index = 0; index < 55; index++) {
+    assert.equal((await sync(path(clientId), { body: `Message ${index + 1}` }, ownerCookie)).statusCode, 201)
+  }
   const recent = (await sync(path(clientId), undefined, guestCookie)).json()
   assert.equal(recent.messages.length, 50)
   assert.equal(recent.messages[0].body, 'Message 6')

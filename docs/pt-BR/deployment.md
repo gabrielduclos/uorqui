@@ -26,3 +26,14 @@ Use um endereço dedicado ao Workplace. Alterações no DNS de produção ou nos
 ## Escopo do beta
 
 As contas podem ser criadas na tela de entrada com nome, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de equipes vazia e podem criar uma equipe ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Envio automático de e-mail, verificação da caixa postal, recuperação de senha e revogação administrativa ficam fora deste beta. Equipes e clientes recebem novas mensagens por consultas periódicas.
+
+
+## Cache
+
+O cache da aba mantém até 100 entradas por cinco minutos. Equipes e listas de canais recentes são reutilizadas por 60 segundos, mensagens por oito segundos e páginas antigas do histórico por cinco minutos. Leituras simultâneas iguais compartilham uma requisição. Cancelar uma tela preserva a requisição de outra tela. Mudanças de autenticação limpam o cache, e eventos entre abas invalidam dados após alterações. Respostas privadas mantêm HTTP no-store.
+
+Conversas visíveis atualizam a cada dez segundos e listas de canais a cada sessenta segundos. Telas ocultas pausam consultas periódicas. Foco e visibilidade atualizam os dados através do cache. Uma gravação bem-sucedida invalida os dados afetados imediatamente. No funcionamento periódico normal, mensagens recebidas podem levar até dez segundos para aparecer.
+
+A API possui cache de mensagens em memória do processo, válido por cinco segundos e limitado a 100 páginas. Toda requisição verifica sessão e permissões do canal antes de usá-lo. Envios bem-sucedidos invalidam todas as páginas daquele canal na instância que os processou. Outras instâncias expiram suas entradas em até cinco segundos. Reinicializações descartam o cache.
+
+Arquivos JavaScript e CSS com hash usam cache imutável no navegador por um ano. O HTML inicial e os dados privados da API mantêm suas políticas próprias.

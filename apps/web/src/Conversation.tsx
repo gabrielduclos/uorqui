@@ -1,6 +1,6 @@
 import { ArrowDown, MessageSquare, Send, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
-import { api, errorText, type Channel, type Message, type MessagePage } from './api'
+import { api, cachedQuery, errorText, type Channel, type Message, type MessagePage } from './api'
 import { MessageSkeleton } from './components/ui/skeleton'
 import { Button } from './components/ui/controls'
 import type { Copy, Locale } from './copy'
@@ -36,8 +36,10 @@ function mergeMessages(current: Message[], incoming: Message[]) {
 function MessageList({ channel, thread, copy, locale, onThread }: {
   channel: Channel; thread?: Message; copy: Copy; locale: Locale; onThread?: (message: Message) => void
 }) {
+  const threadQuery = thread ? `thread=${thread.id}` : ''
+  const endpoint = `/channels/${channel.id}/messages`
   const [pages, setPages] = useState<MessagePage[]>([])
-  const [first, setFirst] = useState<MessagePage>()
+  const [first, setFirst] = useState<MessagePage | undefined>(() => cachedQuery<MessagePage>(`${endpoint}?${threadQuery}`))
   const [loadError, setLoadError] = useState<unknown>()
   const [sendError, setSendError] = useState<unknown>()
   const [busy, setBusy] = useState(false)
@@ -49,34 +51,44 @@ function MessageList({ channel, thread, copy, locale, onThread }: {
   const follow = useRef(true)
   const prepend = useRef<{ height: number; top: number } | null>(null)
   const [atBottom, setAtBottom] = useState(true)
-  const threadQuery = thread ? `thread=${thread.id}` : ''
-  const endpoint = `/channels/${channel.id}/messages`
   const records = pages.reduce((all, page) => mergeMessages(all, page.messages), first?.messages ?? [])
   const hasMore = (pages.at(-1) ?? first)?.more
 
   useEffect(() => {
     const controller = new AbortController()
     let timeout: number
-    let initial = true
+    let loading = false
     async function load() {
+      if (loading || controller.signal.aborted) return
+      window.clearTimeout(timeout)
+      if (document.hidden) return
+      loading = true
       try {
-        if (initial || !document.hidden) {
-          const page = await api<MessagePage>(`${endpoint}?${threadQuery}`, { signal: controller.signal })
-          if (controller.signal.aborted) return
-          setFirst((current) => current
-            ? { messages: mergeMessages(current.messages, page.messages), more: current.more }
-            : page)
-          setLoadError(undefined)
-          initial = false
-        }
+        const page = await api<MessagePage>(`${endpoint}?${threadQuery}`, { signal: controller.signal })
+        if (controller.signal.aborted) return
+        setFirst((current) => current
+          ? { messages: mergeMessages(current.messages, page.messages), more: current.more }
+          : page)
+        setLoadError(undefined)
       } catch (error) {
         if (!controller.signal.aborted) setLoadError(error)
       } finally {
-        if (!controller.signal.aborted) timeout = window.setTimeout(load, 4000)
+        loading = false
+        if (!controller.signal.aborted) timeout = window.setTimeout(load, 10000)
       }
     }
+    const resume = () => { if (!document.hidden) void load() }
+    document.addEventListener('visibilitychange', resume)
+    window.addEventListener('focus', resume)
+    window.addEventListener('cache-updated', resume)
     void load()
-    return () => { controller.abort(); window.clearTimeout(timeout) }
+    return () => {
+      controller.abort()
+      window.clearTimeout(timeout)
+      document.removeEventListener('visibilitychange', resume)
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('cache-updated', resume)
+    }
   }, [endpoint, threadQuery, refresh])
 
   useLayoutEffect(() => {

@@ -26,3 +26,14 @@ Use a dedicated Workplace hostname. Changes to production DNS or to existing ser
 ## Beta scope
 
 Accounts can be created from the sign-in screen with a name, email and password of 8–128 characters. New accounts start with an empty team list and can create a team or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Automatic email delivery, mailbox verification, password recovery and administrative revocation are outside this beta. Teams and customers see new messages through periodic refresh.
+
+
+## Caching
+
+The tab-local cache retains at most 100 entries for five minutes. Fresh teams and channel lists are reused for 60 seconds, messages for eight seconds and older history pages for five minutes. Concurrent identical reads share one request. Cancelling one view does not cancel another view's request. Authentication changes clear the cache, and tab events invalidate other tabs after writes. Private responses retain HTTP no-store.
+
+Visible conversations refresh every ten seconds and channel lists every sixty seconds. Hidden views pause polling. Focus and visibility events refresh through the cache. A successful write invalidates the affected data immediately. These intervals can delay incoming messages by up to ten seconds during normal polling.
+
+The API has a process-local message cache with a five-second lifetime and a maximum of 100 pages. Every request checks its session and channel permissions before using it. Successful message writes invalidate all pages for that channel on the serving instance. Other instances expire their entries within five seconds. Restarts discard the cache.
+
+Hashed JavaScript and CSS assets use a one-year immutable browser cache. Entry HTML and private API data retain their separate policies.

@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.5]
+
+- Reuses tab-local data and coalesces duplicate requests, with bounded caches and invalidation on writes and authentication changes.
+- Refreshes messages every 10 seconds and channels every 60 seconds while visible, and refreshes on foreground return.
+- Caches message queries in the API for 5 seconds after authentication and authorization, invalidating on new messages.
+- Caches fingerprinted assets for a year and adds cache isolation and concurrency regression coverage.
+
 ## [0.2.0-beta.4]
 
 - Preserves static interface structure during loading and adds shared skeletons for data fields, with accessible states and reduced-motion support.

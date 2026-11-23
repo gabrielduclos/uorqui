@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.5]
+
+- Reaproveita dados na aba e agrupa requisições repetidas, com caches limitados e invalidação após alterações e mudanças de autenticação.
+- Atualiza mensagens a cada 10 segundos e canais a cada 60 segundos em primeiro plano, com atualização ao retornar.
+- Mantém consultas de mensagens em cache na API por 5 segundos após autenticação e autorização, invalidando ao enviar mensagens.
+- Armazena arquivos estáticos versionados por um ano e testa isolamento e concorrência do cache.
+
 ## [0.2.0-beta.4]
 
 - Preserva a estrutura estática durante o carregamento e adiciona skeletons compartilhados nos campos de dados, com estados acessíveis e suporte a movimento reduzido.

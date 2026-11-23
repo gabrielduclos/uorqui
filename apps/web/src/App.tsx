@@ -1,6 +1,6 @@
 import { ChevronLeft, CirclePlus, Globe, Hash, Layers, LockKeyhole, LogOut, Moon, Plus, Send, Sun, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { ApiError, api, errorText, type Channel, type Team, type User } from './api'
+import { ApiError, api, cachedQuery, errorText, type Channel, type Team, type User } from './api'
 import { Button, Modal } from './components/ui/controls'
 import { Skeleton, MessageSkeleton } from './components/ui/skeleton'
 import { Conversation, initials } from './Conversation'
@@ -8,7 +8,7 @@ import { translations, type Copy, type Locale } from './copy'
 import { ActionForm, ChannelForm, InviteForm, SignIn, TeamForm } from './forms'
 
 function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy: Copy; locale: Locale; preferredChannel?: string | null }) {
-  const [channels, setChannels] = useState<Channel[]>()
+  const [channels, setChannels] = useState<Channel[] | undefined>(() => team ? cachedQuery<Channel[]>(`/teams/${team.id}/channels`) : undefined)
   const [selected, setSelected] = useState(preferredChannel)
   const [dialog, setDialog] = useState<'create' | 'invite' | 'guest'>()
   const [mobileOpen, setMobileOpen] = useState(!preferredChannel)
@@ -22,7 +22,12 @@ function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy:
     const controller = new AbortController()
     const teamId = team.id
     let timeout: number
+    let loading = false
     async function load() {
+      if (loading || controller.signal.aborted) return
+      window.clearTimeout(timeout)
+      if (document.hidden) return
+      loading = true
       try {
         const result = await api<Channel[]>(`/teams/${teamId}/channels`, { signal: controller.signal })
         if (!controller.signal.aborted) {
@@ -32,11 +37,22 @@ function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy:
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure)
       } finally {
-        if (!controller.signal.aborted) timeout = window.setTimeout(load, 12000)
+        loading = false
+        if (!controller.signal.aborted) timeout = window.setTimeout(load, 60000)
       }
     }
+    const resume = () => { if (!document.hidden) void load() }
+    document.addEventListener('visibilitychange', resume)
+    window.addEventListener('focus', resume)
+    window.addEventListener('cache-updated', resume)
     void load()
-    return () => { controller.abort(); window.clearTimeout(timeout) }
+    return () => {
+      controller.abort()
+      window.clearTimeout(timeout)
+      document.removeEventListener('visibilitychange', resume)
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('cache-updated', resume)
+    }
   }, [team?.id, refresh])
 
   return <div className={mobileOpen ? 'workspace mobile-channels' : 'workspace'}>
@@ -107,7 +123,7 @@ function TeamView({ team, copy, locale, preferredChannel }: { team?: Team; copy:
 function Workspace({ user, copy, locale, token, clearInvite }: {
   user?: User; copy: Copy; locale: Locale; token: string | null; clearInvite: () => void
 }) {
-  const [teams, setTeams] = useState<Team[]>()
+  const [teams, setTeams] = useState<Team[] | undefined>(() => user ? cachedQuery<Team[]>('/teams') : undefined)
   const [selection, setSelection] = useState<{ teamId: string; channelId?: string | null }>()
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<unknown>()
@@ -117,10 +133,24 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
   useEffect(() => {
     const controller = new AbortController()
     if (!user) return
-    api<Team[]>('/teams', { signal: controller.signal }).then(setTeams).catch((failure) => {
-      if (!controller.signal.aborted) setError(failure)
-    })
-    return () => controller.abort()
+    const load = () => {
+      if (document.hidden) return
+      api<Team[]>('/teams', { signal: controller.signal }).then((result) => {
+        if (!controller.signal.aborted) { setTeams(result); setError(undefined) }
+      }).catch((failure) => {
+        if (!controller.signal.aborted) setError(failure)
+      })
+    }
+    document.addEventListener('visibilitychange', load)
+    window.addEventListener('focus', load)
+    window.addEventListener('cache-updated', load)
+    load()
+    return () => {
+      controller.abort()
+      document.removeEventListener('visibilitychange', load)
+      window.removeEventListener('focus', load)
+      window.removeEventListener('cache-updated', load)
+    }
   }, [attempt, user?.id])
 
   return <>
