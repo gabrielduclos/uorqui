@@ -21,7 +21,7 @@ type Access = {
 }
 
 export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Services, 'db'>, access: Access) {
-  const publicFields = { id: users.id, name: users.name, handle: users.handle, bio: profiles.bio }
+  const publicFields = { id: users.id, name: users.name, image: users.image, handle: users.handle, bio: profiles.bio }
 
   app.get('/api/profile', async (request) => {
     const user = await access.requireUser(request)
@@ -124,7 +124,7 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
   app.get('/api/direct', async (request) => {
     const user = await access.requireUser(request)
     return db.select({
-      id: channels.id, name: users.name, description: sql<string>`coalesce(${users.handle}, '')`,
+      id: channels.id, name: users.name, image: users.image, description: sql<string>`coalesce(${users.handle}, '')`,
       visibility: channels.visibility, peerId: users.id,
     }).from(directConversations).innerJoin(channels, eq(channels.id, directConversations.channelId))
       .innerJoin(users, eq(users.id, sql`case when ${directConversations.userA} = ${user.id} then ${directConversations.userB} else ${directConversations.userA} end`))

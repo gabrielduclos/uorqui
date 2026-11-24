@@ -2,14 +2,14 @@ import { clearOutbox } from './outbox'
 import { cachedQuery, invalidateQueries, readQuery, waitForQuery } from './query-cache'
 import type { Copy } from './copy'
 
-export interface PublicProfile { id: string; name: string; handle: string | null; bio: string | null }
+export interface PublicProfile { image?: string | null; id: string; name: string; handle: string | null; bio: string | null }
 export interface Member extends PublicProfile { role: 'owner' | 'member' | 'guest' }
 export interface DirectChannel extends Channel { peerId: string }
-export interface User { emailVerified: boolean; handle?: string | null; bio?: string | null; id: string; name: string; email: string }
-export interface Team { id: string; name: string; role: 'owner' | 'member' | null }
-export interface Channel { id: string; name: string; description: string; visibility: 'team' | 'private' }
+export interface User { image?: string | null; emailVerified: boolean; handle?: string | null; bio?: string | null; id: string; name: string; email: string }
+export interface Team { image?: string | null; id: string; name: string; role: 'owner' | 'member' | null }
+export interface Channel { image?: string | null; id: string; name: string; description: string; visibility: 'team' | 'private' }
 export interface Attachment { id: string; name: string; mime: string; size: number; url?: string }
-export interface Message { reactions?: { emoji: string; count: number; users: string[] }[]; attachments?: Attachment[]; location?: { latitude: number; longitude: number } | null; pendingFile?: File; clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
+export interface Message { authorImage?: string | null; reactions?: { emoji: string; count: number; users: string[] }[]; attachments?: Attachment[]; location?: { latitude: number; longitude: number } | null; pendingFile?: File; clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
 export interface MessagePage { messages: Message[]; more: boolean; readCursor?: number }
 
 export class ApiError extends Error {
@@ -55,6 +55,8 @@ async function request<T>(path: string, options: { data?: unknown; signal?: Abor
 
 export { cachedQuery }
 
+export function refreshPhotos() { dataGeneration++; invalidateQueries(); window.dispatchEvent(new Event('cache-updated')) }
+
 export function refreshUnread(direct = false) {
   invalidateQueries('/unread')
   if (direct) invalidateQueries('/direct')
@@ -82,6 +84,7 @@ export async function api<T>(path: string, options: { data?: unknown; signal?: A
     invalidateQueries('/unread')
     if (path.startsWith('/auth/')) { clearOutbox(); authGeneration++; invalidateQueries() }
     else if (path.includes('/messages')) invalidateQueries(path.split('/messages')[0] + '/messages')
+    else if (path.startsWith('/avatars/')) { invalidateQueries() }
     else if (path.startsWith('/account/')) invalidateQueries('/session')
     else if (path.endsWith('/read')) { /* Only unread counters changed. */ }
     else if (path === '/profile') {

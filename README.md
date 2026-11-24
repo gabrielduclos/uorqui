@@ -1,6 +1,6 @@
 # Uorqui Workplace
 
-[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.13
+[Português (Brasil)](README.pt-BR.md) · 0.2.0-beta.14
 
 A compact workspace for teams to talk in internal channels and collaborate with customers in private channels. Team owners create channels and generate links tied to a recipient’s email. Anyone with access to a channel can send messages and keep follow-up conversations in threads. Team and direct conversations update through SSE and support private media and file attachments.
 

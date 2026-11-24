@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.14]
+
+- Adds user and team photos with local 512 × 512 compression, validated Worker/R2 uploads, removal and team authorization. Extends compression to PNG and file-selected images; retains local video compression with original-file fallback when needed. Includes migration 0006.
+
 ## [0.2.0-beta.13]
 
 - Fixes the mobile attachment dialog and adds persisted message reactions with counters, individual removal and SSE in channels, direct conversations and threads. Includes migration 0005 and authorization/cache invalidation tests.

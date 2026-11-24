@@ -4,7 +4,8 @@ import { SettingsTabs } from './components/ui/settings-tabs'
 import { api, errorText, type DirectChannel, type Member, type PublicProfile, type Team, type User } from './api'
 import { Button, Modal } from './components/ui/controls'
 import { Skeleton } from './components/ui/skeleton'
-import { Conversation, initials } from './Conversation'
+import { Avatar, PhotoSettings } from './Avatar'
+import { Conversation } from './Conversation'
 import type { Copy, Locale } from './copy'
 import { ActionForm } from './forms'
 import { useResource } from './use-resource'
@@ -33,9 +34,9 @@ export function TeamSettings({ team, user, copy, close }: { team: Team; user: Us
   const [removing, setRemoving] = useState<Member>()
   const [deleting, setDeleting] = useState(false)
   return <Modal title={copy.manageTeam} closeLabel={copy.close} onClose={close}>
-    <SettingsTabs label={copy.manageTeam} tabs={[{ id: 'general', label: copy.general, content: <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
+    <SettingsTabs label={copy.manageTeam} tabs={[{ id: 'general', label: copy.general, content: <><PhotoSettings name={team.name} src={team.image} teamId={team.id} copy={copy} saved={async () => { resource.retry() }} /><ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
       await api(`/teams/${team.id}/update`, { data: { name: data.get('name') } })
-    }}><label>{copy.teamName}<input name="name" defaultValue={team.name} required minLength={2} maxLength={80} /></label></ActionForm> },
+    }}><label>{copy.teamName}<input name="name" defaultValue={team.name} required minLength={2} maxLength={80} /></label></ActionForm></> },
     { id: 'members', label: copy.members, content: <>
     {removing ? <>
       <p>{removing.name}</p><p className="muted">{copy.removeHelp}</p>
@@ -48,7 +49,7 @@ export function TeamSettings({ team, user, copy, close }: { team: Team; user: Us
       <ResourceFeedback copy={copy} resource={resource} />
       <div className="member-list">
         {resource.data?.map((member) => <div className="member-row" key={member.id}>
-          <Button variant="ghost" className="member-person" onClick={() => showPerson(member.id)}>{member.name}</Button>
+          <Button variant="ghost" className="member-person" onClick={() => showPerson(member.id)}><Avatar name={member.name} src={member.image} />{member.name}</Button>
           <small>{copy[member.role]}</small>
           {member.id !== user.id && <Button variant="ghost" aria-label={`${copy.removeMember} ${member.name}`} onClick={() => setRemoving(member)}><Trash2 size={15} /></Button>}
         </div>)}
@@ -74,6 +75,7 @@ export function ProfileSettings({ copy, user, close, saved, appearance, initial 
   const [success, setSuccess] = useState(false)
   return <Modal title={copy.settings} closeLabel={copy.close} onClose={close}>
     <SettingsTabs label={copy.settings} initial={initial} tabs={[{ id: 'profile', label: copy.myProfile, content: <>
+    <PhotoSettings name={user.name} src={user.image} copy={copy} saved={saved} />
     <ResourceFeedback copy={copy} resource={resource} />
     {resource.data && <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
       setSuccess(false)
@@ -102,7 +104,7 @@ export function PublicProfileView({ handle, userId, copy, user, close }: {
   return <Modal title={copy.publicProfile} closeLabel={copy.close} onClose={close}>
     <ResourceFeedback copy={copy} resource={resource} />
     {profile && <div className="profile-details">
-      <span className="avatar">{initials(profile.name)}</span>
+      <Avatar name={profile.name} src={profile.image} />
       <h2>{profile.name}</h2>
       <p className="muted">{profile.handle ? `@${profile.handle}` : copy.unpublishedProfile}</p>
       {actionError !== undefined && <p className="error" role="alert">{errorText(copy, actionError)}</p>}
@@ -132,7 +134,7 @@ export function DirectView({ copy, locale, user, requested }: { copy: Copy; loca
       <div className="group-heading"><h2>{copy.direct}</h2><Button variant="ghost" aria-label={copy.newDirect} onClick={() => setCreating(true)}><Plus size={18} /></Button></div>
       <ResourceFeedback copy={copy} resource={resource} />
       {resource.data?.map((item) => <button key={item.id} className="channel-link" aria-current={channel?.id === item.id ? 'true' : undefined}
-        onClick={() => { setSelected(item); setListOpen(false) }}><span className="avatar">{initials(item.name)}</span><span>{item.name}</span><UnreadBadge copy={copy} count={unread.find((entry) => entry.channelId === item.id)?.count ?? 0} /></button>)}
+        onClick={() => { setSelected(item); setListOpen(false) }}><Avatar name={item.name} src={item.image} /><span>{item.name}</span><UnreadBadge copy={copy} count={unread.find((entry) => entry.channelId === item.id)?.count ?? 0} /></button>)}
       {resource.data?.length === 0 && <p className="muted">{copy.emptyDirect}</p>}
     </aside>
     <main className="content">

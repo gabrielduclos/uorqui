@@ -9,6 +9,7 @@ import { useOutbox } from './outbox'
 import { ActionForm } from './forms'
 import { Button, Modal } from './components/ui/controls'
 import type { Copy, Locale } from './copy'
+import { Avatar } from './Avatar'
 import { useUnread } from './unread'
 
 export function initials(name: string) {
@@ -28,7 +29,7 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
   const time = new Date(message.createdAt)
   const own = user?.id === message.authorId
   return <article className="message" aria-busy={message.delivery === 'sending'}>
-    <span className="avatar" aria-hidden="true">{initials(message.author)}</span>
+    <Avatar name={message.author} src={message.authorImage} />
     <div className="message-body">
       <div className="message-meta"><strong>{message.authorId ? <button className="author-link" onClick={() =>
           window.dispatchEvent(new CustomEvent('show-person', { detail: message.authorId }))}>{message.author}</button> : message.author}</strong>
@@ -278,7 +279,7 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
     const clientId = crypto.randomUUID()
     const message: Message = {
       id: -Date.now() - Math.random(), clientId, body, author: user?.name ?? '',
-      authorId: user?.id, createdAt: new Date().toISOString(), replies: 0, delivery: 'sending',
+      authorId: user?.id, authorImage: user?.image, createdAt: new Date().toISOString(), replies: 0, delivery: 'sending',
       ...(file ? { pendingFile: file, attachments: [{ id: clientId, name: file.name, size: file.size,
         mime: file.type.split(';')[0] || 'application/octet-stream', url: URL.createObjectURL(file) }] } : {}),
       ...(location ? { location } : {}),

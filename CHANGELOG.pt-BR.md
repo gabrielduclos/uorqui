@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.14]
+
+- Adiciona fotos de usuário e equipe com compactação local para 512 × 512, upload validado no Worker/R2, remoção e autorização por equipe. Amplia compactação para PNG e imagens escolhidas como arquivo; mantém compactação local de vídeos e fallback ao original quando necessário. Inclui migração 0006.
+
 ## [0.2.0-beta.13]
 
 - Corrige o dialog de anexos no mobile e adiciona reações persistidas com contadores, remoção individual e SSE em canais, conversas diretas e tópicos. Inclui migração 0005 e testes de autorização e invalidação de cache.

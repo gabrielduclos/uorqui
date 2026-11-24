@@ -4,7 +4,8 @@ import { ApiError, api, cachedQuery, errorText, type Channel, type DirectChannel
 import { SettingsTabs } from './components/ui/settings-tabs'
 import { Button, Modal } from './components/ui/controls'
 import { Skeleton, MessageSkeleton } from './components/ui/skeleton'
-import { Conversation, initials } from './Conversation'
+import { Avatar } from './Avatar'
+import { Conversation } from './Conversation'
 import { translations, type Copy, type Locale } from './copy'
 import { DirectView, ProfileSettings, PublicProfileView, TeamSettings } from './workplace-views'
 import { ActionForm, ChannelForm, InviteForm, SignIn, TeamForm } from './forms'
@@ -64,7 +65,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
   return <div className={mobileOpen ? 'workspace mobile-channels' : 'workspace'}>
     <aside className="sidebar" aria-label={copy.channels}>
       <div className="sidebar-heading">
-        <div className="team-mark"><Layers size={18} /></div>
+        <div className="team-mark">{team ? <Avatar name={team.name} src={team.image} /> : <Layers size={18} />}</div>
         <h2>{team ? team.name : <Skeleton className="skeleton-name" />}</h2>
         {owner && <Button variant="ghost" aria-label={copy.manageTeam} title={copy.manageTeam} onClick={() => setDialog('manage')}><Settings size={17} /></Button>}
         {owner && <Button variant="ghost" aria-label={copy.inviteTitle} title={copy.inviteTitle} onClick={() => setDialog('invite')}><UserPlus size={17} /></Button>}
@@ -187,7 +188,7 @@ function Workspace({ user, copy, locale, token, clearInvite }: {
           key={item.id} className="team-button" title={item.name} aria-label={item.name}
           aria-current={!direct && team?.id === item.id ? 'true' : undefined}
           onClick={() => { setDirect(false); setSelection({ teamId: item.id }) }}>
-          <span aria-hidden="true">{initials(item.name)}</span><UnreadBadge copy={copy} count={unread.filter((entry) => entry.teamId === item.id).reduce((total, entry) => total + entry.count, 0)} />
+          <Avatar name={item.name} src={item.image} /><UnreadBadge copy={copy} count={unread.filter((entry) => entry.teamId === item.id).reduce((total, entry) => total + entry.count, 0)} />
         </button>)}
         <button className="team-button team-add" title={copy.newTeam} aria-label={copy.newTeam}
           onClick={() => setCreating(true)}><Plus size={22} aria-hidden="true" /></button>
@@ -303,7 +304,7 @@ export function App() {
         <Button variant="ghost" aria-label={copy.settings} title={copy.settings} onClick={() => setSettingsTab('appearance')}><Settings size={18} /></Button>
         {user === undefined && <Skeleton className="skeleton-avatar" />}
         {user && <>
-          <Button variant="ghost" aria-label={copy.myProfile} title={copy.myProfile} onClick={() => setSettingsTab('profile')}><span className="avatar profile">{initials(user.name)}</span></Button>
+          <Button variant="ghost" aria-label={copy.myProfile} title={copy.myProfile} onClick={() => setSettingsTab('profile')}><Avatar name={user.name} src={user.image} className="profile" /></Button>
           <Button variant="ghost" aria-label={copy.signOut} title={copy.signOut} onClick={async () => {
             try {
               await api('/auth/sign-out', { data: {} })

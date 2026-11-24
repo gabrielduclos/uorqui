@@ -83,3 +83,8 @@ Um SSE autenticado de caixa de entrada invalida as contagens e a lista de conver
 ## Reações
 
 A versão 0.2.0-beta.13 exige migração 0005. Reações são únicas por mensagem, usuário e emoji; o endpoint autenticado recebe o estado desejado para permitir tentativas idempotentes. A autorização do canal é verificada antes de ler ou alterar reações. As alterações invalidam o cache e publicam SSE. Canceladas não exibem nem aceitam reações.
+
+
+## Fotos e mídia
+
+A versão 0.2.0-beta.14 exige migração 0006. Perfil e equipe oferecem alterar/remover foto. A imagem é recortada no centro para 512 × 512 e reencodificada no aparelho antes do upload (máximo final 1 MB). O Worker verifica assinatura e tamanho. Fotos de perfil acompanham a visibilidade pública do perfil; fotos de equipes exigem acesso como membro ou convidado. URLs novas evitam cache antigo. Objetos substituídos ficam inacessíveis; limpeza física fica fora deste beta. Fotos JPEG/PNG/WebP/HEIC decodificáveis acima de 300 KB usam WebP de até 2048 px se reduzir ao menos 10%; GIF mantém animação. Vídeos acima de 8 MB usam o compactador local existente, com fallback ao original se o navegador não suportar ou não houver economia. O limite final é 50 MB.

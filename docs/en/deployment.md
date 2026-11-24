@@ -83,3 +83,8 @@ A separate authenticated inbox SSE stream invalidates unread counts and direct-c
 ## Reactions
 
 Version 0.2.0-beta.13 requires migration 0005. Reactions are unique per message, user and emoji; the authenticated endpoint accepts the desired state for idempotent retries. Channel access is checked before reading or modifying reactions. Changes invalidate the cache and publish SSE. Cancelled messages neither display nor accept reactions.
+
+
+## Photos and media
+
+Version 0.2.0-beta.14 requires migration 0006. Profile and team settings offer change/remove photo. Images are center-cropped to 512 × 512 and re-encoded locally before upload (1 MB final limit). The Worker checks signatures and size. User photos follow public profile visibility; team photos require member or guest access. New URLs avoid stale caches. Replaced objects become inaccessible; physical cleanup is outside this beta. Decodable JPEG/PNG/WebP/HEIC photos above 300 KB use WebP up to 2048 px when at least 10% smaller; GIF animation is preserved. Videos above 8 MB use the existing local compressor, with original-file fallback when unsupported or not smaller. The final attachment limit is 50 MB.

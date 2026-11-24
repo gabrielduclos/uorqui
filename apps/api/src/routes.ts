@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { Config } from './config.js'
 import type { Services } from './database.js'
 import { registerWorkplaceRoutes } from './workplace-routes.js'
+import { registerAvatarRoutes } from './avatar-routes.js'
 import { registerAttachmentRoutes } from './attachment-routes.js'
 import { createRealtime } from './realtime.js'
 import { ReadCache } from './read-cache.js'
@@ -81,6 +82,7 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
 
   registerWorkplaceRoutes(app, { db }, { requireUser, requireOwner })
   registerAttachmentRoutes(app, { db }, config, { requireUser, requireChannel })
+  registerAvatarRoutes(app, services, config, { requireUser, requireOwner, invalidate: () => messageCache.clear('') })
   registerAccountRoutes(app, services, config, requireUser)
   registerUnreadRoutes(app, services, realtime, streams, { requireUser, requireChannel, channelAccess })
 
@@ -144,7 +146,7 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
 
   app.get('/api/session', async (request) => {
     const user = await requireUser(request)
-    const [fresh] = await db.select({ id: users.id, name: users.name, email: users.email, emailVerified: users.emailVerified, handle: users.handle, bio: profiles.bio })
+    const [fresh] = await db.select({ id: users.id, name: users.name, email: users.email, emailVerified: users.emailVerified, handle: users.handle, image: users.image, bio: profiles.bio })
       .from(users).leftJoin(profiles, eq(users.id, profiles.userId)).where(eq(users.id, user.id))
     return fresh
   })
@@ -153,7 +155,7 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
     const { id: userId } = await requireUser(request)
     const hasChannel = exists(db.select({ id: channels.id }).from(channels)
       .where(and(eq(channels.teamId, teams.id), channelAccess(userId))))
-    return db.select({ id: teams.id, name: teams.name, role: memberships.role })
+    return db.select({ id: teams.id, name: teams.name, image: teams.image, role: memberships.role })
       .from(teams)
       .leftJoin(memberships, and(eq(teams.id, memberships.teamId), eq(memberships.userId, userId)))
       .where(and(isNull(teams.deletedAt), or(teamAccess(userId), hasChannel)))
@@ -300,7 +302,7 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
       const roots = db.select({
         id: messages.id, body: messages.body, location: messages.location, createdAt: messages.createdAt,
         authorId: messages.authorId, clientId: messages.clientId, editedAt: messages.editedAt, cancelledAt: messages.cancelledAt,
-        author: users.name,
+        author: users.name, authorImage: users.image,
       }).from(messages).innerJoin(users, eq(messages.authorId, users.id))
         .where(and(eq(messages.channelId, channelId),
           thread ? eq(messages.parentId, thread) : isNull(messages.parentId),
@@ -308,7 +310,7 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
         .orderBy(desc(messages.id)).limit(51).as('page')
 
       const rows = await db.select({
-        id: roots.id, body: roots.body, location: roots.location, createdAt: roots.createdAt, author: roots.author,
+        id: roots.id, body: roots.body, location: roots.location, createdAt: roots.createdAt, author: roots.author, authorImage: roots.authorImage,
         authorId: roots.authorId, clientId: roots.clientId, editedAt: roots.editedAt, cancelledAt: roots.cancelledAt,
         readCursor: sql<number>`cast((select coalesce(max(id), 0) from ${messages} where channel_id = ${channelId}) as bigint)`.mapWith(Number),
         replies: thread ? sql<number>`0` : sql<number>`cast((

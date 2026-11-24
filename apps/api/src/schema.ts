@@ -53,6 +53,7 @@ export const verifications = workplace.table('verification', {
 }, (table) => [index('verification_identifier_idx').on(table.identifier)])
 
 export const teams = workplace.table('team', {
+  image: text(),
   id: uuid().defaultRandom().primaryKey(),
   name: text().notNull(),
   deletedAt: time('deleted_at'),
@@ -162,3 +163,13 @@ export const messageReactions = workplace.table('message_reaction', {
   primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
   check('reaction_emoji_valid', sql`${table.emoji} in ('👍', '❤️', '😂', '😮', '😢', '🎉')`),
 ])
+
+export const avatarUploads = workplace.table('avatar_upload', {
+  id: uuid().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
+  mime: text().notNull(),
+  size: integer().notNull(),
+  ready: boolean().notNull().default(false),
+  createdAt: time('created_at').defaultNow().notNull(),
+})

@@ -315,7 +315,7 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, serial
       setLocating(false);setError(pt?'Não foi possível obter sua localização. Verifique a permissão.':'Could not get your location. Check permissions.');
     },{enableHighAccuracy:false,timeout:12000,maximumAge:30000});
   }
-  function chosenFile(file?:File){if(file && !editing){if(file.type.startsWith('video/'))void stageVideo(file);else stageFile(file);}}
+  function chosenFile(file?:File){if(file && !editing){if(file.type.startsWith('video/'))void stageVideo(file);else if(file.type.startsWith('image/'))stagePhotos([file]);else stageFile(file);}}
   
 
   useLayoutEffect(() => {

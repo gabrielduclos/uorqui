@@ -61,3 +61,8 @@ Abrir configurações em dialog Radix, agrupadas por assunto em abas. Perfil, Se
 ## Anexos e reações
 
 O botão + abre um dialog Radix centralizado, limitado à largura e altura da tela, com rolagem interna. Reações aparecem sob cada mensagem com contador e destaque da seleção própria; tocar novamente remove a própria reação. O seletor oferece 👍 ❤️ 😂 😮 😢 🎉.
+
+
+## Fotos e mídia
+
+A versão 0.2.0-beta.14 exige migração 0006. Perfil e equipe oferecem alterar/remover foto. A imagem é recortada no centro para 512 × 512 e reencodificada no aparelho antes do upload (máximo final 1 MB). O Worker verifica assinatura e tamanho. Fotos de perfil acompanham a visibilidade pública do perfil; fotos de equipes exigem acesso como membro ou convidado. URLs novas evitam cache antigo. Objetos substituídos ficam inacessíveis; limpeza física fica fora deste beta. Fotos JPEG/PNG/WebP/HEIC decodificáveis acima de 300 KB usam WebP de até 2048 px se reduzir ao menos 10%; GIF mantém animação. Vídeos acima de 8 MB usam o compactador local existente, com fallback ao original se o navegador não suportar ou não houver economia. O limite final é 50 MB.

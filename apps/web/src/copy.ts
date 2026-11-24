@@ -1,6 +1,6 @@
 export const translations = {
   'pt-BR': {
-    react: 'Reagir à mensagem', settings: 'Configurações', appearance: 'Aparência', general: 'Geral', advanced: 'Avançado', theme: 'Tema', light: 'Claro', dark: 'Escuro',
+    changePhoto: 'Alterar foto', removePhoto: 'Remover foto', preparingPhoto: 'Preparando foto…', react: 'Reagir à mensagem', settings: 'Configurações', appearance: 'Aparência', general: 'Geral', advanced: 'Avançado', theme: 'Tema', light: 'Claro', dark: 'Escuro',
     unreadCount: (count: number) => `${count} mensagens não lidas`,
     security: 'Segurança da conta', emailConfirmed: 'E-mail confirmado.', emailPending: 'E-mail ainda não confirmado.', emailInvalid: 'Link de confirmação inválido ou expirado. Solicite outro no seu perfil.', resendVerification: 'Enviar confirmação de e-mail', verificationSent: 'Confirmação enviada. Confira sua caixa de entrada e spam.', changePassword: 'Trocar senha', currentPassword: 'Senha atual', newPassword: 'Nova senha', repeatPassword: 'Confirme a nova senha', passwordChanged: 'Senha alterada. As outras sessões foram encerradas.',
 
@@ -34,6 +34,7 @@ export const translations = {
       EMAIL_UNAVAILABLE: 'O envio de e-mail está indisponível. Tente novamente mais tarde.',
       CURRENT_PASSWORD_INVALID: 'A senha atual está incorreta.',
       PASSWORD_MISMATCH: 'As novas senhas não coincidem.',
+      INVALID_PHOTO: 'Não foi possível preparar a foto. Use uma imagem JPG, PNG ou WebP válida.',
       INVALID_FILE: 'Selecione um arquivo válido de até 50 MB.',
       FILE_NOT_FOUND: 'Arquivo indisponível.',
       FILES_UNAVAILABLE: 'Não foi possível acessar os anexos. Tente novamente.',
@@ -60,7 +61,7 @@ export const translations = {
     },
   },
   en: {
-    react: 'React to message', settings: 'Settings', appearance: 'Appearance', general: 'General', advanced: 'Advanced', theme: 'Theme', light: 'Light', dark: 'Dark',
+    changePhoto: 'Change photo', removePhoto: 'Remove photo', preparingPhoto: 'Preparing photo…', react: 'React to message', settings: 'Settings', appearance: 'Appearance', general: 'General', advanced: 'Advanced', theme: 'Theme', light: 'Light', dark: 'Dark',
     unreadCount: (count: number) => `${count} unread messages`,
     security: 'Account security', emailConfirmed: 'Email verified.', emailPending: 'Email has not been verified yet.', emailInvalid: 'Invalid or expired verification link. Request another in your profile.', resendVerification: 'Send verification email', verificationSent: 'Verification sent. Check your inbox and spam folder.', changePassword: 'Change password', currentPassword: 'Current password', newPassword: 'New password', repeatPassword: 'Confirm new password', passwordChanged: 'Password changed. Other sessions have been signed out.',
 

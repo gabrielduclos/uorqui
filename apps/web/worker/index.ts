@@ -8,18 +8,27 @@ interface Env {
 const fail = (code: string, status: number) => Response.json({ code }, { status, headers: { 'Cache-Control': 'no-store' } })
 type FileInfo = { id: string; name: string; mime: string; size: number; key: string; ready: boolean }
 
-async function fileRequest(request: Request, env: Env, upstream: URL, id: string) {
+async function fileRequest(request: Request, env: Env, upstream: URL, id: string, kind = 'files') {
   if (!env.FILES || !env.FILES_SECRET) return fail('FILES_UNAVAILABLE', 503)
   if (!['GET', 'HEAD', 'PUT'].includes(request.method)) return fail('FORBIDDEN', 405)
   if (request.method === 'PUT' && request.headers.get('origin') !== new URL(request.url).origin) return fail('FORBIDDEN', 403)
   const headers = new Headers({ cookie: request.headers.get('cookie') ?? '', 'x-files-secret': env.FILES_SECRET,
     origin: new URL(request.url).origin })
-  const authorize = new URL(`/api/internal/files/${id}${request.method === 'PUT' ? '?upload=1' : ''}`, upstream)
+  const authorize = new URL(`/api/internal/${kind}/${id}${request.method === 'PUT' ? '?upload=1' : ''}`, upstream)
   const authorization = await fetch(authorize, { headers, redirect: 'manual' })
   if (!authorization.ok) return new Response(authorization.body, { status: authorization.status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
   const file = await authorization.json<FileInfo>()
   if (request.method === 'PUT') {
     if (!request.body || Number(request.headers.get('content-length')) !== file.size) return fail('INVALID_FILE', 400)
+    if (kind === 'avatars') {
+      if (file.size > 1024 * 1024) return fail('INVALID_FILE', 400)
+      const bytes = new Uint8Array(await request.arrayBuffer())
+      const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+      const png = [137,80,78,71,13,10,26,10].every((value,index) => bytes[index] === value)
+      const webp = new TextDecoder().decode(bytes.slice(0,4)) === 'RIFF' && new TextDecoder().decode(bytes.slice(8,12)) === 'WEBP'
+      if (bytes.length !== file.size || !(file.mime === 'image/jpeg' && jpeg || file.mime === 'image/png' && png || file.mime === 'image/webp' && webp)) return fail('INVALID_FILE', 400)
+      await env.FILES.put(file.key, bytes, { httpMetadata: { contentType: file.mime } })
+    }
     const existing = await env.FILES.head(file.key)
     if (!existing) {
       const stream = new FixedLengthStream(file.size)
@@ -27,7 +36,7 @@ async function fileRequest(request: Request, env: Env, upstream: URL, id: string
         httpMetadata: { contentType: file.mime }, customMetadata: { attachmentId: file.id },
       })])
     } else if (existing.size !== file.size) return fail('INVALID_FILE', 400)
-    const complete = await fetch(new URL(`/api/internal/files/${id}/complete`, upstream), { method: 'POST', headers })
+    const complete = await fetch(new URL(`/api/internal/${kind}/${id}/complete`, upstream), { method: 'POST', headers })
     if (!complete.ok) return new Response(complete.body, { status: complete.status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
     return Response.json({ ready: true }, { headers: { 'Cache-Control': 'no-store' } })
   }
@@ -60,6 +69,8 @@ export default {
     const upstream = URL.parse(env.API_ORIGIN ?? '')
     if (!upstream || upstream.protocol !== 'https:' || upstream.username || upstream.password) return fail('API_UNAVAILABLE', 503)
     try {
+      const avatar = /^\/api\/avatars\/([0-9a-f-]{36})$/.exec(url.pathname)
+      if (avatar?.[1]) return await fileRequest(request, env, upstream, avatar[1], 'avatars')
       const file = /^\/api\/files\/([0-9a-f-]{36})$/.exec(url.pathname)
       if (file?.[1]) return await fileRequest(request, env, upstream, file[1])
       upstream.pathname = url.pathname
