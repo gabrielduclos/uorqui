@@ -1,5 +1,6 @@
 import { ChevronLeft, MessageSquare, Plus, Trash2, UserRound } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { SettingsTabs } from './components/ui/settings-tabs'
 import { api, errorText, type DirectChannel, type Member, type PublicProfile, type Team, type User } from './api'
 import { Button, Modal } from './components/ui/controls'
 import { Skeleton } from './components/ui/skeleton'
@@ -32,6 +33,28 @@ export function TeamSettings({ team, user, copy, close }: { team: Team; user: Us
   const [removing, setRemoving] = useState<Member>()
   const [deleting, setDeleting] = useState(false)
   return <Modal title={copy.manageTeam} closeLabel={copy.close} onClose={close}>
+    <SettingsTabs label={copy.manageTeam} tabs={[{ id: 'general', label: copy.general, content: <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
+      await api(`/teams/${team.id}/update`, { data: { name: data.get('name') } })
+    }}><label>{copy.teamName}<input name="name" defaultValue={team.name} required minLength={2} maxLength={80} /></label></ActionForm> },
+    { id: 'members', label: copy.members, content: <>
+    {removing ? <>
+      <p>{removing.name}</p><p className="muted">{copy.removeHelp}</p>
+      <ActionForm copy={copy} submit={copy.removeMember} onSubmit={async () => {
+        await api(`/teams/${team.id}/remove-member`, { data: { userId: removing.id } })
+        setRemoving(undefined)
+      }} />
+      <Button variant="ghost" onClick={() => setRemoving(undefined)}>{copy.cancel}</Button>
+    </> : <>
+      <ResourceFeedback copy={copy} resource={resource} />
+      <div className="member-list">
+        {resource.data?.map((member) => <div className="member-row" key={member.id}>
+          <Button variant="ghost" className="member-person" onClick={() => showPerson(member.id)}>{member.name}</Button>
+          <small>{copy[member.role]}</small>
+          {member.id !== user.id && <Button variant="ghost" aria-label={`${copy.removeMember} ${member.name}`} onClick={() => setRemoving(member)}><Trash2 size={15} /></Button>}
+        </div>)}
+      </div>
+    </>}
+    </> }, { id: 'advanced', label: copy.advanced, content: <>
     {deleting ? <>
       <p className="muted">{copy.deleteHelp}</p>
       <ActionForm copy={copy} submit={copy.deleteTeam} onSubmit={async (data) => {
@@ -41,39 +64,16 @@ export function TeamSettings({ team, user, copy, close }: { team: Team; user: Us
         <label>{copy.confirmTeamName}<input name="name" placeholder={team.name} required autoComplete="off" /></label>
       </ActionForm>
       <Button variant="ghost" onClick={() => setDeleting(false)}>{copy.cancel}</Button>
-    </> : removing ? <>
-      <p>{removing.name}</p><p className="muted">{copy.removeHelp}</p>
-      <ActionForm copy={copy} submit={copy.removeMember} onSubmit={async () => {
-        await api(`/teams/${team.id}/remove-member`, { data: { userId: removing.id } })
-        setRemoving(undefined)
-      }} />
-      <Button variant="ghost" onClick={() => setRemoving(undefined)}>{copy.cancel}</Button>
-    </> : <>
-      <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
-        await api(`/teams/${team.id}/update`, { data: { name: data.get('name') } })
-      }}>
-        <label>{copy.teamName}<input name="name" defaultValue={team.name} required minLength={2} maxLength={80} /></label>
-      </ActionForm>
-      <h3 className="section-label">{copy.members}</h3>
-      <ResourceFeedback copy={copy} resource={resource} />
-      <div className="member-list">
-        {resource.data?.map((member) => <div className="member-row" key={member.id}>
-          <Button variant="ghost" className="member-person" onClick={() => showPerson(member.id)}>{member.name}</Button>
-          <small>{copy[member.role]}</small>
-          {member.id !== user.id && <Button variant="ghost" aria-label={`${copy.removeMember} ${member.name}`} onClick={() => setRemoving(member)}>
-            <Trash2 size={15} />
-          </Button>}
-        </div>)}
-      </div>
-      <Button variant="outline" onClick={() => setDeleting(true)}><Trash2 size={16} />{copy.deleteTeam}</Button>
-    </>}
+    </> : <Button variant="outline" onClick={() => setDeleting(true)}><Trash2 size={16} />{copy.deleteTeam}</Button>}
+    </> }]} />
   </Modal>
 }
 
-export function ProfileSettings({ copy, user, close, saved }: { copy: Copy; user: User; close: () => void; saved: () => Promise<void> }) {
+export function ProfileSettings({ copy, user, close, saved, appearance, initial }: { copy: Copy; user: User; close: () => void; saved: () => Promise<void>; appearance: ReactNode; initial?: string }) {
   const resource = useResource<PublicProfile>('/profile')
   const [success, setSuccess] = useState(false)
-  return <Modal title={copy.myProfile} closeLabel={copy.close} onClose={close}>
+  return <Modal title={copy.settings} closeLabel={copy.close} onClose={close}>
+    <SettingsTabs label={copy.settings} initial={initial} tabs={[{ id: 'profile', label: copy.myProfile, content: <>
     <ResourceFeedback copy={copy} resource={resource} />
     {resource.data && <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
       setSuccess(false)
@@ -87,8 +87,9 @@ export function ProfileSettings({ copy, user, close, saved }: { copy: Copy; user
       <label>{copy.bio}<textarea name="bio" rows={3} maxLength={500} defaultValue={resource.data.bio ?? ''} /></label>
       {success && <p role="status">{copy.profileSaved}</p>}
     </ActionForm>}
-    <AccountSecurity user={user} copy={copy} saved={saved} />
     {resource.data?.handle && <a className="profile-link" href={`#profile=${encodeURIComponent(resource.data.handle)}`} onClick={close}>{copy.viewPublic}</a>}
+    </> }, { id: 'security', label: copy.security, content: <AccountSecurity user={user} copy={copy} saved={saved} /> },
+    { id: 'appearance', label: copy.appearance, content: appearance }]} />
   </Modal>
 }
 

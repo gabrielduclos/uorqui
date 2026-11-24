@@ -51,3 +51,8 @@ Use the global system stack `-apple-system, BlinkMacSystemFont, "Segoe UI", sans
 
 
 Audio messages show the player without the stored filename. Stop recording uses inverse primary foreground/background tokens in both themes. Numeric unread badges use shared monochrome tokens and accessible count labels on teams, channels and direct messages. Profile security provides verification status/resend and current/new/confirm password fields, with individual show/hide controls and shared pending/error feedback.
+
+
+## Settings
+
+Open settings in a Radix dialog with topic tabs. Profile, Security and Appearance share the user dialog; General, Members and Advanced organize team settings. Theme and language live under Appearance. Tabs support arrow keys, Home and End, preserve forms and label their panels. The dialog manages focus, closes with Escape and scrolls internally on mobile and desktop.

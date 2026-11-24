@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.12]
+
+- Organizes settings into tabbed dialogs: Profile, Security and Appearance; team settings use General, Members and Advanced. Preserves forms across tabs and supports keyboard navigation, theme and language.
+
 ## [0.2.0-beta.11]
 
 - Hides filenames on audio messages and improves the stop-recording button contrast in both themes.

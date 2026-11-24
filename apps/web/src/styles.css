@@ -250,3 +250,12 @@ input, textarea, select { min-width: 0; font-size: max(var(--font-size-body), 16
 .audio-player small { font-size: 11px; }
 [data-live-message-composer] textarea { padding: 9px 12px; }
 [data-live-message-composer] input[type=file] { width: 1px; height: 1px; }
+
+.settings-tab-list { display: flex; gap: .25rem; overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: 1rem; padding-bottom: .4rem; }
+.settings-tab-list [role="tab"] { flex: 0 0 auto; padding: .55rem .65rem; border-radius: .4rem; color: var(--muted-foreground); font-size: .875rem; font-weight: 400; }
+.settings-tab-list [aria-selected="true"] { color: var(--foreground); background: var(--muted); font-weight: 500; }
+.settings-tab-list [role="tab"]:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.settings-tabs [role="tabpanel"] { min-width: 0; }
+.settings-tabs [role="tabpanel"][hidden] { display: none; }
+.settings-preferences select { width: 100%; min-width: 0; }
+.settings-tabs .account-security { border-top: 0; margin-top: 0; padding-top: 0; }

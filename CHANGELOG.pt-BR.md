@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.12]
+
+- Organiza configurações em dialogs com abas: Perfil, Segurança e Aparência; equipes usam Geral, Membros e Avançado. Preserva formulários ao alternar abas e oferece navegação por teclado, tema e idioma.
+
 ## [0.2.0-beta.11]
 
 - Oculta nomes de arquivos em mensagens de áudio e melhora o contraste do botão de finalizar gravação nos dois temas.

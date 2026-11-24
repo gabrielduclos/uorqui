@@ -33,10 +33,13 @@ export function Button({ className, variant = 'primary', type = 'button', loadin
 export function Modal({ title, closeLabel, onClose, children }: {
   title: string; closeLabel: string; onClose: () => void; children: ReactNode
 }) {
+  const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null)
   return <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-30 bg-black/45" />
-      <Dialog.Content aria-describedby={undefined} className="modal">
+      <Dialog.Content aria-describedby={undefined} className="modal" onCloseAutoFocus={(event) => {
+        if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus() }
+      }}>
         <header>
           <Dialog.Title>{title}</Dialog.Title>
           <Dialog.Close asChild><Button variant="ghost" aria-label={closeLabel}><X size={18} /></Button></Dialog.Close>

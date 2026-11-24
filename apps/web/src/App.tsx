@@ -1,6 +1,7 @@
-import { ChevronLeft, CirclePlus, Globe, Hash, Layers, LockKeyhole, LogOut, MessageSquare, Moon, Settings, Plus, Send, Sun, UserPlus } from 'lucide-react'
+import { ChevronLeft, CirclePlus, Hash, Layers, LockKeyhole, LogOut, MessageSquare, Settings, Plus, Send, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { ApiError, api, cachedQuery, errorText, type Channel, type DirectChannel, type Team, type User } from './api'
+import { SettingsTabs } from './components/ui/settings-tabs'
 import { Button, Modal } from './components/ui/controls'
 import { Skeleton, MessageSkeleton } from './components/ui/skeleton'
 import { Conversation, initials } from './Conversation'
@@ -239,7 +240,7 @@ export function App() {
   const [token, setToken] = useState(invitationFromUrl)
   const [profileHandle, setProfileHandle] = useState(() => new URLSearchParams(location.hash.slice(1)).get('profile'))
   const [person, setPerson] = useState<string>()
-  const [editingProfile, setEditingProfile] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<string>()
   const copy = translations[locale]
 
   useEffect(() => {
@@ -284,23 +285,25 @@ export function App() {
     setToken(null)
   }
 
+  const appearance = <div className="fields settings-preferences">
+    <label>{copy.theme}<select aria-label={copy.theme} value={dark ? 'dark' : 'light'} onChange={(event) => setDark(event.target.value === 'dark')}>
+      <option value="light">{copy.light}</option><option value="dark">{copy.dark}</option>
+    </select></label>
+    <label>{copy.language}<select aria-label={copy.language} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+      <option value="pt-BR">Português (Brasil)</option><option value="en">English</option>
+    </select></label>
+  </div>
+
   return <div className="app">
     <header className="topbar">
       <div className="brand"><div className="brand-mark" aria-hidden="true"><Layers size={18} /></div><strong>Uorqui</strong>
         <span>{copy.product}</span>
       </div>
       <div className="top-actions">
-        <label className="language" title={copy.language}>
-          <Globe size={16} aria-hidden="true" />
-          <select aria-label={copy.language} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
-            <option value="pt-BR">PT</option><option value="en">EN</option>
-          </select>
-        </label>
-        <Button variant="ghost" aria-label={dark ? copy.themeLight : copy.themeDark} title={dark ? copy.themeLight : copy.themeDark}
-          onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={17} />}</Button>
+        <Button variant="ghost" aria-label={copy.settings} title={copy.settings} onClick={() => setSettingsTab('appearance')}><Settings size={18} /></Button>
         {user === undefined && <Skeleton className="skeleton-avatar" />}
         {user && <>
-          <Button variant="ghost" aria-label={copy.myProfile} title={copy.myProfile} onClick={() => setEditingProfile(true)}><span className="avatar profile">{initials(user.name)}</span></Button>
+          <Button variant="ghost" aria-label={copy.myProfile} title={copy.myProfile} onClick={() => setSettingsTab('profile')}><span className="avatar profile">{initials(user.name)}</span></Button>
           <Button variant="ghost" aria-label={copy.signOut} title={copy.signOut} onClick={async () => {
             try {
               await api('/auth/sign-out', { data: {} })
@@ -320,7 +323,11 @@ export function App() {
     </div>}
     {user === null ? <SignIn key={token ?? ''} copy={copy} token={token} onSuccess={() => loadSession()} />
       : user ? <UnreadProvider key={user.id}><Workspace key={user.id} user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} /></UnreadProvider> : <Workspace key="session-loading" user={user} copy={copy} locale={locale} token={token} clearInvite={clearInvite} />}
-    {editingProfile && user && <ProfileSettings key={`profile-settings-${user.id}`} copy={copy} user={user} close={() => setEditingProfile(false)} saved={() => loadSession()} />}
+    {settingsTab && (user ? <ProfileSettings key={`profile-settings-${user.id}`} copy={copy} user={user} initial={settingsTab}
+      appearance={appearance} close={() => setSettingsTab(undefined)} saved={() => loadSession()} />
+      : <Modal title={copy.settings} closeLabel={copy.close} onClose={() => setSettingsTab(undefined)}>
+        <SettingsTabs label={copy.settings} tabs={[{ id: 'appearance', label: copy.appearance, content: appearance }]} />
+      </Modal>)}
     {(profileHandle || (person && user)) && <PublicProfileView key={`public-profile-${profileHandle ?? person}`} handle={profileHandle ?? undefined}
       userId={person} copy={copy} user={user} close={() => {
         setPerson(undefined)

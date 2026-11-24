@@ -51,3 +51,8 @@ Usar a pilha global do sistema `-apple-system, BlinkMacSystemFont, "Segoe UI", s
 
 
 Mensagens de áudio exibem o player sem o nome do arquivo. Finalizar a gravação usa contraste inverso dos tokens de cor primária nos dois temas. Badges numéricos de não lidas usam tokens monocromáticos globais e rótulos acessíveis nas equipes, canais e mensagens diretas. A segurança do perfil oferece estado/reenvio de confirmação e campos de senha atual, nova e confirmação, com controles individuais de mostrar/ocultar e feedback compartilhado de espera/erro.
+
+
+## Configurações
+
+Abrir configurações em dialog Radix, agrupadas por assunto em abas. Perfil, Segurança e Aparência compartilham o dialog do usuário; Geral, Membros e Avançado organizam equipes. Tema e idioma ficam em Aparência. Abas usam setas, Home e End, preservam formulários e têm painéis associados. O dialog controla foco, fecha por Escape e permite rolagem interna no mobile e desktop.
