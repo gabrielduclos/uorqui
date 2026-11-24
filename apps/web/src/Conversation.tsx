@@ -1,6 +1,6 @@
-import { ArrowDown, LoaderCircle, MessageSquare, Pencil, Trash2, X } from 'lucide-react'
+import { ArrowDown, LoaderCircle, MessageSquare, Pencil, SmilePlus, Trash2, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ApiError, api, cachedQuery, errorText, type Channel, type Message, type MessagePage, type User } from './api'
+import { ApiError, api, cachedQuery, refreshChannel, errorText, type Channel, type Message, type MessagePage, type User } from './api'
 import { MessageSkeleton } from './components/ui/skeleton'
 import { LiveMessageComposer } from './LiveMessageComposer'
 import { ChatAudioPlayer } from './ChatAudioPlayer'
@@ -15,12 +15,14 @@ export function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0]?.toUpperCase()).join('')
 }
 
-type MessageAction = (message: Message, action: 'edit' | 'cancel', body?: string) => Promise<void>
+type MessageAction = (message: Message, action: 'edit' | 'cancel' | 'reaction', body?: string) => Promise<void>
 
 function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry }: {
   message: Message; locale: Locale; copy: Copy; user?: User; onThread?: (message: Message) => void
   onAction?: MessageAction; onRetry?: (message: Message) => Promise<void>
 }) {
+  const [reacting, setReacting] = useState(false)
+  const [reactionError, setReactionError] = useState<unknown>()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const time = new Date(message.createdAt)
@@ -49,7 +51,17 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
       {message.delivery && <small role="status">
         {message.delivery === 'sending' ? <><LoaderCircle className="action-spinner inline" size={13} /> {copy.sending}</> : copy.failedMessage}
       </small>}
+      {!message.cancelledAt && !message.delivery && onAction && <div className="message-reactions">
+        {message.reactions?.map((reaction) => <Button key={reaction.emoji} variant="outline" aria-pressed={!!user && reaction.users.includes(user.id)}
+          aria-label={`${reaction.emoji}: ${reaction.count}`} onClick={async () => {
+            setReactionError(undefined)
+            try { await onAction(message, 'reaction', reaction.emoji) } catch (error) { setReactionError(error) }
+          }}>{reaction.emoji} {reaction.count}</Button>)}
+      </div>}
+      {reactionError !== undefined && <p className="error" role="alert">{errorText(copy, reactionError)}</p>}
       <div className="message-actions">
+        {!message.cancelledAt && !message.delivery && onAction && <Button variant="ghost" aria-label={copy.react} onClick={() => setReacting(true)}><SmilePlus size={14} /></Button>}
+
         {message.delivery === 'failed' && onRetry && <Button variant="ghost" onClick={() => onRetry(message)}>{copy.retry}</Button>}
         {onThread && !message.delivery && <Button variant="ghost" className="reply-link" onClick={() => onThread(message)}>
           <MessageSquare size={14} />{message.replies ? copy.replyCount(message.replies) : copy.reply}
@@ -60,6 +72,12 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
         </>}
       </div>
     </div>
+    {reacting && onAction && <Modal title={copy.react} closeLabel={copy.close} onClose={() => setReacting(false)}>
+      <div className="reaction-picker">{['👍', '❤️', '😂', '😮', '😢', '🎉'].map((emoji) => <Button key={emoji} variant="outline"
+        aria-label={emoji} aria-pressed={message.reactions?.some((item) => item.emoji === emoji && !!user && item.users.includes(user.id)) ?? false}
+        onClick={async () => { setReactionError(undefined); try { await onAction(message, 'reaction', emoji); setReacting(false) } catch (error) { setReactionError(error) } }}>{emoji}</Button>)}</div>
+      {reactionError !== undefined && <p className="error" role="alert">{errorText(copy, reactionError)}</p>}
+    </Modal>}
     {editing && onAction && <Modal title={copy.editMessage} closeLabel={copy.close} onClose={() => setEditing(false)}>
       <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
         await onAction(message, 'edit', String(data.get('body')))
@@ -272,7 +290,12 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
     await transmit(message)
   }
 
-  async function changeMessage(message: Message, action: 'edit' | 'cancel', body?: string) {
+  async function changeMessage(message: Message, action: 'edit' | 'cancel' | 'reaction', body?: string) {
+    if (action === 'reaction') {
+      await api(`${endpoint}/${message.id}/reaction`, { data: { emoji: body, active: !message.reactions?.some((item) => item.emoji === body && !!user && item.users.includes(user.id)) } })
+      refreshChannel(channel.id)
+      return
+    }
     await api(`${endpoint}/${message.id}/${action}`, { data: action === 'edit' ? { body } : {} })
     const updated = action === 'edit'
       ? { ...message, body: body!.trim(), editedAt: new Date().toISOString() }

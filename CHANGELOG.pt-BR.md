@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.13]
+
+- Corrige o dialog de anexos no mobile e adiciona reações persistidas com contadores, remoção individual e SSE em canais, conversas diretas e tópicos. Inclui migração 0005 e testes de autorização e invalidação de cache.
+
 ## [0.2.0-beta.12]
 
 - Organiza configurações em dialogs com abas: Perfil, Segurança e Aparência; equipes usam Geral, Membros e Avançado. Preserva formulários ao alternar abas e oferece navegação por teclado, tema e idioma.

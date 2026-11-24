@@ -78,3 +78,8 @@ Password changes require the current password and 8–128 characters for the new
 Unread counts include uncancelled messages from other authors, including thread replies, only in channels the user can currently access. Read cursors advance monotonically to the snapshot returned with a rendered message page. Viewing the latest messages acknowledges channel activity, including its threads. A conversation must be visible, focused and at the bottom to acknowledge that snapshot. Hidden mobile conversations and background tabs do not acknowledge messages. Explicit snapshot cursors prevent concurrent arrivals from being marked read accidentally.
 
 A separate authenticated inbox SSE stream invalidates unread counts and direct-conversation lists for accessible channels, including closed conversations. It closes while hidden, catches up on reconnect, checks session validity on events and once per minute, and falls back to thirty-second polling while disconnected. Unread queries share the tab cache with an eight-second freshness window and the existing authentication isolation. Acknowledgements publish an invalidation for other devices. No message body or private channel identifiers are sent on the inbox stream.
+
+
+## Reactions
+
+Version 0.2.0-beta.13 requires migration 0005. Reactions are unique per message, user and emoji; the authenticated endpoint accepts the desired state for idempotent retries. Channel access is checked before reading or modifying reactions. Changes invalidate the cache and publish SSE. Cancelled messages neither display nor accept reactions.

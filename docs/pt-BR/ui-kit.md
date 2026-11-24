@@ -56,3 +56,8 @@ Mensagens de áudio exibem o player sem o nome do arquivo. Finalizar a gravaçã
 ## Configurações
 
 Abrir configurações em dialog Radix, agrupadas por assunto em abas. Perfil, Segurança e Aparência compartilham o dialog do usuário; Geral, Membros e Avançado organizam equipes. Tema e idioma ficam em Aparência. Abas usam setas, Home e End, preservam formulários e têm painéis associados. O dialog controla foco, fecha por Escape e permite rolagem interna no mobile e desktop.
+
+
+## Anexos e reações
+
+O botão + abre um dialog Radix centralizado, limitado à largura e altura da tela, com rolagem interna. Reações aparecem sob cada mensagem com contador e destaque da seleção própria; tocar novamente remove a própria reação. O seletor oferece 👍 ❤️ 😂 😮 😢 🎉.

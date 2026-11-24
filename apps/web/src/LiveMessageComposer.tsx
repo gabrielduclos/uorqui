@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
 import { ChatImageEditor } from './ChatImageEditor';
 import { cn } from './utils';
+import { Modal } from './components/ui/controls';
 import { optimizeVideoAttachment } from './videoCompression';
 import { optimizeImageAttachment } from './imageCompression';
 
@@ -328,24 +329,22 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, serial
   }, [value, textareaRef]);
 
   useEffect(() => {
-    if (!emojiOpen && !attachmentsOpen) return;
+    if (!emojiOpen) return;
     const outside = (event: PointerEvent) => {
       if (!controls.current?.contains(event.target as Node)) {
         setEmojiOpen(false);
-        setAttachmentsOpen(false);
       }
     };
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
         setEmojiOpen(false);
-        setAttachmentsOpen(false);
       }
     };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape, true);
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape, true); };
-  }, [emojiOpen, attachmentsOpen]);
+  }, [emojiOpen]);
 
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -438,15 +437,7 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, serial
         className="grid size-11 lg:size-12 place-items-center text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
         <Plus className={cn('size-6 transition-transform',attachmentsOpen && 'rotate-45')} />
       </button>
-      {attachmentsOpen && <div role="dialog" aria-label={pt ? 'Adicionar à conversa' : 'Add to chat'}
-        className="absolute bottom-full left-0 z-40 mb-2 w-[min(510px,calc(100vw-24px))] max-w-[calc(100vw-24px)] border border-border bg-popover p-2 text-popover-foreground shadow-xl">
-        <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-xs font-semibold">{pt ? 'Adicionar à conversa' : 'Add to conversation'}</span>
-          <button type="button" onClick={() => setAttachmentsOpen(false)}
-            aria-label={pt ? 'Fechar anexos' : 'Close attachments'} className="grid size-7 place-items-center hover:bg-accent">
-            <X className="size-4"/>
-          </button>
-        </div>
+      {attachmentsOpen && <Modal title={pt ? 'Adicionar à conversa' : 'Add to chat'} closeLabel={pt ? 'Fechar anexos' : 'Close attachments'} onClose={() => { setAttachmentsOpen(false); setCameraOptions(false); }}>
         {cameraOptions ? <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={()=>{cameraKindRef.current='image';cameraRef.current?.setAttribute('accept','image/*');cameraRef.current?.click();setCameraOptions(false);setAttachmentsOpen(false);}}
             className="flex min-h-16 flex-col items-center justify-center border border-border p-2 text-xs hover:bg-accent"><Camera className="size-5"/>{pt?'Tirar foto':'Take photo'}</button>
@@ -473,7 +464,7 @@ export function LiveMessageComposer({ value, onChange, onSelectionChange, serial
         <p className="px-2 pt-2 text-[11px] text-muted-foreground">
           {pt ? 'Anexos até 50 MB após compactação. Vídeos originais até 300 MB.' : 'Attachments up to 50 MB after compression. Videos up to 300 MB before compression.'}
         </p>
-      </div>}
+      </Modal>}
     </div>
     <input ref={galleryRef} type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime" className="sr-only"
       onChange={e => { const files=Array.from(e.target.files??[]); e.target.value=''; selectGallery(files); }} />

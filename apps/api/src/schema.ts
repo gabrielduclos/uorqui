@@ -153,3 +153,12 @@ export const attachments = workplace.table('attachment', {
   ready: boolean().notNull().default(false),
   createdAt: time('created_at').defaultNow().notNull(),
 }, (table) => [index('attachment_message_idx').on(table.messageId)])
+
+export const messageReactions = workplace.table('message_reaction', {
+  messageId: bigint('message_id', { mode: 'number' }).notNull().references(() => messages.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  emoji: text().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+  check('reaction_emoji_valid', sql`${table.emoji} in ('👍', '❤️', '😂', '😮', '😢', '🎉')`),
+])

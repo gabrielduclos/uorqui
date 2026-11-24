@@ -78,3 +78,8 @@ A troca exige a senha atual e uma nova senha de 8–128 caracteres, confirmada n
 A contagem inclui mensagens não canceladas de outros autores, inclusive respostas em tópicos, apenas em canais acessíveis. O cursor avança sem regredir até a fotografia de dados retornada com a página de mensagens. Abrir as mensagens recentes reconhece a atividade do canal, incluindo seus tópicos. A conversa precisa estar visível, em foco e no fim da rolagem. Conversas ocultas no mobile e abas em segundo plano não marcam leitura. Mensagens recebidas depois daquela consulta permanecem não lidas.
 
 Um SSE autenticado de caixa de entrada invalida as contagens e a lista de conversas diretas nos canais permitidos, inclusive os fechados. Ele pausa quando a aba fica oculta, atualiza ao reconectar, verifica a sessão nos eventos e a cada minuto e usa consulta a cada trinta segundos durante desconexão. As consultas compartilham o cache de oito segundos e o isolamento entre contas. O reconhecimento de leitura publica uma invalidação para outros dispositivos. O SSE de caixa de entrada não transmite corpos de mensagens nem identificadores de canais privados.
+
+
+## Reações
+
+A versão 0.2.0-beta.13 exige migração 0005. Reações são únicas por mensagem, usuário e emoji; o endpoint autenticado recebe o estado desejado para permitir tentativas idempotentes. A autorização do canal é verificada antes de ler ou alterar reações. As alterações invalidam o cache e publicam SSE. Canceladas não exibem nem aceitam reações.

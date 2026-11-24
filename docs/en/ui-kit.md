@@ -56,3 +56,8 @@ Audio messages show the player without the stored filename. Stop recording uses 
 ## Settings
 
 Open settings in a Radix dialog with topic tabs. Profile, Security and Appearance share the user dialog; General, Members and Advanced organize team settings. Theme and language live under Appearance. Tabs support arrow keys, Home and End, preserve forms and label their panels. The dialog manages focus, closes with Escape and scrolls internally on mobile and desktop.
+
+
+## Attachments and reactions
+
+The + button opens a centered Radix dialog bounded by the viewport, with internal scrolling. Reactions appear below each message with counts and selected-state styling; tapping again removes your reaction. The picker offers 👍 ❤️ 😂 😮 😢 🎉.

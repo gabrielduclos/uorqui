@@ -9,7 +9,7 @@ export interface User { emailVerified: boolean; handle?: string | null; bio?: st
 export interface Team { id: string; name: string; role: 'owner' | 'member' | null }
 export interface Channel { id: string; name: string; description: string; visibility: 'team' | 'private' }
 export interface Attachment { id: string; name: string; mime: string; size: number; url?: string }
-export interface Message { attachments?: Attachment[]; location?: { latitude: number; longitude: number } | null; pendingFile?: File; clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
+export interface Message { reactions?: { emoji: string; count: number; users: string[] }[]; attachments?: Attachment[]; location?: { latitude: number; longitude: number } | null; pendingFile?: File; clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
 export interface MessagePage { messages: Message[]; more: boolean; readCursor?: number }
 
 export class ApiError extends Error {

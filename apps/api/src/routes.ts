@@ -11,7 +11,7 @@ import { createRealtime } from './realtime.js'
 import { ReadCache } from './read-cache.js'
 import { registerAccountRoutes } from './account-routes.js'
 import { registerUnreadRoutes } from './unread-routes.js'
-import { attachments, channelMembers, channelReads, channels, directConversations, invitations, memberships, messages, profiles, sessions, teams, users } from './schema.js'
+import { attachments, channelMembers, channelReads, channels, directConversations, invitations, memberships, messages, messageReactions, profiles, sessions, teams, users } from './schema.js'
 
 export class RequestError extends Error {
   constructor(readonly statusCode: number, readonly code: string) {
@@ -92,6 +92,7 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
     await db.select({ id: attachments.id }).from(attachments).limit(1)
     await db.select({ id: directConversations.channelId }).from(directConversations).limit(1)
     await db.select({ id: channelReads.channelId }).from(channelReads).limit(1)
+    await db.select({ id: messageReactions.messageId }).from(messageReactions).limit(1)
     return { ready: true, emailConfigured: services.emailAvailable }
   })
 
@@ -320,7 +321,16 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
       const files = page.length ? await db.select({ id: attachments.id, name: attachments.name, mime: attachments.mime,
         size: attachments.size, messageId: attachments.messageId }).from(attachments)
         .where(inArray(attachments.messageId, page.filter((row) => !row.cancelledAt).map((row) => row.id))) : []
-      return { readCursor: rows[0]?.readCursor ?? 0, messages: page.map(({ readCursor: _, ...row }) => ({ ...row, attachments: files.filter((file) => file.messageId === row.id)
+      const reactionRows = page.length ? await db.select().from(messageReactions)
+        .where(inArray(messageReactions.messageId, page.filter((row) => !row.cancelledAt).map((row) => row.id))) : []
+      const reactionsFor = (messageId: number) => {
+        const grouped = new Map<string, string[]>()
+        for (const reaction of reactionRows.filter((item) => item.messageId === messageId)) {
+          grouped.set(reaction.emoji, [...(grouped.get(reaction.emoji) ?? []), reaction.userId])
+        }
+        return [...grouped].sort(([a], [b]) => a.localeCompare(b)).map(([emoji, users]) => ({ emoji, users, count: users.length }))
+      }
+      return { readCursor: rows[0]?.readCursor ?? 0, messages: page.map(({ readCursor: _, ...row }) => ({ ...row, reactions: reactionsFor(row.id), attachments: files.filter((file) => file.messageId === row.id)
         .map(({ messageId: _, ...file }) => file) })), more: rows.length > 50 }
     })
   })
@@ -361,6 +371,22 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
     })
     await realtime.publish(channelId)
     return reply.code(201).send(message)
+  })
+
+  app.post('/api/channels/:channelId/messages/:messageId/reaction', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request) => {
+    const user = await requireUser(request)
+    const params = validate(z.object({ channelId: id, messageId }), request.params)
+    const input = validate(z.object({ emoji: z.enum(['👍', '❤️', '😂', '😮', '😢', '🎉']), active: z.boolean() }), request.body)
+    await requireChannel(params.channelId, user.id)
+    await db.transaction(async (tx) => {
+      const [message] = await tx.select({ id: messages.id, cancelledAt: messages.cancelledAt }).from(messages)
+        .where(and(eq(messages.id, params.messageId), eq(messages.channelId, params.channelId))).for('update')
+      if (!message || message.cancelledAt) throw new RequestError(404, 'MESSAGE_UNAVAILABLE')
+      if (input.active) await tx.insert(messageReactions).values({ messageId: message.id, userId: user.id, emoji: input.emoji }).onConflictDoNothing()
+      else await tx.delete(messageReactions).where(and(eq(messageReactions.messageId, message.id), eq(messageReactions.userId, user.id), eq(messageReactions.emoji, input.emoji)))
+    })
+    await realtime.publish(params.channelId)
+    return { active: input.active }
   })
 
   app.post('/api/channels/:channelId/messages/:messageId/edit', async (request) => {

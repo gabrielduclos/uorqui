@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.13]
+
+- Fixes the mobile attachment dialog and adds persisted message reactions with counters, individual removal and SSE in channels, direct conversations and threads. Includes migration 0005 and authorization/cache invalidation tests.
+
 ## [0.2.0-beta.12]
 
 - Organizes settings into tabbed dialogs: Profile, Security and Appearance; team settings use General, Members and Advanced. Preserves forms across tabs and supports keyboard navigation, theme and language.
