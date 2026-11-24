@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.15]
+
+- Adds an authorized, paginated media gallery for channels and direct messages, including thread attachments and history beyond the loaded messages.
+- Keeps image, video and audio skeletons until each medium is ready; reactions appear and animate only after all message media load, including app restoration. Reactions update optimistically and roll back on failure; reduced-motion preferences disable animation.
+- Renames the interface to communities and adds channel name, description and access settings in a tabbed dialog. Access changes apply to the existing history; closing a channel preserves explicit invitees and the editor.
+- Lets owners assign Moderator or Member levels. Moderators can create/edit accessible channels and send invitations; owner-only community and role controls remain enforced by the API. Includes migration 0007 and a gallery paging index.
+
 ## [0.2.0-beta.14]
 
 - Adds user and team photos with local 512 × 512 compression, validated Worker/R2 uploads, removal and team authorization. Extends compression to PNG and file-selected images; retains local video compression with original-file fallback when needed. Includes migration 0006.

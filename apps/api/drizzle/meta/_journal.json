@@ -50,6 +50,13 @@
       "when": 1795486251982,
       "tag": "0006_premium_yellowjacket",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795520411907,
+      "tag": "0007_odd_amphibian",
+      "breakpoints": true
     }
   ]
 }

@@ -18,6 +18,7 @@ function parse<T>(schema: z.ZodType<T>, input: unknown): T {
 type Access = {
   requireUser: (request: FastifyRequest) => Promise<{ id: string; name: string; email: string }>
   requireOwner: (teamId: string, userId: string) => Promise<void>
+  requireManager: (teamId: string, userId: string) => Promise<void>
 }
 
 export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Services, 'db'>, access: Access) {
@@ -71,7 +72,7 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
   app.get('/api/teams/:teamId/members', async (request) => {
     const user = await access.requireUser(request)
     const { teamId } = parse(z.object({ teamId: uuid }), request.params)
-    await access.requireOwner(teamId, user.id)
+    await access.requireManager(teamId, user.id)
     const members = await db.select({ ...publicFields, role: memberships.role }).from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
       .leftJoin(profiles, eq(profiles.userId, users.id)).where(eq(memberships.teamId, teamId)).orderBy(asc(users.name))
@@ -81,6 +82,19 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
       .leftJoin(profiles, eq(profiles.userId, users.id)).where(eq(channels.teamId, teamId))
     const included = new Set(members.map((member) => member.id))
     return [...members, ...guests.filter((guest) => !included.has(guest.id))]
+  })
+
+  app.post('/api/teams/:teamId/member-role', async (request) => {
+    const user = await access.requireUser(request)
+    const { teamId } = parse(z.object({ teamId: uuid }), request.params)
+    const input = parse(z.object({ userId: userIdInput, role: z.enum(['moderator', 'member']) }), request.body)
+    await access.requireOwner(teamId, user.id)
+    if (input.userId === user.id) throw new RequestError(400, 'OWNER_REQUIRED')
+    const [member] = await db.update(memberships).set({ role: input.role })
+      .where(and(eq(memberships.teamId, teamId), eq(memberships.userId, input.userId), sql`${memberships.role} <> 'owner'`))
+      .returning({ userId: memberships.userId, role: memberships.role })
+    if (!member) throw new RequestError(400, 'OWNER_REQUIRED')
+    return member
   })
 
   app.post('/api/teams/:teamId/update', async (request) => {
@@ -99,7 +113,8 @@ export function registerWorkplaceRoutes(app: FastifyInstance, { db }: Pick<Servi
     const { teamId } = parse(z.object({ teamId: uuid }), request.params)
     const { userId } = parse(z.object({ userId: userIdInput }), request.body)
     await access.requireOwner(teamId, user.id)
-    if (userId === user.id) throw new RequestError(400, 'OWNER_REQUIRED')
+    const [targetMember] = await db.select({ role: memberships.role }).from(memberships).where(and(eq(memberships.teamId, teamId), eq(memberships.userId, userId)))
+    if (userId === user.id || targetMember?.role === 'owner') throw new RequestError(400, 'OWNER_REQUIRED')
     await db.transaction(async (tx) => {
       const [target] = await tx.select({ email: users.email }).from(users).where(eq(users.id, userId))
       await tx.delete(channelMembers).where(and(eq(channelMembers.userId, userId),

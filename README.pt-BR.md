@@ -1,12 +1,12 @@
 # Uorqui Workplace
 
-[English](README.md) · 0.2.0-beta.14
+[English](README.md) · 0.2.0-beta.15
 
-Um espaço compacto para equipes conversarem em canais internos e colaborarem com clientes em canais privados. Responsáveis pelas equipes criam canais e geram links vinculados ao e-mail de cada convidado. Quem tem acesso ao canal pode enviar mensagens e organizar as respostas em tópicos. Conversas de equipes e diretas atualizam por SSE e oferecem anexos privados de mídia e arquivos.
+Um espaço compacto para comunidades conversarem em canais internos e colaborarem com clientes em canais privados. Responsáveis pelas comunidades criam canais e geram links vinculados ao e-mail de cada convidado. Quem tem acesso ao canal pode enviar mensagens e organizar as respostas em tópicos. Conversas de comunidades e diretas atualizam por SSE e oferecem anexos privados de mídia e arquivos.
 
-Badges de não lidas atualizam equipes e conversas diretas por um SSE autenticado de caixa de entrada. O perfil inclui confirmação de e-mail e troca de senha; configure `RESEND_API_KEY` e `AUTH_EMAIL_FROM` na API para ativar o envio da confirmação.
+Badges de não lidas atualizam comunidades e conversas diretas por um SSE autenticado de caixa de entrada. O perfil inclui confirmação de e-mail e troca de senha; configure `RESEND_API_KEY` e `AUTH_EMAIL_FROM` na API para ativar o envio da confirmação.
 
-Responsáveis também podem gerenciar membros e excluir equipes. Mensagens diretas conectam duas pessoas independentemente das equipes. Edite nome, identificação pública e biografia pelo botão de perfil e compartilhe o link do seu perfil público.
+Responsáveis também podem gerenciar membros e excluir comunidades. Mensagens diretas conectam duas pessoas independentemente das comunidades. Edite nome, identificação pública e biografia pelo botão de perfil e compartilhe o link do seu perfil público.
 
 A interface oferece português do Brasil, inglês e temas claro e escuro. O frontend React e a API Fastify rodam separadamente. O Better Auth gerencia sessões e o Drizzle armazena mensagens no PostgreSQL.
 
@@ -29,7 +29,7 @@ unset password
 npm run dev
 ```
 
-Também é possível criar uma conta diretamente na tela de entrada com @username único. Digite a senha da primeira conta após o comando `read`. Abra [localhost:5173](http://localhost:5173/), entre e crie uma equipe. Para convidar um cliente, crie um canal privado. O sistema gera um link para você enviar ao convidado.
+Também é possível criar uma conta diretamente na tela de entrada com @username único. Digite a senha da primeira conta após o comando `read`. Abra [localhost:5173](http://localhost:5173/), entre e crie uma comunidade. Para convidar um cliente, crie um canal privado. O sistema gera um link para você enviar ao convidado.
 
 Use `npm run typecheck`, `npm run build` e `npm test` para verificar o projeto. O teste de integração usa um PostgreSQL temporário via PGlite.
 

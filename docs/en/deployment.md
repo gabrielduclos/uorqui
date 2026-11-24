@@ -25,12 +25,12 @@ The preview is available at https://feat-enterprise-channels-main.uorqui1.worker
 
 ## Beta scope
 
-Accounts can be created from the sign-in screen with a name, unique @username, email and password of 8–128 characters. New accounts start with an empty team list and can create a team or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Email verification and password changes are available in profile settings. Forgotten-password recovery and automatic invitation emails remain outside this beta. Open team and direct conversations receive SSE invalidations in real time.
+Accounts can be created from the sign-in screen with a name, unique @username, email and password of 8–128 characters. New accounts start with an empty community list and can create a community or accept an invitation. The app generates email-bound, 48-hour links for owners to send manually. Email verification and password changes are available in profile settings. Forgotten-password recovery and automatic invitation emails remain outside this beta. Open community and direct conversations receive SSE invalidations in real time.
 
 
 ## Caching
 
-The tab-local cache retains at most 100 entries for five minutes. Fresh teams and channel lists are reused for 60 seconds, messages for eight seconds and older history pages for five minutes. Concurrent identical reads share one request. Cancelling one view does not cancel another view's request. Authentication changes clear the cache, and tab events invalidate other tabs after writes. Private responses retain HTTP no-store.
+The tab-local cache retains at most 100 entries for five minutes. Fresh communities and channel lists are reused for 60 seconds, messages for eight seconds and older history pages for five minutes. Concurrent identical reads share one request. Cancelling one view does not cancel another view's request. Authentication changes clear the cache, and tab events invalidate other tabs after writes. Private responses retain HTTP no-store.
 
 Open conversations use one authenticated SSE stream per channel, shared by its conversation and thread. Events invalidate cached message pages; reads still check permissions. Connected streams suppress message polling. A thirty-second polling fallback runs while SSE is disconnected. Hidden views close their streams and pause polling, then refresh on return. Channel and direct-conversation lists retain their sixty-second refresh. Successful writes invalidate affected data immediately.
 
@@ -41,11 +41,11 @@ Hashed JavaScript and CSS assets use a one-year immutable browser cache. Entry H
 The composer starts at one line and grows to 160 px. Sends appear immediately with pending or retry feedback. Pending and failed sends survive navigation in tab memory and are cleared at authentication changes. Authors can edit sent messages or confirm unsending. Unsent text is cleared and replaced by a translated placeholder, preserving thread replies. Retrying a send uses the same client ID to avoid duplicate messages. Apply migration 0001 before deploying this API version. Existing messages with no client ID remain compatible.
 
 
-## Teams, direct messages and profiles
+## Communities, direct messages and profiles
 
-Apply migration 0002 before starting this version. It adds `profile`, `direct_conversation`, nullable `channel.team_id` and `team.deleted_at`. Teams still own their normal channels; direct channels have no team and are unique per ordered participant pair.
+Apply migration 0002 before starting this version. It adds `profile`, `direct_conversation`, nullable `channel.team_id` and `team.deleted_at`. Communities still own their normal channels; direct channels have no community and are unique per ordered participant pair.
 
-Team owners can rename a team and remove members or private-channel guests. Removal also revokes their existing invitations for that team. Owners cannot remove themselves. Deletion requires the current team name, records a deletion timestamp and denies team/channel access and invitations. Stored team data is retained; this is logical deletion. Direct conversations remain independent of team membership.
+Community owners can rename a community and remove members or private-channel guests. Removal also revokes their existing invitations for that community. Owners cannot remove themselves. Deletion requires the current community name, records a deletion timestamp and denies community/channel access and invitations. Stored community data is retained; this is logical deletion. Direct conversations remain independent of community membership.
 
 The profile button edits name, unique handle and biography. Handles use 3–24 lowercase letters, digits or underscores; biographies allow 500 characters. Saving a handle publishes name, handle and biography at `/#profile=handle`, readable without signing in. Email is excluded. A signed-in visitor can start a direct conversation from a profile, a message author or the direct-message list. Direct messages reuse channel authorization and message semantics.
 
@@ -87,4 +87,13 @@ Version 0.2.0-beta.13 requires migration 0005. Reactions are unique per message,
 
 ## Photos and media
 
-Version 0.2.0-beta.14 requires migration 0006. Profile and team settings offer change/remove photo. Images are center-cropped to 512 × 512 and re-encoded locally before upload (1 MB final limit). The Worker checks signatures and size. User photos follow public profile visibility; team photos require member or guest access. New URLs avoid stale caches. Replaced objects become inaccessible; physical cleanup is outside this beta. Decodable JPEG/PNG/WebP/HEIC photos above 300 KB use WebP up to 2048 px when at least 10% smaller; GIF animation is preserved. Videos above 8 MB use the existing local compressor, with original-file fallback when unsupported or not smaller. The final attachment limit is 50 MB.
+Version 0.2.0-beta.14 requires migration 0006. Profile and community settings offer change/remove photo. Images are center-cropped to 512 × 512 and re-encoded locally before upload (1 MB final limit). The Worker checks signatures and size. User photos follow public profile visibility; community photos require member or guest access. New URLs avoid stale caches. Replaced objects become inaccessible; physical cleanup is outside this beta. Decodable JPEG/PNG/WebP/HEIC photos above 300 KB use WebP up to 2048 px when at least 10% smaller; GIF animation is preserved. Videos above 8 MB use the existing local compressor, with original-file fallback when unsupported or not smaller. The final attachment limit is 50 MB.
+
+
+## Gallery, media readiness and community permissions
+
+Version 0.2.0-beta.15 requires migration 0007. Gallery reads use `/api/channels/:channelId/media`, with 48 items per page and a `(message ID, attachment ID)` cursor, newest first. Only completed attachments linked to non-cancelled messages are returned, including replies; every page checks current channel access. The partial gallery index avoids an unbounded scan of unrelated uploads. Existing private Worker downloads enforce authorization independently.
+
+Media skeletons cover each image, video or audio until its element reports readiness. Cached elements are checked on visibility/page restoration without forcing a reload. Reaction chips wait for every media element in the message; text-only messages can react immediately. A desired-state overlay updates only the current user’s reaction optimistically and rolls back failures while preserving other users. Chip entry/count animations respect reduced motion.
+
+The interface calls teams communities; persisted tables and API URLs retain their names. Owners can assign Member or Moderator, never demote/remove an owner. Moderators may create channels, update accessible community channels and send invitations, but cannot rename/delete communities, change community photos, remove users or assign levels. Direct conversation settings cannot be edited through community routes. Channel settings use General and Access tabs. Access changes include history: switching to private retains explicit channel invitees and grants access to the editor; switching to community access opens history to community members. The form explains this before saving.

@@ -1,9 +1,9 @@
-import { ArrowDown, LoaderCircle, MessageSquare, Pencil, SmilePlus, Trash2, X } from 'lucide-react'
+import { ArrowDown, Images, LoaderCircle, MessageSquare, Pencil, SmilePlus, Trash2, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ApiError, api, cachedQuery, refreshChannel, errorText, type Channel, type Message, type MessagePage, type User } from './api'
 import { MessageSkeleton } from './components/ui/skeleton'
 import { LiveMessageComposer } from './LiveMessageComposer'
-import { ChatAudioPlayer } from './ChatAudioPlayer'
+import { isMedia, ReadyMedia, MediaGallery, type GalleryMedia } from './Media'
 import { isRealtimeConnected, useRealtime } from './realtime'
 import { useOutbox } from './outbox'
 import { ActionForm } from './forms'
@@ -16,12 +16,47 @@ export function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0]?.toUpperCase()).join('')
 }
 
-type MessageAction = (message: Message, action: 'edit' | 'cancel' | 'reaction', body?: string) => Promise<void>
+type MessageAction = (message: Message, action: 'edit' | 'cancel' | 'reaction', body?: string, active?: boolean) => Promise<void>
 
-function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry }: {
+function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry, onMedia }: {
   message: Message; locale: Locale; copy: Copy; user?: User; onThread?: (message: Message) => void
-  onAction?: MessageAction; onRetry?: (message: Message) => Promise<void>
+  onMedia?: (file: GalleryMedia) => void; onAction?: MessageAction; onRetry?: (message: Message) => Promise<void>
 }) {
+  const [loadedFiles, setLoadedFiles] = useState<Record<string, boolean>>({})
+  const [optimistic, setOptimistic] = useState<Record<string, { active: boolean; pending: boolean }>>({})
+  const pendingReactions = useRef(new Set<string>())
+  const mediaReady = !message.attachments?.some((file) => isMedia(file) && !loadedFiles[file.id])
+  const reactions = (message.reactions ?? []).map((item) => ({ ...item, users: [...item.users] }))
+  for (const [emoji, change] of Object.entries(optimistic)) {
+    let reaction = reactions.find((item) => item.emoji === emoji)
+    if (!reaction) { reaction = { emoji, users: [], count: 0 }; reactions.push(reaction) }
+    reaction.users = reaction.users.filter((id) => id !== user?.id)
+    if (change.active && user) reaction.users.push(user.id)
+    reaction.count = reaction.users.length
+  }
+  useEffect(() => {
+    setOptimistic((current) => {
+      const next = { ...current }
+      for (const [emoji, change] of Object.entries(next)) {
+        if (!change.pending && change.active === !!message.reactions?.some((item) => item.emoji === emoji && !!user && item.users.includes(user.id))) delete next[emoji]
+      }
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+  }, [message.reactions, optimistic, user?.id])
+  async function react(emoji: string) {
+    if (!onAction || !user || pendingReactions.current.has(emoji)) return
+    pendingReactions.current.add(emoji)
+    const active = !reactions.some((item) => item.emoji === emoji && item.users.includes(user.id))
+    setOptimistic((current) => ({ ...current, [emoji]: { active, pending: true } }))
+    setReacting(false); setReactionError(undefined)
+    try {
+      await onAction(message, 'reaction', emoji, active)
+      setOptimistic((current) => ({ ...current, [emoji]: { active, pending: false } }))
+    } catch (error) {
+      setOptimistic((current) => { const next = { ...current }; delete next[emoji]; return next })
+      setReactionError(error)
+    } finally { pendingReactions.current.delete(emoji) }
+  }
   const [reacting, setReacting] = useState(false)
   const [reactionError, setReactionError] = useState<unknown>()
   const [editing, setEditing] = useState(false)
@@ -39,11 +74,9 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
       <p className={message.cancelledAt ? 'muted' : undefined}>{message.cancelledAt ? copy.cancelledMessage : message.body}</p>
       {!message.cancelledAt && <>
         {message.attachments?.map((file) => {
-          const src = file.url ?? `/api/files/${file.id}`
           return <div className="message-attachment" key={file.id}>
-            {file.mime.startsWith('image/') ? <a href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={file.name} loading="lazy" /></a>
-              : file.mime.startsWith('video/') ? <video controls playsInline preload="metadata" src={src} aria-label={file.name} />
-              : file.mime.startsWith('audio/') ? <ChatAudioPlayer src={src} locale={locale} /> : null}
+            {isMedia(file) && <ReadyMedia file={file} copy={copy} locale={locale} ready={(id, loaded) => setLoadedFiles((current) => current[id] === loaded ? current : { ...current, [id]: loaded })}
+              open={onMedia ? () => onMedia({ ...file, messageId: message.id, author: message.author, createdAt: message.createdAt }) : undefined} />}
             {!file.mime.startsWith('audio/') && <a className="file-link" href={file.url ?? `/api/files/${file.id}?download=1`} download={file.name}>{file.name} · {file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(0)} KB`} · {copy.download}</a>}
           </div>
         })}
@@ -52,12 +85,9 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
       {message.delivery && <small role="status">
         {message.delivery === 'sending' ? <><LoaderCircle className="action-spinner inline" size={13} /> {copy.sending}</> : copy.failedMessage}
       </small>}
-      {!message.cancelledAt && !message.delivery && onAction && <div className="message-reactions">
-        {message.reactions?.map((reaction) => <Button key={reaction.emoji} variant="outline" aria-pressed={!!user && reaction.users.includes(user.id)}
-          aria-label={`${reaction.emoji}: ${reaction.count}`} onClick={async () => {
-            setReactionError(undefined)
-            try { await onAction(message, 'reaction', reaction.emoji) } catch (error) { setReactionError(error) }
-          }}>{reaction.emoji} {reaction.count}</Button>)}
+      {!message.cancelledAt && !message.delivery && onAction && mediaReady && <div className="message-reactions">
+        {reactions.filter((reaction) => reaction.count > 0).map((reaction) => <Button key={`${reaction.emoji}:${reaction.count}`} variant="outline" className="reaction-pop" aria-pressed={!!user && reaction.users.includes(user.id)}
+          aria-label={`${reaction.emoji}: ${reaction.count}`} disabled={optimistic[reaction.emoji]?.pending} onClick={() => { void react(reaction.emoji) }}>{reaction.emoji} {reaction.count}</Button>)}
       </div>}
       {reactionError !== undefined && <p className="error" role="alert">{errorText(copy, reactionError)}</p>}
       <div className="message-actions">
@@ -75,8 +105,8 @@ function MessageItem({ message, locale, copy, user, onThread, onAction, onRetry 
     </div>
     {reacting && onAction && <Modal title={copy.react} closeLabel={copy.close} onClose={() => setReacting(false)}>
       <div className="reaction-picker">{['👍', '❤️', '😂', '😮', '😢', '🎉'].map((emoji) => <Button key={emoji} variant="outline"
-        aria-label={emoji} aria-pressed={message.reactions?.some((item) => item.emoji === emoji && !!user && item.users.includes(user.id)) ?? false}
-        onClick={async () => { setReactionError(undefined); try { await onAction(message, 'reaction', emoji); setReacting(false) } catch (error) { setReactionError(error) } }}>{emoji}</Button>)}</div>
+        aria-label={emoji} aria-pressed={reactions.some((item) => item.emoji === emoji && !!user && item.users.includes(user.id)) ?? false}
+        onClick={() => { void react(emoji) }}>{emoji}</Button>)}</div>
       {reactionError !== undefined && <p className="error" role="alert">{errorText(copy, reactionError)}</p>}
     </Modal>}
     {editing && onAction && <Modal title={copy.editMessage} closeLabel={copy.close} onClose={() => setEditing(false)}>
@@ -102,8 +132,8 @@ function mergeMessages(current: Message[], incoming: Message[]) {
   return [...unique.values()].sort((left, right) => left.id - right.id)
 }
 
-function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated }: {
-  channel: Channel; thread?: Message; copy: Copy; locale: Locale; user?: User; onUpdated?: (message: Message) => void; onThread?: (message: Message) => void
+function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated, onMedia }: {
+  onMedia: (file: GalleryMedia) => void; channel: Channel; thread?: Message; copy: Copy; locale: Locale; user?: User; onUpdated?: (message: Message) => void; onThread?: (message: Message) => void
 }) {
   const threadQuery = thread ? `thread=${thread.id}` : ''
   const endpoint = `/channels/${channel.id}/messages`
@@ -204,6 +234,14 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
   }, [records.length, first !== undefined])
 
   useEffect(() => {
+    const list = scroll.current
+    if (!list) return
+    const observer = new ResizeObserver(() => { if (follow.current) list.scrollTop = list.scrollHeight })
+    for (const child of list.children) observer.observe(child)
+    return () => observer.disconnect()
+  }, [records.length, first !== undefined])
+
+  useEffect(() => {
     let retryRead: number | undefined
     const mark = () => {
       const cursor = first?.readCursor ?? 0
@@ -291,9 +329,9 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
     await transmit(message)
   }
 
-  async function changeMessage(message: Message, action: 'edit' | 'cancel' | 'reaction', body?: string) {
+  async function changeMessage(message: Message, action: 'edit' | 'cancel' | 'reaction', body?: string, active?: boolean) {
     if (action === 'reaction') {
-      await api(`${endpoint}/${message.id}/reaction`, { data: { emoji: body, active: !message.reactions?.some((item) => item.emoji === body && !!user && item.users.includes(user.id)) } })
+      await api(`${endpoint}/${message.id}/reaction`, { data: { emoji: body, active } })
       refreshChannel(channel.id)
       return
     }
@@ -316,7 +354,7 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
       follow.current = list.scrollHeight - list.scrollTop - list.clientHeight < 48
       setAtBottom(follow.current)
     }}>
-      {thread && !inaccessible && <div className="thread-root"><MessageItem message={thread} copy={copy} locale={locale} user={user} onAction={changeMessage} /></div>}
+      {thread && !inaccessible && <div className="thread-root"><MessageItem message={thread} copy={copy} locale={locale} user={user} onMedia={onMedia} onAction={changeMessage} /></div>}
       {hasMore && <div className="load-more"><Button variant="outline" onClick={loadOlder} loading={paging}>
         {copy.older}
       </Button></div>}
@@ -328,7 +366,7 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
         lastDay = date
         return <div key={message.clientId ? `${message.authorId}:${message.clientId}` : message.id}>
           {showDay && <div className="date-line"><span>{date}</span></div>}
-          <MessageItem message={message} locale={locale} copy={copy} user={user} onThread={onThread} onAction={changeMessage} onRetry={transmit} />
+          <MessageItem message={message} locale={locale} copy={copy} user={user} onThread={onThread} onMedia={onMedia} onAction={changeMessage} onRetry={transmit} />
         </div>
       })}
     </div>
@@ -352,13 +390,16 @@ function MessageList({ channel, thread, copy, locale, user, onThread, onUpdated 
 export function Conversation({ channel, copy, locale, user }: { channel: Channel; copy: Copy; locale: Locale; user?: User }) {
   useRealtime(channel.id)
   const [thread, setThread] = useState<Message>()
+  const [gallery, setGallery] = useState<{ initial?: GalleryMedia }>()
   return <div className={thread ? 'conversation with-thread' : 'conversation'}>
     <section className="room" aria-label={copy.discussion}>
-      <MessageList channel={channel} copy={copy} locale={locale} user={user} onUpdated={(message) => setThread((current) => current?.id === message.id ? message : current)} onThread={setThread} />
+      <div className="conversation-tools"><Button variant="ghost" onClick={() => setGallery({})}><Images size={16} />{copy.gallery}</Button></div>
+      <MessageList onMedia={(file) => setGallery({ initial: file })} channel={channel} copy={copy} locale={locale} user={user} onUpdated={(message) => setThread((current) => current?.id === message.id ? message : current)} onThread={setThread} />
     </section>
     {thread && <section className="thread" aria-label={copy.thread}>
       <header><strong>{copy.thread}</strong><Button variant="ghost" aria-label={copy.close} onClick={() => setThread(undefined)}><X size={18} /></Button></header>
-      <MessageList key={thread.id} channel={channel} thread={thread} copy={copy} locale={locale} user={user} onUpdated={(message) => setThread((current) => current?.id === message.id ? message : current)} />
+      <MessageList onMedia={(file) => setGallery({ initial: file })} key={thread.id} channel={channel} thread={thread} copy={copy} locale={locale} user={user} onUpdated={(message) => setThread((current) => current?.id === message.id ? message : current)} />
     </section>}
+    {gallery && <MediaGallery channelId={channel.id} initial={gallery.initial} copy={copy} locale={locale} close={() => setGallery(undefined)} />}
   </div>
 }

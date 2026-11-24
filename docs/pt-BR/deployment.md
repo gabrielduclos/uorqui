@@ -25,12 +25,12 @@ O preview fica em https://feat-enterprise-channels-main.uorqui1.workers.dev/. Pr
 
 ## Escopo do beta
 
-As contas podem ser criadas na tela de entrada com nome, @username único, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de equipes vazia e podem criar uma equipe ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da equipe. Confirmação de e-mail e troca de senha estão disponíveis no perfil. Recuperação sem a senha atual e envio automático de convites ficam fora deste beta. Conversas abertas de equipes e mensagens diretas recebem invalidações por SSE em tempo real.
+As contas podem ser criadas na tela de entrada com nome, @username único, e-mail e senha de 8 a 128 caracteres. Novas contas começam com a lista de comunidades vazia e podem criar uma comunidade ou aceitar um convite. O sistema gera links vinculados ao e-mail, com validade de 48 horas, para envio manual pelos responsáveis da comunidade. Confirmação de e-mail e troca de senha estão disponíveis no perfil. Recuperação sem a senha atual e envio automático de convites ficam fora deste beta. Conversas abertas de comunidades e mensagens diretas recebem invalidações por SSE em tempo real.
 
 
 ## Cache
 
-O cache da aba mantém até 100 entradas por cinco minutos. Equipes e listas de canais recentes são reutilizadas por 60 segundos, mensagens por oito segundos e páginas antigas do histórico por cinco minutos. Leituras simultâneas iguais compartilham uma requisição. Cancelar uma tela preserva a requisição de outra tela. Mudanças de autenticação limpam o cache, e eventos entre abas invalidam dados após alterações. Respostas privadas mantêm HTTP no-store.
+O cache da aba mantém até 100 entradas por cinco minutos. Comunidades e listas de canais recentes são reutilizadas por 60 segundos, mensagens por oito segundos e páginas antigas do histórico por cinco minutos. Leituras simultâneas iguais compartilham uma requisição. Cancelar uma tela preserva a requisição de outra tela. Mudanças de autenticação limpam o cache, e eventos entre abas invalidam dados após alterações. Respostas privadas mantêm HTTP no-store.
 
 Conversas abertas usam uma conexão SSE autenticada por canal, compartilhada pela conversa e seu tópico. Os eventos invalidam páginas de mensagens em cache; as leituras continuam verificando permissões. A conexão ativa suspende as consultas periódicas de mensagens. Quando o SSE está desconectado, uma consulta de contingência ocorre a cada trinta segundos. Telas ocultas fecham suas conexões e pausam consultas, atualizando ao retornar. Listas de canais e conversas diretas mantêm atualização a cada sessenta segundos. Gravações bem-sucedidas invalidam os dados afetados imediatamente.
 
@@ -41,11 +41,11 @@ Arquivos JavaScript e CSS com hash usam cache imutável no navegador por um ano.
 O campo de mensagem começa em uma linha e cresce até 160 px. Envios aparecem imediatamente com estado pendente e opção de nova tentativa. Envios pendentes e falhos persistem na navegação em memória da aba e são limpos nas mudanças de autenticação. O autor pode editar mensagens enviadas ou confirmar o cancelamento. O texto cancelado é apagado e substituído por indicação traduzida, preservando as respostas do tópico. Novas tentativas usam o mesmo identificador para evitar mensagens duplicadas. Aplicar a migração 0001 antes de publicar esta API. Mensagens existentes sem identificador de cliente permanecem compatíveis.
 
 
-## Equipes, mensagens diretas e perfis
+## Comunidades, mensagens diretas e perfis
 
-Aplique a migração 0002 antes de iniciar esta versão. Ela adiciona `profile`, `direct_conversation`, permite `channel.team_id` nulo e inclui `team.deleted_at`. Os canais normais continuam vinculados às equipes; canais diretos não possuem equipe e são únicos por dupla ordenada de participantes.
+Aplique a migração 0002 antes de iniciar esta versão. Ela adiciona `profile`, `direct_conversation`, permite `channel.team_id` nulo e inclui `team.deleted_at`. Os canais normais continuam vinculados às comunidades; canais diretos não possuem comunidade e são únicos por dupla ordenada de participantes.
 
-O responsável pode renomear a equipe e remover membros ou convidados de canais privados. A remoção também revoga seus convites existentes para a equipe. O responsável não pode remover a si mesmo. A exclusão exige o nome atual da equipe, registra a data de exclusão e bloqueia os acessos e convites da equipe e seus canais. Os dados são mantidos por exclusão lógica. Conversas diretas permanecem independentes da participação em equipes.
+O responsável pode renomear a comunidade e remover membros ou convidados de canais privados. A remoção também revoga seus convites existentes para a comunidade. O responsável não pode remover a si mesmo. A exclusão exige o nome atual da comunidade, registra a data de exclusão e bloqueia os acessos e convites da comunidade e seus canais. Os dados são mantidos por exclusão lógica. Conversas diretas permanecem independentes da participação em comunidades.
 
 O botão de perfil permite editar nome, identificação pública única e biografia. A identificação aceita de 3 a 24 letras minúsculas, números ou sublinhado; a biografia permite 500 caracteres. Ao salvar uma identificação, nome, identificação e biografia ficam disponíveis em `/#profile=identificacao`, sem exigir login. O e-mail permanece privado. Uma pessoa conectada pode iniciar uma conversa direta pelo perfil, pelo autor de uma mensagem ou pela lista de mensagens diretas. Essas conversas reutilizam as permissões e o comportamento das mensagens dos canais.
 
@@ -87,4 +87,13 @@ A versão 0.2.0-beta.13 exige migração 0005. Reações são únicas por mensag
 
 ## Fotos e mídia
 
-A versão 0.2.0-beta.14 exige migração 0006. Perfil e equipe oferecem alterar/remover foto. A imagem é recortada no centro para 512 × 512 e reencodificada no aparelho antes do upload (máximo final 1 MB). O Worker verifica assinatura e tamanho. Fotos de perfil acompanham a visibilidade pública do perfil; fotos de equipes exigem acesso como membro ou convidado. URLs novas evitam cache antigo. Objetos substituídos ficam inacessíveis; limpeza física fica fora deste beta. Fotos JPEG/PNG/WebP/HEIC decodificáveis acima de 300 KB usam WebP de até 2048 px se reduzir ao menos 10%; GIF mantém animação. Vídeos acima de 8 MB usam o compactador local existente, com fallback ao original se o navegador não suportar ou não houver economia. O limite final é 50 MB.
+A versão 0.2.0-beta.14 exige migração 0006. Perfil e comunidade oferecem alterar/remover foto. A imagem é recortada no centro para 512 × 512 e reencodificada no aparelho antes do upload (máximo final 1 MB). O Worker verifica assinatura e tamanho. Fotos de perfil acompanham a visibilidade pública do perfil; fotos de comunidades exigem acesso como membro ou convidado. URLs novas evitam cache antigo. Objetos substituídos ficam inacessíveis; limpeza física fica fora deste beta. Fotos JPEG/PNG/WebP/HEIC decodificáveis acima de 300 KB usam WebP de até 2048 px se reduzir ao menos 10%; GIF mantém animação. Vídeos acima de 8 MB usam o compactador local existente, com fallback ao original se o navegador não suportar ou não houver economia. O limite final é 50 MB.
+
+
+## Galeria, carregamento de mídias e permissões da comunidade
+
+A versão 0.2.0-beta.15 exige migração 0007. A galeria usa `/api/channels/:channelId/media`, com 48 itens por página e cursor `(ID da mensagem, ID do anexo)`, do mais novo ao mais antigo. Retorna somente anexos concluídos de mensagens não canceladas, incluindo respostas; cada página verifica o acesso atual ao canal. Um índice parcial evita varrer uploads de outras conversas. O download privado pelo Worker continua verificando autorização separadamente.
+
+Cada imagem, vídeo ou áudio mantém skeleton até o elemento estar pronto. Ao restaurar página ou visibilidade, o estado do elemento em cache é conferido sem forçar novo download. As reações aguardam todas as mídias da mensagem; mensagens só de texto reagem imediatamente. O estado otimista altera apenas a reação do próprio usuário e reverte falhas, preservando as reações dos demais. Animações de entrada e contagem respeitam movimento reduzido.
+
+A interface passa a usar comunidade; nomes de tabelas e URLs da API permanecem. O responsável atribui Membro ou Moderador, sem rebaixar/remover responsáveis. Moderadores criam canais, editam canais da comunidade aos quais têm acesso e enviam convites, mas não renomeiam/apagam a comunidade, alteram sua foto, removem pessoas ou atribuem níveis. Conversas diretas não podem ser editadas pelas rotas de comunidades. Ajustes do canal usam abas Geral e Acesso. A mudança vale para o histórico: tornar privado preserva convidados explícitos e dá acesso a quem editou; abrir à comunidade libera o histórico aos membros. O formulário explica isso antes de salvar.

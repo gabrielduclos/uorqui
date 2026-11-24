@@ -30,14 +30,14 @@ export function Button({ className, variant = 'primary', type = 'button', loadin
   </button>
 }
 
-export function Modal({ title, closeLabel, onClose, children }: {
-  title: string; closeLabel: string; onClose: () => void; children: ReactNode
+export function Modal({ title, closeLabel, onClose, children, className = '' }: {
+  title: string; closeLabel: string; onClose: () => void; children: ReactNode; className?: string
 }) {
   const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null)
   return <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-30 bg-black/45" />
-      <Dialog.Content aria-describedby={undefined} className="modal" onCloseAutoFocus={(event) => {
+      <Dialog.Content aria-describedby={undefined} className={`modal ${className}`} onCloseAutoFocus={(event) => {
         if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus() }
       }}>
         <header>

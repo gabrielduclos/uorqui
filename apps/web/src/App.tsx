@@ -14,7 +14,7 @@ import { UnreadProvider, UnreadBadge, useUnread } from './unread'
 function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team; user?: User; copy: Copy; locale: Locale; preferredChannel?: string | null }) {
   const [channels, setChannels] = useState<Channel[] | undefined>(() => team ? cachedQuery<Channel[]>(`/teams/${team.id}/channels`) : undefined)
   const [selected, setSelected] = useState(preferredChannel)
-  const [dialog, setDialog] = useState<'create' | 'invite' | 'guest' | 'manage'>()
+  const [dialog, setDialog] = useState<'create' | 'invite' | 'guest' | 'manage' | 'edit-channel'>()
   const [mobileOpen, setMobileOpen] = useState(!preferredChannel)
   const [error, setError] = useState<unknown>()
   const [refresh, setRefresh] = useState(0)
@@ -22,6 +22,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
   const channel = channels?.find((item) => item.id === selected) ?? channels?.[0]
   const unread = useUnread()
   const owner = team?.role === 'owner'
+  const manager = owner || team?.role === 'moderator'
 
   useEffect(() => {
     if (!team) return
@@ -68,7 +69,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
         <div className="team-mark">{team ? <Avatar name={team.name} src={team.image} /> : <Layers size={18} />}</div>
         <h2>{team ? team.name : <Skeleton className="skeleton-name" />}</h2>
         {owner && <Button variant="ghost" aria-label={copy.manageTeam} title={copy.manageTeam} onClick={() => setDialog('manage')}><Settings size={17} /></Button>}
-        {owner && <Button variant="ghost" aria-label={copy.inviteTitle} title={copy.inviteTitle} onClick={() => setDialog('invite')}><UserPlus size={17} /></Button>}
+        {manager && <Button variant="ghost" aria-label={copy.inviteTitle} title={copy.inviteTitle} onClick={() => setDialog('invite')}><UserPlus size={17} /></Button>}
       </div>
       {!channels && <div className="channel-placeholder" role="status" aria-label={copy.loading} aria-busy="true">
         <h3>{copy.channels}</h3>
@@ -81,7 +82,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
         return <section className="channel-group" key={visibility}>
           <div className="group-heading">
             <h3>{visibility === 'team' ? copy.channels : copy.privateChannels}</h3>
-            {owner && visibility === 'team' && <Button variant="ghost" aria-label={copy.newChannel} title={copy.newChannel} onClick={() => setDialog('create')}><Plus size={16} /></Button>}
+            {manager && visibility === 'team' && <Button variant="ghost" aria-label={copy.newChannel} title={copy.newChannel} onClick={() => setDialog('create')}><Plus size={16} /></Button>}
           </div>
           {list.map((item) => {
             const Icon = item.visibility === 'private' ? LockKeyhole : Hash
@@ -107,7 +108,8 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
           <h1>{channel ? channel.name : channels ? copy.chooseChannel : <Skeleton className="skeleton-title" />}</h1>
           {channel?.description && <p>{channel.description}</p>}
         </div>
-        {owner && channel?.visibility === 'private' &&
+        {manager && channel && <Button variant="ghost" aria-label={copy.editChannel} onClick={() => setDialog('edit-channel')}><Settings size={17} /></Button>}
+        {manager && channel?.visibility === 'private' &&
           <Button variant="outline" onClick={() => setDialog('guest')}><UserPlus size={17} />{copy.invite}</Button>}
       </header>
       {channel ? <Conversation key={channel.id} channel={channel} user={user} copy={copy} locale={locale} />
@@ -117,7 +119,7 @@ function TeamView({ team, user, copy, locale, preferredChannel }: { team?: Team;
         </div> : <div className="center-state"><p>{copy.chooseChannel}</p></div>}
     </main>
     {dialog === 'manage' && team && user && <TeamSettings team={team} user={user} copy={copy} close={() => setDialog(undefined)} />}
-    {dialog === 'create' && team && <ChannelForm copy={copy} teamId={team.id} close={() => setDialog(undefined)} created={(created) => {
+    {(dialog === 'create' || dialog === 'edit-channel') && team && <ChannelForm channel={dialog === 'edit-channel' ? channel : undefined} copy={copy} teamId={team.id} close={() => setDialog(undefined)} created={(created) => {
       setChannels((current) => [...(current ?? []).filter((item) => item.id !== created.id), created])
       setSelected(created.id)
       setMobileOpen(false)

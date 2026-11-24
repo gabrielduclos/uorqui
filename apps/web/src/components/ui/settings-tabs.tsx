@@ -6,7 +6,15 @@ export function SettingsTabs({ label, tabs, initial }: {
   const prefix = useId()
   const [selected, setSelected] = useState(initial ?? tabs[0]?.id)
   const active = tabs.some((tab) => tab.id === selected) ? selected : tabs[0]?.id
-  return <div className="settings-tabs">
+  return <div className="settings-tabs" onInvalidCapture={(event) => {
+    const input = event.target as HTMLInputElement
+    const panel = input.closest('[role="tabpanel"]')
+    const tab = tabs.find((item) => panel?.id === `${prefix}-panel-${item.id}`)
+    if (tab && tab.id !== active) {
+      event.preventDefault(); setSelected(tab.id)
+      requestAnimationFrame(() => { input.focus(); input.reportValidity() })
+    }
+  }}>
     <div className="settings-tab-list" role="tablist" aria-label={label}>
       {tabs.map((tab, index) => <button key={tab.id} type="button" role="tab"
         id={`${prefix}-tab-${tab.id}`} aria-controls={`${prefix}-panel-${tab.id}`}

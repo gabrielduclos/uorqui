@@ -31,6 +31,7 @@ function ResourceFeedback({ copy, resource }: { copy: Copy; resource: ReturnType
 
 export function TeamSettings({ team, user, copy, close }: { team: Team; user: User; copy: Copy; close: () => void }) {
   const resource = useResource<Member[]>(`/teams/${team.id}/members`)
+  const [level, setLevel] = useState<Member>()
   const [removing, setRemoving] = useState<Member>()
   const [deleting, setDeleting] = useState(false)
   return <Modal title={copy.manageTeam} closeLabel={copy.close} onClose={close}>
@@ -38,11 +39,18 @@ export function TeamSettings({ team, user, copy, close }: { team: Team; user: Us
       await api(`/teams/${team.id}/update`, { data: { name: data.get('name') } })
     }}><label>{copy.teamName}<input name="name" defaultValue={team.name} required minLength={2} maxLength={80} /></label></ActionForm></> },
     { id: 'members', label: copy.members, content: <>
-    {removing ? <>
+    {level ? <>
+      <p>{level.name}</p><p className="muted">{copy.roleHelp}</p>
+      <ActionForm copy={copy} submit={copy.save} onSubmit={async (data) => {
+        await api(`/teams/${team.id}/member-role`, { data: { userId: level.id, role: data.get('role') } })
+        resource.retry(); setLevel(undefined)
+      }}><label>{copy.level}<select name="role" aria-label={copy.level} defaultValue={level.role}><option value="member">{copy.member}</option><option value="moderator">{copy.moderator}</option></select></label></ActionForm>
+      <Button variant="ghost" onClick={() => setLevel(undefined)}>{copy.cancel}</Button>
+    </> : removing ? <>
       <p>{removing.name}</p><p className="muted">{copy.removeHelp}</p>
       <ActionForm copy={copy} submit={copy.removeMember} onSubmit={async () => {
         await api(`/teams/${team.id}/remove-member`, { data: { userId: removing.id } })
-        setRemoving(undefined)
+        resource.retry(); setRemoving(undefined)
       }} />
       <Button variant="ghost" onClick={() => setRemoving(undefined)}>{copy.cancel}</Button>
     </> : <>
@@ -51,7 +59,8 @@ export function TeamSettings({ team, user, copy, close }: { team: Team; user: Us
         {resource.data?.map((member) => <div className="member-row" key={member.id}>
           <Button variant="ghost" className="member-person" onClick={() => showPerson(member.id)}><Avatar name={member.name} src={member.image} />{member.name}</Button>
           <small>{copy[member.role]}</small>
-          {member.id !== user.id && <Button variant="ghost" aria-label={`${copy.removeMember} ${member.name}`} onClick={() => setRemoving(member)}><Trash2 size={15} /></Button>}
+          {member.role !== 'guest' && member.role !== 'owner' && <Button variant="ghost" aria-label={`${copy.level} ${member.name}`} onClick={() => setLevel(member)}>{copy.level}</Button>}
+          {member.id !== user.id && member.role !== 'owner' && <Button variant="ghost" aria-label={`${copy.removeMember} ${member.name}`} onClick={() => setRemoving(member)}><Trash2 size={15} /></Button>}
         </div>)}
       </div>
     </>}

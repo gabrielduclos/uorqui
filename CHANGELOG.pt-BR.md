@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta.15]
+
+- Adiciona galeria de mídias com autorização e paginação nos canais e mensagens diretas, incluindo anexos de respostas e todo o histórico.
+- Mantém skeletons de imagens, vídeos e áudios até cada mídia estar pronta; as reações aparecem e animam após todas as mídias da mensagem carregarem, inclusive ao voltar ao app. Reações são otimistas, com reversão em caso de falha, e respeitam a preferência de movimento reduzido.
+- Troca equipe por comunidade na interface e permite editar nome, descrição e acesso do canal em um dialog com abas. A mudança vale para o histórico; tornar privado preserva convidados explícitos e quem editou.
+- Permite ao responsável atribuir os níveis Moderador ou Membro. Moderadores criam/editam canais acessíveis e enviam convites; a API mantém gestão da comunidade e dos níveis restrita ao responsável. Inclui migração 0007 e índice para paginação da galeria.
+
 ## [0.2.0-beta.14]
 
 - Adiciona fotos de usuário e equipe com compactação local para 512 × 512, upload validado no Worker/R2, remoção e autorização por equipe. Amplia compactação para PNG e imagens escolhidas como arquivo; mantém compactação local de vídeos e fallback ao original quando necessário. Inclui migração 0006.

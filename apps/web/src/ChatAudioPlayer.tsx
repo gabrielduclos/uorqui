@@ -1,10 +1,17 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { Button } from './components/ui/controls'
 
-export function ChatAudioPlayer({ src, locale = 'pt-BR' }: { src: string; locale?: string }) {
+export function ChatAudioPlayer({ src, locale = 'pt-BR', onReady, onError }: { src: string; locale?: string; onReady?: (ready: boolean) => void; onError?: () => void }) {
   const pt = locale === 'pt-BR'
   const player = useRef<HTMLAudioElement>(null)
+  const callbacks = useRef({ onReady, onError })
+  callbacks.current = { onReady, onError }
+  useEffect(() => {
+    const check = () => { if (!document.hidden) callbacks.current.onReady?.((player.current?.readyState ?? 0) >= 1) }
+    check(); document.addEventListener('visibilitychange', check)
+    return () => document.removeEventListener('visibilitychange', check)
+  }, [src])
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
@@ -15,8 +22,8 @@ export function ChatAudioPlayer({ src, locale = 'pt-BR' }: { src: string; locale
   return <div className="audio-player" aria-label={pt ? 'Mensagem de áudio' : 'Voice message'}>
     <audio ref={player} src={src} preload="metadata" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
       onEnded={() => setPlaying(false)} onWaiting={() => setLoading(true)} onCanPlay={() => setLoading(false)}
-      onError={() => { setError(true); setLoading(false) }} onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
-      onLoadedMetadata={(event) => { if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration) }} />
+      onError={() => { setError(true); setLoading(false); callbacks.current.onError?.() }} onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
+      onLoadedMetadata={(event) => { callbacks.current.onReady?.(true); if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration) }} />
     <Button variant="outline" aria-label={playing ? (pt ? 'Pausar áudio' : 'Pause audio') : (pt ? 'Reproduzir áudio' : 'Play audio')}
       loading={loading} onClick={async () => {
         if (!player.current) return

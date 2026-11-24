@@ -74,13 +74,20 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
     if (!owner) throw new RequestError(403, 'FORBIDDEN')
   }
 
+  async function requireManager(teamId: string, userId: string) {
+    const [manager] = await db.select({ id: memberships.userId }).from(memberships)
+      .where(and(eq(memberships.teamId, teamId), eq(memberships.userId, userId), inArray(memberships.role, ['owner', 'moderator']),
+        exists(db.select({ id: teams.id }).from(teams).where(and(eq(teams.id, teamId), isNull(teams.deletedAt))))))
+    if (!manager) throw new RequestError(403, 'FORBIDDEN')
+  }
+
   async function requireThread(channelId: string, threadId: number) {
     const [thread] = await db.select({ id: messages.id }).from(messages)
       .where(and(eq(messages.id, threadId), eq(messages.channelId, channelId), isNull(messages.parentId)))
     if (!thread) throw new RequestError(404, 'THREAD_NOT_FOUND')
   }
 
-  registerWorkplaceRoutes(app, { db }, { requireUser, requireOwner })
+  registerWorkplaceRoutes(app, { db }, { requireUser, requireOwner, requireManager })
   registerAttachmentRoutes(app, { db }, config, { requireUser, requireChannel })
   registerAvatarRoutes(app, services, config, { requireUser, requireOwner, invalidate: () => messageCache.clear('') })
   registerAccountRoutes(app, services, config, requireUser)
@@ -187,7 +194,7 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
   app.post('/api/teams/:teamId/channels', async (request, reply) => {
     const { id: userId } = await requireUser(request)
     const { teamId } = validate(z.object({ teamId: id }), request.params)
-    await requireOwner(teamId, userId)
+    await requireManager(teamId, userId)
     const input = validate(z.object({
       name: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,39}$/),
       description: z.string().trim().max(180),
@@ -205,10 +212,55 @@ export function registerRoutes(app: FastifyInstance, services: Services, config:
     return reply.code(201).send(channel)
   })
 
+  app.post('/api/channels/:channelId/update', async (request) => {
+    const user = await requireUser(request)
+    const { channelId } = validate(z.object({ channelId: id }), request.params)
+    const channel = await requireChannel(channelId, user.id)
+    if (!channel.teamId) throw new RequestError(403, 'FORBIDDEN')
+    await requireManager(channel.teamId, user.id)
+    const input = validate(z.object({
+      name: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,39}$/),
+      description: z.string().trim().max(180), visibility: z.enum(['team', 'private']),
+    }), request.body)
+    const updated = await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(channels).where(eq(channels.id, channelId)).for('update')
+      if (!current) throw new RequestError(404, 'CHANNEL_NOT_FOUND')
+      // Preserve explicit invitees. When closing a public channel, only the editor initially has access.
+      if (input.visibility === 'private') await tx.insert(channelMembers).values({ channelId, userId: user.id }).onConflictDoNothing()
+      const [result] = await tx.update(channels).set(input).where(eq(channels.id, channelId)).returning()
+      return result
+    }).catch((error: { code?: string; cause?: { code?: string } }) => {
+      if ((error.code ?? error.cause?.code) === '23505') throw new RequestError(409, 'CHANNEL_NAME_TAKEN')
+      throw error
+    })
+    await realtime.publish(channelId)
+    return updated
+  })
+
+  app.get('/api/channels/:channelId/media', async (request) => {
+    const user = await requireUser(request)
+    const { channelId } = validate(z.object({ channelId: id }), request.params)
+    const { before } = validate(z.object({ before: z.string().regex(/^[1-9][0-9]*:[0-9a-f-]{36}$/).optional() }), request.query)
+    const [cursorMessage, cursorFile] = before?.split(':') ?? []
+    const cursorId = before ? validate(messageId, cursorMessage) : undefined
+    if (before) validate(id, cursorFile)
+    await requireChannel(channelId, user.id)
+    // Keyset pagination includes replies and orders messages newest first, with UUID as a tie-breaker.
+    const rows = await db.select({ id: attachments.id, name: attachments.name, mime: attachments.mime, size: attachments.size,
+      messageId: messages.id, author: users.name, authorId: users.id, createdAt: messages.createdAt })
+      .from(attachments).innerJoin(messages, eq(messages.id, attachments.messageId)).innerJoin(users, eq(users.id, messages.authorId))
+      .where(and(eq(attachments.channelId, channelId), eq(messages.channelId, channelId), eq(attachments.ready, true), isNull(messages.cancelledAt),
+        or(sql`${attachments.mime} like 'image/%'`, sql`${attachments.mime} like 'video/%'`, sql`${attachments.mime} like 'audio/%'`),
+        before ? or(lt(attachments.messageId, cursorId!), and(eq(attachments.messageId, cursorId!), lt(attachments.id, cursorFile!))) : undefined))
+      .orderBy(sql`${attachments.messageId} DESC NULLS LAST`, sql`${attachments.id} DESC NULLS LAST`).limit(49)
+    const items = rows.slice(0, 48)
+    return { items, next: rows.length > 48 ? `${items.at(-1)!.messageId}:${items.at(-1)!.id}` : null }
+  })
+
   app.post('/api/teams/:teamId/invitations', async (request, reply) => {
     const { id: userId } = await requireUser(request)
     const { teamId } = validate(z.object({ teamId: id }), request.params)
-    await requireOwner(teamId, userId)
+    await requireManager(teamId, userId)
     const input = validate(z.object({ email, channelId: id.optional() }), request.body)
     if (input.channelId) {
       const channel = await requireChannel(input.channelId, userId)

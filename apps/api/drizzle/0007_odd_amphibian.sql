@@ -1,0 +1,3 @@
+ALTER TABLE "uorqui_workplace"."team_member" DROP CONSTRAINT "valid_team_role";--> statement-breakpoint
+CREATE INDEX "attachment_gallery_idx" ON "uorqui_workplace"."attachment" USING btree ("channel_id","message_id" DESC NULLS LAST,"id" DESC NULLS LAST) WHERE "uorqui_workplace"."attachment"."ready" = true;--> statement-breakpoint
+ALTER TABLE "uorqui_workplace"."team_member" ADD CONSTRAINT "valid_team_role" CHECK ("uorqui_workplace"."team_member"."role" in ('owner', 'moderator', 'member'));

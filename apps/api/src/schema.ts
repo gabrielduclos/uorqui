@@ -63,11 +63,11 @@ export const teams = workplace.table('team', {
 export const memberships = workplace.table('team_member', {
   teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  role: text({ enum: ['owner', 'member'] }).notNull(),
+  role: text({ enum: ['owner', 'moderator', 'member'] }).notNull(),
 }, (table) => [
   primaryKey({ columns: [table.teamId, table.userId] }),
   index('team_member_user_idx').on(table.userId),
-  check('valid_team_role', sql`${table.role} in ('owner', 'member')`),
+  check('valid_team_role', sql`${table.role} in ('owner', 'moderator', 'member')`),
 ])
 
 export const channels = workplace.table('channel', {
@@ -153,7 +153,9 @@ export const attachments = workplace.table('attachment', {
   size: integer().notNull(),
   ready: boolean().notNull().default(false),
   createdAt: time('created_at').defaultNow().notNull(),
-}, (table) => [index('attachment_message_idx').on(table.messageId)])
+}, (table) => [index('attachment_message_idx').on(table.messageId),
+  index('attachment_gallery_idx').on(table.channelId, table.messageId.desc(), table.id.desc()).where(sql`${table.ready} = true`),
+])
 
 export const messageReactions = workplace.table('message_reaction', {
   messageId: bigint('message_id', { mode: 'number' }).notNull().references(() => messages.id, { onDelete: 'cascade' }),

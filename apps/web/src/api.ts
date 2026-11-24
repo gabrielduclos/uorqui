@@ -3,10 +3,10 @@ import { cachedQuery, invalidateQueries, readQuery, waitForQuery } from './query
 import type { Copy } from './copy'
 
 export interface PublicProfile { image?: string | null; id: string; name: string; handle: string | null; bio: string | null }
-export interface Member extends PublicProfile { role: 'owner' | 'member' | 'guest' }
+export interface Member extends PublicProfile { role: 'owner' | 'moderator' | 'member' | 'guest' }
 export interface DirectChannel extends Channel { peerId: string }
 export interface User { image?: string | null; emailVerified: boolean; handle?: string | null; bio?: string | null; id: string; name: string; email: string }
-export interface Team { image?: string | null; id: string; name: string; role: 'owner' | 'member' | null }
+export interface Team { image?: string | null; id: string; name: string; role: 'owner' | 'moderator' | 'member' | null }
 export interface Channel { image?: string | null; id: string; name: string; description: string; visibility: 'team' | 'private' }
 export interface Attachment { id: string; name: string; mime: string; size: number; url?: string }
 export interface Message { authorImage?: string | null; reactions?: { emoji: string; count: number; users: string[] }[]; attachments?: Attachment[]; location?: { latitude: number; longitude: number } | null; pendingFile?: File; clientId?: string | null; authorId?: string; editedAt?: string | null; cancelledAt?: string | null; delivery?: 'sending' | 'failed'; id: number; body: string; author: string; createdAt: string; replies: number }
@@ -66,6 +66,7 @@ export function refreshUnread(direct = false) {
 export function refreshChannel(channelId: string) {
   dataGeneration++
   invalidateQueries(`/channels/${channelId}/messages`)
+  invalidateQueries(`/channels/${channelId}/media`)
   window.dispatchEvent(new Event('cache-updated'))
 }
 

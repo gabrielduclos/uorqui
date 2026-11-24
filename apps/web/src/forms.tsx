@@ -1,6 +1,7 @@
 import { Check, Copy as CopyIcon, Eye, EyeOff } from 'lucide-react'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, api, errorText, type Channel, type Team } from './api'
+import { SettingsTabs } from './components/ui/settings-tabs'
 import { Button, Modal } from './components/ui/controls'
 import type { Copy } from './copy'
 
@@ -82,22 +83,26 @@ export function TeamForm({ copy, close, created }: { copy: Copy; close: () => vo
   </Modal>
 }
 
-export function ChannelForm({ copy, teamId, close, created }: {
-  copy: Copy; teamId: string; close: () => void; created: (channel: Channel) => void
+export function ChannelForm({ copy, teamId, close, created, channel }: {
+  copy: Copy; teamId: string; close: () => void; created: (channel: Channel) => void; channel?: Channel
 }) {
-  return <Modal title={copy.newChannel} closeLabel={copy.close} onClose={close}>
-    <ActionForm copy={copy} submit={copy.create} onSubmit={async (data) => {
-      created(await api<Channel>(`/teams/${teamId}/channels`, { data: Object.fromEntries(data) }))
+  return <Modal title={channel ? copy.editChannel : copy.newChannel} closeLabel={copy.close} onClose={close}>
+    <ActionForm copy={copy} submit={channel ? copy.save : copy.create} onSubmit={async (data) => {
+      created(await api<Channel>(channel ? `/channels/${channel.id}/update` : `/teams/${teamId}/channels`, { data: Object.fromEntries(data) }))
     }}>
-      <label>{copy.channelName}
-        <input name="name" autoCapitalize="none" spellCheck={false} aria-describedby="channel-name-hint"
+      <SettingsTabs label={channel ? copy.editChannel : copy.newChannel} tabs={[
+        { id: 'general', label: copy.general, content: <>      <label>{copy.channelName}
+        <input name="name" aria-label={copy.channelName} defaultValue={channel?.name} autoCapitalize="none" spellCheck={false} aria-describedby="channel-name-hint"
           required pattern="[a-zA-Z0-9][a-zA-Z0-9\-]{1,39}" maxLength={40} />
         <small id="channel-name-hint">{copy.nameHint}</small>
       </label>
-      <label>{copy.details}<input name="description" maxLength={180} /></label>
-      <label>{copy.visibility}
-        <select name="visibility"><option value="team">{copy.teamOnly}</option><option value="private">{copy.privateOnly}</option></select>
+      <label>{copy.details}<input name="description" defaultValue={channel?.description} maxLength={180} /></label>
+</> },
+        { id: 'access', label: copy.visibility, content: <>      <label>{copy.visibility}
+        <select name="visibility" aria-label={copy.visibility} defaultValue={channel?.visibility ?? 'team'}><option value="team">{copy.teamOnly}</option><option value="private">{copy.privateOnly}</option></select>
       </label>
+{channel && <p className="muted">{copy.accessHelp}</p>}</> },
+      ]} />
     </ActionForm>
   </Modal>
 }
